@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
+import Customers from './pages/Customers';
 
 // Placeholder Pages
 const Placeholder = ({ title }) => (
@@ -35,7 +36,7 @@ function App() {
                     <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
 
                     {/* People */}
-                    <Route path="/customers" element={<Placeholder title="Customer Directory" />} />
+                    <Route path="/customers" element={<Customers />} />
                     <Route path="/employees" element={<Placeholder title="Staff Management" />} />
 
                     {/* Analytics */}
