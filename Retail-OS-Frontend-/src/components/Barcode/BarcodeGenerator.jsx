@@ -1,37 +1,102 @@
 import React from "react";
-import Barcode from "react-barcode";
 
 
-const BarcodeGenerator = ({value}) => {
+const BarcodeGenerator = ({ value }) => {
 
 
     return (
 
-        <div>
+        <div className="
+            bg-slate-50
+            rounded-2xl
+            p-6
+            border
+            border-slate-100
+        ">
 
-            <h3>
+
+            <h4 className="
+                text-sm
+                font-black
+                text-slate-700
+                uppercase
+                tracking-widest
+                mb-4
+            ">
+
                 Generated Barcode
-            </h3>
+
+            </h4>
 
 
-            {
-                value ?
 
-                <Barcode
-                    value={value}
-                    format="CODE128"
-                />
 
-                :
+            <div className="
+                bg-white
+                rounded-2xl
+                border
+                border-slate-100
+                h-32
+                flex
+                items-center
+                justify-center
+            ">
 
-                <p>
-                    Enter SKU to generate barcode
-                </p>
 
-            }
+                {
+                    value ?
+
+                    <div className="text-center">
+
+
+                        <div className="
+                            text-4xl
+                            tracking-[0.3em]
+                            font-black
+                        ">
+
+                            |||||||||||
+
+                        </div>
+
+
+                        <p className="
+                            mt-3
+                            text-xs
+                            font-bold
+                            text-slate-500
+                        ">
+
+                            {value}
+
+                        </p>
+
+
+                    </div>
+
+
+                    :
+
+                    <p className="
+                        text-sm
+                        font-bold
+                        text-slate-400
+                    ">
+
+                        Enter SKU to generate barcode
+
+                    </p>
+
+                }
+
+
+
+            </div>
+
 
 
         </div>
+
 
     );
 

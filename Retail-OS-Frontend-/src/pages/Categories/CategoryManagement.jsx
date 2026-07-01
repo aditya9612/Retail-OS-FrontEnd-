@@ -1,101 +1,66 @@
-import {useEffect,useState} from "react";
-
+import React, { useState } from "react";
 
 import CategoryForm from "../../components/Categories/CategoryForm";
-
 import CategoryTable from "../../components/Categories/CategoryTable";
 
+const CategoryManagement = () => {
 
-import {
-getCategories,
-createCategory,
-deleteCategory
-}
-from "../../services/categoryService";
+    const [categories, setCategories] = useState([
+        "Electronics",
+        "Grocery",
+        "Clothing"
+    ]);
 
+    const addCategory = (category) => {
 
+        setCategories([
+            ...categories,
+            category
+        ]);
 
-function CategoryManagement(){
+    };
 
+    return (
 
-const [categories,setCategories]=useState([]);
+        <div className="h-[calc(100vh-80px)] overflow-y-auto bg-slate-50/50 p-6 custom-scrollbar">
 
+            {/* Header */}
 
+            <div className="mb-8">
 
-useEffect(()=>{
+                <h2 className="text-3xl font-black text-slate-800">
+                    Category Management
+                </h2>
 
-loadCategories();
+                <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold mt-2">
+                    Manage Product Categories
+                </p>
 
-},[])
+            </div>
 
+            {/* Card */}
 
+            <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8">
 
-const loadCategories=async()=>{
+                <h3 className="text-xl font-black text-slate-800 mb-6">
+                    Categories
+                </h3>
 
-const data=await getCategories();
+                <CategoryForm
+                    onAdd={addCategory}
+                />
 
-setCategories(data);
+                <CategoryTable
+                    categories={categories}
+                    setCategories={setCategories}
+                />
 
-}
+            </div>
 
+        </div>
 
+    );
 
-const addCategory=async(data)=>{
-
-
-await createCategory(data);
-
-loadCategories();
-
-
-}
-
-
-
-const removeCategory=async(id)=>{
-
-
-await deleteCategory(id);
-
-loadCategories();
-
-
-}
-
-
-
-return (
-
-<div>
-
-
-<h1>
-Category Management
-</h1>
-
-
-<CategoryForm
-onSubmit={addCategory}
-/>
-
-
-
-<CategoryTable
-
-categories={categories}
-
-onDelete={removeCategory}
-
-/>
-
-
-</div>
-
-
-)
-
-}
-
-
+};
 
 export default CategoryManagement;

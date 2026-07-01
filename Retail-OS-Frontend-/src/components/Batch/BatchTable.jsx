@@ -1,84 +1,126 @@
 import React from "react";
 
+const BatchTable = ({ batches, setBatches }) => {
 
-const BatchTable = ({batches}) => {
+    const deleteBatch = (index) => {
 
+        const updated = batches.filter((_, i) => i !== index);
 
-return (
+        setBatches(updated);
 
-<table border="1">
+    };
 
+    return (
 
-<thead>
+        <div className="overflow-hidden rounded-2xl border border-slate-100 mt-6">
 
-<tr>
+            <table className="w-full">
 
-<th>
-Batch Number
-</th>
+                <thead className="bg-slate-50">
 
+                    <tr>
 
-<th>
-Expiry Date
-</th>
+                        <th className="px-6 py-4 text-left font-black text-slate-500">
+                            Batch No
+                        </th>
 
+                        <th className="px-6 py-4 text-left font-black text-slate-500">
+                            MFG Date
+                        </th>
 
-<th>
-Quantity
-</th>
+                        <th className="px-6 py-4 text-left font-black text-slate-500">
+                            Expiry Date
+                        </th>
 
+                        <th className="px-6 py-4 text-left font-black text-slate-500">
+                            Quantity
+                        </th>
 
-</tr>
+                        <th className="px-6 py-4 text-center font-black text-slate-500">
+                            Action
+                        </th>
 
-</thead>
+                    </tr>
 
+                </thead>
 
+                <tbody>
 
-<tbody>
+                    {
+                        batches.length === 0 ? (
 
+                            <tr>
 
-{
+                                <td
+                                    colSpan="5"
+                                    className="px-6 py-8 text-center text-slate-400 font-bold"
+                                >
 
-batches.map((batch,index)=>(
+                                    No Batch Available
 
+                                </td>
 
-<tr key={index}>
+                            </tr>
 
+                        ) : (
 
-<td>
-{batch.batchNumber}
-</td>
+                            batches.map((batch, index) => (
 
+                                <tr
+                                    key={index}
+                                    className="border-t border-slate-100"
+                                >
 
-<td>
-{batch.expiryDate}
-</td>
+                                    <td className="px-6 py-4 font-bold">
+                                        {batch.batchNo}
+                                    </td>
 
+                                    <td className="px-6 py-4">
+                                        {batch.mfgDate}
+                                    </td>
 
-<td>
-{batch.quantity}
-</td>
+                                    <td className="px-6 py-4">
+                                        {batch.expiryDate}
+                                    </td>
 
+                                    <td className="px-6 py-4 font-bold">
+                                        {batch.quantity}
+                                    </td>
 
-</tr>
+                                    <td className="px-6 py-4 text-center">
 
+                                        <button
+                                            onClick={() => deleteBatch(index)}
+                                            className="
+                                                px-4
+                                                py-2
+                                                bg-red-500
+                                                text-white
+                                                rounded-xl
+                                                text-xs
+                                                font-black
+                                            "
+                                        >
+                                            Delete
+                                        </button>
 
-))
+                                    </td>
 
+                                </tr>
 
-}
+                            ))
 
+                        )
+                    }
 
-</tbody>
+                </tbody>
 
+            </table>
 
-</table>
+        </div>
 
-
-)
-
+    );
 
 };
-
 
 export default BatchTable;

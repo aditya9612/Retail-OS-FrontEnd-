@@ -1,27 +1,27 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
-import DashboardLayout from './layouts/DashboardLayout';
+import DashboardLayout from "./layouts/DashboardLayout";
 
-import Billing from './pages/Billing';
-import Dashboard from './pages/Dashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import BillingManagement from './pages/BillingManagement';
-import GSTManagement from './pages/GSTManagement';
+import Dashboard from "./pages/Dashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 
-import Products from './pages/Products';
+import Billing from "./pages/Billing";
+import BillingManagement from "./pages/BillingManagement";
+import GSTManagement from "./pages/GSTManagement";
+
+import Products from "./pages/Products";
+import CategoryManagement from "./pages/Categories/CategoryManagement";
 
 
 // Placeholder Pages
 const Placeholder = ({ title }) => (
     <div style={{ padding: 32 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: "#111827" }}>
             {title}
         </h1>
     </div>
 );
-
-
 
 function App() {
 
@@ -33,122 +33,110 @@ function App() {
 
                 <Routes>
 
+                    {/* Dashboard */}
 
-                    {/* Main */}
+                    <Route
+                        path="/dashboard"
+                        element={<Dashboard />}
+                    />
 
-                    <Route 
-                        path="/dashboard" 
-                        element={<Dashboard />} 
+                    <Route
+                        path="/admin-dashboard"
+                        element={<AdminDashboard />}
                     />
 
 
-                    <Route 
-                        path="/admin-dashboard" 
-                        element={<AdminDashboard />} 
+
+                    {/* Billing */}
+
+                    <Route
+                        path="/billing"
+                        element={<Billing />}
                     />
 
-
-
-                    {/* Billing & GST */}
-
-                    <Route 
-                        path="/billing" 
-                        element={<Billing />} 
+                    <Route
+                        path="/billing-management"
+                        element={<BillingManagement />}
                     />
 
-
-                    <Route 
-                        path="/billing-management" 
-                        element={<BillingManagement />} 
-                    />
-
-
-                    <Route 
-                        path="/gst-management" 
-                        element={<GSTManagement />} 
+                    <Route
+                        path="/gst-management"
+                        element={<GSTManagement />}
                     />
 
 
 
                     {/* Product Management */}
 
-                    <Route 
-                        path="/products" 
-                        element={<Products />} 
+                    <Route
+                        path="/products"
+                        element={<Products />}
+                    />
+
+                    <Route
+                        path="/categories"
+                        element={<CategoryManagement />}
                     />
 
 
 
                     {/* Inventory */}
 
-                    <Route 
-                        path="/categories" 
-                        element={<Placeholder title="Categories" />} 
+                    <Route
+                        path="/purchases"
+                        element={<Placeholder title="Purchases" />}
                     />
 
-
-                    <Route 
-                        path="/purchases" 
-                        element={<Placeholder title="Purchases" />} 
-                    />
-
-
-                    <Route 
-                        path="/returns" 
-                        element={<Placeholder title="Returns & Refunds" />} 
+                    <Route
+                        path="/returns"
+                        element={<Placeholder title="Returns & Refunds" />}
                     />
 
 
 
                     {/* People */}
 
-                    <Route 
-                        path="/customers" 
-                        element={<Placeholder title="Customer Directory" />} 
+                    <Route
+                        path="/customers"
+                        element={<Placeholder title="Customer Directory" />}
                     />
 
-
-                    <Route 
-                        path="/employees" 
-                        element={<Placeholder title="Staff Management" />} 
+                    <Route
+                        path="/employees"
+                        element={<Placeholder title="Staff Management" />}
                     />
 
 
 
                     {/* Analytics */}
 
-                    <Route 
-                        path="/reports" 
-                        element={<Placeholder title="Analytics & Reports" />} 
+                    <Route
+                        path="/reports"
+                        element={<Placeholder title="Analytics & Reports" />}
                     />
 
-
-                    <Route 
-                        path="/settings" 
-                        element={<Placeholder title="System Settings" />} 
+                    <Route
+                        path="/settings"
+                        element={<Placeholder title="System Settings" />}
                     />
 
 
 
                     {/* Default */}
 
-                    <Route 
-                        path="/" 
-                        element={<Navigate to="/dashboard" replace />} 
+                    <Route
+                        path="/"
+                        element={<Navigate to="/dashboard" replace />}
                     />
-
 
                 </Routes>
 
-
             </DashboardLayout>
-
 
         </Router>
 
     );
 
 }
-
 
 export default App;

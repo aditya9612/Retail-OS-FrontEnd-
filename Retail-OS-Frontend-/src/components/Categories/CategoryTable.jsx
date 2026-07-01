@@ -1,74 +1,104 @@
-function CategoryTable({categories, onDelete}){
+import React from "react";
 
+const CategoryTable = ({ categories, setCategories }) => {
 
-return (
+    const deleteCategory = (index) => {
 
-<table border="1">
+        const updated = categories.filter((_, i) => i !== index);
 
+        setCategories(updated);
 
-<thead>
+    };
 
-<tr>
+    return (
 
-<th>Name</th>
-<th>Description</th>
-<th>Action</th>
+        <div className="overflow-hidden rounded-2xl border border-slate-100 mt-6">
 
-</tr>
+            <table className="w-full">
 
-</thead>
+                <thead className="bg-slate-50">
 
+                    <tr>
 
-<tbody>
+                        <th className="px-6 py-4 text-left text-sm font-black text-slate-500">
+                            Category Name
+                        </th>
 
+                        <th className="px-6 py-4 text-center text-sm font-black text-slate-500">
+                            Action
+                        </th>
 
-{
-categories.map((category)=>(
+                    </tr>
 
+                </thead>
 
-<tr key={category.id}>
+                <tbody>
 
+                    {
+                        categories.length === 0 ? (
 
-<td>
-{category.name}
-</td>
+                            <tr>
 
+                                <td
+                                    colSpan="2"
+                                    className="px-6 py-8 text-center text-slate-400 font-bold"
+                                >
 
-<td>
-{category.description}
-</td>
+                                    No Categories Available
 
+                                </td>
 
-<td>
+                            </tr>
 
-<button
-onClick={()=>onDelete(category.id)}
->
+                        ) : (
 
-Delete
+                            categories.map((category, index) => (
 
-</button>
+                                <tr
+                                    key={index}
+                                    className="border-t border-slate-100"
+                                >
 
-</td>
+                                    <td className="px-6 py-4 font-bold">
+                                        {category}
+                                    </td>
 
+                                    <td className="px-6 py-4 text-center">
 
-</tr>
+                                        <button
+                                            onClick={() => deleteCategory(index)}
+                                            className="
+                                                px-4
+                                                py-2
+                                                bg-red-500
+                                                text-white
+                                                rounded-xl
+                                                text-xs
+                                                font-black
+                                            "
+                                        >
 
+                                            Delete
 
-))
+                                        </button>
 
-}
+                                    </td>
 
+                                </tr>
 
-</tbody>
+                            ))
 
+                        )
+                    }
 
-</table>
+                </tbody>
 
+            </table>
 
-)
+        </div>
 
-}
+    );
 
+};
 
 export default CategoryTable;

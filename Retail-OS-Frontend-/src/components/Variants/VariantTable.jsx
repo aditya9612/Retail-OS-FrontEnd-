@@ -1,88 +1,166 @@
-import VariantRow from "./VariantRow";
+import React from "react";
 
 
-function VariantTable({variants,setVariants}){
+const VariantTable = ({ variants, setVariants }) => {
+
+
+    const removeVariant = (index) => {
+
+        const updated = variants.filter((_, i) => i !== index);
+
+        setVariants(updated);
+
+    };
+
+
+    return (
+
+        <div className="overflow-hidden rounded-2xl border border-slate-100 mt-6">
+
+
+            <table className="w-full text-sm">
+
+
+                <thead className="bg-slate-50">
+
+
+                    <tr className="text-left">
+
+
+                        <th className="px-6 py-4 font-black text-slate-500">
+                            Size
+                        </th>
+
+
+                        <th className="px-6 py-4 font-black text-slate-500">
+                            Color
+                        </th>
+
+
+                        <th className="px-6 py-4 font-black text-slate-500">
+                            Price
+                        </th>
+
+
+                        <th className="px-6 py-4 font-black text-slate-500">
+                            SKU
+                        </th>
+
+
+                        <th className="px-6 py-4 font-black text-slate-500">
+                            Action
+                        </th>
+
+
+                    </tr>
+
+
+                </thead>
 
 
 
-const deleteVariant=(sku)=>{
+                <tbody>
 
 
-setVariants(
-
-variants.filter(
-(item)=>item.sku!==sku
-)
-
-)
+                    {
+                        variants.length === 0 ? (
 
 
-}
+                            <tr>
+
+                                <td
+                                colSpan="5"
+                                className="px-6 py-8 text-center text-slate-400 font-bold"
+                                >
+
+                                    No Variants Added
+
+                                </td>
+
+                            </tr>
 
 
-
-return (
-
-<table border="1">
+                        ) : (
 
 
-<thead>
-
-<tr>
-
-<th>Size</th>
-
-<th>Color</th>
-
-<th>Price</th>
-
-<th>SKU</th>
-
-<th>Action</th>
+                            variants.map((variant,index)=>(
 
 
-</tr>
+                                <tr
+                                key={index}
+                                className="border-t border-slate-100"
+                                >
 
 
-</thead>
+                                    <td className="px-6 py-4 font-bold">
+                                        {variant.size}
+                                    </td>
 
 
-
-<tbody>
-
-
-{
-
-variants.map((variant)=>(
+                                    <td className="px-6 py-4 font-bold">
+                                        {variant.color}
+                                    </td>
 
 
-<VariantRow
-
-key={variant.sku}
-
-variant={variant}
-
-onDelete={deleteVariant}
-
-/>
+                                    <td className="px-6 py-4 font-bold">
+                                        ₹{variant.price}
+                                    </td>
 
 
-))
+                                    <td className="px-6 py-4 font-bold">
+                                        {variant.sku || "-"}
+                                    </td>
 
 
-}
+                                    <td className="px-6 py-4">
 
 
-</tbody>
+                                        <button
+
+                                        onClick={()=>removeVariant(index)}
+
+                                        className="
+                                        px-4
+                                        py-2
+                                        bg-red-500
+                                        text-white
+                                        rounded-xl
+                                        text-xs
+                                        font-black
+                                        "
+
+                                        >
+
+                                        Delete
+
+                                        </button>
 
 
-</table>
+                                    </td>
 
 
-)
+                                </tr>
 
 
-}
+                            ))
+
+
+                        )
+                    }
+
+
+                </tbody>
+
+
+            </table>
+
+
+        </div>
+
+
+    );
+
+};
 
 
 export default VariantTable;

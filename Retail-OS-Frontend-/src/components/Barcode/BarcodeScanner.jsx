@@ -8,13 +8,9 @@ const BarcodeScanner = ({onScan}) => {
 
 
 
-    const handleScan = () => {
-
+    const scan = () => {
 
         onScan(code);
-
-
-        setCode("");
 
     };
 
@@ -22,42 +18,95 @@ const BarcodeScanner = ({onScan}) => {
 
     return (
 
-        <div>
+        <div className="
+            bg-slate-50
+            rounded-2xl
+            p-6
+            border
+            border-slate-100
+        ">
 
 
-            <h3>
+
+            <h4 className="
+                text-sm
+                font-black
+                text-slate-700
+                uppercase
+                tracking-widest
+                mb-4
+            ">
+
                 Barcode Scanner
-            </h3>
+
+            </h4>
+
+
 
 
             <input
 
-                type="text"
-
-                placeholder="Scan barcode"
 
                 value={code}
 
+
                 onChange={(e)=>setCode(e.target.value)}
+
+
+                placeholder="Scan barcode"
+
+
+                className="
+                    w-full
+                    px-5
+                    py-4
+                    bg-white
+                    border
+                    border-slate-100
+                    rounded-2xl
+                    font-bold
+                    text-sm
+                    outline-none
+                "
+
 
             />
 
 
+
+
             <button
 
-            onClick={handleScan}
+
+                onClick={scan}
+
+
+                className="
+                    mt-4
+                    w-full
+                    py-4
+                    bg-indigo-600
+                    text-white
+                    rounded-2xl
+                    font-black
+                    text-sm
+                "
+
 
             >
 
                 Scan
 
+
             </button>
+
+
 
 
         </div>
 
-    );
 
+    );
 
 };
 

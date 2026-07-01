@@ -1,254 +1,103 @@
 import React, { useState } from "react";
 
-import VariantForm from "../../components/Variants/VariantForm";
-import VariantTable from "../../components/Variants/VariantTable";
 
-import BarcodeGenerator from "../../components/Barcode/BarcodeGenerator";
-import BarcodeScanner from "../../components/Barcode/BarcodeScanner";
-
-
+import ProductHeader from "../../components/Product/ProductHeader";
+import ProductStats from "../../components/Product/ProductStats";
+import ProductCharts from "../../components/Product/ProductCharts";
+import ProductToolbar from "../../components/Product/ProductToolbar";
+import ProductTable from "../../components/Product/ProductTable";
+import ProductDrawer from "../../components/Product/ProductDrawer";
+    
+const initialProducts = [
+  {
+    id: 1,
+    name: "Wireless Mouse",
+    sku: "PRD001",
+    barcode: "8901234567890",
+    category: "Electronics",
+    stock: 45,
+    price: 799,
+    status: "In Stock",
+  },
+  {
+    id: 2,
+    name: "Shampoo",
+    sku: "PRD002",
+    barcode: "8901234567891",
+    category: "Grocery",
+    stock: 8,
+    price: 299,
+    status: "Low Stock",
+  },
+  {
+    id: 3,
+    name: "T-Shirt",
+    sku: "PRD003",
+    barcode: "8901234567892",
+    category: "Clothing",
+    stock: 0,
+    price: 599,
+    status: "Out of Stock",
+  },
+];
 const Products = () => {
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [products, setProducts] = useState(initialProducts);
+    const [search, setSearch] = useState("");
+    const [category, setCategory] = useState("");
 
-
-    const [variants, setVariants] = useState([]);
-
-    const [barcode, setBarcode] = useState("");
-
-
-    const [product, setProduct] = useState({
-
-        name: "",
-        category: "",
-        price: ""
-
-    });
-
-
-
-    const handleChange = (e) => {
-
-
-        setProduct({
-
-            ...product,
-
-            [e.target.name]: e.target.value
-
-        });
-
-
+    const handleAddProduct = () => {
+        setDrawerOpen(true);
     };
-
-
-
-    const addVariant = (variant) => {
-
-
-        setVariants([
-
-            ...variants,
-
-            variant
-
-        ]);
-
-
+    
+    const handleExport = () => {
+        console.log("Export Products");
     };
-
-
-
-    return (
-
-        <div>
-
-
-            <h1>
-                Product Management
-            </h1>
-
-
-
-            <hr />
-
-
-
-            <h3>
-                Product Details
-            </h3>
-
-
-
-            <input
-
-                type="text"
-
-                name="name"
-
-                placeholder="Product Name"
-
-                value={product.name}
-
-                onChange={handleChange}
-
-            />
-
-
-
-            <br /><br />
-
-
-
-            <select
-
-                name="category"
-
-                value={product.category}
-
-                onChange={handleChange}
-
-            >
-
-
-                <option value="">
-                    Select Category
-                </option>
-
-
-                <option value="Electronics">
-                    Electronics
-                </option>
-
-
-                <option value="Grocery">
-                    Grocery
-                </option>
-
-
-                <option value="Clothing">
-                    Clothing
-                </option>
-
-
-            </select>
-
-
-
-            <br /><br />
-
-
-
-            <input
-
-                type="number"
-
-                name="price"
-
-                placeholder="Price"
-
-                value={product.price}
-
-                onChange={handleChange}
-
-            />
-
-
-
-            <hr />
-
-
-
-            <h3>
-                Product Variants
-            </h3>
-
-
-
-            <VariantForm
-
-                onAdd={addVariant}
-
-            />
-
-
-
-            <VariantTable
-
-                variants={variants}
-
-                setVariants={setVariants}
-
-            />
-
-
-
-            <hr />
-
-
-
-            <h3>
-                Barcode Management
-            </h3>
-
-
-
-            <input
-
-                type="text"
-
-                placeholder="Enter SKU"
-
-                value={barcode}
-
-                onChange={(e)=>setBarcode(e.target.value)}
-
-            />
-
-
-
-            <br /><br />
-
-
-
-            <BarcodeGenerator
-
-                value={barcode}
-
-            />
-
-
-
-            <br />
-
-
-
-            <BarcodeScanner
-
-                onScan={(code)=>setBarcode(code)}
-
-            />
-
-
-
-            <hr />
-
-
-
-            <h3>
-                Batch & Expiry Tracking
-            </h3>
-
-
-
-            <p>
-                Batch management will be added here.
-            </p>
-
-
-
-        </div>
-
-    );
-
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 5;
+    const handleDelete = (id) => {
+          setProducts(products.filter((item) => item.id !== id));
+    };
+return (
+<div
+    className="dash-page custom-scrollbar"
+    style={{
+    background: "#f5f7fb",
+    minHeight: "100vh",
+  }}
+>
+
+        <ProductHeader
+            onAddProduct={handleAddProduct}
+            onExport={handleExport}
+        />
+
+        <ProductStats />
+        <ProductCharts />
+        <ProductToolbar
+            search={search}
+            setSearch={setSearch}
+            category={category}
+            setCategory={setCategory}
+/>
+
+        <ProductTable
+            products={products}
+            search={search}
+            category={category}
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            onDelete={handleDelete}
+        />
+
+        <ProductDrawer
+            open={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+        />
+    </div>
+);
+    
 };
 
 

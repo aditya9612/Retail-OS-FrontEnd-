@@ -1,57 +1,58 @@
-import { useState } from "react";
+import React, { useState } from "react";
 
+const CategoryForm = ({ onAdd }) => {
 
-function CategoryForm({ onSubmit }) {
+    const [category, setCategory] = useState("");
 
-    const [name, setName] = useState("");
-    const [description, setDescription] = useState("");
+    const submit = () => {
 
+        if (category.trim() === "") return;
 
-    const handleSubmit = (e)=>{
-        e.preventDefault();
+        onAdd(category);
 
-        onSubmit({
-            name,
-            description
-        });
+        setCategory("");
 
-        setName("");
-        setDescription("");
-    }
-
+    };
 
     return (
 
-        <form onSubmit={handleSubmit}>
-
-            <h3>Add Category</h3>
-
+        <div className="flex gap-4">
 
             <input
-            type="text"
-            placeholder="Category Name"
-            value={name}
-            onChange={(e)=>setName(e.target.value)}
+                type="text"
+                placeholder="Category Name"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="
+                    flex-1
+                    px-5
+                    py-3
+                    bg-slate-50
+                    rounded-xl
+                    outline-none
+                    font-bold
+                    text-sm
+                "
             />
 
-
-            <input
-            type="text"
-            placeholder="Description"
-            value={description}
-            onChange={(e)=>setDescription(e.target.value)}
-            />
-
-
-            <button type="submit">
-                Save
+            <button
+                onClick={submit}
+                className="
+                    px-6
+                    py-3
+                    bg-indigo-600
+                    text-white
+                    rounded-xl
+                    font-black
+                "
+            >
+                Add Category
             </button>
 
+        </div>
 
-        </form>
+    );
 
-    )
-}
-
+};
 
 export default CategoryForm;

@@ -1,141 +1,151 @@
-import {useState} from "react";
+import React, {useState} from "react";
 
 
-function VariantForm({onAdd}){
+const VariantForm = ({onAdd}) => {
 
 
-const [variant,setVariant]=useState({
+    const [variant,setVariant] = useState({
 
-size:"",
-color:"",
-price:"",
-sku:""
+        size:"",
+        color:"",
+        price:"",
+        sku:""
 
-});
+    });
 
 
 
-const handleChange=(e)=>{
+    const handleChange=(e)=>{
 
+        setVariant({
 
-setVariant({
+            ...variant,
 
-...variant,
+            [e.target.name]:e.target.value
 
-[e.target.name]:e.target.value
+        });
 
-})
+    };
 
 
-}
 
+    const submit=()=>{
 
+        onAdd(variant);
 
-const submit=(e)=>{
+        setVariant({
 
+            size:"",
+            color:"",
+            price:"",
+            sku:""
 
-e.preventDefault();
+        });
 
+    };
 
-onAdd(variant);
 
 
+    return (
 
-setVariant({
+        <div className="grid grid-cols-4 gap-4">
 
-size:"",
-color:"",
-price:"",
-sku:""
 
-});
+            <input
 
+            name="size"
 
-}
+            value={variant.size}
 
+            onChange={handleChange}
 
+            placeholder="Size"
 
-return (
+            className="
+            px-4
+            py-3
+            bg-slate-50
+            rounded-xl
+            font-bold
+            text-sm
+            outline-none
+            "
 
-<form onSubmit={submit}>
+            />
 
 
-<h3>Add Variant</h3>
+            <input
 
+            name="color"
 
-<input
+            value={variant.color}
 
-name="size"
+            onChange={handleChange}
 
-placeholder="Size"
+            placeholder="Color"
 
-value={variant.size}
+            className="
+            px-4
+            py-3
+            bg-slate-50
+            rounded-xl
+            font-bold
+            text-sm
+            outline-none
+            "
 
-onChange={handleChange}
+            />
 
-/>
 
 
+            <input
 
-<input
+            name="price"
 
-name="color"
+            value={variant.price}
 
-placeholder="Color"
+            onChange={handleChange}
 
-value={variant.color}
+            placeholder="Price"
 
-onChange={handleChange}
+            className="
+            px-4
+            py-3
+            bg-slate-50
+            rounded-xl
+            font-bold
+            text-sm
+            outline-none
+            "
 
-/>
+            />
 
 
 
-<input
+            <button
 
-name="price"
+            onClick={submit}
 
-placeholder="Price"
+            className="
+            bg-indigo-600
+            text-white
+            rounded-xl
+            font-black
+            "
 
-type="number"
+            >
 
-value={variant.price}
+            Add Variant
 
-onChange={handleChange}
+            </button>
 
-/>
 
 
+        </div>
 
-<input
+    );
 
-name="sku"
-
-placeholder="SKU"
-
-value={variant.sku}
-
-onChange={handleChange}
-
-/>
-
-
-
-<button>
-
-Add Variant
-
-</button>
-
-
-
-</form>
-
-
-)
-
-}
-
+};
 
 
 export default VariantForm;
