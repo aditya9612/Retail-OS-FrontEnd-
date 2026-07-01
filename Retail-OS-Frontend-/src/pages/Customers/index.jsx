@@ -23,6 +23,12 @@ const INITIAL_CUSTOMERS = [
     { id: 'CUST-004', name: 'Sneha Singh', DateOfBirth: '1996-11-25',  phone: '9876501234', gstin: '—', address: 'Bangalore, Karnataka', totalOrders: 3, totalSpent: 12500, joinedDate: '2026-05-01', status: 'Inactive' },
     { id: 'CUST-005', name: 'Vikram Mehta', DateOfBirth: '1998-02-18',  phone: '9012345678', gstin: '—', address: 'Ahmedabad, Gujarat', totalOrders: 20, totalSpent: 67800, joinedDate: '2025-09-05', status: 'Active' },
     { id: 'CUST-006', name: 'Anjali Gupta', DateOfBirth: '2000-09-12',  phone: '9123456700', gstin: '29BCEPK4283R1ZJ', address: 'Hyderabad, Telangana', totalOrders: 6, totalSpent: 34500, joinedDate: '2026-03-12', status: 'Active' },
+    { id: 'CUST-007', name: 'John Doe', DateOfBirth: '1990-05-15', phone: '9876543210', gstin: '27AAPFU0939F1ZV', address: 'Mumbai, Maharashtra', totalOrders: 12, totalSpent: 45800, joinedDate: '2026-01-15', status: 'Active' },
+    { id: 'CUST-008', name: 'Jane Smith', DateOfBirth: '1992-07-20', phone: '9123456789', gstin: '—', address: 'Pune, Maharashtra', totalOrders: 8, totalSpent: 23400, joinedDate: '2026-02-20', status: 'Active' },
+    { id: 'CUST-009', name: 'Jim Beam', DateOfBirth: '1994-03-10', phone: '9988776655', gstin: '07BCEPK4283R1ZJ', address: 'Delhi', totalOrders: 15, totalSpent: 89200, joinedDate: '2025-11-10', status: 'Active' },
+    { id: 'CUST-010', name: 'Jill Johnson', DateOfBirth: '1996-11-25', phone: '9876501234', gstin: '—', address: 'Bangalore, Karnataka', totalOrders: 3, totalSpent: 12500, joinedDate: '2026-05-01', status: 'Inactive' },
+    { id: 'CUST-011', name: 'Jack Daniels', DateOfBirth: '1998-02-18', phone: '9012345678', gstin: '—', address: 'Ahmedabad, Gujarat', totalOrders: 20, totalSpent: 67800, joinedDate: '2025-09-05', status: 'Active' },
+    { id: 'CUST-012', name: 'Jill Smith', DateOfBirth: '2000-09-12', phone: '9123456700', gstin: '29BCEPK4283R1ZJ', address: 'Hyderabad, Telangana', totalOrders: 6, totalSpent: 34500, joinedDate: '2026-03-12', status: 'Active' },
 ];
 
 const fmt = (n) => '₹' + Number(n).toLocaleString('en-IN');
