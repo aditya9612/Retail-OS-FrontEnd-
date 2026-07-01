@@ -1,11 +1,22 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-    BsGrid1X2Fill, BsBoxSeam, BsTag, BsCartCheck,
-    BsBagCheck, BsArrowReturnLeft, BsPeopleFill,
-    BsBarChartFill, BsReceiptCutoff, BsFileEarmarkText,
-    BsShopWindow, BsChevronDown, BsGearFill,
-    BsPersonBadge, BsActivity,
+    BsGrid1X2Fill,
+    BsBoxSeam,
+    BsTag,
+    BsCartCheck,
+    BsBagCheck,
+    BsArrowReturnLeft,
+    BsPeopleFill,
+    BsBarChartFill,
+    BsReceiptCutoff,
+    BsFileEarmarkText,
+    BsShopWindow,
+    BsChevronDown,
+    BsGearFill,
+    BsPersonBadge,
+    BsActivity,
+    BsUpcScan       // ✅ Add this
 } from 'react-icons/bs';
 
 const menuGroups = [
@@ -21,13 +32,14 @@ const menuGroups = [
         items: [
             { name: 'POS Billing', icon: <BsCartCheck />, path: '/billing' },
             { name: 'Billing Mgmt', icon: <BsFileEarmarkText />, path: '/billing-management', hasArrow: true },
+            { name: "Barcode & Product Management",icon: <BsUpcScan />, path: "/products", hasArrow: true,},
             { name: 'GST Management', icon: <BsReceiptCutoff />, path: '/gst-management' },
         ],
     },
     {
         label: 'Inventory',
         items: [
-            { name: 'Products', icon: <BsBoxSeam />, path: '/products', hasArrow: true },
+            
             { name: 'Categories', icon: <BsTag />, path: '/categories', hasArrow: true },
             { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases', hasArrow: true },
             { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/returns', hasArrow: true },
