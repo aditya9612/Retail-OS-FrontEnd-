@@ -7,6 +7,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
 import Customers from './pages/Customers';
+import Login from './pages/Login';
 
 // Placeholder Pages
 const Placeholder = ({ title }) => (
@@ -18,35 +19,44 @@ const Placeholder = ({ title }) => (
 function App() {
     return (
         <Router>
-            <DashboardLayout>
-                <Routes>
-                    {/* Main */}
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Routes>
+                <Route path="/login" element={<Login />} />
 
-                    {/* Billing & GST */}
-                    <Route path="/billing" element={<Billing />} />
-                    <Route path="/billing-management" element={<BillingManagement />} />
-                    <Route path="/gst-management" element={<GSTManagement />} />
+                <Route
+                    path="/*"
+                    element={
+                        <DashboardLayout>
+                            <Routes>
+                                {/* Main */}
+                                <Route path="/dashboard" element={<Dashboard />} />
+                                <Route path="/admin-dashboard" element={<AdminDashboard />} />
 
-                    {/* Inventory */}
-                    <Route path="/products" element={<Placeholder title="Product Catalog" />} />
-                    <Route path="/categories" element={<Placeholder title="Categories" />} />
-                    <Route path="/purchases" element={<Placeholder title="Purchases" />} />
-                    <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
+                                {/* Billing & GST */}
+                                <Route path="/billing" element={<Billing />} />
+                                <Route path="/billing-management" element={<BillingManagement />} />
+                                <Route path="/gst-management" element={<GSTManagement />} />
 
-                    {/* People */}
-                    <Route path="/customers" element={<Customers />} />
-                    <Route path="/employees" element={<Placeholder title="Staff Management" />} />
+                                {/* Inventory */}
+                                <Route path="/products" element={<Placeholder title="Product Catalog" />} />
+                                <Route path="/categories" element={<Placeholder title="Categories" />} />
+                                <Route path="/purchases" element={<Placeholder title="Purchases" />} />
+                                <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
 
-                    {/* Analytics */}
-                    <Route path="/reports" element={<Placeholder title="Analytics & Reports" />} />
-                    <Route path="/settings" element={<Placeholder title="System Settings" />} />
+                                {/* People */}
+                                <Route path="/customers" element={<Customers />} />
+                                <Route path="/employees" element={<Placeholder title="Staff Management" />} />
 
-                    {/* Default */}
-                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
-            </DashboardLayout>
+                                {/* Analytics */}
+                                <Route path="/reports" element={<Placeholder title="Analytics & Reports" />} />
+                                <Route path="/settings" element={<Placeholder title="System Settings" />} />
+
+                                {/* Default */}
+                                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                            </Routes>
+                        </DashboardLayout>
+                    }
+                />
+            </Routes>
         </Router>
     );
 }
