@@ -8,7 +8,8 @@ import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
 import Customers from './pages/Customers';
 import Products from './pages/Products';
-import CategoryManagement from './pages/CategoryManagement';
+import CategoryManagement from './pages/Categories/CategoryManagement';
+import Login from './pages/Login';
 
 // Placeholder Pages
 const Placeholder = ({ title }) => (
@@ -20,105 +21,46 @@ const Placeholder = ({ title }) => (
 );
 
 function App() {
-
     return (
-
         <Router>
+            <Routes>
+                <Route path="/login" element={<Login />} />
 
-            <DashboardLayout>
+                <Route
+                    path="/*"
+                    element={
+                        <DashboardLayout>
+                            <Routes>
+                                {/* Main */}
+                                <Route path="/dashboard" element={<Dashboard />} />
+                                <Route path="/admin-dashboard" element={<AdminDashboard />} />
 
-                <Routes>
+                                {/* Billing & GST */}
+                                <Route path="/billing" element={<Billing />} />
+                                <Route path="/billing-management" element={<BillingManagement />} />
+                                <Route path="/gst-management" element={<GSTManagement />} />
 
-                    {/* Dashboard */}
+                                {/* Inventory */}
+                                <Route path="/products" element={<Placeholder title="Product Catalog" />} />
+                                <Route path="/categories" element={<Placeholder title="Categories" />} />
+                                <Route path="/purchases" element={<Placeholder title="Purchases" />} />
+                                <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
 
-                    <Route
-                        path="/dashboard"
-                        element={<Dashboard />}
-                    />
+                                {/* People */}
+                                <Route path="/customers" element={<Customers />} />
+                                <Route path="/employees" element={<Placeholder title="Staff Management" />} />
 
-                    <Route
-                        path="/admin-dashboard"
-                        element={<AdminDashboard />}
-                    />
+                                {/* Analytics */}
+                                <Route path="/reports" element={<Placeholder title="Analytics & Reports" />} />
+                                <Route path="/settings" element={<Placeholder title="System Settings" />} />
 
-
-
-                    {/* Billing */}
-
-                    <Route
-                        path="/billing"
-                        element={<Billing />}
-                    />
-
-                    <Route
-                        path="/billing-management"
-                        element={<BillingManagement />}
-                    />
-
-                    <Route
-                        path="/gst-management"
-                        element={<GSTManagement />}
-                    />
-
-
-
-                    {/* Product Management */}
-
-                    <Route
-                        path="/products"
-                        element={<Products />}
-                    />
-
-                    <Route
-                        path="/categories"
-                        element={<CategoryManagement />}
-                    />
-
-
-
-                    {/* Inventory */}
-
-                    <Route
-                        path="/purchases"
-                        element={<Placeholder title="Purchases" />}
-                    />
-
-                    <Route
-                        path="/returns"
-                        element={<Placeholder title="Returns & Refunds" />}
-                    />
-
-
-
-                    {/* People */}
-                    <Route path="/customers" element={<Customers />} />
-                    <Route path="/employees" element={<Placeholder title="Staff Management" />} />
-
-                    {/* Analytics */}
-
-                    <Route
-                        path="/reports"
-                        element={<Placeholder title="Analytics & Reports" />}
-                    />
-
-                    <Route
-                        path="/settings"
-                        element={<Placeholder title="System Settings" />}
-                    />
-
-
-
-                    {/* Default */}
-
-                    <Route
-                        path="/"
-                        element={<Navigate to="/dashboard" replace />}
-                    />
-
-                </Routes>
-
-            </DashboardLayout>
-
+                                {/* Default */}
+                                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                            </Routes>
+                        </DashboardLayout>
+                    }
+                />
+            </Routes>
         </Router>
 
     );
