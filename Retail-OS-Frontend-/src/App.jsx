@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
+import Inventory from './pages/Inventory';
 
 // Placeholder Pages
 const Placeholder = ({ title }) => (
@@ -29,11 +30,12 @@ function App() {
                     <Route path="/gst-management" element={<GSTManagement />} />
 
                     {/* Inventory */}
+                      <Route path="/inventory" element={<Inventory />} />
                     <Route path="/products" element={<Placeholder title="Product Catalog" />} />
                     <Route path="/categories" element={<Placeholder title="Categories" />} />
                     <Route path="/purchases" element={<Placeholder title="Purchases" />} />
                     <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
-
+                  
                     {/* People */}
                     <Route path="/customers" element={<Placeholder title="Customer Directory" />} />
                     <Route path="/employees" element={<Placeholder title="Staff Management" />} />

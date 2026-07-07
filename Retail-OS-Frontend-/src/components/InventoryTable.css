@@ -1,0 +1,246 @@
+/* ==========================================
+   Inventory Table Container
+========================================== */
+
+.inventory-table-container {
+  background: #ffffff;
+  margin-top: 25px;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  overflow-x: auto;
+  transition: all 0.3s ease;
+}
+
+/* Custom Scrollbar */
+
+.inventory-table-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.inventory-table-container::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.inventory-table-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.inventory-table-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ==========================================
+   Table Header
+========================================== */
+
+.table-header {
+  margin-bottom: 20px;
+}
+
+.table-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.table-header p {
+  margin-top: 6px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* ==========================================
+   Table
+========================================== */
+
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1000px;
+}
+
+.inventory-table thead {
+  background: #f8fafc;
+}
+
+.inventory-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #f8fafc;
+}
+
+.inventory-table th {
+  padding: 16px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.inventory-table td {
+  padding: 16px;
+  font-size: 14px;
+  color: #4b5563;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+
+.inventory-table tbody tr {
+  transition: all 0.3s ease;
+}
+
+.inventory-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+/* Quantity */
+
+.inventory-table td:nth-child(5) {
+  font-weight: 600;
+}
+
+/* ==========================================
+   Status Badges
+========================================== */
+
+.status {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* In Stock */
+
+.status.in-stock {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+/* Low Stock */
+
+.status.low-stock {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+/* Out Of Stock */
+
+.status.out-of-stock {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* ==========================================
+   Action Buttons
+========================================== */
+
+.action-btn {
+  border: none;
+  padding: 8px 14px;
+  margin-right: 8px;
+  margin-bottom: 5px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+}
+
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* View */
+
+.view-btn {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.view-btn:hover {
+  background: #1d4ed8;
+}
+
+/* Edit */
+
+.edit-btn {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.edit-btn:hover {
+  background: #059669;
+}
+
+/* Delete */
+
+.delete-btn {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.delete-btn:hover {
+  background: #dc2626;
+}
+
+/* ==========================================
+   Responsive
+========================================== */
+
+@media (max-width: 992px) {
+
+  .inventory-table-container {
+    padding: 18px;
+  }
+
+  .table-header h2 {
+    font-size: 20px;
+  }
+
+}
+
+@media (max-width: 768px) {
+
+  .inventory-table-container {
+    overflow-x: auto;
+  }
+
+  .inventory-table {
+    min-width: 900px;
+  }
+
+}
+
+@media (max-width: 576px) {
+
+  .table-header h2 {
+    font-size: 18px;
+  }
+
+  .table-header p {
+    font-size: 13px;
+  }
+
+  .action-btn {
+    width: 100%;
+    margin-right: 0;
+    margin-bottom: 8px;
+    padding: 8px;
+    font-size: 12px;
+  }
+
+}

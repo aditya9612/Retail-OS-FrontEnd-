@@ -1,0 +1,170 @@
+/* ===========================
+   Inventory Filters
+=========================== */
+
+.inventory-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 20px;
+  background: #ffffff;
+  padding: 24px;
+  margin: 25px 0;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* ===========================
+   Filters Header
+=========================== */
+
+.filters-header {
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+.filters-header h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 6px;
+}
+
+.filters-header p {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* ===========================
+   Filter Group
+=========================== */
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 220px;
+}
+
+.filter-group label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.filter-group input,
+.filter-group select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.3s ease;
+  background: #ffffff;
+}
+
+.filter-group input:focus,
+.filter-group select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* ===========================
+   Buttons
+=========================== */
+
+.filter-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.reset-btn,
+.search-btn,
+.export-btn {
+  padding: 12px 22px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+/* Reset */
+
+.reset-btn {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.reset-btn:hover {
+  background: #d1d5db;
+}
+
+/* Search */
+
+.search-btn {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.search-btn:hover {
+  background: #1d4ed8;
+}
+
+/* Export */
+
+.export-btn {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.export-btn:hover {
+  background: #059669;
+}
+
+/* ===========================
+   Responsive
+=========================== */
+
+@media (max-width: 992px) {
+
+  .inventory-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filters-header {
+    margin-bottom: 15px;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .filter-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+}
+
+@media (max-width: 576px) {
+
+  .reset-btn,
+  .search-btn,
+  .export-btn {
+    width: 100%;
+  }
+
+  .filter-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+}

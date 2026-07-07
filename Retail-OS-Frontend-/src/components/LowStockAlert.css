@@ -1,0 +1,215 @@
+/* ==========================================
+   Low Stock Alert Container
+========================================== */
+
+.low-stock-alert {
+  background: #ffffff;
+  margin-top: 25px;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  overflow-x: auto;
+  transition: all 0.3s ease;
+}
+
+/* Custom Scrollbar */
+
+.low-stock-alert::-webkit-scrollbar {
+  height: 8px;
+}
+
+.low-stock-alert::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.low-stock-alert::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.low-stock-alert::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ==========================================
+   Header
+========================================== */
+
+.low-stock-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.low-stock-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #dc2626;
+}
+
+.low-stock-header p {
+  margin-top: 6px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* ==========================================
+   View All Button
+========================================== */
+
+.view-all-btn {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.view-all-btn:hover {
+  background: #1d4ed8;
+  transform: translateY(-2px);
+}
+
+/* ==========================================
+   Table
+========================================== */
+
+.low-stock-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1100px;
+}
+
+.low-stock-table thead {
+  background: #f9fafb;
+}
+
+.low-stock-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f9fafb;
+  z-index: 5;
+}
+
+.low-stock-table th {
+  padding: 14px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.low-stock-table td {
+  padding: 14px;
+  font-size: 14px;
+  color: #4b5563;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+
+.low-stock-table tbody tr {
+  transition: all 0.3s ease;
+}
+
+.low-stock-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+/* ==========================================
+   Status Badges
+========================================== */
+
+.low-stock-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #fef3c7;
+  color: #b45309;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.critical-stock-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ==========================================
+   Reorder Button
+========================================== */
+
+.reorder-btn {
+  border: none;
+  background: #10b981;
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.reorder-btn:hover {
+  background: #059669;
+  transform: translateY(-2px);
+}
+
+/* ==========================================
+   Responsive
+========================================== */
+
+@media (max-width: 992px) {
+
+  .low-stock-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+}
+
+@media (max-width: 768px) {
+
+  .low-stock-alert {
+    overflow-x: auto;
+  }
+
+  .low-stock-table {
+    min-width: 1000px;
+  }
+
+}
+
+@media (max-width: 576px) {
+
+  .low-stock-header h2 {
+    font-size: 18px;
+  }
+
+  .low-stock-header p {
+    font-size: 13px;
+  }
+
+  .view-all-btn {
+    width: 100%;
+  }
+
+  .reorder-btn {
+    width: 100%;
+  }
+
+}
