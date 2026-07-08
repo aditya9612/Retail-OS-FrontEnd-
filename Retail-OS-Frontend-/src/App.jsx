@@ -6,50 +6,67 @@ import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
+import Customers from './pages/Customers';
+import Products from './pages/Products';
+import CategoryManagement from './pages/Categories/CategoryManagement';
+import Login from './pages/Login';
 import Inventory from './pages/Inventory';
 
 // Placeholder Pages
 const Placeholder = ({ title }) => (
     <div style={{ padding: 32 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>{title}</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: "#111827" }}>
+            {title}
+        </h1>
     </div>
 );
 
 function App() {
     return (
         <Router>
-            <DashboardLayout>
-                <Routes>
-                    {/* Main */}
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Routes>
+                <Route path="/login" element={<Login />} />
 
-                    {/* Billing & GST */}
-                    <Route path="/billing" element={<Billing />} />
-                    <Route path="/billing-management" element={<BillingManagement />} />
-                    <Route path="/gst-management" element={<GSTManagement />} />
+                <Route
+                    path="/*"
+                    element={
+                        <DashboardLayout>
+                            <Routes>
+                                {/* Main */}
+                                <Route path="/dashboard" element={<Dashboard />} />
+                                <Route path="/admin-dashboard" element={<AdminDashboard />} />
 
-                    {/* Inventory */}
+                                {/* Billing & GST */}
+                                <Route path="/billing" element={<Billing />} />
+                                <Route path="/billing-management" element={<BillingManagement />} />
+                                <Route path="/gst-management" element={<GSTManagement />} />
+
+                                {/* Inventory */}
                       <Route path="/inventory" element={<Inventory />} />
-                    <Route path="/products" element={<Placeholder title="Product Catalog" />} />
-                    <Route path="/categories" element={<Placeholder title="Categories" />} />
-                    <Route path="/purchases" element={<Placeholder title="Purchases" />} />
-                    <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
+                                <Route path="/products" element={<Placeholder title="Product Catalog" />} />
+                                <Route path="/categories" element={<Placeholder title="Categories" />} />
+                                <Route path="/purchases" element={<Placeholder title="Purchases" />} />
+                                <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
                   
-                    {/* People */}
-                    <Route path="/customers" element={<Placeholder title="Customer Directory" />} />
-                    <Route path="/employees" element={<Placeholder title="Staff Management" />} />
+                                {/* People */}
+                                <Route path="/customers" element={<Customers />} />
+                                <Route path="/employees" element={<Placeholder title="Staff Management" />} />
 
-                    {/* Analytics */}
-                    <Route path="/reports" element={<Placeholder title="Analytics & Reports" />} />
-                    <Route path="/settings" element={<Placeholder title="System Settings" />} />
+                                {/* Analytics */}
+                                <Route path="/reports" element={<Placeholder title="Analytics & Reports" />} />
+                                <Route path="/settings" element={<Placeholder title="System Settings" />} />
 
-                    {/* Default */}
-                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
-            </DashboardLayout>
+                                {/* Default */}
+                                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                            </Routes>
+                        </DashboardLayout>
+                    }
+                />
+            </Routes>
         </Router>
+
     );
+
 }
 
 export default App;
