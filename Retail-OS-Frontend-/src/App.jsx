@@ -1,11 +1,14 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import DashboardLayout from './layouts/DashboardLayout';
+import Login from './pages/Login';
 import Billing from './pages/Billing';
 import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
+import Inventory from './pages/Inventory';
+import Customers from './pages/Customers';
 import ECommerceDashboard from './pages/ECommerce/ECommerceDashboard';
 import StoreManagement from './pages/ECommerce/StoreManagement';
 import OrderManagement from './pages/ECommerce/OrderManagement';

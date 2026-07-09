@@ -5,6 +5,7 @@ import {
     BsBoxSeam,
     BsTag,
     BsCartCheck,
+    BsCart3,
     BsBagCheck,
     BsArrowReturnLeft,
     BsPeopleFill,
@@ -16,7 +17,10 @@ import {
     BsGearFill,
     BsPersonBadge,
     BsActivity,
-    BsUpcScan       // ✅ Add this
+    BsUpcScan,
+    BsTagFill,
+    BsTruck,
+    BsStarHalf,
 } from 'react-icons/bs';
 
 const menuGroups = [
