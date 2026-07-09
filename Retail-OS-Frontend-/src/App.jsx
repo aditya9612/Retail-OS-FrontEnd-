@@ -6,6 +6,15 @@ import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
+import ECommerceDashboard from './pages/ECommerce/ECommerceDashboard';
+import StoreManagement from './pages/ECommerce/StoreManagement';
+import OrderManagement from './pages/ECommerce/OrderManagement';
+import CouponManagement from './pages/ECommerce/CouponManagement';
+import DeliveryManagement from './pages/ECommerce/DeliveryManagement';
+import ProductCatalog from './pages/ECommerce/ProductCatalog';
+import CustomerManagement from './pages/ECommerce/CustomerManagement';
+import ReviewManagement from './pages/ECommerce/ReviewManagement';
+import ReturnManagement from './pages/ECommerce/ReturnManagement';
 
 // Placeholder Pages
 const Placeholder = ({ title }) => (
@@ -27,6 +36,17 @@ function App() {
                     <Route path="/billing" element={<Billing />} />
                     <Route path="/billing-management" element={<BillingManagement />} />
                     <Route path="/gst-management" element={<GSTManagement />} />
+
+                    {/* E-Commerce Module */}
+                    <Route path="/ecommerce" element={<ECommerceDashboard />} />
+                    <Route path="/ecommerce/store" element={<StoreManagement />} />
+                    <Route path="/ecommerce/orders" element={<OrderManagement />} />
+                    <Route path="/ecommerce/coupons" element={<CouponManagement />} />
+                    <Route path="/ecommerce/delivery" element={<DeliveryManagement />} />
+                    <Route path="/ecommerce/products" element={<ProductCatalog />} />
+                    <Route path="/ecommerce/customers" element={<CustomerManagement />} />
+                    <Route path="/ecommerce/reviews" element={<ReviewManagement />} />
+                    <Route path="/ecommerce/returns" element={<ReturnManagement />} />
 
                     {/* Inventory */}
                     <Route path="/products" element={<Placeholder title="Product Catalog" />} />

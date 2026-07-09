@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
     BsGrid1X2Fill, BsBoxSeam, BsTag, BsCartCheck,
     BsBagCheck, BsArrowReturnLeft, BsPeopleFill,
     BsBarChartFill, BsReceiptCutoff, BsFileEarmarkText,
-    BsShopWindow, BsChevronDown, BsGearFill,
-    BsPersonBadge, BsActivity,
+    BsShopWindow, BsChevronDown, BsChevronRight, BsGearFill,
+    BsPersonBadge, BsActivity, BsTruck, BsTagFill, BsCart3,
+    BsStarHalf, BsPeopleFill as BsPpl, BsChatLeftText,
 } from 'react-icons/bs';
 
 const menuGroups = [
@@ -20,37 +21,52 @@ const menuGroups = [
         label: 'Billing & GST',
         items: [
             { name: 'POS Billing', icon: <BsCartCheck />, path: '/billing' },
-            { name: 'Billing Mgmt', icon: <BsFileEarmarkText />, path: '/billing-management', hasArrow: true },
+            { name: 'Billing Mgmt', icon: <BsFileEarmarkText />, path: '/billing-management' },
             { name: 'GST Management', icon: <BsReceiptCutoff />, path: '/gst-management' },
+        ],
+    },
+    {
+        label: 'E-Commerce',
+        items: [
+            { name: 'EC Dashboard', icon: <BsCart3 />, path: '/ecommerce' },
+            { name: 'Store Settings', icon: <BsShopWindow />, path: '/ecommerce/store' },
+            { name: 'Product Catalog', icon: <BsBoxSeam />, path: '/ecommerce/products' },
+            { name: 'Online Orders', icon: <BsBagCheck />, path: '/ecommerce/orders' },
+            { name: 'Coupons', icon: <BsTagFill />, path: '/ecommerce/coupons' },
+            { name: 'Delivery', icon: <BsTruck />, path: '/ecommerce/delivery' },
+            { name: 'Customers', icon: <BsPeopleFill />, path: '/ecommerce/customers' },
+            { name: 'Reviews', icon: <BsStarHalf />, path: '/ecommerce/reviews' },
+            { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/ecommerce/returns' },
         ],
     },
     {
         label: 'Inventory',
         items: [
-            { name: 'Products', icon: <BsBoxSeam />, path: '/products', hasArrow: true },
-            { name: 'Categories', icon: <BsTag />, path: '/categories', hasArrow: true },
-            { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases', hasArrow: true },
-            { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/returns', hasArrow: true },
+            { name: 'Products', icon: <BsBoxSeam />, path: '/products' },
+            { name: 'Categories', icon: <BsTag />, path: '/categories' },
+            { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases' },
+            { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/returns' },
         ],
     },
     {
         label: 'People',
         items: [
-            { name: 'Customers', icon: <BsPeopleFill />, path: '/customers', hasArrow: true },
-            { name: 'Staff', icon: <BsPersonBadge />, path: '/employees', hasArrow: true },
+            { name: 'Customers', icon: <BsPeopleFill />, path: '/customers' },
+            { name: 'Staff', icon: <BsPersonBadge />, path: '/employees' },
         ],
     },
     {
         label: 'Analytics',
         items: [
-            { name: 'Reports', icon: <BsBarChartFill />, path: '/reports', hasArrow: true },
-            { name: 'Settings', icon: <BsGearFill />, path: '/settings', hasArrow: true },
+            { name: 'Reports', icon: <BsBarChartFill />, path: '/reports' },
+            { name: 'Settings', icon: <BsGearFill />, path: '/settings' },
         ],
     },
 ];
 
 const Sidebar = () => {
     const [collapsed, setCollapsed] = useState(false);
+    const location = useLocation();
 
     return (
         <aside className="sidebar" style={{ width: collapsed ? '62px' : '210px' }}>
@@ -87,12 +103,7 @@ const Sidebar = () => {
                             >
                                 <span className="sidebar-item-icon">{item.icon}</span>
                                 {!collapsed && (
-                                    <>
-                                        <span className="sidebar-item-label">{item.name}</span>
-                                        {item.hasArrow && (
-                                            <BsChevronDown className="sidebar-item-arrow" size={10} />
-                                        )}
-                                    </>
+                                    <span className="sidebar-item-label">{item.name}</span>
                                 )}
                             </NavLink>
                         ))}

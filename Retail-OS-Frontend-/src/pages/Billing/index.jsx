@@ -1,43 +1,46 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
     BsSearch,
     BsTrash,
     BsPlus,
     BsDash,
-    BsPrinter,
-    BsDownload,
-    BsPerson,
-    BsCartCheck,
-    BsCashCoin,
-    BsArrowLeftRight,
     BsUpcScan,
-    BsBagCheck,
-    BsClockHistory,
-    BsFilter,
+    BsCart3,
+    BsCashCoin,
+    BsQrCode,
+    BsCreditCard2Front,
+    BsPrinter,
+    BsArrowCounterclockwise,
     BsCheckCircleFill,
-    BsCart3
+    BsBoxSeam,
+    BsPersonFill,
+    BsReceiptCutoff,
+    BsLightningChargeFill,
+    BsX,
+    BsPercent,
 } from 'react-icons/bs';
 
-const GST_SLABS = [0, 5, 12, 18, 28];
 const CATEGORIES = ['All', 'Apparel', 'Electronics', 'Accessories', 'Groceries'];
 
+const PAYMENT_MODES = [
+    { id: 'Cash', label: 'Cash', icon: <BsCashCoin size={15} /> },
+    { id: 'UPI', label: 'UPI', icon: <BsQrCode size={15} /> },
+    { id: 'Card', label: 'Card', icon: <BsCreditCard2Front size={15} /> },
+];
+
 const Billing = () => {
-    // State
-    const [activeTab, setActiveTab] = useState('new'); // 'new' or 'history'
-    const [customer, setCustomer] = useState({ name: '', phone: '', gstin: '', address: '' });
+    const [customer, setCustomer] = useState({ name: '', phone: '' });
     const [cart, setCart] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [discountType, setDiscountType] = useState('percentage');
     const [billDiscount, setBillDiscount] = useState(0);
     const [paymentMode, setPaymentMode] = useState('Cash');
-    const [invoiceNo, setInvoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
+    const [invoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
     const [showPreview, setShowPreview] = useState(false);
-    const [salesHistory, setSalesHistory] = useState([]);
     const [scannerValue, setScannerValue] = useState('');
     const scanInputRef = useRef(null);
 
-    // Mock Product Data
     const products = [
         { id: 1, name: 'Premium Cotton T-Shirt', price: 899, hsn: '6109', gstRate: 5, category: 'Apparel', barcode: '1001', image: '👕' },
         { id: 2, name: 'Wireless Bluetooth Earbuds', price: 2499, hsn: '8518', gstRate: 18, category: 'Electronics', barcode: '1002', image: '🎧' },
@@ -46,10 +49,9 @@ const Billing = () => {
         { id: 5, name: 'Smart Fitness Tracker', price: 3999, hsn: '8517', gstRate: 18, category: 'Electronics', barcode: '1005', image: '⌚' },
         { id: 6, name: 'Denim Slim Fit Jeans', price: 1999, hsn: '6203', gstRate: 12, category: 'Apparel', barcode: '1006', image: '👖' },
         { id: 7, name: 'USB-C Fast Charger', price: 799, hsn: '8504', gstRate: 18, category: 'Electronics', barcode: '1007', image: '🔌' },
-        { id: 8, name: 'Stainless Steel Water Bottle', price: 550, hsn: '7323', gstRate: 12, category: 'Accessories', barcode: '1008', image: '🍼' },
+        { id: 8, name: 'Stainless Steel Bottle', price: 550, hsn: '7323', gstRate: 12, category: 'Accessories', barcode: '1008', image: '🍼' },
     ];
 
-    // Filtered Products
     const filteredProducts = products.filter(p =>
         (selectedCategory === 'All' || p.category === selectedCategory) &&
         (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.barcode.includes(searchQuery))
@@ -59,96 +61,88 @@ const Billing = () => {
         const val = e.target.value;
         setScannerValue(val);
         const product = products.find(p => p.barcode === val);
-        if (product) {
-            addToCart(product);
-            setScannerValue('');
-        }
+        if (product) { addToCart(product); setScannerValue(''); }
     };
 
     const addToCart = (product) => {
         setCart(prev => {
-            const existing = prev.find(item => item.id === product.id);
-            if (existing) {
-                return prev.map(item => item.id === product.id ? { ...item, qty: item.qty + 1 } : item);
-            }
-            return [...prev, { ...product, qty: 1, discount: 0 }];
+            const existing = prev.find(i => i.id === product.id);
+            if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
+            return [...prev, { ...product, qty: 1 }];
         });
     };
 
-    const removeFromCart = (id) => setCart(cart.filter(item => item.id !== id));
+    const removeFromCart = (id) => setCart(cart.filter(i => i.id !== id));
 
     const updateQty = (id, delta) => {
-        setCart(cart.map(item => item.id === id ? { ...item, qty: Math.max(1, item.qty + delta) } : item));
+        setCart(cart.map(i => i.id === id ? { ...i, qty: Math.max(1, i.qty + delta) } : i));
     };
 
     const totals = useMemo(() => {
-        let subtotal = 0, totalDiscount = 0, totalGST = 0;
+        let subtotal = 0, totalGST = 0;
         cart.forEach(item => {
-            const itemBase = item.price * item.qty;
-            const itemDisc = (itemBase * item.discount) / 100;
-            const taxable = itemBase - itemDisc;
-            const gst = (taxable * item.gstRate) / 100;
-            subtotal += itemBase;
-            totalDiscount += itemDisc;
-            totalGST += gst;
+            const base = item.price * item.qty;
+            subtotal += base;
+            totalGST += (base * item.gstRate) / 100;
         });
-        let finalDisc = totalDiscount;
+        let discountAmount = 0;
         if (billDiscount > 0) {
-            finalDisc += (discountType === 'percentage') ? ((subtotal - totalDiscount) * billDiscount) / 100 : billDiscount;
+            discountAmount = discountType === 'percentage'
+                ? (subtotal * billDiscount) / 100
+                : Number(billDiscount);
         }
-        return { subtotal, totalDiscount: finalDisc, totalGST, grandTotal: Math.round(subtotal + totalGST - finalDisc) };
+        return { subtotal, totalGST, discountAmount, grandTotal: Math.round(subtotal + totalGST - discountAmount) };
     }, [cart, billDiscount, discountType]);
 
     const handleFinishSale = () => {
-        if (cart.length === 0) return alert('Cart is empty!');
-        const sale = {
-            id: invoiceNo,
-            customer,
-            items: [...cart],
-            totals,
-            date: new Date().toLocaleString(),
-            paymentMode
-        };
-        setSalesHistory([sale, ...salesHistory]);
+        if (cart.length === 0) return;
         setShowPreview(true);
     };
 
     const handleReset = () => {
         setCart([]);
-        setCustomer({ name: '', phone: '', gstin: '', address: '' });
+        setCustomer({ name: '', phone: '' });
         setBillDiscount(0);
-        setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
+        setShowPreview(false);
     };
 
+    const totalUnits = cart.reduce((s, i) => s + i.qty, 0);
+
     return (
-        <div className="flex h-[calc(100vh-80px)] overflow-hidden bg-slate-50/50">
-            {/* Left: Product Selection */}
-            <div className="flex-1 flex flex-col p-6 overflow-hidden">
-                <div className="flex items-center justify-between mb-8">
+        <div className="pos-shell">
+            {/* ── LEFT: Product Catalog ── */}
+            <div className="pos-left">
+
+                {/* Top bar */}
+                <div className="pos-left-header">
                     <div>
-                        <h2 className="text-3xl font-black text-slate-800 tracking-tight">Order Point</h2>
-                        <div className="flex items-center gap-2 mt-1">
-                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                            <p className="text-slate-500 font-bold text-[10px] uppercase tracking-widest">Active Terminal</p>
+                        <h2 className="pos-terminal-title">
+                            <BsLightningChargeFill size={18} color="#6366f1" />
+                            Order Point
+                        </h2>
+                        <div className="pos-terminal-status">
+                            <span className="pos-status-dot" />
+                            Active Terminal
                         </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                        <div className="relative group">
-                            <BsSearch className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+                    <div className="pos-search-row">
+                        <div className="pos-search-wrap">
+                            <BsSearch className="pos-search-icon" size={13} />
                             <input
                                 type="text"
-                                placeholder="Find Products..."
-                                className="pl-14 pr-6 py-4 bg-white border border-slate-100 rounded-2xl w-80 text-sm font-bold focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all shadow-sm"
+                                className="pos-search-input"
+                                placeholder="Search products…"
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onChange={e => setSearchQuery(e.target.value)}
                             />
                         </div>
-                        <div className="relative group">
-                            <BsUpcScan className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <div className="pos-search-wrap pos-scanner-wrap">
+                            <BsUpcScan className="pos-search-icon" size={13} />
                             <input
+                                ref={scanInputRef}
                                 type="text"
-                                placeholder="Scan Barcode"
-                                className="pl-14 pr-6 py-4 bg-white border border-slate-100 rounded-2xl w-44 text-sm font-bold focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all shadow-sm"
+                                className="pos-search-input"
+                                placeholder="Scan barcode…"
                                 value={scannerValue}
                                 onChange={handleScanner}
                             />
@@ -156,136 +150,306 @@ const Billing = () => {
                     </div>
                 </div>
 
-                <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-none">
+                {/* Category pills */}
+                <div className="pos-category-bar">
                     {CATEGORIES.map(cat => (
                         <button
                             key={cat}
                             onClick={() => setSelectedCategory(cat)}
-                            className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border ${selectedCategory === cat
-                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xl shadow-indigo-100'
-                                    : 'bg-white text-slate-500 border-slate-100 hover:bg-slate-50 shadow-sm'
-                                }`}
+                            className={`pos-cat-pill${selectedCategory === cat ? ' pos-cat-pill--active' : ''}`}
                         >
                             {cat}
                         </button>
                     ))}
                 </div>
 
-                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
-                        {filteredProducts.map(product => (
-                            <div
-                                key={product.id}
-                                onClick={() => addToCart(product)}
-                                className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-indigo-100 hover:-translate-y-2 transition-all cursor-pointer group relative overflow-hidden"
-                            >
-                                <div className="absolute top-4 right-4"><span className="bg-green-50 text-green-600 text-[9px] font-black px-2 py-1 rounded-lg border border-green-100 uppercase">Stock</span></div>
-                                <div className="w-full h-32 bg-slate-50 rounded-3xl mb-4 flex items-center justify-center text-4xl group-hover:scale-110 transition-transform">{product.image}</div>
-                                <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1">{product.category}</p>
-                                <h3 className="font-black text-slate-800 text-sm leading-tight h-10 line-clamp-2">{product.name}</h3>
-                                <div className="flex items-center justify-between mt-4">
-                                    <p className="text-xl font-black text-slate-900">₹{product.price}</p>
-                                    <div className="p-2.5 bg-slate-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-all"><BsPlus size={20} /></div>
+                {/* Product grid */}
+                <div className="pos-product-grid custom-scrollbar">
+                    {filteredProducts.length === 0 ? (
+                        <div className="pos-empty-state">
+                            <BsBoxSeam size={40} />
+                            <p>No products found</p>
+                        </div>
+                    ) : (
+                        filteredProducts.map(product => {
+                            const inCart = cart.find(i => i.id === product.id);
+                            return (
+                                <div
+                                    key={product.id}
+                                    className={`pos-product-card${inCart ? ' pos-product-card--in-cart' : ''}`}
+                                    onClick={() => addToCart(product)}
+                                >
+                                    {inCart && (
+                                        <div className="pos-product-qty-badge">{inCart.qty}</div>
+                                    )}
+                                    <div className="pos-product-image">{product.image}</div>
+                                    <span className="pos-product-cat">{product.category}</span>
+                                    <h3 className="pos-product-name">{product.name}</h3>
+                                    <div className="pos-product-footer">
+                                        <span className="pos-product-price">₹{product.price.toLocaleString()}</span>
+                                        <div className="pos-product-add-btn">
+                                            <BsPlus size={18} />
+                                        </div>
+                                    </div>
+                                    <span className="pos-product-gst-tag">GST {product.gstRate}%</span>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
+                            );
+                        })
+                    )}
                 </div>
             </div>
 
-            {/* Right: Cart & Payment */}
-            <div className="w-[450px] bg-white border-l border-slate-100 flex flex-col shadow-[-20px_0_40px_rgba(0,0,0,0.02)]">
-                <div className="p-8 border-b border-slate-100 flex flex-col gap-4">
-                    <div className="flex justify-between items-center">
-                        <h3 className="text-xl font-black text-slate-800 tracking-tight">Current Order</h3>
-                        <span className="bg-indigo-600 text-white text-[10px] font-black px-3 py-1.5 rounded-full">{cart.reduce((s, i) => s + i.qty, 0)} UNITS</span>
+            {/* ── RIGHT: Cart & Payment ── */}
+            <div className="pos-right">
+
+                {/* Order header */}
+                <div className="pos-right-header">
+                    <div className="pos-right-header-top">
+                        <div className="pos-right-title-row">
+                            <BsReceiptCutoff size={16} color="#6366f1" />
+                            <h3 className="pos-right-title">Current Order</h3>
+                        </div>
+                        <span className="pos-units-badge">{totalUnits} {totalUnits === 1 ? 'item' : 'items'}</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <input type="text" placeholder="Cust. Name" value={customer.name} onChange={e => setCustomer({ ...customer, name: e.target.value })} className="px-4 py-3 bg-slate-50 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-indigo-100" />
-                        <input type="text" placeholder="Phone" value={customer.phone} onChange={e => setCustomer({ ...customer, phone: e.target.value })} className="px-4 py-3 bg-slate-50 rounded-xl text-xs font-bold border-none outline-none focus:ring-2 focus:ring-indigo-100" />
+
+                    {/* Customer fields */}
+                    <div className="pos-customer-row">
+                        <div className="pos-cust-field-wrap">
+                            <BsPersonFill size={12} className="pos-cust-icon" />
+                            <input
+                                type="text"
+                                className="pos-cust-input"
+                                placeholder="Customer name"
+                                value={customer.name}
+                                onChange={e => setCustomer({ ...customer, name: e.target.value })}
+                            />
+                        </div>
+                        <div className="pos-cust-field-wrap">
+                            <input
+                                type="text"
+                                className="pos-cust-input"
+                                placeholder="Phone number"
+                                value={customer.phone}
+                                onChange={e => setCustomer({ ...customer, phone: e.target.value })}
+                            />
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar">
+                {/* Cart items */}
+                <div className="pos-cart-list custom-scrollbar">
                     {cart.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center opacity-30 grayscale"><BsCart3 size={64} className="text-slate-300 mb-4" /><p className="text-[10px] font-black uppercase tracking-widest">Cart is empty</p></div>
+                        <div className="pos-cart-empty">
+                            <BsCart3 size={48} />
+                            <p>Cart is empty</p>
+                            <span>Click a product to add it</span>
+                        </div>
                     ) : (
                         cart.map(item => (
-                            <div key={item.id} className="flex gap-4 group">
-                                <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-2xl border border-slate-100">{item.image}</div>
-                                <div className="flex-1">
-                                    <h4 className="font-black text-slate-800 text-xs mb-1 line-clamp-1">{item.name}</h4>
-                                    <div className="flex items-center gap-2"><span className="text-[10px] font-black text-indigo-600 border border-indigo-100 px-2 rounded-lg bg-indigo-50/50">₹{item.price}</span></div>
+                            <div key={item.id} className="pos-cart-item">
+                                <div className="pos-cart-item-emoji">{item.image}</div>
+                                <div className="pos-cart-item-info">
+                                    <h4 className="pos-cart-item-name">{item.name}</h4>
+                                    <span className="pos-cart-item-price">₹{item.price.toLocaleString()} × {item.qty}</span>
                                 </div>
-                                <div className="flex items-center bg-slate-50 rounded-xl p-1 border border-slate-100">
-                                    <button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 font-bold">-</button>
-                                    <span className="w-8 text-center text-[10px] font-black">{item.qty}</span>
-                                    <button onClick={() => updateQty(item.id, 1)} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 font-bold">+</button>
+                                <div className="pos-qty-ctrl">
+                                    <button className="pos-qty-btn" onClick={() => updateQty(item.id, -1)}>
+                                        <BsDash size={12} />
+                                    </button>
+                                    <span className="pos-qty-val">{item.qty}</span>
+                                    <button className="pos-qty-btn" onClick={() => updateQty(item.id, 1)}>
+                                        <BsPlus size={12} />
+                                    </button>
                                 </div>
-                                <button onClick={() => removeFromCart(item.id)} className="p-2 text-slate-300 hover:text-red-500"><BsTrash size={16} /></button>
+                                <span className="pos-cart-item-total">₹{(item.price * item.qty).toLocaleString()}</span>
+                                <button className="pos-cart-item-del" onClick={() => removeFromCart(item.id)}>
+                                    <BsTrash size={13} />
+                                </button>
                             </div>
                         ))
                     )}
                 </div>
 
-                <div className="p-8 bg-slate-50 border-t border-slate-100 space-y-4">
-                    <div className="space-y-2">
-                        <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest"><span>Subtotal</span><span className="text-slate-800">₹{totals.subtotal.toFixed(2)}</span></div>
-                        <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest"><span>GST (18%)</span><span className="text-slate-800">₹{totals.totalGST.toFixed(2)}</span></div>
-                        <div className="flex justify-between text-[10px] font-black text-red-500 uppercase tracking-widest"><span>Discount</span><span>-₹{totals.totalDiscount.toFixed(2)}</span></div>
-                        <div className="pt-4 mt-2 border-t border-slate-200 flex justify-between items-end">
-                            <div><p className="text-[10px] font-black text-indigo-400 uppercase mb-1">Grand Total</p><h3 className="text-4xl font-black text-slate-900 tracking-tight">₹{totals.grandTotal.toFixed(2)}</h3></div>
-                            <div className="text-right text-[8px] font-black text-slate-400 uppercase">Incl. Taxes & Fees</div>
+                {/* Totals & payment */}
+                <div className="pos-right-footer">
+
+                    {/* Discount row */}
+                    <div className="pos-discount-row">
+                        <div className="pos-discount-type-btns">
+                            <button
+                                className={`pos-disc-type-btn${discountType === 'percentage' ? ' pos-disc-type-btn--active' : ''}`}
+                                onClick={() => setDiscountType('percentage')}
+                            >
+                                <BsPercent size={11} /> %
+                            </button>
+                            <button
+                                className={`pos-disc-type-btn${discountType === 'fixed' ? ' pos-disc-type-btn--active' : ''}`}
+                                onClick={() => setDiscountType('fixed')}
+                            >
+                                ₹ Flat
+                            </button>
+                        </div>
+                        <input
+                            type="number"
+                            min="0"
+                            className="pos-discount-input"
+                            placeholder="Discount"
+                            value={billDiscount || ''}
+                            onChange={e => setBillDiscount(Number(e.target.value))}
+                        />
+                    </div>
+
+                    {/* Summary */}
+                    <div className="pos-summary">
+                        <div className="pos-summary-row">
+                            <span>Subtotal</span>
+                            <span>₹{totals.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div className="pos-summary-row">
+                            <span>GST</span>
+                            <span>₹{totals.totalGST.toFixed(2)}</span>
+                        </div>
+                        {totals.discountAmount > 0 && (
+                            <div className="pos-summary-row pos-summary-row--discount">
+                                <span>Discount</span>
+                                <span>−₹{totals.discountAmount.toFixed(2)}</span>
+                            </div>
+                        )}
+                        <div className="pos-summary-divider" />
+                        <div className="pos-summary-total">
+                            <span>Grand Total</span>
+                            <span className="pos-grand-amount">₹{totals.grandTotal.toLocaleString('en-IN')}</span>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 py-2">
-                        {['Cash', 'UPI', 'Card'].map(m => (
-                            <button key={m} onClick={() => setPaymentMode(m)} className={`py-3 rounded-2xl text-[10px] font-black uppercase transition-all border ${paymentMode === m ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-100' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>{m}</button>
+                    {/* Payment mode */}
+                    <div className="pos-payment-modes">
+                        {PAYMENT_MODES.map(m => (
+                            <button
+                                key={m.id}
+                                onClick={() => setPaymentMode(m.id)}
+                                className={`pos-pay-btn${paymentMode === m.id ? ' pos-pay-btn--active' : ''}`}
+                            >
+                                {m.icon}
+                                {m.label}
+                            </button>
                         ))}
                     </div>
 
-                    <button
-                        disabled={cart.length === 0}
-                        onClick={handleFinishSale}
-                        className="w-full py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-lg shadow-xl shadow-indigo-100 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:grayscale"
-                    >
-                        COMPLETE ORDER
-                    </button>
+                    {/* Actions */}
+                    <div className="pos-action-row">
+                        <button className="pos-btn-reset" onClick={handleReset} title="Clear cart">
+                            <BsArrowCounterclockwise size={15} />
+                        </button>
+                        <button
+                            className="pos-btn-checkout"
+                            disabled={cart.length === 0}
+                            onClick={handleFinishSale}
+                        >
+                            <BsCheckCircleFill size={16} />
+                            Complete Sale
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* Receipt Modal */}
+            {/* ── Receipt Modal ── */}
             {showPreview && (
-                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-50 flex items-center justify-center p-8 animate-in fade-in duration-300">
-                    <div className="bg-white w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-500">
-                        <div className="p-10" id="invoice">
-                            <div className="text-center mb-8">
-                                <h1 className="text-2xl font-black tracking-tighter mb-1">POS DASH</h1>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Smart Retail Solutions</p>
+                <div className="ec-modal-overlay" onClick={() => setShowPreview(false)}>
+                    <div className="pos-receipt-modal" onClick={e => e.stopPropagation()}>
+                        <button className="pos-receipt-close" onClick={() => setShowPreview(false)}>
+                            <BsX size={18} />
+                        </button>
+
+                        <div id="invoice" className="pos-receipt-body">
+                            {/* Store header */}
+                            <div className="pos-receipt-store">
+                                <div className="pos-receipt-logo">
+                                    <BsLightningChargeFill size={22} color="#fff" />
+                                </div>
+                                <h1 className="pos-receipt-store-name">RetailOS</h1>
+                                <p className="pos-receipt-store-tag">Smart Retail Solutions</p>
                             </div>
-                            <div className="border-y border-slate-100 py-6 mb-8 grid grid-cols-2 gap-4">
-                                <div><p className="text-[9px] font-black text-slate-300 uppercase mb-1">Invoice</p><p className="text-sm font-black text-slate-800">{invoiceNo}</p></div>
-                                <div className="text-right"><p className="text-[9px] font-black text-slate-300 uppercase mb-1">Date</p><p className="text-sm font-black text-slate-800">{new Date().toLocaleDateString()}</p></div>
+
+                            <div className="pos-receipt-divider-dots" />
+
+                            {/* Invoice meta */}
+                            <div className="pos-receipt-meta">
+                                <div>
+                                    <p className="pos-receipt-meta-label">Invoice</p>
+                                    <p className="pos-receipt-meta-value">{invoiceNo}</p>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                    <p className="pos-receipt-meta-label">Date</p>
+                                    <p className="pos-receipt-meta-value">{new Date().toLocaleDateString('en-IN')}</p>
+                                </div>
+                                {customer.name && (
+                                    <div>
+                                        <p className="pos-receipt-meta-label">Customer</p>
+                                        <p className="pos-receipt-meta-value">{customer.name}</p>
+                                    </div>
+                                )}
+                                <div style={{ textAlign: 'right' }}>
+                                    <p className="pos-receipt-meta-label">Payment</p>
+                                    <p className="pos-receipt-meta-value">{paymentMode}</p>
+                                </div>
                             </div>
-                            <div className="space-y-4 mb-8">
-                                {cart.map(i => (
-                                    <div key={i.id} className="flex justify-between items-center text-sm">
-                                        <div><p className="font-black text-slate-800">{i.name}</p><p className="text-[10px] text-slate-400">Qty: {i.qty} x ₹{i.price}</p></div>
-                                        <p className="font-black text-slate-900">₹{(i.qty * i.price).toFixed(2)}</p>
+
+                            <div className="pos-receipt-divider-dots" />
+
+                            {/* Line items */}
+                            <div className="pos-receipt-items">
+                                <div className="pos-receipt-item-header">
+                                    <span>Item</span>
+                                    <span>Qty</span>
+                                    <span style={{ textAlign: 'right' }}>Amount</span>
+                                </div>
+                                {cart.map(item => (
+                                    <div key={item.id} className="pos-receipt-item-row">
+                                        <span className="pos-receipt-item-name">{item.name}</span>
+                                        <span className="pos-receipt-item-qty">{item.qty} × ₹{item.price.toLocaleString()}</span>
+                                        <span className="pos-receipt-item-amt">₹{(item.price * item.qty).toLocaleString()}</span>
                                     </div>
                                 ))}
                             </div>
-                            <div className="bg-slate-50 rounded-3xl p-6 space-y-2">
-                                <div className="flex justify-between text-xs font-black"><span>TOTAL AMOUNT</span><span>₹{totals.grandTotal.toFixed(2)}</span></div>
-                                <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase"><span>Payment Mode</span><span>{paymentMode}</span></div>
+
+                            <div className="pos-receipt-divider-dots" />
+
+                            {/* Summary */}
+                            <div className="pos-receipt-summary">
+                                <div className="pos-receipt-sum-row">
+                                    <span>Subtotal</span>
+                                    <span>₹{totals.subtotal.toLocaleString()}</span>
+                                </div>
+                                <div className="pos-receipt-sum-row">
+                                    <span>GST</span>
+                                    <span>₹{totals.totalGST.toFixed(2)}</span>
+                                </div>
+                                {totals.discountAmount > 0 && (
+                                    <div className="pos-receipt-sum-row" style={{ color: '#ef4444' }}>
+                                        <span>Discount</span>
+                                        <span>−₹{totals.discountAmount.toFixed(2)}</span>
+                                    </div>
+                                )}
                             </div>
+
+                            <div className="pos-receipt-total-box">
+                                <span>TOTAL PAID</span>
+                                <span className="pos-receipt-total-amount">₹{totals.grandTotal.toLocaleString('en-IN')}</span>
+                            </div>
+
+                            <p className="pos-receipt-footer-msg">Thank you for shopping with us! 🙏</p>
                         </div>
-                        <div className="p-10 pt-0 flex gap-4">
-                            <button onClick={() => { window.print(); }} className="flex-1 py-4 bg-slate-900 text-white rounded-3xl font-black text-sm hover:scale-105 transition-all">PRINT RECEIPT</button>
-                            <button onClick={() => { setShowPreview(false); handleReset(); }} className="flex-1 py-4 bg-slate-100 text-slate-800 rounded-3xl font-black text-sm hover:scale-105 transition-all">NEW SALE</button>
+
+                        {/* Buttons */}
+                        <div className="pos-receipt-actions no-print">
+                            <button className="pos-receipt-btn-print" onClick={() => window.print()}>
+                                <BsPrinter size={15} /> Print Receipt
+                            </button>
+                            <button className="pos-receipt-btn-new" onClick={handleReset}>
+                                <BsArrowCounterclockwise size={15} /> New Sale
+                            </button>
                         </div>
-                        <button onClick={() => setShowPreview(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-800 transition-colors">✕</button>
                     </div>
                 </div>
             )}
