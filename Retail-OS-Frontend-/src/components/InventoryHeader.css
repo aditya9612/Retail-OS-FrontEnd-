@@ -1,0 +1,175 @@
+/* ===========================
+   Inventory Header
+=========================== */
+
+.inventory-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 30px;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 28px 32px;
+  margin-bottom: 28px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+/* ===========================
+   Left Section
+=========================== */
+
+.inventory-header-left {
+  flex: 1;
+}
+
+.inventory-header-left h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.inventory-header-left p {
+  margin-top: 10px;
+  max-width: 650px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #6b7280;
+}
+
+/* ===========================
+   Right Section
+=========================== */
+
+.inventory-header-right {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 15px;
+}
+
+/* ===========================
+   Common Button Style
+=========================== */
+
+.header-btn {
+  min-width: 160px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+/* ===========================
+   Stock In
+=========================== */
+
+.stock-in-btn {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.stock-in-btn:hover {
+  background: #15803d;
+  transform: translateY(-2px);
+}
+
+/* ===========================
+   Stock Out
+=========================== */
+
+.stock-out-btn {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.stock-out-btn:hover {
+  background: #b91c1c;
+  transform: translateY(-2px);
+}
+
+/* ===========================
+   Transfer
+=========================== */
+
+.transfer-btn {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.transfer-btn:hover {
+  background: #1d4ed8;
+  transform: translateY(-2px);
+}
+
+/* ===========================
+   Purchase Order
+=========================== */
+
+.purchase-btn {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+.purchase-btn:hover {
+  background: #d97706;
+  transform: translateY(-2px);
+}
+
+/* ===========================
+   Responsive
+=========================== */
+
+@media (max-width: 992px) {
+
+  .inventory-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .inventory-header-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+}
+
+@media (max-width: 768px) {
+
+  .inventory-header {
+    padding: 24px;
+  }
+
+  .inventory-header-left h1 {
+    font-size: 28px;
+  }
+
+  .inventory-header-left p {
+    font-size: 14px;
+  }
+
+  .header-btn {
+    width: 100%;
+  }
+
+}
+
+@media (max-width: 480px) {
+
+  .inventory-header {
+    padding: 20px;
+  }
+
+  .inventory-header-left h1 {
+    font-size: 24px;
+  }
+
+  .inventory-header-left p {
+    font-size: 13px;
+  }
+
+}

@@ -1,12 +1,22 @@
 import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-    BsGrid1X2Fill, BsBoxSeam, BsTag, BsCartCheck,
-    BsBagCheck, BsArrowReturnLeft, BsPeopleFill,
-    BsBarChartFill, BsReceiptCutoff, BsFileEarmarkText,
-    BsShopWindow, BsChevronDown, BsChevronRight, BsGearFill,
-    BsPersonBadge, BsActivity, BsTruck, BsTagFill, BsCart3,
-    BsStarHalf, BsPeopleFill as BsPpl, BsChatLeftText,
+    BsGrid1X2Fill,
+    BsBoxSeam,
+    BsTag,
+    BsCartCheck,
+    BsBagCheck,
+    BsArrowReturnLeft,
+    BsPeopleFill,
+    BsBarChartFill,
+    BsReceiptCutoff,
+    BsFileEarmarkText,
+    BsShopWindow,
+    BsChevronDown,
+    BsGearFill,
+    BsPersonBadge,
+    BsActivity,
+    BsUpcScan       // ✅ Add this
 } from 'react-icons/bs';
 
 const menuGroups = [
@@ -21,7 +31,8 @@ const menuGroups = [
         label: 'Billing & GST',
         items: [
             { name: 'POS Billing', icon: <BsCartCheck />, path: '/billing' },
-            { name: 'Billing Mgmt', icon: <BsFileEarmarkText />, path: '/billing-management' },
+            { name: 'Billing Mgmt', icon: <BsFileEarmarkText />, path: '/billing-management', hasArrow: true },
+            { name: "Barcode & Product Management", icon: <BsUpcScan />, path: "/products", hasArrow: true, },
             { name: 'GST Management', icon: <BsReceiptCutoff />, path: '/gst-management' },
         ],
     },
@@ -42,10 +53,10 @@ const menuGroups = [
     {
         label: 'Inventory',
         items: [
-            { name: 'Products', icon: <BsBoxSeam />, path: '/products' },
-            { name: 'Categories', icon: <BsTag />, path: '/categories' },
-            { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases' },
-            { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/returns' },
+
+            { name: 'Categories', icon: <BsTag />, path: '/categories', hasArrow: true },
+            { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases', hasArrow: true },
+            { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/returns', hasArrow: true },
         ],
     },
     {

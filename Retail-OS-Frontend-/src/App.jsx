@@ -19,55 +19,69 @@ import ReturnManagement from './pages/ECommerce/ReturnManagement';
 // Placeholder Pages
 const Placeholder = ({ title }) => (
     <div style={{ padding: 32 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>{title}</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 800, color: "#111827" }}>
+            {title}
+        </h1>
     </div>
 );
 
 function App() {
     return (
         <Router>
-            <DashboardLayout>
-                <Routes>
-                    {/* Main */}
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/admin-dashboard" element={<AdminDashboard />} />
+            <Routes>
+                <Route path="/login" element={<Login />} />
 
-                    {/* Billing & GST */}
-                    <Route path="/billing" element={<Billing />} />
-                    <Route path="/billing-management" element={<BillingManagement />} />
-                    <Route path="/gst-management" element={<GSTManagement />} />
+                <Route
+                    path="/*"
+                    element={
+                        <DashboardLayout>
+                            <Routes>
+                                {/* Main */}
+                                <Route path="/dashboard" element={<Dashboard />} />
+                                <Route path="/admin-dashboard" element={<AdminDashboard />} />
 
-                    {/* E-Commerce Module */}
-                    <Route path="/ecommerce" element={<ECommerceDashboard />} />
-                    <Route path="/ecommerce/store" element={<StoreManagement />} />
-                    <Route path="/ecommerce/orders" element={<OrderManagement />} />
-                    <Route path="/ecommerce/coupons" element={<CouponManagement />} />
-                    <Route path="/ecommerce/delivery" element={<DeliveryManagement />} />
-                    <Route path="/ecommerce/products" element={<ProductCatalog />} />
-                    <Route path="/ecommerce/customers" element={<CustomerManagement />} />
-                    <Route path="/ecommerce/reviews" element={<ReviewManagement />} />
-                    <Route path="/ecommerce/returns" element={<ReturnManagement />} />
+                                {/* Billing & GST */}
+                                <Route path="/billing" element={<Billing />} />
+                                <Route path="/billing-management" element={<BillingManagement />} />
+                                <Route path="/gst-management" element={<GSTManagement />} />
 
-                    {/* Inventory */}
-                    <Route path="/products" element={<Placeholder title="Product Catalog" />} />
-                    <Route path="/categories" element={<Placeholder title="Categories" />} />
-                    <Route path="/purchases" element={<Placeholder title="Purchases" />} />
-                    <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
+                                {/* E-Commerce Module */}
+                                <Route path="/ecommerce" element={<ECommerceDashboard />} />
+                                <Route path="/ecommerce/store" element={<StoreManagement />} />
+                                <Route path="/ecommerce/orders" element={<OrderManagement />} />
+                                <Route path="/ecommerce/coupons" element={<CouponManagement />} />
+                                <Route path="/ecommerce/delivery" element={<DeliveryManagement />} />
+                                <Route path="/ecommerce/products" element={<ProductCatalog />} />
+                                <Route path="/ecommerce/customers" element={<CustomerManagement />} />
+                                <Route path="/ecommerce/reviews" element={<ReviewManagement />} />
+                                <Route path="/ecommerce/returns" element={<ReturnManagement />} />
 
-                    {/* People */}
-                    <Route path="/customers" element={<Placeholder title="Customer Directory" />} />
-                    <Route path="/employees" element={<Placeholder title="Staff Management" />} />
+                                {/* Inventory */}
+                                <Route path="/inventory" element={<Inventory />} />
+                                <Route path="/products" element={<Placeholder title="Product Catalog" />} />
+                                <Route path="/categories" element={<Placeholder title="Categories" />} />
+                                <Route path="/purchases" element={<Placeholder title="Purchases" />} />
+                                <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
 
-                    {/* Analytics */}
-                    <Route path="/reports" element={<Placeholder title="Analytics & Reports" />} />
-                    <Route path="/settings" element={<Placeholder title="System Settings" />} />
+                                {/* People */}
+                                <Route path="/customers" element={<Customers />} />
+                                <Route path="/employees" element={<Placeholder title="Staff Management" />} />
 
-                    {/* Default */}
-                    <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                </Routes>
-            </DashboardLayout>
+                                {/* Analytics */}
+                                <Route path="/reports" element={<Placeholder title="Analytics & Reports" />} />
+                                <Route path="/settings" element={<Placeholder title="System Settings" />} />
+
+                                {/* Default */}
+                                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                            </Routes>
+                        </DashboardLayout>
+                    }
+                />
+            </Routes>
         </Router>
+
     );
+
 }
 
 export default App;

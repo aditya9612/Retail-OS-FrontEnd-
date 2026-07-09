@@ -1,0 +1,190 @@
+/* ==========================================
+   Pending Transfer Container
+========================================== */
+
+.pending-transfer {
+  background: #ffffff;
+  margin-top: 25px;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  overflow-x: auto;
+}
+
+/* ==========================================
+   Header
+========================================== */
+
+.pending-transfer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.pending-transfer-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+.pending-transfer-header p {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* ==========================================
+   View All Button
+========================================== */
+
+.view-all-btn {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.view-all-btn:hover {
+  background: #1d4ed8;
+}
+
+/* ==========================================
+   Table
+========================================== */
+
+.pending-transfer-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 950px;
+}
+
+.pending-transfer-table thead {
+  background: #f9fafb;
+}
+
+.pending-transfer-table th {
+  padding: 14px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.pending-transfer-table td {
+  padding: 14px;
+  font-size: 14px;
+  color: #4b5563;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.pending-transfer-table tbody tr {
+  transition: background 0.3s ease;
+}
+
+.pending-transfer-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+/* ==========================================
+   Status Badges
+========================================== */
+
+.transfer-status {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Pending */
+
+.transfer-status.pending {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+/* Approved */
+
+.transfer-status.approved {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+/* In Transit */
+
+.transfer-status.in-transit {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+/* ==========================================
+   Action Button
+========================================== */
+
+.transfer-action-btn {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.transfer-action-btn:hover {
+  background: #1d4ed8;
+}
+
+/* ==========================================
+   Responsive
+========================================== */
+
+@media (max-width: 992px) {
+
+  .pending-transfer-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+}
+
+@media (max-width: 768px) {
+
+  .pending-transfer {
+    overflow-x: auto;
+  }
+
+  .pending-transfer-table {
+    min-width: 900px;
+  }
+
+}
+
+@media (max-width: 576px) {
+
+  .pending-transfer-header h2 {
+    font-size: 18px;
+  }
+
+  .pending-transfer-header p {
+    font-size: 13px;
+  }
+
+  .view-all-btn {
+    width: 100%;
+  }
+
+}

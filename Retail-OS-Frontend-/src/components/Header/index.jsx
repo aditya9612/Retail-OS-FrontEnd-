@@ -1,7 +1,11 @@
-import React from 'react';
+// import React from 'react';
+// import { BsSearch, BsEnvelope, BsBell, BsPlus } from 'react-icons/bs';
+import React, { useState } from 'react';
+import NewOrderForm from '../NewOrderForm';
 import { BsSearch, BsEnvelope, BsBell, BsPlus } from 'react-icons/bs';
 
 const Header = () => {
+    const [showNewOrder, setShowNewOrder] = useState(false);
     return (
         <header className="pos-header">
             {/* Search */}
@@ -23,7 +27,16 @@ const Header = () => {
                 </div>
 
                 {/* New Order */}
-                <button className="header-new-order">
+                {/* <button className="header-new-order">
+                    <BsPlus size={16} />
+                    New Order
+                </button> */}
+
+                <button
+                    type="button"
+                    className="header-new-order"
+                    onClick={() => setShowNewOrder(true)}
+                >
                     <BsPlus size={16} />
                     New Order
                 </button>
@@ -48,6 +61,10 @@ const Header = () => {
                     />
                 </div>
             </div>
+            
+            {showNewOrder && (
+                <NewOrderForm onClose={() => setShowNewOrder(false)} />
+            )}
         </header>
     );
 };

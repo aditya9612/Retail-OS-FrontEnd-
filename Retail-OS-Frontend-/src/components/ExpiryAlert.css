@@ -1,0 +1,212 @@
+/* ==========================================
+   Expiry Alert Container
+========================================== */
+
+.expiry-alert {
+  background: #ffffff;
+  margin-top: 25px;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  overflow-x: auto;
+  transition: all 0.3s ease;
+}
+
+/* Custom Scrollbar */
+
+.expiry-alert::-webkit-scrollbar {
+  height: 8px;
+}
+
+.expiry-alert::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.expiry-alert::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.expiry-alert::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ==========================================
+   Header
+========================================== */
+
+.expiry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.expiry-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #d97706;
+}
+
+.expiry-header p {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+/* ==========================================
+   View All Button
+========================================== */
+
+.view-all-btn {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.view-all-btn:hover {
+  background: #1d4ed8;
+  transform: translateY(-2px);
+}
+
+/* ==========================================
+   Table
+========================================== */
+
+.expiry-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+}
+
+.expiry-table thead {
+  background: #f9fafb;
+}
+
+.expiry-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f9fafb;
+  z-index: 5;
+}
+
+.expiry-table th {
+  padding: 14px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.expiry-table td {
+  padding: 14px;
+  font-size: 14px;
+  color: #4b5563;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+
+.expiry-table tbody tr {
+  transition: all 0.3s ease;
+}
+
+.expiry-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+/* ==========================================
+   Status Badges
+========================================== */
+
+.expiry-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: #fef3c7;
+  color: #b45309;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.critical-expiry-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 20px;
+  background: #fee2e2;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* ==========================================
+   Future Action Button Support
+========================================== */
+
+.action-btn {
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.action-btn:hover {
+  background: #1d4ed8;
+  transform: translateY(-2px);
+}
+
+/* ==========================================
+   Responsive
+========================================== */
+
+@media (max-width: 992px) {
+
+  .expiry-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+}
+
+@media (max-width: 768px) {
+
+  .expiry-alert {
+    overflow-x: auto;
+  }
+
+  .expiry-table {
+    min-width: 850px;
+  }
+
+}
+
+@media (max-width: 576px) {
+
+  .expiry-header h2 {
+    font-size: 18px;
+  }
+
+  .expiry-header p {
+    font-size: 13px;
+  }
+
+  .view-all-btn,
+  .action-btn {
+    width: 100%;
+  }
+
+}
