@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 
+
 import CategoryForm from "../../components/Categories/CategoryForm";
 import CategoryTable from "../../components/Categories/CategoryTable";
+
 
 const CategoryManagement = () => {
 
