@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
+import Products from './pages/Products';
 import Inventory from './pages/Inventory';
 import Customers from './pages/Customers';
 import ECommerceDashboard from './pages/ECommerce/ECommerceDashboard';
@@ -61,7 +62,7 @@ function App() {
 
                                 {/* Inventory */}
                                 <Route path="/inventory" element={<Inventory />} />
-                                <Route path="/products" element={<Placeholder title="Product Catalog" />} />
+                                <Route path="/products" element={<Products />} />
                                 <Route path="/categories" element={<Placeholder title="Categories" />} />
                                 <Route path="/purchases" element={<Placeholder title="Purchases" />} />
                                 <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
