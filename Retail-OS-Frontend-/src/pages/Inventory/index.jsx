@@ -1,4 +1,8 @@
 import React, { useState } from 'react';
+import InventoryHeader from "../../components/InventoryHeader";
+import InventoryCards from "../../components/InventoryCards";
+import InventoryFilters from "../../components/InventoryFilters"
+import InventoryTable from "../../components/InventoryTable";
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
     BsBoxSeam, BsExclamationTriangleFill, BsCheckCircleFill,
@@ -134,153 +138,122 @@ const Inventory = () => {
     ];
 
     return (
-        <div className="dash-page">
-            {/* Header */}
-            <div className="adm-page-header">
-                <div>
-                    <h1 className="adm-page-title">📦 Inventory Management</h1>
-                    <p className="adm-page-sub">Track stock levels, manage products and prevent stockouts</p>
-                </div>
-                <div className="adm-header-actions">
-                    <button className="adm-btn-secondary"><BsDownload size={14} /> Export</button>
-                    <button className="adm-btn-primary"><BsPlus size={17} /> Add Product</button>
-                </div>
-            </div>
+    <div className="dash-page">
 
-            {/* KPIs */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
-                {kpis.map((k, i) => (
-                    <div key={i} className="adm-kpi-card" style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <span style={{ fontSize: 20 }}>{k.icon}</span>
-                        </div>
-                        <p style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k.label}</p>
-                        <p style={{ fontSize: i === 4 ? 16 : 22, fontWeight: 800, color: k.color, marginTop: 4 }}>{k.value}</p>
-                    </div>
-                ))}
-            </div>
+        <h1 style={{ color: "red", fontSize: "40px" }}>
+      INVENTORY PAGE WORKING
+    </h1>
 
-            {/* Tabs */}
-            <div className="ec-tabs">
-                {tabs.map(tab => (
-                    <button key={tab} className={`ec-tab-btn ${activeTab === tab ? 'ec-tab-btn--active' : ''}`}
-                        onClick={() => { setActiveTab(tab); setPage(1); }}>
-                        {tab === 'Low Stock' && <BsExclamationTriangleFill size={12} />}
-                        {tab === 'Out of Stock' && <BsBoxSeam size={12} />}
-                        {tab} {tab !== 'All Items' && (
-                            <span style={{ marginLeft: 4, padding: '1px 6px', borderRadius: 10, background: tab === 'Low Stock' ? '#fffbeb' : '#fef2f2', color: tab === 'Low Stock' ? '#f59e0b' : '#ef4444', fontSize: 10, fontWeight: 700 }}>
-                                {tab === 'Low Stock' ? lowStockCount : outOfStockCount}
-                            </span>
-                        )}
+       <div className="adm-page-header">
+  <h2>Inventory Dashboard</h2>
+</div>
+
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "repeat(5,1fr)",
+    gap: 14,
+    marginBottom: "20px",
+  }}
+>
+  {kpis.map((item) => (
+    <div
+      key={item.label}
+      style={{
+        background: "#fff",
+        padding: "16px",
+        borderRadius: "10px",
+        boxShadow: "0 2px 8px rgba(0,0,0,.08)",
+      }}
+    >
+      <h4>{item.label}</h4>
+      <h2>{item.value}</h2>
+    </div>
+  ))}
+</div>
+
+        <div style={{ marginTop: "-20px" }}>
+    <InventoryCards />
+</div>
+
+        <InventoryFilters
+            search={search}
+            setSearch={setSearch}
+            filterCat={filterCat}
+            setFilterCat={setFilterCat}
+            filterStatus={filterStatus}
+            setFilterStatus={setFilterStatus}
+        />
+
+        <InventoryHeader
+            totalItems={inventory.length}
+            lowStockCount={lowStockCount}
+            outOfStockCount={outOfStockCount}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+        />
+
+        <InventoryTable
+            paginated={paginated}
+            stockStatus={stockStatus}
+            fmt={fmt}
+            setStockModal={setStockModal}
+        />
+
+        {totalPages > 1 && (
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 16px",
+                    borderTop: "1px solid #f3f4f6",
+                }}
+            >
+                <span style={{ fontSize: 12, color: "#6b7280" }}>
+                    Showing {(page - 1) * PAGE_SIZE + 1}–
+                    {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                </span>
+
+                <div style={{ display: "flex", gap: 6 }}>
+                    <button
+                        className="adm-btn-secondary"
+                        disabled={page === 1}
+                        onClick={() => setPage(page - 1)}
+                    >
+                        <BsChevronLeft />
                     </button>
-                ))}
-            </div>
 
-            {/* Filters */}
-            <div style={{ background: '#fff', border: '1px solid #e8eaf0', borderRadius: 12, padding: '14px 16px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-                    <BsSearch size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-                    <input className="ec-input" style={{ paddingLeft: 32 }} placeholder="Search by product name or SKU..."
-                        value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                        <button
+                            key={p}
+                            onClick={() => setPage(p)}
+                        >
+                            {p}
+                        </button>
+                    ))}
+
+                    <button
+                        className="adm-btn-secondary"
+                        disabled={page === totalPages}
+                        onClick={() => setPage(page + 1)}
+                    >
+                        <BsChevronRight />
+                    </button>
                 </div>
-                <select className="ec-input" style={{ minWidth: 160 }} value={filterCat}
-                    onChange={e => { setFilterCat(e.target.value); setPage(1); }}>
-                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                </select>
             </div>
+        )}
 
-            {/* Table */}
-            <div className="chart-card" style={{ padding: 0, overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                        <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e8eaf0' }}>
-                            {['Product', 'SKU', 'Category', 'Current Stock', 'Min Stock', 'Cost Price', 'Selling Price', 'Margin', 'Status', 'Actions'].map(h => (
-                                <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {paginated.map((item, i) => {
-                            const st = stockStatus(item);
-                            const margin = Math.round(((item.sellingPrice - item.costPrice) / item.costPrice) * 100);
-                            return (
-                                <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}
-                                    onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
-                                    onMouseLeave={e => e.currentTarget.style.background = ''}>
-                                    <td style={{ padding: '12px 14px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                            <div style={{ width: 34, height: 34, borderRadius: 8, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                <BsBoxSeam size={14} color="#d1d5db" />
-                                            </div>
-                                            <div>
-                                                <p style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{item.name}</p>
-                                                <p style={{ fontSize: 11, color: '#9ca3af' }}>{item.brand} · {item.location}</p>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{item.sku}</td>
-                                    <td style={{ padding: '12px 14px' }}>
-                                        <span style={{ fontSize: 11, background: '#eef2ff', color: '#6366f1', padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>{item.category}</span>
-                                    </td>
-                                    <td style={{ padding: '12px 14px' }}>
-                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                            <p style={{ fontSize: 14, fontWeight: 700, color: st.color }}>{item.stock} {item.unit}</p>
-                                            {item.stock > 0 && item.stock < item.minStock && (
-                                                <p style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600 }}>Below min ({item.minStock})</p>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '12px 14px', fontSize: 13, color: '#6b7280' }}>{item.minStock} {item.unit}</td>
-                                    <td style={{ padding: '12px 14px', fontSize: 13, color: '#374151' }}>{fmt(item.costPrice)}</td>
-                                    <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700, color: '#111827' }}>{fmt(item.sellingPrice)}</td>
-                                    <td style={{ padding: '12px 14px' }}>
-                                        <span style={{ fontSize: 12, fontWeight: 700, color: margin > 40 ? '#10b981' : margin > 20 ? '#f59e0b' : '#ef4444' }}>
-                                            {margin}%
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: '12px 14px' }}>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: st.bg, color: st.color }}>
-                                            {st.label}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: '12px 14px' }}>
-                                        <button className="adm-btn-primary" style={{ padding: '5px 12px', fontSize: 11 }}
-                                            onClick={() => setStockModal(item)}>
-                                            Update
-                                        </button>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                        {paginated.length === 0 && (
-                            <tr><td colSpan={10} style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 14 }}>No inventory items found</td></tr>
-                        )}
-                    </tbody>
-                </table>
+        {stockModal && (
+            <StockUpdateModal
+                item={stockModal}
+                onClose={() => setStockModal(null)}
+                onSave={handleStockUpdate}
+            />
+        )}
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid #f3f4f6' }}>
-                        <span style={{ fontSize: 12, color: '#6b7280' }}>Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}</span>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="adm-btn-secondary" style={{ padding: '5px 10px' }} disabled={page === 1} onClick={() => setPage(p => p - 1)}><BsChevronLeft size={12} /></button>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                                <button key={p} onClick={() => setPage(p)}
-                                    style={{ width: 30, height: 30, borderRadius: 6, border: `1.5px solid ${p === page ? '#6366f1' : '#e5e7eb'}`, background: p === page ? '#eef2ff' : '#fff', color: p === page ? '#6366f1' : '#6b7280', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                                    {p}
-                                </button>
-                            ))}
-                            <button className="adm-btn-secondary" style={{ padding: '5px 10px' }} disabled={page === totalPages} onClick={() => setPage(p => p + 1)}><BsChevronRight size={12} /></button>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {stockModal && (
-                <StockUpdateModal item={stockModal} onClose={() => setStockModal(null)} onSave={handleStockUpdate} />
-            )}
-        </div>
-    );
+    </div>
+  );
 };
 
 export default Inventory;
