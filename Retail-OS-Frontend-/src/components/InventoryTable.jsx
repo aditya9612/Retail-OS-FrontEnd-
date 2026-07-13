@@ -1,70 +1,16 @@
 import React from "react";
 import "./InventoryTable.css";
+import { BsBoxSeam } from "react-icons/bs";
 
-const inventoryData = [
-  {
-    id: 1,
-    product: "Basmati Rice",
-    sku: "SKU001",
-    category: "Groceries",
-    warehouse: "Main Warehouse",
-    quantity: 250,
-    reorder: 50,
-    status: "In Stock",
-  },
-  {
-    id: 2,
-    product: "Coca Cola",
-    sku: "SKU002",
-    category: "Beverages",
-    warehouse: "Store Warehouse",
-    quantity: 18,
-    reorder: 30,
-    status: "Low Stock",
-  },
-  {
-    id: 3,
-    product: "Paracetamol",
-    sku: "SKU003",
-    category: "Medicines",
-    warehouse: "Cold Storage",
-    quantity: 0,
-    reorder: 20,
-    status: "Out of Stock",
-  },
-  {
-    id: 4,
-    product: "Sunflower Oil",
-    sku: "SKU004",
-    category: "Groceries",
-    warehouse: "Main Warehouse",
-    quantity: 125,
-    reorder: 40,
-    status: "In Stock",
-  },
-  {
-    id: 5,
-    product: "Laptop Charger",
-    sku: "SKU005",
-    category: "Electronics",
-    warehouse: "Store Warehouse",
-    quantity: 12,
-    reorder: 15,
-    status: "Low Stock",
-  },
-];
-
-const InventoryTable = () => {
+const InventoryTable = ({
+  paginated,
+  stockStatus,
+  fmt,
+  setStockModal,
+}) => {
   return (
     <div className="inventory-table-container">
-
-      <div className="table-header">
-        <h2>Inventory List</h2>
-        <p>Manage all available products and stock levels.</p>
-      </div>
-
       <table className="inventory-table">
-
         <thead>
           <tr>
             <th>Product</th>
@@ -73,63 +19,179 @@ const InventoryTable = () => {
             <th>Warehouse</th>
             <th>Available Qty</th>
             <th>Reorder Level</th>
+            <th>Cost Price</th>
+            <th>Selling Price</th>
+            <th>Margin</th>
             <th>Status</th>
             <th>Actions</th>
           </tr>
         </thead>
 
         <tbody>
+          {paginated.map((item) => {
+            const st = stockStatus(item);
 
-          {inventoryData.map((item) => (
+            const margin = Math.round(
+              ((item.sellingPrice - item.costPrice) / item.costPrice) * 100
+            );
 
-            <tr key={item.id}>
+            return (
+              <tr key={item.id}>
+                {/* Product */}
+                <td>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 8,
+                        background: "#f3f4f6",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <BsBoxSeam size={14} color="#9ca3af" />
+                    </div>
 
-              <td>{item.product}</td>
+                    <div>
+                      <div style={{ fontWeight: 600 }}>
+                        {item.name}
+                      </div>
 
-              <td>{item.sku}</td>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "#6b7280",
+                        }}
+                      >
+                        {item.brand} • {item.location}
+                      </div>
+                    </div>
+                  </div>
+                </td>
 
-              <td>{item.category}</td>
+                {/* SKU */}
+                <td>{item.sku}</td>
 
-              <td>{item.warehouse}</td>
+                {/* Category */}
+                <td>
+                  <span
+                    style={{
+                      background: "#eef2ff",
+                      color: "#6366f1",
+                      padding: "4px 8px",
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {item.category}
+                  </span>
+                </td>
 
-              <td>{item.quantity}</td>
+                {/* Warehouse */}
+                <td>{item.location}</td>
 
-              <td>{item.reorder}</td>
+                {/* Stock */}
+                <td>
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        color: st.color,
+                      }}
+                    >
+                      {item.stock} {item.unit}
+                    </div>
 
-              <td>
-                <span
-                  className={`status ${item.status
-                    .toLowerCase()
-                    .replace(/\s/g, "-")}`}
+                    {item.stock > 0 &&
+                      item.stock < item.minStock && (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#f59e0b",
+                          }}
+                        >
+                          Below Min ({item.minStock})
+                        </div>
+                      )}
+                  </div>
+                </td>
+
+                {/* Min Stock */}
+                <td>
+                  {item.minStock} {item.unit}
+                </td>
+
+                {/* Cost Price */}
+                <td>{fmt(item.costPrice)}</td>
+
+                {/* Selling Price */}
+                <td
+                  style={{
+                    fontWeight: 700,
+                    color: "#111827",
+                  }}
                 >
-                  {item.status}
-                </span>
-              </td>
+                  {fmt(item.sellingPrice)}
+                </td>
 
-              <td>
+                {/* Margin */}
+                <td>
+                  <span
+                    style={{
+                      color:
+                        margin > 40
+                          ? "#10b981"
+                          : margin > 20
+                          ? "#f59e0b"
+                          : "#ef4444",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {margin}%
+                  </span>
+                </td>
 
-                <button className="action-btn view-btn">
-                  View
-                </button>
+                {/* Status */}
+                <td>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      padding: "4px 10px",
+                      borderRadius: "20px",
+                      background: st.bg,
+                      color: st.color,
+                      fontSize: 12,
+                      fontWeight: 700,
+                    }}
+                  >
+                    {st.label}
+                  </span>
+                </td>
 
-                <button className="action-btn edit-btn">
-                  Edit
-                </button>
-
-                <button className="action-btn delete-btn">
-                  Delete
-                </button>
-
-              </td>
-
-            </tr>
-
-          ))}
-
+                {/* Actions */}
+                <td>
+                  <button
+                    className="adm-btn-primary"
+                    onClick={() => setStockModal(item)}
+                  >
+                    Update
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
-
       </table>
-
     </div>
   );
 };
