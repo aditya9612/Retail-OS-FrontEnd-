@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { State, City } from 'country-state-city';
 import {
     BsSearch, BsDownload, BsEye, BsPeopleFill, BsPhone, BsGeoAlt,
     BsCalendar, BsCurrencyRupee, BsCartCheck, BsStarFill,
     BsChevronLeft, BsChevronRight, BsCheckCircleFill, BsXCircleFill,
-    BsEnvelope, BsFilter,
+    BsEnvelope, BsFilter,BsPlus,
 } from 'react-icons/bs';
+import { getCustomers, createCustomer } from '../../services/customer';
 
 const CUSTOMERS = [
     { id: 'CUS-001', name: 'Aarav Mehta', email: 'aarav@email.com', phone: '+91 98765 11111', city: 'Bangalore', state: 'Karnataka', orders: 24, totalSpent: 68400, lastOrder: '26 Jun 2026', registered: '12 Jan 2026', status: 'Active', type: 'Regular', credit: 0 },
@@ -31,6 +33,7 @@ const statusCfg = {
 const typeCfg = {
     Regular: { color: '#6366f1', bg: '#eef2ff' },
     Wholesale: { color: '#8b5cf6', bg: '#f5f3ff' },
+    VIP: { color: '#8b5cf6', bg: '#f5f3ff' },
 };
 
 const CustomerDetailModal = ({ customer, onClose, onChange }) => {
@@ -95,13 +98,441 @@ const CustomerDetailModal = ({ customer, onClose, onChange }) => {
     );
 };
 
+
+const AddCustomerModal = ({ onClose, onCreated }) => {
+    const [form, setForm] = useState({
+        name: '',
+        email: '',
+        phone: '',
+        city: '',
+        state: '',
+        stateCode: '',
+        type: '',
+        credit: '',
+    });
+    
+    const indianStates = State.getStatesOfCountry('IN');
+    
+    const availableCities = form.stateCode
+        ? City.getCitiesOfState('IN', form.stateCode)
+        : [];
+
+
+        const handleChange = (e) => {
+            const { name, value } = e.target;
+        
+            if (name === 'stateCode') {
+                const selectedState = indianStates.find(
+                    state => state.isoCode === value
+                );
+        
+                setForm(prev => ({
+                    ...prev,
+                    stateCode: value,
+                    state: selectedState?.name || '',
+                    city: '',
+                }));
+        
+                return;
+            }
+        
+            if (name === 'phone') {
+                const onlyNumbers = value.replace(/\D/g, '').slice(0, 10);
+        
+                setForm(prev => ({
+                    ...prev,
+                    phone: onlyNumbers,
+                }));
+        
+                return;
+            }
+        
+            setForm(prev => ({
+                ...prev,
+                [name]: value,
+            }));
+        };
+
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+    
+        if (
+            !form.name.trim() ||
+            !form.email.trim() ||
+            !form.phone.trim() ||
+            !form.stateCode ||
+            !form.state.trim() ||
+            !form.city.trim() ||
+            !form.type
+        ) {
+            alert('Please fill all required fields');
+            return;
+        }
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (!emailPattern.test(form.email.trim())) {
+            alert('Please enter a valid email address');
+            return;
+        }
+    
+
+        const customerData = {
+            name: form.name.trim(),
+            email: form.email.trim().toLowerCase(),
+            phone: form.phone.trim(),
+            address: `${form.city.trim()}, ${form.state.trim()}`,
+            birthday: null,
+            whatsapp_opt_in: false,
+            sms_opt_in: false,
+            status: 'active',
+            segment: form.type,
+        };
+    
+        try {
+            await createCustomer(customerData);
+    
+            alert('Customer created successfully!');
+    
+            if (onCreated) {
+                await onCreated();
+            }
+    
+            onClose();
+        } catch (err) {
+            console.error('Create customer failed:', err);
+            alert('Unable to create customer. Backend server may not be available.');
+        }
+    };
+    
+    const labelStyle = {
+        display: 'block',
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#374151',
+        marginBottom: 6,
+    };
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose}>
+            <div
+                className="ec-modal"
+                style={{ maxWidth: 560 }}
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="ec-modal-header">
+                    <div>
+                        <h3
+                            style={{
+                                fontWeight: 700,
+                                fontSize: 17,
+                                color: '#111827',
+                            }}
+                        >
+                            Add Customer
+                        </h3>
+
+                        <p
+                            style={{
+                                fontSize: 12,
+                                color: '#9ca3af',
+                                marginTop: 3,
+                            }}
+                        >
+                            Enter the customer details below
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        className="ec-modal-close"
+                        onClick={onClose}
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit}>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 14,
+                        }}
+                    >
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <label style={labelStyle}>
+                                Customer Name *
+                            </label>
+
+                            <input
+                                className="ec-input"
+                                type="text"
+                                name="name"
+                                placeholder="Enter customer name"
+                                value={form.name}
+                                onChange={handleChange}
+                            />
+                        </div>
+
+                        <div>
+                            <label style={labelStyle}>Email *</label>
+
+                            <input
+                                className="ec-input"
+                                type="email"
+                                name="email"
+                                placeholder="Enter email"
+                                value={form.email}
+                                onChange={handleChange}
+                                autoComplete="email"
+                                required
+                            />
+
+                            
+                        </div>
+
+                       
+
+                        <div>
+    <label style={labelStyle}>Phone *</label>
+
+    <div style={{ display: 'flex', gap: 8 }}>
+        <input
+            className="ec-input"
+            type="text"
+            value="+91"
+            disabled
+            style={{
+                width: 70,
+                textAlign: 'center',
+                background: '#f3f4f6',
+            }}
+        />
+
+        <input
+            className="ec-input"
+            type="tel"
+            name="phone"
+            placeholder="Enter 10 digit mobile number"
+            value={form.phone}
+            onChange={handleChange}
+            maxLength={10}
+            inputMode="numeric"
+            pattern="[6-9][0-9]{9}"
+            required
+        />
+    </div>
+</div>
+
+
+
+                        {/* State */}
+<div>
+    <label style={labelStyle}>State *</label>
+
+    <select
+        className="ec-input"
+        name="stateCode"
+        value={form.stateCode}
+        onChange={handleChange}
+        required
+    >
+        <option value="">Select State</option>
+
+        {indianStates.map(state => (
+            <option
+                key={state.isoCode}
+                value={state.isoCode}
+            >
+                {state.name}
+            </option>
+        ))}
+    </select>
+</div>
+
+{/* City */}
+<div>
+    <label style={labelStyle}>City *</label>
+
+    <select
+        className="ec-input"
+        name="city"
+        value={form.city}
+        onChange={handleChange}
+        disabled={!form.stateCode}
+        required
+    >
+        <option value="">
+            {form.stateCode
+                ? 'Select City'
+                : 'Select State First'}
+        </option>
+
+        {availableCities.map(city => (
+            <option
+                key={`${city.name}-${city.latitude}-${city.longitude}`}
+                value={city.name}
+            >
+                {city.name}
+            </option>
+        ))}
+    </select>
+</div>
+
+                        <div>
+                            <label style={labelStyle}>
+                                Customer Type *
+                            </label>
+
+                            <select
+                                className="ec-input"
+                                name="type"
+                                value={form.type}
+                                onChange={handleChange}
+                                required
+                            >
+                                <option value="">Select Customer Type</option>
+                                <option value="new">New</option>
+                                <option value="regular">Regular</option>
+                                <option value="vip">VIP</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label style={labelStyle}>
+                                Credit Limit
+                            </label>
+
+                            <input
+                                className="ec-input"
+                                type="number"
+                                min="0"
+                                name="credit"
+                                placeholder="Enter credit limit"
+                                value={form.credit}
+                                onChange={handleChange}
+                            />
+                        </div>
+                    </div>
+
+                    <div
+                        style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: 10,
+                            marginTop: 24,
+                        }}
+                    >
+                        <button
+                            type="button"
+                            className="adm-btn-secondary"
+                            onClick={onClose}
+                        >
+                            Cancel
+                        </button>
+
+                        <button
+                            type="submit"
+                            className="adm-btn-primary"
+                        >
+                            Add Customer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 const Customers = () => {
-    const [customers, setCustomers] = useState(CUSTOMERS);
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    // const [customers, setCustomers] = useState(CUSTOMERS);
+    // const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
     const [filterType, setFilterType] = useState('All');
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState(null);
+    const [showAddModal, setShowAddModal] = useState(false);
+
+    const loadCustomers = async () => {
+        try {
+            setLoading(true);
+            setError('');
+    
+            const data = await getCustomers();
+    
+            const customerList = Array.isArray(data)
+                ? data
+                : data.customers || data.data || [];
+    
+            const formattedCustomers = customerList.map(customer => ({
+                id: `CUS-${String(customer.id).padStart(3, '0')}`,
+                backendId: customer.id,
+    
+                name: customer.name || 'Unknown Customer',
+                email: customer.email || '',
+                phone: customer.phone || '',
+    
+                city: customer.address || 'Not available',
+                state: '',
+    
+                orders: 0,
+                totalSpent: customer.total_spend || 0,
+                lastOrder: 'No orders yet',
+    
+                registered: customer.created_at
+                    ? new Date(customer.created_at).toLocaleDateString('en-GB', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                      })
+                    : 'Not available',
+    
+                status:
+                    customer.status === 'active'
+                        ? 'Active'
+                        : customer.status === 'inactive'
+                          ? 'Inactive'
+                          : 'Blocked',
+    
+                type:
+                    customer.segment === 'vip'
+                        ? 'VIP'
+                        : customer.segment === 'new'
+                          ? 'New'
+                          : 'Regular',
+
+                      
+    
+                credit: 0,
+                loyaltyPoints: customer.loyalty_points || 0,
+                birthday: customer.birthday || '',
+                whatsappOptIn: customer.whatsapp_opt_in || false,
+                smsOptIn: customer.sms_opt_in || false,
+            }));
+    
+            setCustomers(formattedCustomers);
+
+        // } catch (err) {
+        //     console.error('Customer API is currently unavailable:', err);
+        //     // setCustomers(CUSTOMERS);
+        //     // setError('');
+        // } finally {
+        } catch (err) {
+            console.error('Failed to load customers:', err);
+            setError('Unable to load customers. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+    useEffect(() => {
+        loadCustomers();
+    }, []);
 
     const filtered = customers.filter(c => {
         const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -116,12 +547,39 @@ const Customers = () => {
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleStatusChange = (id, s) => setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: s } : c));
-
     const kpis = [
-        { label: 'Total Customers', value: customers.length, color: '#6366f1', bg: '#eef2ff', icon: '👥' },
-        { label: 'Active', value: customers.filter(c => c.status === 'Active').length, color: '#10b981', bg: '#ecfdf5', icon: '✅' },
-        { label: 'Wholesale', value: customers.filter(c => c.type === 'Wholesale').length, color: '#8b5cf6', bg: '#f5f3ff', icon: '🏭' },
-        { label: 'Top Spender', value: fmt(Math.max(...customers.map(c => c.totalSpent))), color: '#f59e0b', bg: '#fffbeb', icon: '🏆' },
+        {
+            label: 'Total Customers',
+            value: customers.length,
+            color: '#6366f1',
+            bg: '#eef2ff',
+            icon: '👥',
+        },
+        {
+            label: 'Active',
+            value: customers.filter(c => c.status === 'Active').length,
+            color: '#10b981',
+            bg: '#ecfdf5',
+            icon: '✅',
+        },
+        {
+            label: 'VIP',
+            value: customers.filter(c => c.type === 'VIP').length,
+            color: '#8b5cf6',
+            bg: '#f5f3ff',
+            icon: '⭐',
+        },
+        {
+            label: 'Top Spender',
+            value: fmt(
+                customers.length > 0
+                    ? Math.max(...customers.map(c => c.totalSpent))
+                    : 0
+            ),
+            color: '#f59e0b',
+            bg: '#fffbeb',
+            icon: '🏆',
+        },
     ];
 
     return (
@@ -132,7 +590,19 @@ const Customers = () => {
                     <p className="adm-page-sub">Manage customer accounts, credit limits and purchase history</p>
                 </div>
                 <div className="adm-header-actions">
-                    <button className="adm-btn-secondary"><BsDownload size={14} /> Export</button>
+                    <button className="adm-btn-secondary">
+                        <BsDownload size={14} />
+                        Export
+                    </button>
+
+                    <button
+                        type="button"
+                        className="adm-btn-primary"
+                        onClick={() => setShowAddModal(true)}
+                    >
+                        <BsPlus size={16} />
+                        Add Customer
+                    </button>
                 </div>
             </div>
 
@@ -160,7 +630,7 @@ const Customers = () => {
                 </select>
                 <select className="ec-input" style={{ minWidth: 140 }} value={filterType}
                     onChange={e => { setFilterType(e.target.value); setPage(1); }}>
-                    {['All', 'Regular', 'Wholesale'].map(t => <option key={t}>{t}</option>)}
+                    {['All', 'Regular', 'VIP'].map(t => <option key={t}>{t}</option>)}
                 </select>
             </div>
 
@@ -175,7 +645,42 @@ const Customers = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {paginated.map((c, i) => {
+                            {loading && (
+                                <tr>
+                                    <td
+                                        colSpan={9}
+                                        style={{
+                                            padding: 40,
+                                            textAlign: 'center',
+                                            color: '#6366f1',
+                                            fontSize: 14,
+                                            fontWeight: 600,
+                                        }}
+                                    >
+                                        Loading customers...
+                                    </td>
+                                </tr>
+                            )}
+                            
+                            
+                            {!loading && error && (
+                                <tr>
+                                    <td
+                                        colSpan={9}
+                                        style={{
+                                            padding: 40,
+                                            textAlign: 'center',
+                                            color: '#ef4444',
+                                            fontSize: 14,
+                                            fontWeight: 600,
+                                        }}
+                                    >
+                                        {error}
+                                    </td>
+                                </tr>
+                            )}
+
+                            {!loading && !error && paginated.map((c, i) => {
                             const sc = statusCfg[c.status];
                             const tc = typeCfg[c.type] || typeCfg.Regular;
                             return (
@@ -217,7 +722,7 @@ const Customers = () => {
                                 </tr>
                             );
                         })}
-                        {paginated.length === 0 && (
+                        {!loading && !error && paginated.length === 0 && (
                             <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 14 }}>No customers found</td></tr>
                         )}
                     </tbody>
@@ -236,6 +741,14 @@ const Customers = () => {
                     </div>
                 )}
             </div>
+            
+          
+            {showAddModal && (
+                <AddCustomerModal
+                onClose={() => setShowAddModal(false)}
+                onCreated={loadCustomers}
+                />
+            )}
 
             {selected && (
                 <CustomerDetailModal customer={selected} onClose={() => setSelected(null)}

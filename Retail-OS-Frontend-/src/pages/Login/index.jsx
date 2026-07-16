@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BsEnvelope, BsLock, BsEye, BsEyeSlash } from 'react-icons/bs';
+import { loginUser } from '../../services/auth';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -19,20 +20,41 @@ const Login = () => {
         }));
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-
+    
         if (!form.email.trim()) {
             alert('Email is required');
             return;
         }
-
+    
         if (!form.password.trim()) {
             alert('Password is required');
             return;
         }
-
-        navigate('/dashboard');
+    
+        try {
+            const data = await loginUser({
+                email: form.email.trim(),
+                password: form.password,
+            });
+    
+            localStorage.setItem('access_token', data.access_token);
+            localStorage.setItem('refresh_token', data.refresh_token);
+            localStorage.setItem('token_type', data.token_type || 'bearer');
+    
+            alert('Login successful!');
+    
+            navigate('/dashboard');
+        } catch (err) {
+            console.error('Login failed:', err);
+    
+            const message =
+                err.response?.data?.detail ||
+                'Invalid email or password';
+    
+            alert(message);
+        }
     };
 
     return (
