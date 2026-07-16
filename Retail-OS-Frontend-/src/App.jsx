@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
+import Products from './pages/Products';
 import Inventory from './pages/Inventory';
 import CategoryManagement from './pages/Categories/CategoryManagement';
 import Orders from './pages/Orders';
@@ -71,6 +72,13 @@ function App() {
                            <Route path="/products" element={<Placeholder title="Product Catalog" />} />
                 
                          <Route path="/products" element={<Placeholder title="Product Catalog" />} />
+                                {/* Inventory */}
+                                <Route path="/inventory" element={<Inventory />} />
+                                <Route path="/products" element={<Products />} />
+                                <Route path="/categories" element={<Placeholder title="Categories" />} />
+                                <Route path="/purchases" element={<Placeholder title="Purchases" />} />
+                                <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
+
                                 {/* People */}
                                 <Route path="/customers" element={<Customers />} />
                                 <Route path="/employees" element={<Placeholder title="Staff Management" />} />
