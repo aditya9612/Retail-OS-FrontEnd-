@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { State, City } from 'country-state-city';
 import {
     BsSearch, BsDownload, BsEye, BsPeopleFill, BsPhone, BsGeoAlt,
     BsCalendar, BsCurrencyRupee, BsCartCheck, BsStarFill,
@@ -32,6 +33,7 @@ const statusCfg = {
 const typeCfg = {
     Regular: { color: '#6366f1', bg: '#eef2ff' },
     Wholesale: { color: '#8b5cf6', bg: '#f5f3ff' },
+    VIP: { color: '#8b5cf6', bg: '#f5f3ff' },
 };
 
 const CustomerDetailModal = ({ customer, onClose, onChange }) => {
@@ -104,18 +106,53 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
         phone: '',
         city: '',
         state: '',
-        type: 'Regular',
+        stateCode: '',
+        type: '',
         credit: '',
     });
+    
+    const indianStates = State.getStatesOfCountry('IN');
+    
+    const availableCities = form.stateCode
+        ? City.getCitiesOfState('IN', form.stateCode)
+        : [];
 
-    const handleChange = (e) => {
-        const { name, value } = e.target;
 
-        setForm(prev => ({
-            ...prev,
-            [name]: value,
-        }));
-    };
+        const handleChange = (e) => {
+            const { name, value } = e.target;
+        
+            if (name === 'stateCode') {
+                const selectedState = indianStates.find(
+                    state => state.isoCode === value
+                );
+        
+                setForm(prev => ({
+                    ...prev,
+                    stateCode: value,
+                    state: selectedState?.name || '',
+                    city: '',
+                }));
+        
+                return;
+            }
+        
+            if (name === 'phone') {
+                const onlyNumbers = value.replace(/\D/g, '').slice(0, 10);
+        
+                setForm(prev => ({
+                    ...prev,
+                    phone: onlyNumbers,
+                }));
+        
+                return;
+            }
+        
+            setForm(prev => ({
+                ...prev,
+                [name]: value,
+            }));
+        };
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -124,23 +161,32 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
             !form.name.trim() ||
             !form.email.trim() ||
             !form.phone.trim() ||
+            !form.stateCode ||
+            !form.state.trim() ||
             !form.city.trim() ||
-            !form.state.trim()
+            !form.type
         ) {
             alert('Please fill all required fields');
             return;
         }
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (!emailPattern.test(form.email.trim())) {
+            alert('Please enter a valid email address');
+            return;
+        }
     
+
         const customerData = {
             name: form.name.trim(),
-            email: form.email.trim(),
+            email: form.email.trim().toLowerCase(),
             phone: form.phone.trim(),
             address: `${form.city.trim()}, ${form.state.trim()}`,
             birthday: null,
             whatsapp_opt_in: false,
             sms_opt_in: false,
             status: 'active',
-            segment: form.type === 'Wholesale' ? 'wholesale' : 'new',
+            segment: form.type,
         };
     
         try {
@@ -239,51 +285,104 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
                                 placeholder="Enter email"
                                 value={form.email}
                                 onChange={handleChange}
+                                autoComplete="email"
+                                required
                             />
+
+                            
                         </div>
+
+                       
 
                         <div>
-                            <label style={labelStyle}>Phone *</label>
+    <label style={labelStyle}>Phone *</label>
 
-                            <input
-                                className="ec-input"
-                                type="tel"
-                                name="phone"
-                                placeholder="Enter phone number"
-                                value={form.phone}
-                                onChange={handleChange}
-                            />
-                        </div>
+    <div style={{ display: 'flex', gap: 8 }}>
+        <input
+            className="ec-input"
+            type="text"
+            value="+91"
+            disabled
+            style={{
+                width: 70,
+                textAlign: 'center',
+                background: '#f3f4f6',
+            }}
+        />
 
-                        <div>
-                            <label style={labelStyle}>City *</label>
+        <input
+            className="ec-input"
+            type="tel"
+            name="phone"
+            placeholder="Enter 10 digit mobile number"
+            value={form.phone}
+            onChange={handleChange}
+            maxLength={10}
+            inputMode="numeric"
+            pattern="[6-9][0-9]{9}"
+            required
+        />
+    </div>
+</div>
 
-                            <input
-                                className="ec-input"
-                                type="text"
-                                name="city"
-                                placeholder="Enter city"
-                                value={form.city}
-                                onChange={handleChange}
-                            />
-                        </div>
 
-                        <div>
-                            <label style={labelStyle}>State *</label>
 
-                            <input
-                                className="ec-input"
-                                type="text"
-                                name="state"
-                                placeholder="Enter state"
-                                value={form.state}
-                                onChange={handleChange}
-                            />
-                        </div>
+                        {/* State */}
+<div>
+    <label style={labelStyle}>State *</label>
+
+    <select
+        className="ec-input"
+        name="stateCode"
+        value={form.stateCode}
+        onChange={handleChange}
+        required
+    >
+        <option value="">Select State</option>
+
+        {indianStates.map(state => (
+            <option
+                key={state.isoCode}
+                value={state.isoCode}
+            >
+                {state.name}
+            </option>
+        ))}
+    </select>
+</div>
+
+{/* City */}
+<div>
+    <label style={labelStyle}>City *</label>
+
+    <select
+        className="ec-input"
+        name="city"
+        value={form.city}
+        onChange={handleChange}
+        disabled={!form.stateCode}
+        required
+    >
+        <option value="">
+            {form.stateCode
+                ? 'Select City'
+                : 'Select State First'}
+        </option>
+
+        {availableCities.map(city => (
+            <option
+                key={`${city.name}-${city.latitude}-${city.longitude}`}
+                value={city.name}
+            >
+                {city.name}
+            </option>
+        ))}
+    </select>
+</div>
 
                         <div>
                             <label style={labelStyle}>
-                                Customer Type
+                                Customer Type *
                             </label>
 
                             <select
@@ -291,9 +390,12 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
                                 name="type"
                                 value={form.type}
                                 onChange={handleChange}
+                                required
                             >
-                                <option value="Regular">Regular</option>
-                                <option value="Wholesale">Wholesale</option>
+                                <option value="">Select Customer Type</option>
+                                <option value="new">New</option>
+                                <option value="regular">Regular</option>
+                                <option value="vip">VIP</option>
                             </select>
                         </div>
 
@@ -400,8 +502,12 @@ const Customers = () => {
     
                 type:
                     customer.segment === 'vip'
-                        ? 'Wholesale'
-                        : 'Regular',
+                        ? 'VIP'
+                        : customer.segment === 'new'
+                          ? 'New'
+                          : 'Regular',
+
+                      
     
                 credit: 0,
                 loyaltyPoints: customer.loyalty_points || 0,
@@ -442,10 +548,38 @@ const Customers = () => {
 
     const handleStatusChange = (id, s) => setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: s } : c));
     const kpis = [
-        { label: 'Total Customers', value: customers.length, color: '#6366f1', bg: '#eef2ff', icon: '👥' },
-        { label: 'Active', value: customers.filter(c => c.status === 'Active').length, color: '#10b981', bg: '#ecfdf5', icon: '✅' },
-        { label: 'Wholesale', value: customers.filter(c => c.type === 'Wholesale').length, color: '#8b5cf6', bg: '#f5f3ff', icon: '🏭' },
-        {label: 'Top Spender',value: fmt(customers.length > 0 ? Math.max(...customers.map(c => c.totalSpent)) : 0),color: '#f59e0b',bg: '#fffbeb',icon: '🏆'},
+        {
+            label: 'Total Customers',
+            value: customers.length,
+            color: '#6366f1',
+            bg: '#eef2ff',
+            icon: '👥',
+        },
+        {
+            label: 'Active',
+            value: customers.filter(c => c.status === 'Active').length,
+            color: '#10b981',
+            bg: '#ecfdf5',
+            icon: '✅',
+        },
+        {
+            label: 'VIP',
+            value: customers.filter(c => c.type === 'VIP').length,
+            color: '#8b5cf6',
+            bg: '#f5f3ff',
+            icon: '⭐',
+        },
+        {
+            label: 'Top Spender',
+            value: fmt(
+                customers.length > 0
+                    ? Math.max(...customers.map(c => c.totalSpent))
+                    : 0
+            ),
+            color: '#f59e0b',
+            bg: '#fffbeb',
+            icon: '🏆',
+        },
     ];
 
     return (
@@ -496,7 +630,7 @@ const Customers = () => {
                 </select>
                 <select className="ec-input" style={{ minWidth: 140 }} value={filterType}
                     onChange={e => { setFilterType(e.target.value); setPage(1); }}>
-                    {['All', 'Regular', 'Wholesale'].map(t => <option key={t}>{t}</option>)}
+                    {['All', 'Regular', 'VIP'].map(t => <option key={t}>{t}</option>)}
                 </select>
             </div>
 
