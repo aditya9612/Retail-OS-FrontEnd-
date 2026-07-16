@@ -8,6 +8,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
 import Inventory from './pages/Inventory';
+import CategoryManagement from './pages/Categories/CategoryManagement';
+import Orders from './pages/Orders';
 import Customers from './pages/Customers';
 import ECommerceDashboard from './pages/ECommerce/ECommerceDashboard';
 import StoreManagement from './pages/ECommerce/StoreManagement';
@@ -18,6 +20,7 @@ import ProductCatalog from './pages/ECommerce/ProductCatalog';
 import CustomerManagement from './pages/ECommerce/CustomerManagement';
 import ReviewManagement from './pages/ECommerce/ReviewManagement';
 import ReturnManagement from './pages/ECommerce/ReturnManagement';
+import Returns from "./pages/Reports";
 
 // Placeholder Pages
 const Placeholder = ({ title }) => (
@@ -59,13 +62,15 @@ function App() {
                                 <Route path="/ecommerce/reviews" element={<ReviewManagement />} />
                                 <Route path="/ecommerce/returns" element={<ReturnManagement />} />
 
-                                {/* Inventory */}
-                                <Route path="/inventory" element={<Inventory />} />
-                                <Route path="/products" element={<Placeholder title="Product Catalog" />} />
-                                <Route path="/categories" element={<Placeholder title="Categories" />} />
-                                <Route path="/purchases" element={<Placeholder title="Purchases" />} />
-                                <Route path="/returns" element={<Placeholder title="Returns & Refunds" />} />
-
+                            
+                               {/* Inventory */}
+                        <Route path="/inventory" element={<Inventory />} />
+                         <Route path="/categories" element={<CategoryManagement />} />
+                         <Route path="/purchases" element={<Orders />} />
+                         <Route path="/returns" element={<Returns />} />
+                           <Route path="/products" element={<Placeholder title="Product Catalog" />} />
+                
+                         <Route path="/products" element={<Placeholder title="Product Catalog" />} />
                                 {/* People */}
                                 <Route path="/customers" element={<Customers />} />
                                 <Route path="/employees" element={<Placeholder title="Staff Management" />} />

@@ -1,68 +1,159 @@
 import React, { useState } from "react";
 
-
-import CategoryForm from "../../components/Categories/CategoryForm";
+import CategoryHeader from "../../components/Categories/CategoryHeader";
+import CategoryCards from "../../components/Categories/CategoryCards";
+import CategoryFilters from "../../components/Categories/CategoryFilters";
 import CategoryTable from "../../components/Categories/CategoryTable";
+import CategoryModel from "../../components/Categories/CategoryModel";
 
+const INITIAL_CATEGORIES = [
+  {
+    id: 1,
+    name: "Electronics",
+    products: 145,
+    status: "Active",
+    created: "10 Jul 2026",
+  },
+  {
+    id: 2,
+    name: "Groceries",
+    products: 82,
+    status: "Active",
+    created: "09 Jul 2026",
+  },
+  {
+    id: 3,
+    name: "Clothing",
+    products: 64,
+    status: "Active",
+    created: "08 Jul 2026",
+  },
+  {
+    id: 4,
+    name: "Beauty",
+    products: 35,
+    status: "Inactive",
+    created: "07 Jul 2026",
+  },
+  {
+    id: 5,
+    name: "Home & Kitchen",
+    products: 56,
+    status: "Active",
+    created: "05 Jul 2026",
+  },
+];
 
 const CategoryManagement = () => {
+  const [categories, setCategories] = useState(INITIAL_CATEGORIES);
 
-    const [categories, setCategories] = useState([
-        "Electronics",
-        "Grocery",
-        "Clothing"
-    ]);
+  const [search, setSearch] = useState("");
 
-    const addCategory = (category) => {
+  const [statusFilter, setStatusFilter] = useState("All");
 
-        setCategories([
-            ...categories,
-            category
-        ]);
+  const [showModal, setShowModal] = useState(false);
 
-    };
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
-    return (
+  const filteredCategories = categories.filter((item) => {
+    const searchMatch = item.name
+      .toLowerCase()
+      .includes(search.toLowerCase());
 
-        <div className="h-[calc(100vh-80px)] overflow-y-auto bg-slate-50/50 p-6 custom-scrollbar">
+    const statusMatch =
+      statusFilter === "All" ||
+      item.status === statusFilter;
 
-            {/* Header */}
+    return searchMatch && statusMatch;
+  });
 
-            <div className="mb-8">
+  const handleAdd = () => {
+    setSelectedCategory(null);
+    setShowModal(true);
+  };
 
-                <h2 className="text-3xl font-black text-slate-800">
-                    Category Management
-                </h2>
+  const handleEdit = (category) => {
+    setSelectedCategory(category);
+    setShowModal(true);
+  };
 
-                <p className="text-slate-500 text-[10px] uppercase tracking-widest font-bold mt-2">
-                    Manage Product Categories
-                </p>
-
-            </div>
-
-            {/* Card */}
-
-            <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm p-8">
-
-                <h3 className="text-xl font-black text-slate-800 mb-6">
-                    Categories
-                </h3>
-
-                <CategoryForm
-                    onAdd={addCategory}
-                />
-
-                <CategoryTable
-                    categories={categories}
-                    setCategories={setCategories}
-                />
-
-            </div>
-
-        </div>
-
+  const handleDelete = (id) => {
+    setCategories((prev) =>
+      prev.filter((item) => item.id !== id)
     );
+  };
 
+  const handleSave = (data) => {
+    if (selectedCategory) {
+      setCategories((prev) =>
+        prev.map((item) =>
+          item.id === selectedCategory.id
+            ? { ...item, ...data }
+            : item
+        )
+      );
+    } else {
+      const newCategory = {
+        id: Date.now(),
+        products: 0,
+        created: new Date().toLocaleDateString("en-GB"),
+        ...data,
+      };
+
+      setCategories((prev) => [...prev, newCategory]);
+    }
+
+    setShowModal(false);
+    setSelectedCategory(null);
+  };
+
+  const activeCount = categories.filter(
+    (item) => item.status === "Active"
+  ).length;
+
+  const inactiveCount = categories.filter(
+    (item) => item.status === "Inactive"
+  ).length;
+
+  return (
+    <div className="dash-page">
+
+      <CategoryHeader
+        total={categories.length}
+        active={activeCount}
+        inactive={inactiveCount}
+        onAdd={handleAdd}
+      />
+
+      <CategoryCards
+        categories={categories}
+      />
+
+      <CategoryFilters
+        search={search}
+        setSearch={setSearch}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+      />
+
+      <CategoryTable
+        categories={filteredCategories}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+      />
+{showModal && (
+  <CategoryModel
+    category={selectedCategory}
+    onSave={handleSave}
+    onClose={() => {
+      setShowModal(false);
+      setSelectedCategory(null);
+    }}
+  />
+)}
+
+    </div>
+  );
 };
 
 export default CategoryManagement;
