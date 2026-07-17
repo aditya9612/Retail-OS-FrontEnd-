@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { State, City } from 'country-state-city';
 import {
-    BsSearch, BsDownload, BsEye, BsPeopleFill, BsPhone, BsGeoAlt,
+    BsSearch, BsDownload, BsPeopleFill, BsPhone, BsGeoAlt,
     BsCalendar, BsCurrencyRupee, BsCartCheck, BsStarFill,
     BsChevronLeft, BsChevronRight, BsCheckCircleFill, BsXCircleFill,
-    BsEnvelope, BsFilter,BsPlus,
+    BsEnvelope, BsFilter,BsPlus,BsEye, BsPencilSquare,
 } from 'react-icons/bs';
-import { getCustomers, createCustomer } from '../../services/customer';
+import { getCustomers, createCustomer, getCustomerById, updateCustomer } from '../../services/customer';
 
 const CUSTOMERS = [
     { id: 'CUS-001', name: 'Aarav Mehta', email: 'aarav@email.com', phone: '+91 98765 11111', city: 'Bangalore', state: 'Karnataka', orders: 24, totalSpent: 68400, lastOrder: '26 Jun 2026', registered: '12 Jan 2026', status: 'Active', type: 'Regular', credit: 0 },
@@ -445,6 +445,348 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
     );
 };
 
+const EditCustomerModal = ({
+    customer,
+    setCustomer,
+    updating,
+    onClose,
+    onSave,
+}) => {
+    const indianStates = State.getStatesOfCountry('IN');
+
+    const availableCities = customer?.stateCode
+        ? City.getCitiesOfState('IN', customer.stateCode)
+        : [];
+
+    const labelStyle = {
+        display: 'block',
+        fontSize: 12,
+        fontWeight: 700,
+        color: '#374151',
+        marginBottom: 6,
+    };
+
+    const handleChange = (e) => {
+        const { name, value, type, checked } = e.target;
+
+        if (name === 'stateCode') {
+            const selectedState = indianStates.find(
+                state => state.isoCode === value
+            );
+
+            setCustomer(prev => ({
+                ...prev,
+                stateCode: value,
+                state: selectedState?.name || '',
+                city: '',
+            }));
+
+            return;
+        }
+
+        if (name === 'phone') {
+            const onlyNumbers = value
+                .replace(/\D/g, '')
+                .slice(0, 10);
+
+            setCustomer(prev => ({
+                ...prev,
+                phone: onlyNumbers,
+            }));
+
+            return;
+        }
+
+        setCustomer(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value,
+        }));
+    };
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose}>
+            <div
+                className="ec-modal"
+                style={{ maxWidth: 560 }}
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="ec-modal-header">
+                    <div>
+                        <h3
+                            style={{
+                                fontWeight: 700,
+                                fontSize: 17,
+                                color: '#111827',
+                            }}
+                        >
+                            Edit Customer
+                        </h3>
+
+                        <p
+                            style={{
+                                fontSize: 12,
+                                color: '#9ca3af',
+                                marginTop: 3,
+                            }}
+                        >
+                            Update the customer details below
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        className="ec-modal-close"
+                        onClick={onClose}
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                <form onSubmit={onSave}>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 14,
+                        }}
+                    >
+                        {/* Customer Name */}
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <label style={labelStyle}>
+                                Customer Name *
+                            </label>
+
+                            <input
+                                className="ec-input"
+                                type="text"
+                                name="name"
+                                placeholder="Enter customer name"
+                                value={customer?.name || ''}
+                                onChange={handleChange}
+                                required
+                            />
+                        </div>
+
+                        {/* Email */}
+                        <div>
+                            <label style={labelStyle}>
+                                Email *
+                            </label>
+
+                            <input
+                                className="ec-input"
+                                type="email"
+                                name="email"
+                                placeholder="Enter email"
+                                value={customer?.email || ''}
+                                onChange={handleChange}
+                                required
+                            />
+                        </div>
+
+                        {/* Phone */}
+                        <div>
+                            <label style={labelStyle}>
+                                Phone *
+                            </label>
+
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    gap: 8,
+                                }}
+                            >
+                                <input
+                                    className="ec-input"
+                                    type="text"
+                                    value="+91"
+                                    disabled
+                                    style={{
+                                        width: 70,
+                                        textAlign: 'center',
+                                        background: '#f3f4f6',
+                                    }}
+                                />
+
+                                <input
+                                    className="ec-input"
+                                    type="tel"
+                                    name="phone"
+                                    placeholder="Enter 10 digit mobile number"
+                                    value={customer?.phone || ''}
+                                    onChange={handleChange}
+                                    maxLength={10}
+                                    inputMode="numeric"
+                                    pattern="[6-9][0-9]{9}"
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        {/* State */}
+                        <div>
+                            <label style={labelStyle}>
+                                State *
+                            </label>
+
+                            <select
+                                className="ec-input"
+                                name="stateCode"
+                                value={customer?.stateCode || ''}
+                                onChange={handleChange}
+                                required
+                            >
+                                <option value="">
+                                    Select State
+                                </option>
+
+                                {indianStates.map(state => (
+                                    <option
+                                        key={state.isoCode}
+                                        value={state.isoCode}
+                                    >
+                                        {state.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* City */}
+                        <div>
+                            <label style={labelStyle}>
+                                City *
+                            </label>
+
+                            <select
+                                className="ec-input"
+                                name="city"
+                                value={customer?.city || ''}
+                                onChange={handleChange}
+                                disabled={!customer?.stateCode}
+                                required
+                            >
+                                <option value="">
+                                    {customer?.stateCode
+                                        ? 'Select City'
+                                        : 'Select State First'}
+                                </option>
+
+                                {availableCities.map(city => (
+                                    <option
+                                        key={`${city.name}-${city.latitude}-${city.longitude}`}
+                                        value={city.name}
+                                    >
+                                        {city.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Birthday */}
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <label style={labelStyle}>
+                                Birthday
+                            </label>
+
+                            <input
+                                className="ec-input"
+                                type="date"
+                                name="birthday"
+                                value={customer?.birthday || ''}
+                                onChange={handleChange}
+                            />
+                        </div>
+
+                        {/* Opt-in options */}
+                        <div
+                            style={{
+                                gridColumn: '1 / -1',
+                                display: 'flex',
+                                gap: 24,
+                                marginTop: 2,
+                            }}
+                        >
+                            <label
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    name="whatsappOptIn"
+                                    checked={
+                                        customer?.whatsappOptIn || false
+                                    }
+                                    onChange={handleChange}
+                                />
+
+                                WhatsApp Opt-in
+                            </label>
+
+                            <label
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    name="smsOptIn"
+                                    checked={
+                                        customer?.smsOptIn || false
+                                    }
+                                    onChange={handleChange}
+                                />
+
+                                SMS Opt-in
+                            </label>
+                        </div>
+                    </div>
+
+                    <div
+                        style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: 10,
+                            marginTop: 24,
+                        }}
+                    >
+                        <button
+                            type="button"
+                            className="adm-btn-secondary"
+                            onClick={onClose}
+                            disabled={updating}
+                        >
+                            Cancel
+                        </button>
+
+                        <button
+                            type="submit"
+                            className="adm-btn-primary"
+                            disabled={updating}
+                        >
+                            {updating
+                                ? 'Saving...'
+                                : 'Save Changes'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 const Customers = () => {
     const [customers, setCustomers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -458,10 +800,16 @@ const Customers = () => {
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState(null);
     const [showAddModal, setShowAddModal] = useState(false);
-
-    const loadCustomers = async () => {
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editingCustomer, setEditingCustomer] = useState(null);
+    const [updating, setUpdating] = useState(false);
+    
+    const loadCustomers = async (showLoader = true) => {
         try {
-            setLoading(true);
+            if (showLoader) {
+                setLoading(true);
+            }
+    
             setError('');
     
             const data = await getCustomers();
@@ -527,12 +875,170 @@ const Customers = () => {
             console.error('Failed to load customers:', err);
             setError('Unable to load customers. Please try again.');
         } finally {
-            setLoading(false);
+            if (showLoader) {
+                setLoading(false);
+            }
         }
     };
     useEffect(() => {
         loadCustomers();
     }, []);
+
+    const handleViewCustomer = async (customerId) => {
+        try {
+            const customerData = await getCustomerById(customerId);
+    
+            const formattedCustomer = {
+                id: `CUS-${String(customerData.id).padStart(3, '0')}`,
+                backendId: customerData.id,
+    
+                name: customerData.name || 'Unknown Customer',
+                email: customerData.email || '',
+                phone: customerData.phone || '',
+    
+                city: customerData.address || 'Not available',
+                state: '',
+    
+                orders: 0,
+                totalSpent: customerData.total_spend || 0,
+                lastOrder: 'No orders yet',
+    
+                registered: customerData.created_at
+                    ? new Date(customerData.created_at).toLocaleDateString('en-GB', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                      })
+                    : 'Not available',
+    
+                status:
+                    customerData.status === 'active'
+                        ? 'Active'
+                        : customerData.status === 'inactive'
+                          ? 'Inactive'
+                          : 'Blocked',
+    
+                type:
+                    customerData.segment === 'vip'
+                        ? 'VIP'
+                        : customerData.segment === 'new'
+                          ? 'New'
+                          : 'Regular',
+    
+                credit: 0,
+                loyaltyPoints: customerData.loyalty_points || 0,
+                birthday: customerData.birthday || '',
+                whatsappOptIn: customerData.whatsapp_opt_in || false,
+                smsOptIn: customerData.sms_opt_in || false,
+            };
+    
+            setSelected(formattedCustomer);
+        } catch (error) {
+            console.error('Unable to fetch customer details:', error);
+            alert('Unable to load customer details.');
+        }
+    };
+
+    const handleEditCustomer = async (customerId) => {
+    try {
+        const customerData =
+            await getCustomerById(customerId);
+
+        const addressParts = customerData.address
+            ? customerData.address
+                  .split(',')
+                  .map(item => item.trim())
+            : [];
+
+        const customerCity = addressParts[0] || '';
+        const customerState = addressParts[1] || '';
+
+        const indianStates =
+            State.getStatesOfCountry('IN');
+
+        const matchedState = indianStates.find(
+            state =>
+                state.name.toLowerCase() ===
+                customerState.toLowerCase()
+        );
+
+        setEditingCustomer({
+            backendId: customerData.id,
+            name: customerData.name || '',
+            email: customerData.email || '',
+            phone: customerData.phone || '',
+
+            city: customerCity,
+            state: customerState,
+            stateCode: matchedState?.isoCode || '',
+
+            birthday: customerData.birthday || '',
+            whatsappOptIn:
+                customerData.whatsapp_opt_in || false,
+            smsOptIn:
+                customerData.sms_opt_in || false,
+        });
+
+        setShowEditModal(true);
+    } catch (error) {
+        console.error(
+            'Unable to load customer for editing:',
+            error
+        );
+
+        alert('Unable to load customer details.');
+    }
+};
+
+    const handleUpdateCustomer = async (e) => {
+        e.preventDefault();
+    
+        if (!editingCustomer) return;
+    
+        try {
+            setUpdating(true);
+    
+            const payload = {
+                name: editingCustomer.name.trim(),
+                email: editingCustomer.email
+                    .trim()
+                    .toLowerCase(),
+            
+                phone: editingCustomer.phone.trim(),
+            
+                address: `${editingCustomer.city.trim()}, ${editingCustomer.state.trim()}`,
+            
+                birthday:
+                    editingCustomer.birthday || null,
+            
+                whatsapp_opt_in:
+                    editingCustomer.whatsappOptIn,
+            
+                sms_opt_in:
+                    editingCustomer.smsOptIn,
+            };
+    
+            await updateCustomer(editingCustomer.backendId, payload);
+    
+            alert('Customer updated successfully.');
+    
+            setShowEditModal(false);
+            setEditingCustomer(null);
+    
+            await loadCustomers(false);
+        } catch (error) {
+            console.error('Failed to update customer:', error);
+    
+            const message =
+                error.response?.data?.detail?.[0]?.msg ||
+                error.response?.data?.detail?.message ||
+                'Unable to update customer.';
+    
+            alert(message);
+        } finally {
+            setUpdating(false);
+        }
+    };
 
     const filtered = customers.filter(c => {
         const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -714,10 +1220,54 @@ const Customers = () => {
                                             {c.status}
                                         </span>
                                     </td>
-                                    <td style={{ padding: '12px 14px' }}>
-                                        <button className="adm-btn-secondary" style={{ padding: '5px 10px', fontSize: 12 }} onClick={() => setSelected(c)}>
-                                            <BsEye size={12} /> View
-                                        </button>
+                        
+                                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                justifyContent: 'center',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                            }}
+                                        >
+                                            <button
+                                                className="adm-btn-secondary"
+                                                onClick={() => handleViewCustomer(c.backendId)}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    padding: '7px 12px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '600',
+                                                    borderRadius: '8px',
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                <BsEye size={14} />
+                                                View
+                                            </button>
+
+                                            <button
+                                                onClick={() => handleEditCustomer(c.backendId)}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    padding: '7px 12px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '600',
+                                                    color: '#4F46E5',
+                                                    background: '#EEF2FF',
+                                                    border: '1px solid #C7D2FE',
+                                                    borderRadius: '8px',
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                <BsPencilSquare size={14} />
+                                                Edit
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             );
@@ -744,9 +1294,23 @@ const Customers = () => {
             
           
             {showAddModal && (
+                
                 <AddCustomerModal
                 onClose={() => setShowAddModal(false)}
                 onCreated={loadCustomers}
+                />
+            )}
+
+            {showEditModal && editingCustomer && (
+                <EditCustomerModal
+                customer={editingCustomer}
+                setCustomer={setEditingCustomer}
+                updating={updating}
+                onSave={handleUpdateCustomer}
+                onClose={() => {
+                setShowEditModal(false);
+                setEditingCustomer(null);
+                    }}
                 />
             )}
 
