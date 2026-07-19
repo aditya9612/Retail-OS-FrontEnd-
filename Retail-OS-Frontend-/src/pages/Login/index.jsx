@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BsEnvelope, BsLock, BsEye, BsEyeSlash } from 'react-icons/bs';
+import { loginUser } from '../../services/auth';
+import { setTokens } from '../../utils/tokenStorage';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -10,6 +12,7 @@ const Login = () => {
     });
 
     const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -19,7 +22,7 @@ const Login = () => {
         }));
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (!form.email.trim()) {
@@ -32,7 +35,32 @@ const Login = () => {
             return;
         }
 
-        navigate('/dashboard');
+        setLoading(true);
+
+        try {
+            const data = await loginUser({
+                email: form.email.trim(),
+                password: form.password,
+            });
+
+            setTokens({
+                access_token: data.access_token,
+                refresh_token: data.refresh_token,
+                token_type: data.token_type,
+            });
+
+            navigate('/dashboard', { replace: true });
+        } catch (err) {
+            console.error('Login failed:', err);
+
+            const message =
+                err.response?.data?.detail ||
+                'Invalid email or password';
+
+            alert(message);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -159,6 +187,7 @@ const Login = () => {
                     <button
                         type="submit"
                         className="adm-btn-primary"
+                        disabled={loading}
                         style={{
                             width: '100%',
                             justifyContent: 'center',
@@ -166,9 +195,11 @@ const Login = () => {
                             borderRadius: 14,
                             fontSize: 15,
                             fontWeight: 800,
+                            opacity: loading ? 0.7 : 1,
+                            cursor: loading ? 'not-allowed' : 'pointer',
                         }}
                     >
-                        Login
+                        {loading ? 'Logging in...' : 'Login'}
                     </button>
                 </form>
             </div>

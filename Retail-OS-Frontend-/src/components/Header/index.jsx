@@ -1,11 +1,19 @@
 // import React from 'react';
 // import { BsSearch, BsEnvelope, BsBell, BsPlus } from 'react-icons/bs';
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import NewOrderForm from '../NewOrderForm';
-import { BsSearch, BsEnvelope, BsBell, BsPlus } from 'react-icons/bs';
+import { BsSearch, BsEnvelope, BsBell, BsPlus, BsBoxArrowRight } from 'react-icons/bs';
+import { logoutUser } from '../../services/auth';
 
 const Header = () => {
+    const navigate = useNavigate();
     const [showNewOrder, setShowNewOrder] = useState(false);
+
+    const handleLogout = () => {
+        logoutUser();
+        navigate('/login', { replace: true });
+    };
     return (
         <header className="pos-header">
             {/* Search */}
@@ -52,13 +60,21 @@ const Header = () => {
                     <span className="header-badge" />
                 </button>
 
-                {/* Avatar */}
-                <div className="header-avatar-wrap">
+                {/* Avatar + Logout */}
+                <div className="header-avatar-wrap" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <img
                         src="https://ui-avatars.com/api/?name=Graham+Smith&background=6366f1&color=fff&size=80"
                         alt="User Avatar"
                         className="header-avatar"
                     />
+                    <button
+                        type="button"
+                        className="header-icon-btn"
+                        onClick={handleLogout}
+                        title="Logout"
+                    >
+                        <BsBoxArrowRight size={17} />
+                    </button>
                 </div>
             </div>
             
