@@ -1,63 +1,28 @@
-import axios from 'axios';
+import apiClient from './axiosInstance';
 
-const CUSTOMER_API_URL =
-    'https://api-testing.myretailos.com/api/v1/customers';
-
-const getAuthHeaders = () => {
-    const token = localStorage.getItem('access_token');
-
-    return {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-    };
-};
+const CUSTOMER_API_URL = '/customers';
 
 export const getCustomers = async () => {
-    const response = await axios.get(
-        CUSTOMER_API_URL,
-        {
-            headers: getAuthHeaders(),
-        }
-    );
-
+    const response = await apiClient.get(CUSTOMER_API_URL);
     return response.data;
 };
 
 export const getCustomerById = async (customerId) => {
     try {
-      const token = localStorage.getItem("access_token");
-  
-      const response = await axios.get(
-        `${CUSTOMER_API_URL}/${customerId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-  
-      return response.data;
+        const response = await apiClient.get(`${CUSTOMER_API_URL}/${customerId}`);
+        return response.data;
     } catch (error) {
-      console.error("Get customer by ID error:", error);
-      throw error;
+        console.error('Get customer by ID error:', error);
+        throw error;
     }
-  };
+};
 
-  export const updateCustomer = async (customerId, customerData) => {
+export const updateCustomer = async (customerId, customerData) => {
     try {
-        const token = localStorage.getItem('access_token');
-
-        const response = await axios.patch(
+        const response = await apiClient.patch(
             `${CUSTOMER_API_URL}/${customerId}`,
-            customerData,
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                },
-            }
+            customerData
         );
-
         return response.data;
     } catch (error) {
         console.error('Update customer error:', error);
@@ -66,13 +31,6 @@ export const getCustomerById = async (customerId) => {
 };
 
 export const createCustomer = async (customerData) => {
-    const response = await axios.post(
-        CUSTOMER_API_URL,
-        customerData,
-        {
-            headers: getAuthHeaders(),
-        }
-    );
-
+    const response = await apiClient.post(CUSTOMER_API_URL, customerData);
     return response.data;
 };
