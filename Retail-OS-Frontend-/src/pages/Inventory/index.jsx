@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
 import InventoryHeader from "../../components/InventoryHeader";
 import InventoryCards from "../../components/InventoryCards";
 import InventoryFilters from "../../components/InventoryFilters"
 import InventoryTable from "../../components/InventoryTable";
+import { getInventory } from "../../api/inventoryApi";
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
     BsBoxSeam, BsExclamationTriangleFill, BsCheckCircleFill,
@@ -104,6 +105,9 @@ const Inventory = () => {
     const [page, setPage] = useState(1);
     const [stockModal, setStockModal] = useState(null);
     const [activeTab, setActiveTab] = useState('All Items');
+    
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
     const tabs = ['All Items', 'Low Stock', 'Out of Stock'];
 
@@ -136,7 +140,28 @@ const Inventory = () => {
         { label: 'Out of Stock', value: outOfStockCount, color: '#ef4444', bg: '#fef2f2', icon: '🚫' },
         { label: 'Inventory Value', value: fmt(totalValue), color: '#8b5cf6', bg: '#f5f3ff', icon: '💰' },
     ];
+const fetchInventory = async () => {
+  try {
+    setLoading(true);
 
+    const response = await getInventory();
+
+    console.log("Inventory API Response:", response);
+    console.log("Is Array:", Array.isArray(response));
+    console.log("First Item:", response?.[0]);
+
+    setInventory(response || []);
+  } catch (error) {
+    console.error("Fetch Inventory Error:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+    useEffect(() => {
+    fetchInventory();
+}, []);
+ 
+  
     return (
     <div className="dash-page">
 
