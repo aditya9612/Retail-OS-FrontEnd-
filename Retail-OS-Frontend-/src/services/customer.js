@@ -30,6 +30,19 @@ export const updateCustomer = async (customerId, customerData) => {
     }
 };
 
+export const deleteCustomer = async (customerId) => {
+    try {
+        const response = await apiClient.delete(
+            `${CUSTOMER_API_URL}/${customerId}`
+        );
+
+        return response.data;
+    } catch (error) {
+        console.error('Delete customer error:', error);
+        throw error;
+    }
+};
+
 export const createCustomer = async (customerData) => {
     const response = await apiClient.post(CUSTOMER_API_URL, customerData);
     return response.data;
