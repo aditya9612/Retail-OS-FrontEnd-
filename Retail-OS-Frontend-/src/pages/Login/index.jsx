@@ -1,7 +1,8 @@
+import { auth } from "../../services/auth";
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BsEnvelope, BsLock, BsEye, BsEyeSlash } from 'react-icons/bs';
 
+import { BsEnvelope, BsLock, BsEye, BsEyeSlash } from 'react-icons/bs';
 const Login = () => {
     const navigate = useNavigate();
     const [form, setForm] = useState({
@@ -19,22 +20,31 @@ const Login = () => {
         }));
     };
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
+    const handleSubmit = async (e) => {
+    e.preventDefault();
 
-        if (!form.email.trim()) {
-            alert('Email is required');
-            return;
-        }
+    if (!form.email.trim()) {
+        alert("Email is required");
+        return;
+    }
 
-        if (!form.password.trim()) {
-            alert('Password is required');
-            return;
-        }
+    if (!form.password.trim()) {
+        alert("Password is required");
+        return;
+    }
 
-        navigate('/dashboard');
-    };
+    try {
+        const data = await auth.login(form);
 
+        console.log("Login response:", data);
+
+        navigate("/dashboard");
+
+    } catch (error) {
+        console.log("Login failed:", error);
+        alert("Invalid login");
+    }
+};
     return (
         <div
             style={{
