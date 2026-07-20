@@ -4,9 +4,9 @@ import {
     BsSearch, BsDownload, BsPeopleFill, BsPhone, BsGeoAlt,
     BsCalendar, BsCurrencyRupee, BsCartCheck, BsStarFill,
     BsChevronLeft, BsChevronRight, BsCheckCircleFill, BsXCircleFill,
-    BsEnvelope, BsFilter,BsPlus,BsEye, BsPencilSquare, BsTrash,
+    BsEnvelope, BsFilter,BsPlus,BsEye, BsPencilSquare,
 } from 'react-icons/bs';
-import { getCustomers, createCustomer, getCustomerById, updateCustomer, deleteCustomer } from '../../services/customer';
+import { getCustomers, createCustomer, getCustomerById, updateCustomer } from '../../services/customer';
 
 const CUSTOMERS = [
     { id: 'CUS-001', name: 'Aarav Mehta', email: 'aarav@email.com', phone: '+91 98765 11111', city: 'Bangalore', state: 'Karnataka', orders: 24, totalSpent: 68400, lastOrder: '26 Jun 2026', registered: '12 Jan 2026', status: 'Active', type: 'Regular', credit: 0 },
@@ -1040,37 +1040,6 @@ const Customers = () => {
         }
     };
 
-    const handleDeleteCustomer = async (customerId, customerName) => {
-        const confirmed = window.confirm(
-            `Are you sure you want to delete ${customerName}?`
-        );
-    
-        if (!confirmed) {
-            return;
-        }
-    
-        try {
-            await deleteCustomer(customerId);
-    
-            alert('Customer deleted successfully.');
-    
-            await loadCustomers(false);
-        } catch (error) {
-            console.error('Failed to delete customer:', error);
-    
-            const message =
-                error.response?.data?.detail ||
-                error.response?.data?.message ||
-                'Unable to delete customer.';
-    
-            alert(
-                typeof message === 'string'
-                    ? message
-                    : 'Unable to delete customer.'
-            );
-        }
-    };
-
     const filtered = customers.filter(c => {
         const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
             c.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -1297,27 +1266,6 @@ const Customers = () => {
                                             >
                                                 <BsPencilSquare size={14} />
                                                 Edit
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => handleDeleteCustomer(c.backendId, c.name)}
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '5px',
-                                                    padding: '7px 12px',
-                                                    fontSize: '12px',
-                                                    fontWeight: '600',
-                                                    color: '#dc2626',
-                                                    background: '#fef2f2',
-                                                    border: '1px solid #fecaca',
-                                                    borderRadius: '8px',
-                                                    cursor: 'pointer',
-                                                }}
-                                            >
-                                                <BsTrash size={14} />
-                                                Delete
                                             </button>
                                         </div>
                                     </td>

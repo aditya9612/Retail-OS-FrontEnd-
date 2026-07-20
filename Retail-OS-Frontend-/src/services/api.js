@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getAccessToken, getTokenType } from "../utils/tokenStorage";
 
 const apiClient = axios.create({
     baseURL: "https://api-testing.myretailos.com/api/v1",
@@ -9,10 +10,10 @@ const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
     (config) => {
-        const token = localStorage.getItem("token");
+        const token = getAccessToken();
 
         if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+            config.headers.Authorization = `${getTokenType()} ${token}`;
         }
 
         return config;

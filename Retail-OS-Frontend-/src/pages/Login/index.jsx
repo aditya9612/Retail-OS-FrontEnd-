@@ -14,16 +14,8 @@ const Login = () => {
     });
 
     const [showPassword, setShowPassword] = useState(false);
-
-
     const handleChange = (e) => {
-<<<<<<< HEAD
-        
-=======
-
->>>>>>> a25a408589f78a292a72d694517c8fea385de7d9
         const { name, value } = e.target;
-
         setForm(prev => ({
             ...prev,
             [name]: value,
