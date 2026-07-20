@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { BsEnvelope, BsLock, BsEye, BsEyeSlash } from "react-icons/bs";
 import { auth } from "../../services/auth";
 
-
 const Login = () => {
 
     const navigate = useNavigate();
@@ -14,14 +13,7 @@ const Login = () => {
     });
 
     const [showPassword, setShowPassword] = useState(false);
-
-
     const handleChange = (e) => {
-<<<<<<< HEAD
-        
-=======
-
->>>>>>> a25a408589f78a292a72d694517c8fea385de7d9
         const { name, value } = e.target;
 
         setForm(prev => ({
