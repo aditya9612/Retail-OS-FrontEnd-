@@ -231,7 +231,7 @@ const Products = () => {
     price: Number(form.sellingPrice),
     cost_price: Number(form.costPrice),
 
-    variants: {},
+    variants: [],
 
     track_batch: false,
     track_expiry: false,
