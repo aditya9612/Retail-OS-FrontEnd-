@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BsEnvelope, BsLock, BsEye, BsEyeSlash } from "react-icons/bs";
 import { auth } from "../../services/auth";
+import { getCurrentUser } from "../../services/user";
 
 const Login = () => {
 
@@ -49,7 +50,13 @@ const Login = () => {
             const data = await auth.login(form);
 
             console.log("Login response:", data);
+            
+            const user = await getCurrentUser();
+            
+            console.log("Current user response:", user);
 
+            localStorage.setItem("user", JSON.stringify(user));
+            
             navigate("/dashboard");
 
 
