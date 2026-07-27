@@ -192,7 +192,7 @@ const Products = () => {
         setLoading(true);
 
        const data = await productService.getAll();
-
+       console.log("Products API:", data);
         setProducts(data);
 
     } catch (error) {
@@ -214,40 +214,44 @@ const Products = () => {
     const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    const handleSave = async (form) => {
+   const handleSave = async (form) => {
     try {
+        const payload = {
+            name: form.name,
+            sku: `SKU-${Date.now()}`,
+            barcode: `${Date.now()}`,
+            description: form.description,
 
-    const payload = {
-    name: form.name,
-    sku: `SKU-${Date.now()}`,
-    barcode: `${Date.now()}`,
-    description: form.description,
+            category_id: 1,
 
-    category_id: 1,
+            hsn_code: form.hsnCode || "1234",
+            gst_rate: 18,
 
-    hsn_code: form.hsnCode || "1234",
-    gst_rate: 18,
+            price: Number(form.sellingPrice),
+            cost_price: Number(form.costPrice),
 
-    price: Number(form.sellingPrice),
-    cost_price: Number(form.costPrice),
+            variants: {},
 
-    variants: [],
+            track_batch: false,
+            track_expiry: false,
 
-    track_batch: false,
-    track_expiry: false,
+            image_url: null
+        };
 
-    image_url: ""
-};
-
-console.log("Payload:", payload);
-
-const response = await productService.create(payload);
-console.log(response);
         console.log("Payload:", payload);
+
+        // Create product
+        const response = await productService.create(payload);
+
         console.log("Product Created:", response);
 
-        // refresh list from backend
-        fetchProducts();
+        // Refresh product list after successful creation
+        await fetchProducts();
+
+        console.log("Product list refreshed");
+
+        // Close modal (if you have this state)
+        setShowModal(false);
 
     } catch (error) {
         console.error(
@@ -256,7 +260,6 @@ console.log(response);
         );
     }
 };
-
     const toggleStatus = (id) => setProducts(prev => prev.map(p => p.id === id ? { ...p, status: !p.status } : p));
     const deleteProduct = (id) => setProducts(prev => prev.filter(p => p.id !== id));
 
