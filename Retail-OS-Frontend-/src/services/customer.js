@@ -1,4 +1,4 @@
-import apiClient from './axiosInstance';
+import apiClient from './api';
 
 const CUSTOMER_API_URL = '/customers';
 
