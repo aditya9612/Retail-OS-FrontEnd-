@@ -2,37 +2,51 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BsEnvelope, BsLock, BsEye, BsEyeSlash } from 'react-icons/bs';
 
+const BASE_URL = 'https://api-testing.myretailos.com/api/v1';
+
 const Login = () => {
     const navigate = useNavigate();
-    const [form, setForm] = useState({
-        email: '',
-        password: '',
-    });
-
+    const [form, setForm] = useState({ email: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setForm(prev => ({
-            ...prev,
-            [name]: value,
-        }));
+        setForm(prev => ({ ...prev, [name]: value }));
+        setError('');
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!form.email.trim()) { alert('Email is required'); return; }
+        if (!form.password.trim()) { alert('Password is required'); return; }
 
-        if (!form.email.trim()) {
-            alert('Email is required');
-            return;
+        setLoading(true);
+        setError('');
+        try {
+            const res = await fetch(`${BASE_URL}/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ email: form.email, password: form.password }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                setError(data?.detail?.message || data?.detail || 'Login failed. Check your credentials.');
+                return;
+            }
+            // Persist tokens
+            localStorage.setItem('access_token', data.access_token);
+            localStorage.setItem('refresh_token', data.refresh_token);
+            navigate('/dashboard');
+        } catch (err) {
+            setError('Network error. Please try again.');
+        } finally {
+            setLoading(false);
         }
-
-        if (!form.password.trim()) {
-            alert('Password is required');
-            return;
-        }
-
-        navigate('/dashboard');
     };
 
     return (
@@ -79,7 +93,7 @@ const Login = () => {
                                 placeholder="Enter your email"
                                 value={form.email}
                                 onChange={handleChange}
-                                required 
+                                required
                                 style={{
                                     width: '100%',
                                     padding: '14px 16px 14px 44px',
@@ -140,7 +154,7 @@ const Login = () => {
                         </div>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: error ? 12 : 24 }}>
                         <button
                             type="button"
                             style={{
@@ -156,8 +170,24 @@ const Login = () => {
                         </button>
                     </div>
 
+                    {error && (
+                        <div style={{
+                            background: '#fef2f2',
+                            border: '1px solid #fca5a5',
+                            borderRadius: 10,
+                            padding: '10px 14px',
+                            marginBottom: 16,
+                            fontSize: 13,
+                            color: '#dc2626',
+                            fontWeight: 600,
+                        }}>
+                            ⚠️ {error}
+                        </div>
+                    )}
+
                     <button
                         type="submit"
+                        disabled={loading}
                         className="adm-btn-primary"
                         style={{
                             width: '100%',
@@ -166,9 +196,11 @@ const Login = () => {
                             borderRadius: 14,
                             fontSize: 15,
                             fontWeight: 800,
+                            opacity: loading ? 0.7 : 1,
+                            cursor: loading ? 'not-allowed' : 'pointer',
                         }}
                     >
-                        Login
+                        {loading ? 'Logging in…' : 'Login'}
                     </button>
                 </form>
             </div>
