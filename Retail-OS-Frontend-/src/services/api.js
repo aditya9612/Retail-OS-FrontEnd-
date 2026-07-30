@@ -1,5 +1,27 @@
-// API Service
-export const api = {
-    get: (url) => fetch(url).then(res => res.json()),
-    post: (url, data) => fetch(url, { method: 'POST', body: JSON.stringify(data) }).then(res => res.json()),
-};
+import axios from "axios";
+import { getAccessToken, getTokenType } from "../utils/tokenStorage";
+
+const apiClient = axios.create({
+    baseURL: "https://api-testing.myretailos.com/api/v1",
+    headers: {
+        "Content-Type": "application/json",
+    },
+});
+
+apiClient.interceptors.request.use(
+    (config) => {
+        const token = getAccessToken();
+
+        if (token) {
+            config.headers.Authorization = `${getTokenType()} ${token}`;
+        }
+
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
+export default apiClient;
+

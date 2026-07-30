@@ -1,104 +1,113 @@
 import React from "react";
+import "./CategoryTable.css";
 
-const CategoryTable = ({ categories, setCategories }) => {
+const CategoryTable = ({
+  categories,
+  onEdit,
+  onDelete,
+}) => {
+  return (
+    <div className="category-table-container">
 
-    const deleteCategory = (index) => {
+      <table className="category-table">
 
-        const updated = categories.filter((_, i) => i !== index);
+        <thead>
+          <tr>
+            <th>Category Name</th>
+            <th>Total Products</th>
+            <th>Status</th>
+            <th>Created Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
 
-        setCategories(updated);
+        <tbody>
 
-    };
+          {categories.length === 0 ? (
+            <tr>
+              <td
+                colSpan="5"
+                className="empty-row"
+              >
+                No Categories Found
+              </td>
+            </tr>
+          ) : (
 
-    return (
+            categories.map((item) => (
 
-        <div className="overflow-hidden rounded-2xl border border-slate-100 mt-6">
+              <tr key={item.id}>
 
-            <table className="w-full">
+                <td>
 
-                <thead className="bg-slate-50">
+                  <div className="category-name">
 
-                    <tr>
+                    <div className="category-icon">
+                      📂
+                    </div>
 
-                        <th className="px-6 py-4 text-left text-sm font-black text-slate-500">
-                            Category Name
-                        </th>
+                    <span>{item.name}</span>
 
-                        <th className="px-6 py-4 text-center text-sm font-black text-slate-500">
-                            Action
-                        </th>
+                  </div>
 
-                    </tr>
+                </td>
 
-                </thead>
+                <td>
+                  {item.products}
+                </td>
 
-                <tbody>
+                <td>
 
-                    {
-                        categories.length === 0 ? (
-
-                            <tr>
-
-                                <td
-                                    colSpan="2"
-                                    className="px-6 py-8 text-center text-slate-400 font-bold"
-                                >
-
-                                    No Categories Available
-
-                                </td>
-
-                            </tr>
-
-                        ) : (
-
-                            categories.map((category, index) => (
-
-                                <tr
-                                    key={index}
-                                    className="border-t border-slate-100"
-                                >
-
-                                    <td className="px-6 py-4 font-bold">
-                                        {category}
-                                    </td>
-
-                                    <td className="px-6 py-4 text-center">
-
-                                        <button
-                                            onClick={() => deleteCategory(index)}
-                                            className="
-                                                px-4
-                                                py-2
-                                                bg-red-500
-                                                text-white
-                                                rounded-xl
-                                                text-xs
-                                                font-black
-                                            "
-                                        >
-
-                                            Delete
-
-                                        </button>
-
-                                    </td>
-
-                                </tr>
-
-                            ))
-
-                        )
+                  <span
+                    className={
+                      item.status === "Active"
+                        ? "status active"
+                        : "status inactive"
                     }
+                  >
+                    {item.status}
+                  </span>
 
-                </tbody>
+                </td>
 
-            </table>
+                <td>
+                  {item.created}
+                </td>
 
-        </div>
+                <td>
 
-    );
+                  <div className="table-actions">
 
+                    <button
+                      className="edit-btn"
+                      onClick={() => onEdit(item)}
+                    >
+                      Edit
+                    </button>
+
+                    <button
+                      className="delete-btn"
+                      onClick={() => onDelete(item.id)}
+                    >
+                      Delete
+                    </button>
+
+                  </div>
+
+                </td>
+
+              </tr>
+
+            ))
+
+          )}
+
+        </tbody>
+
+      </table>
+
+    </div>
+  );
 };
 
 export default CategoryTable;

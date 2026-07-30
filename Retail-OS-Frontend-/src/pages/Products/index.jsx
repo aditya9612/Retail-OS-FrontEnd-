@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { product as productService } from "../../services/product";
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
     BsBoxSeam, BsTag, BsArrowUpRight, BsChevronLeft, BsChevronRight,
@@ -174,11 +175,33 @@ const initialProducts = [
     },
 ];
 const Products = () => {
-    const [products, setProducts] = useState(PRODUCTS);
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [filterCat, setFilterCat] = useState('All');
     const [page, setPage] = useState(1);
     const [modal, setModal] = useState(null);
+
+    useEffect(() => {
+        fetchProducts();
+    }, []);
+
+
+    const fetchProducts = async () => {
+    try {
+        setLoading(true);
+
+       const data = await productService.getAll();
+
+        setProducts(data);
+
+    } catch (error) {
+        console.error("Failed to fetch products:", error);
+
+    } finally {
+        setLoading(false);
+    }
+};
 
     const filtered = products.filter(p => {
         const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -191,13 +214,48 @@ const Products = () => {
     const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    const handleSave = (form) => {
-        if (form.id) {
-            setProducts(prev => prev.map(p => p.id === form.id ? { ...p, ...form } : p));
-        } else {
-            setProducts(prev => [...prev, { ...form, id: `PRD-${String(prev.length + 1).padStart(3, '0')}` }]);
-        }
-    };
+    const handleSave = async (form) => {
+    try {
+
+    const payload = {
+    name: form.name,
+    sku: `SKU-${Date.now()}`,
+    barcode: `${Date.now()}`,
+    description: form.description,
+
+    category_id: 1,
+
+    hsn_code: form.hsnCode || "1234",
+    gst_rate: 18,
+
+    price: Number(form.sellingPrice),
+    cost_price: Number(form.costPrice),
+
+    variants: [],
+
+    track_batch: false,
+    track_expiry: false,
+
+    image_url: ""
+};
+
+console.log("Payload:", payload);
+
+const response = await productService.create(payload);
+console.log(response);
+        console.log("Payload:", payload);
+        console.log("Product Created:", response);
+
+        // refresh list from backend
+        fetchProducts();
+
+    } catch (error) {
+        console.error(
+            "Create Product Failed:",
+            error.response?.data || error.message
+        );
+    }
+};
 
     const toggleStatus = (id) => setProducts(prev => prev.map(p => p.id === id ? { ...p, status: !p.status } : p));
     const deleteProduct = (id) => setProducts(prev => prev.filter(p => p.id !== id));
@@ -208,6 +266,7 @@ const Products = () => {
         { label: 'Featured', value: products.filter(p => p.featured).length, color: '#8b5cf6', bg: '#f5f3ff', icon: '⭐' },
         { label: 'Out of Stock', value: products.filter(p => p.stock === 0).length, color: '#ef4444', bg: '#fef2f2', icon: '🚫' },
     ];
+
 
     return (
         <div className="dash-page">

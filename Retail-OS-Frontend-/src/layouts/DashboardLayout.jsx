@@ -1,15 +1,16 @@
 import React from 'react';
+import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 
-const DashboardLayout = ({ children }) => {
+const DashboardLayout = () => {
     return (
         <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--color-bg)' }}>
             <Sidebar />
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
                 <Header />
                 <main style={{ flex: 1, overflowY: 'auto' }} className="custom-scrollbar">
-                    {children}
+                    <Outlet />
                 </main>
             </div>
         </div>

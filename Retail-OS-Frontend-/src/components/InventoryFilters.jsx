@@ -1,7 +1,14 @@
 import React from "react";
 import "./InventoryFilters.css";
 
-const InventoryFilters = () => {
+const InventoryFilters = ({
+  search,
+  setSearch,
+  filterCat,
+  setFilterCat,
+  filterStatus,
+  setFilterStatus,
+}) => {
   return (
     <div className="inventory-filters">
 
@@ -14,10 +21,12 @@ const InventoryFilters = () => {
       {/* Search */}
       <div className="filter-group">
         <label>Search Product</label>
-        <input
-          type="text"
-          placeholder="Search by Product Name / SKU / Barcode"
-        />
+       <input
+  type="text"
+  placeholder="Search by Product Name / SKU / Barcode"
+  value={search}
+  onChange={(e) => setSearch(e.target.value)}
+/>
       </div>
 
       {/* Warehouse */}
@@ -34,13 +43,18 @@ const InventoryFilters = () => {
       {/* Category */}
       <div className="filter-group">
         <label>Category</label>
-        <select>
-          <option>All Categories</option>
-          <option>Groceries</option>
-          <option>Beverages</option>
-          <option>Electronics</option>
-          <option>Medicines</option>
-        </select>
+      <select
+  value={filterCat}
+  onChange={(e) => setFilterCat(e.target.value)}
+>
+  <option>All Categories</option>
+  <option>Electronics</option>
+  <option>Groceries</option>
+  <option>Apparel</option>
+  <option>Accessories</option>
+  <option>Home & Kitchen</option>
+  <option>Beauty</option>
+</select>
       </div>
 
       {/* Supplier */}
@@ -58,13 +72,15 @@ const InventoryFilters = () => {
       {/* Stock Status */}
       <div className="filter-group">
         <label>Stock Status</label>
-        <select>
-          <option>All</option>
-          <option>Available</option>
-          <option>Low Stock</option>
-          <option>Out Of Stock</option>
-          <option>Expired</option>
-        </select>
+      <select
+  value={filterStatus}
+  onChange={(e) => setFilterStatus(e.target.value)}
+>
+  <option>All</option>
+  <option>In Stock</option>
+  <option>Low Stock</option>
+  <option>Out of Stock</option>
+</select>
       </div>
 
       {/* Date */}
@@ -75,14 +91,20 @@ const InventoryFilters = () => {
 
       {/* Buttons */}
       <div className="filter-actions">
+<button
+  className="reset-btn"
+  onClick={() => {
+    setSearch("");
+    setFilterCat("All Categories");
+    setFilterStatus("All");
+  }}
+>
+  Reset
+</button>
 
-        <button className="reset-btn">
-          Reset
-        </button>
-
-        <button className="search-btn">
-          Search
-        </button>
+      <button className="search-btn">
+  Search
+</button>
 
         <button className="export-btn">
           Export
