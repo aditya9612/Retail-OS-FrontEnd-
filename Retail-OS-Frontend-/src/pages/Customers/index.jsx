@@ -4,9 +4,15 @@ import {
     BsSearch, BsDownload, BsPeopleFill, BsPhone, BsGeoAlt,
     BsCalendar, BsCurrencyRupee, BsCartCheck, BsStarFill,
     BsChevronLeft, BsChevronRight, BsCheckCircleFill, BsXCircleFill,
-    BsEnvelope, BsFilter,BsPlus,BsEye, BsPencilSquare,BsTrash,
+    BsEnvelope, BsFilter, BsPlus, BsEye, BsPencilSquare,
 } from 'react-icons/bs';
-import { getCustomers, createCustomer, getCustomerById, updateCustomer, deleteCustomer } from '../../services/customer';
+import {
+    getCustomers,
+    createCustomer,
+    getCustomerById,
+    updateCustomer,
+    // deleteCustomer, // TODO: Replace with Active/Inactive API when backend is available.
+} from '../../services/customer';
 
 const CUSTOMERS = [
     { id: 'CUS-001', name: 'Aarav Mehta', email: 'aarav@email.com', phone: '+91 98765 11111', city: 'Bangalore', state: 'Karnataka', orders: 24, totalSpent: 68400, lastOrder: '26 Jun 2026', registered: '12 Jan 2026', status: 'Active', type: 'Regular', credit: 0 },
@@ -21,7 +27,7 @@ const CUSTOMERS = [
     { id: 'CUS-010', name: 'Tanvi Joshi', email: 'tanvi@email.com', phone: '+91 98765 10000', city: 'Jaipur', state: 'Rajasthan', orders: 21, totalSpent: 64300, lastOrder: '22 Jun 2026', registered: '07 Oct 2025', status: 'Blocked', type: 'Regular', credit: 0 },
 ];
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 const fmt = (n) => '₹' + n.toLocaleString('en-IN');
 
 const NAME_PATTERN = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
@@ -81,8 +87,8 @@ const getApiErrorMessage = (error, fallback) =>
     fallback;
 
 const statusCfg = {
-    Active: { color: '#10b981', bg: '#ecfdf5' },
-    Inactive: { color: '#9ca3af', bg: '#f3f4f6' },
+    Active: { color: '#22C55E', bg: '#f0fdf4' },
+    Inactive: { color: '#EF4444', bg: '#fef2f2' },
     Blocked: { color: '#ef4444', bg: '#fef2f2' },
 };
 
@@ -90,6 +96,73 @@ const typeCfg = {
     Regular: { color: '#6366f1', bg: '#eef2ff' },
     Wholesale: { color: '#8b5cf6', bg: '#f5f3ff' },
     VIP: { color: '#8b5cf6', bg: '#f5f3ff' },
+};
+
+const CustomerStatusToggle = ({ isActive, onToggle }) => {
+    const activeColor = '#22C55E';
+    const inactiveColor = '#EF4444';
+
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={isActive}
+            aria-label={isActive ? 'Active' : 'Inactive'}
+            onClick={onToggle}
+            style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '5px 10px 5px 5px',
+                borderRadius: 999,
+                border: `1px solid ${isActive ? '#bbf7d0' : '#fecaca'}`,
+                background: isActive ? '#f0fdf4' : '#fef2f2',
+                cursor: 'pointer',
+                transition: 'background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease',
+                boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
+            }}
+        >
+            <span
+                style={{
+                    position: 'relative',
+                    width: 36,
+                    height: 20,
+                    borderRadius: 999,
+                    background: isActive ? activeColor : inactiveColor,
+                    transition: 'background 0.25s ease',
+                    flexShrink: 0,
+                }}
+            >
+                <span
+                    style={{
+                        position: 'absolute',
+                        top: 2,
+                        left: isActive ? 18 : 2,
+                        width: 16,
+                        height: 16,
+                        borderRadius: '50%',
+                        background: '#ffffff',
+                        transition: 'left 0.25s ease, transform 0.25s ease',
+                        boxShadow: '0 1px 3px rgba(15, 23, 42, 0.18)',
+                    }}
+                />
+            </span>
+
+            <span
+                style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: isActive ? activeColor : inactiveColor,
+                    transition: 'color 0.25s ease',
+                    minWidth: 52,
+                    textAlign: 'left',
+                    userSelect: 'none',
+                }}
+            >
+                {isActive ? 'Active' : 'Inactive'}
+            </span>
+        </button>
+    );
 };
 
 const CustomerDetailModal = ({ customer, onClose, onChange }) => {
@@ -1170,26 +1243,46 @@ const Customers = () => {
         });
     };
 
-    const handleDeleteCustomer = async (customerId) => {
-        try {
-            await deleteCustomer(customerId);
-    
-            await loadCustomers(false);
-        } catch (error) {
-            console.error('Failed to delete customer:', error);
-    
-            const message =
-                error.response?.data?.detail?.message ||
-                error.response?.data?.detail ||
-                error.response?.data?.message ||
-                'Unable to delete customer.';
-    
-            console.error(
-                typeof message === 'string'
-                    ? message
-                    : 'Unable to delete customer.'
-            );
-        }
+    // TODO: Replace with Active/Inactive API when backend is available.
+    // const handleDeleteCustomer = async (customerId) => {
+    //     try {
+    //         await deleteCustomer(customerId);
+    //
+    //         await loadCustomers(false);
+    //     } catch (error) {
+    //         console.error('Failed to delete customer:', error);
+    //
+    //         const message =
+    //             error.response?.data?.detail?.message ||
+    //             error.response?.data?.detail ||
+    //             error.response?.data?.message ||
+    //             'Unable to delete customer.';
+    //
+    //         console.error(
+    //             typeof message === 'string'
+    //                 ? message
+    //                 : 'Unable to delete customer.'
+    //         );
+    //     }
+    // };
+
+    const handleStatusToggle = (customerId) => {
+        // TODO: Replace with Active/Inactive API when backend is available.
+        // Example when API is ready:
+        // const customer = customers.find(c => c.backendId === customerId);
+        // const apiStatus = customer.status === 'Active' ? 'inactive' : 'active';
+        // await updateCustomer(customerId, { status: apiStatus });
+
+        setCustomers(prev =>
+            prev.map(customer =>
+                customer.backendId === customerId
+                    ? {
+                          ...customer,
+                          status: customer.status === 'Active' ? 'Inactive' : 'Active',
+                      }
+                    : customer
+            )
+        );
     };
 
     const filtered = customers.filter(c => {
@@ -1523,73 +1616,61 @@ const Customers = () => {
                                         </span>
                                     </td>
                         
-                                    <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                                    <td style={{ padding: '12px 14px' }}>
                                         <div
                                             style={{
                                                 display: 'flex',
-                                                justifyContent: 'center',
+                                                justifyContent: 'flex-start',
                                                 alignItems: 'center',
-                                                gap: '8px',
+                                                gap: 8,
                                             }}
                                         >
                                             <button
+                                                type="button"
                                                 className="adm-btn-secondary"
+                                                title="View customer"
+                                                aria-label="View customer"
                                                 onClick={() => handleViewCustomer(c.backendId)}
                                                 style={{
-                                                    display: 'flex',
+                                                    display: 'inline-flex',
                                                     alignItems: 'center',
-                                                    gap: '5px',
-                                                    padding: '7px 12px',
-                                                    fontSize: '12px',
-                                                    fontWeight: '600',
-                                                    borderRadius: '8px',
+                                                    justifyContent: 'center',
+                                                    width: 34,
+                                                    height: 34,
+                                                    padding: 0,
+                                                    borderRadius: 8,
                                                     cursor: 'pointer',
                                                 }}
                                             >
-                                                <BsEye size={14} />
-                                                View
+                                                <BsEye size={15} />
                                             </button>
 
                                             <button
+                                                type="button"
+                                                title="Edit customer"
+                                                aria-label="Edit customer"
                                                 onClick={() => handleEditCustomer(c.backendId)}
                                                 style={{
-                                                    display: 'flex',
+                                                    display: 'inline-flex',
                                                     alignItems: 'center',
-                                                    gap: '5px',
-                                                    padding: '7px 12px',
-                                                    fontSize: '12px',
-                                                    fontWeight: '600',
+                                                    justifyContent: 'center',
+                                                    width: 34,
+                                                    height: 34,
+                                                    padding: 0,
                                                     color: '#4F46E5',
                                                     background: '#EEF2FF',
                                                     border: '1px solid #C7D2FE',
-                                                    borderRadius: '8px',
+                                                    borderRadius: 8,
                                                     cursor: 'pointer',
                                                 }}
                                             >
-                                                <BsPencilSquare size={14} />
-                                                Edit
+                                                <BsPencilSquare size={15} />
                                             </button>
 
-                                            <button
-                                                onClick={() => handleDeleteCustomer(c.backendId)}
-                                                style={{
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: '5px',
-                                                    padding: '7px 12px',
-                                                    fontSize: '12px',
-                                                    fontWeight: '600',
-                                                    color: '#DC2626',
-                                                    background: '#FEF2F2',
-                                                    border: '1px solid #FECACA',
-                                                    borderRadius: '8px',
-                                                    cursor: 'pointer',
-                                                }}
-                                            >
-                                                <BsTrash size={14} />
-                                                Delete
-                                            </button>
-
+                                            <CustomerStatusToggle
+                                                isActive={c.status === 'Active'}
+                                                onToggle={() => handleStatusToggle(c.backendId)}
+                                            />
                                         </div>
                                     </td>
                                 </tr>
