@@ -2,38 +2,35 @@ import React, { useState, useEffect } from 'react';
 import { product as productService } from "../../services/product";
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
-    BsBoxSeam, BsTag, BsArrowUpRight, BsChevronLeft, BsChevronRight,
-    BsCheckCircleFill, BsToggleOn, BsToggleOff, BsImage, BsStarFill,
-    BsXCircleFill,
+    BsChevronLeft, BsChevronRight, BsCheckCircleFill,
+    BsToggleOn, BsToggleOff, BsImage,
 } from 'react-icons/bs';
 
 const CATEGORIES_LIST = ['Electronics', 'Groceries', 'Apparel', 'Accessories', 'Home & Kitchen', 'Beauty', 'Sports', 'Books', 'Toys'];
 const GST_RATES = ['0%', '5%', '12%', '18%', '28%'];
 const UNITS = ['Pcs', 'Kg', 'Ltr', 'Box', 'Set', 'Pair', 'Bag', 'Dozen'];
 
-const PRODUCTS = [
-    { id: 'PRD-001', name: 'Wireless Earbuds Pro', category: 'Electronics', brand: 'Samsung', barcode: '8901572637846', unit: 'Pcs', mrp: 3499, sellingPrice: 2499, costPrice: 1800, gst: '18%', stock: 145, hsnCode: '8518', status: true, featured: true },
-    { id: 'PRD-002', name: 'Organic Green Tea (100g)', category: 'Groceries', brand: 'Organic Valley', barcode: '8901234567890', unit: 'Box', mrp: 599, sellingPrice: 449, costPrice: 280, gst: '5%', stock: 320, hsnCode: '0902', status: true, featured: false },
-    { id: 'PRD-003', name: 'Leather Crossbody Bag', category: 'Accessories', brand: 'Nike', barcode: '8901144012345', unit: 'Pcs', mrp: 2999, sellingPrice: 2079, costPrice: 1200, gst: '12%', stock: 42, hsnCode: '4202', status: true, featured: true },
-    { id: 'PRD-004', name: 'Smart Fitness Band X2', category: 'Electronics', brand: 'Samsung', barcode: '8902123456789', unit: 'Pcs', mrp: 2799, sellingPrice: 1999, costPrice: 1100, gst: '18%', stock: 12, hsnCode: '8517', status: true, featured: false },
-    { id: 'PRD-005', name: "Men's Cotton Kurta", category: 'Apparel', brand: "Levi's", barcode: '8903234567891', unit: 'Pcs', mrp: 999, sellingPrice: 699, costPrice: 350, gst: '5%', stock: 0, hsnCode: '6105', status: true, featured: false },
-    { id: 'PRD-006', name: 'Matte Lipstick Set', category: 'Beauty', brand: 'Lakme', barcode: '8904345678902', unit: 'Set', mrp: 799, sellingPrice: 599, costPrice: 280, gst: '12%', stock: 180, hsnCode: '3304', status: true, featured: true },
-    { id: 'PRD-007', name: 'Non-Stick Cookware Set', category: 'Home & Kitchen', brand: 'Prestige', barcode: '8905456789013', unit: 'Set', mrp: 4999, sellingPrice: 3499, costPrice: 2200, gst: '12%', stock: 25, hsnCode: '7321', status: false, featured: false },
-    { id: 'PRD-008', name: 'Running Shoes Pro', category: 'Apparel', brand: 'Nike', barcode: '8906567890124', unit: 'Pair', mrp: 6499, sellingPrice: 4499, costPrice: 2800, gst: '18%', stock: 60, hsnCode: '6402', status: true, featured: false },
-];
+const CATEGORY_IDS = {
+    Electronics: 1, Groceries: 2, Apparel: 3, Accessories: 4,
+    "Home & Kitchen": 5, Beauty: 6, Sports: 7, Books: 8, Toys: 9,
+};
+// reverse map: id -> name
+const CATEGORY_NAMES = Object.fromEntries(
+    Object.entries(CATEGORY_IDS).map(([name, id]) => [id, name])
+);
 
 const PAGE_SIZE = 6;
-const fmt = (n) => '₹' + Number(n).toLocaleString('en-IN');
+const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
 
 const EMPTY_FORM = {
-    name: '', category: 'Electronics', brand: '', barcode: '', unit: 'Pcs',
-    mrp: '', sellingPrice: '', costPrice: '', gst: '18%', stock: '', hsnCode: '', status: true, featured: false,
-    description: '', minStock: 10,
+    name: '', sku: '', category: 'Electronics', brand: '', barcode: '', unit: 'Pcs',
+    mrp: '', sellingPrice: '', costPrice: '', gst: '18%', stock: '', hsnCode: '',
+    status: true, featured: false, description: '', minStock: 10,
 };
 
 const ProductFormModal = ({ product, onClose, onSave }) => {
     const isNew = !product;
-    const [form, setForm] = useState(product ? { ...product } : { ...EMPTY_FORM });
+    const [form, setForm] = useState(product ? { ...EMPTY_FORM, ...product } : { ...EMPTY_FORM });
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
     return (
@@ -41,7 +38,9 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
             <div className="ec-modal" style={{ maxWidth: 680 }} onClick={e => e.stopPropagation()}>
                 <div className="ec-modal-header">
                     <div>
-                        <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>{isNew ? 'Add New Product' : `Edit: ${product.name}`}</h3>
+                        <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>
+                            {isNew ? 'Add New Product' : `Edit: ${product.name}`}
+                        </h3>
                         <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>Fill in all required product details</p>
                     </div>
                     <button className="ec-modal-close" onClick={onClose}>✕</button>
@@ -53,34 +52,41 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                         <input className="ec-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Wireless Earbuds Pro" />
                     </div>
                     <div className="ec-field">
+                        <label>SKU *</label>
+                        <input className="ec-input" value={form.sku || ''} onChange={e => set('sku', e.target.value)} placeholder="e.g. SKU-1001" />
+                    </div>
+                    <div className="ec-field">
                         <label>Brand</label>
-                        <input className="ec-input" value={form.brand} onChange={e => set('brand', e.target.value)} placeholder="Brand name" />
+                        <input className="ec-input" value={form.brand || ''} onChange={e => set('brand', e.target.value)} placeholder="Brand name" />
                     </div>
                 </div>
+
                 <div className="ec-form-row">
                     <div className="ec-field">
                         <label>Category *</label>
                         <select className="ec-input" value={form.category} onChange={e => set('category', e.target.value)}>
-                            {CATEGORIES_LIST.map(c => <option key={c}>{c}</option>)}
+                            {CATEGORIES_LIST.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                     </div>
                     <div className="ec-field">
                         <label>Unit</label>
                         <select className="ec-input" value={form.unit} onChange={e => set('unit', e.target.value)}>
-                            {UNITS.map(u => <option key={u}>{u}</option>)}
+                            {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                     </div>
                 </div>
+
                 <div className="ec-form-row">
                     <div className="ec-field">
                         <label>Barcode</label>
-                        <input className="ec-input" value={form.barcode} onChange={e => set('barcode', e.target.value)} placeholder="EAN/UPC Barcode" />
+                        <input className="ec-input" value={form.barcode || ''} onChange={e => set('barcode', e.target.value)} placeholder="EAN/UPC Barcode" />
                     </div>
                     <div className="ec-field">
                         <label>HSN Code</label>
-                        <input className="ec-input" value={form.hsnCode} onChange={e => set('hsnCode', e.target.value)} placeholder="HSN/SAC Code" />
+                        <input className="ec-input" value={form.hsnCode || ''} onChange={e => set('hsnCode', e.target.value)} placeholder="HSN/SAC Code" />
                     </div>
                 </div>
+
                 <div className="ec-form-row">
                     <div className="ec-field">
                         <label>MRP (₹)</label>
@@ -91,6 +97,7 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                         <input className="ec-input" type="number" value={form.sellingPrice} onChange={e => set('sellingPrice', e.target.value)} placeholder="0" />
                     </div>
                 </div>
+
                 <div className="ec-form-row">
                     <div className="ec-field">
                         <label>Cost Price (₹)</label>
@@ -99,10 +106,11 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                     <div className="ec-field">
                         <label>GST Rate</label>
                         <select className="ec-input" value={form.gst} onChange={e => set('gst', e.target.value)}>
-                            {GST_RATES.map(g => <option key={g}>{g}</option>)}
+                            {GST_RATES.map(g => <option key={g} value={g}>{g}</option>)}
                         </select>
                     </div>
                 </div>
+
                 <div className="ec-form-row">
                     <div className="ec-field">
                         <label>Opening Stock</label>
@@ -113,20 +121,25 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                         <input className="ec-input" type="number" value={form.minStock} onChange={e => set('minStock', e.target.value)} placeholder="10" />
                     </div>
                 </div>
+
                 <div className="ec-field">
                     <label>Description</label>
-                    <textarea className="ec-textarea" rows={2} value={form.description} onChange={e => set('description', e.target.value)} placeholder="Product description..." />
+                    <textarea className="ec-textarea" rows={2} value={form.description || ''} onChange={e => set('description', e.target.value)} placeholder="Product description..." />
                 </div>
+
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: '10px 14px', background: '#f9fafb', borderRadius: 10 }}>
                     <div onClick={() => set('featured', !form.featured)} style={{ cursor: 'pointer' }}>
                         {form.featured ? <BsToggleOn size={26} color="#6366f1" /> : <BsToggleOff size={26} color="#d1d5db" />}
                     </div>
                     <p style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Mark as Featured Product</p>
                 </div>
+
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                     <button className="adm-btn-secondary" onClick={onClose}>Cancel</button>
-                    <button className="adm-btn-primary" onClick={() => { onSave(form); onClose(); }}>
-                        {isNew ? <><BsPlus size={16} /> Add Product</> : <><BsCheckCircleFill size={13} /> Save Changes</>}
+                    <button className="adm-btn-primary" onClick={() => onSave(form)}>
+                        {isNew
+                            ? <><BsPlus size={16} /> Add Product</>
+                            : <><BsCheckCircleFill size={13} /> Save Changes</>}
                     </button>
                 </div>
             </div>
@@ -134,46 +147,6 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
     );
 };
 
-
-import ProductHeader from "../../components/Product/ProductHeader";
-import ProductStats from "../../components/Product/ProductStats";
-import ProductCharts from "../../components/Product/ProductCharts";
-import ProductToolbar from "../../components/Product/ProductToolbar";
-import ProductTable from "../../components/Product/ProductTable";
-import ProductDrawer from "../../components/Product/ProductDrawer";
-
-const initialProducts = [
-    {
-        id: 1,
-        name: "Wireless Mouse",
-        sku: "PRD001",
-        barcode: "8901234567890",
-        category: "Electronics",
-        stock: 45,
-        price: 799,
-        status: "In Stock",
-    },
-    {
-        id: 2,
-        name: "Shampoo",
-        sku: "PRD002",
-        barcode: "8901234567891",
-        category: "Grocery",
-        stock: 8,
-        price: 299,
-        status: "Low Stock",
-    },
-    {
-        id: 3,
-        name: "T-Shirt",
-        sku: "PRD003",
-        barcode: "8901234567892",
-        category: "Clothing",
-        stock: 0,
-        price: 599,
-        status: "Out of Stock",
-    },
-];
 const Products = () => {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -182,91 +155,104 @@ const Products = () => {
     const [page, setPage] = useState(1);
     const [modal, setModal] = useState(null);
 
-    useEffect(() => {
-        fetchProducts();
-    }, []);
-
+    useEffect(() => { fetchProducts(); }, []);
 
     const fetchProducts = async () => {
-    try {
-        setLoading(true);
+        try {
+            setLoading(true);
+            const data = await productService.getAll();
+            // API may return [], {data:[]} or {items:[]}
+            const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
 
-       const data = await productService.getAll();
+            const formatted = list.map((p) => ({
+                id: p.id,
+                name: p.name,
+                sku: p.sku,
+                brand: p.brand || '—',
+                barcode: p.barcode,
+                category: CATEGORY_NAMES[p.category_id] || 'Unknown',
+                mrp: Number(p.price) || 0,
+                sellingPrice: Number(p.price) || 0,
+                costPrice: Number(p.cost_price) || 0,
+                gst: p.gst_rate ? `${Math.round(Number(p.gst_rate))}%` : '0%',
+                hsnCode: p.hsn_code || '',
+                stock: Number(p.stock ?? 0),
+                unit: 'Pcs',
+                status: p.is_active ?? true,
+                featured: false,
+                description: p.description || '',
+            }));
 
-        setProducts(data);
-
-    } catch (error) {
-        console.error("Failed to fetch products:", error);
-
-    } finally {
-        setLoading(false);
-    }
-};
+            setProducts(formatted);
+        } catch (error) {
+            console.error('Failed to fetch products:', error?.response?.status, error?.response?.data);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const filtered = products.filter(p => {
-        const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-            p.brand?.toLowerCase().includes(search.toLowerCase()) ||
-            p.barcode?.includes(search);
+        const q = search.toLowerCase();
+        const matchSearch =
+            (p.name || '').toLowerCase().includes(q) ||
+            (p.brand || '').toLowerCase().includes(q) ||
+            (p.barcode || '').includes(search);
         const matchCat = filterCat === 'All' || p.category === filterCat;
         return matchSearch && matchCat;
     });
 
-    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSave = async (form) => {
-    try {
+        try {
+            const payload = {
+                name: form.name,
+                sku: form.sku || `SKU-${Date.now()}`,
+                barcode: form.barcode || '',
+                category_id: CATEGORY_IDS[form.category] || 1,
+                description: form.description || '',
+                hsn_code: form.hsnCode || '1234',
+                gst_rate: Number(String(form.gst).replace('%', '')) || 0,
+                price: Number(form.sellingPrice) || 0,
+                cost_price: Number(form.costPrice) || 0,
+                variants: null,          // backend crashes on {} — send null
+                track_batch: false,
+                track_expiry: false,
+                image_url: '',
+                is_active: form.status ?? true,
+            };
 
-    const payload = {
-    name: form.name,
-    sku: `SKU-${Date.now()}`,
-    barcode: `${Date.now()}`,
-    description: form.description,
+            if (form.id) {
+                await productService.update(form.id, payload);
+            } else {
+                await productService.create(payload);
+            }
 
-    category_id: 1,
-
-    hsn_code: form.hsnCode || "1234",
-    gst_rate: 18,
-
-    price: Number(form.sellingPrice),
-    cost_price: Number(form.costPrice),
-
-    variants: [],
-
-    track_batch: false,
-    track_expiry: false,
-
-    image_url: ""
-};
-
-console.log("Payload:", payload);
-
-const response = await productService.create(payload);
-console.log(response);
-        console.log("Payload:", payload);
-        console.log("Product Created:", response);
-
-        // refresh list from backend
-        fetchProducts();
-
-    } catch (error) {
-        console.error(
-            "Create Product Failed:",
-            error.response?.data || error.message
-        );
-    }
-};
+            await fetchProducts();
+            setModal(null);
+        } catch (error) {
+            console.error('Save failed:', error?.response?.status, error?.response?.data);
+            alert(`Save failed (${error?.response?.status || 'network'}). Check console.`);
+        }
+    };
 
     const toggleStatus = (id) => setProducts(prev => prev.map(p => p.id === id ? { ...p, status: !p.status } : p));
-    const deleteProduct = (id) => setProducts(prev => prev.filter(p => p.id !== id));
+    const deleteProduct = async (id) => {
+        try {
+            if (productService.remove) await productService.remove(id);
+            setProducts(prev => prev.filter(p => p.id !== id));
+        } catch (e) {
+            console.error('Delete failed:', e?.response?.data);
+        }
+    };
 
     const kpis = [
-        { label: 'Total Products', value: products.length, color: '#6366f1', bg: '#eef2ff', icon: '📦' },
-        { label: 'Active', value: products.filter(p => p.status).length, color: '#10b981', bg: '#ecfdf5', icon: '✅' },
-        { label: 'Featured', value: products.filter(p => p.featured).length, color: '#8b5cf6', bg: '#f5f3ff', icon: '⭐' },
-        { label: 'Out of Stock', value: products.filter(p => p.stock === 0).length, color: '#ef4444', bg: '#fef2f2', icon: '🚫' },
+        { label: 'Total Products', value: products.length, color: '#6366f1', icon: '📦' },
+        { label: 'Active', value: products.filter(p => p.status).length, color: '#10b981', icon: '✅' },
+        { label: 'Featured', value: products.filter(p => p.featured).length, color: '#8b5cf6', icon: '⭐' },
+        { label: 'Out of Stock', value: products.filter(p => p.stock === 0).length, color: '#ef4444', icon: '🚫' },
     ];
-
 
     return (
         <div className="dash-page">
@@ -281,7 +267,6 @@ console.log(response);
                 </div>
             </div>
 
-            {/* KPIs */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
                 {kpis.map((k, i) => (
                     <div key={i} className="adm-kpi-card" style={{ padding: '14px 18px' }}>
@@ -292,7 +277,6 @@ console.log(response);
                 ))}
             </div>
 
-            {/* Categories quick filter */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {['All', ...CATEGORIES_LIST].map(cat => (
                     <button key={cat} onClick={() => { setFilterCat(cat); setPage(1); }}
@@ -302,7 +286,6 @@ console.log(response);
                 ))}
             </div>
 
-            {/* Filters */}
             <div style={{ background: '#fff', border: '1px solid #e8eaf0', borderRadius: 12, padding: '14px 16px', display: 'flex', gap: 12 }}>
                 <div style={{ position: 'relative', flex: 1 }}>
                     <BsSearch size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
@@ -311,7 +294,6 @@ console.log(response);
                 </div>
             </div>
 
-            {/* Table */}
             <div className="chart-card" style={{ padding: 0, overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
@@ -322,10 +304,8 @@ console.log(response);
                         </tr>
                     </thead>
                     <tbody>
-                        {paginated.map((p, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
-                                onMouseLeave={e => e.currentTarget.style.background = ''}>
+                        {paginated.map((p) => (
+                            <tr key={p.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                                 <td style={{ padding: '12px 14px' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                         <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -372,19 +352,26 @@ console.log(response);
                                 </td>
                             </tr>
                         ))}
-                        {paginated.length === 0 && (
+
+                        {loading && (
+                            <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 14 }}>Loading products…</td></tr>
+                        )}
+                        {!loading && paginated.length === 0 && (
                             <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 14 }}>No products found</td></tr>
                         )}
                     </tbody>
                 </table>
+
                 {totalPages > 1 && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderTop: '1px solid #f3f4f6' }}>
-                        <span style={{ fontSize: 12, color: '#6b7280' }}>Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}</span>
+                        <span style={{ fontSize: 12, color: '#6b7280' }}>
+                            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+                        </span>
                         <div style={{ display: 'flex', gap: 6 }}>
                             <button className="adm-btn-secondary" style={{ padding: '5px 10px' }} disabled={page === 1} onClick={() => setPage(p => p - 1)}><BsChevronLeft size={12} /></button>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                                <button key={p} onClick={() => setPage(p)}
-                                    style={{ width: 30, height: 30, borderRadius: 6, border: `1.5px solid ${p === page ? '#6366f1' : '#e5e7eb'}`, background: p === page ? '#eef2ff' : '#fff', color: p === page ? '#6366f1' : '#6b7280', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{p}</button>
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+                                <button key={n} onClick={() => setPage(n)}
+                                    style={{ width: 30, height: 30, borderRadius: 6, border: `1.5px solid ${n === page ? '#6366f1' : '#e5e7eb'}`, background: n === page ? '#eef2ff' : '#fff', color: n === page ? '#6366f1' : '#6b7280', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{n}</button>
                             ))}
                             <button className="adm-btn-secondary" style={{ padding: '5px 10px' }} disabled={page === totalPages} onClick={() => setPage(p => p + 1)}><BsChevronRight size={12} /></button>
                         </div>
@@ -402,6 +389,5 @@ console.log(response);
         </div>
     );
 };
-
 
 export default Products;
