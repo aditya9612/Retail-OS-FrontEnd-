@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     BsSearch, BsDownload, BsEye, BsPeopleFill, BsPersonFill,
     BsCurrencyRupee, BsCartCheck, BsStarFill, BsChevronLeft, BsChevronRight,
     BsEnvelope, BsPhone, BsGeoAlt, BsCalendar, BsArrowUpRight,
     BsShieldFill, BsXCircleFill, BsCheckCircleFill,
 } from 'react-icons/bs';
+import { getCustomers, updateCustomer } from '../../services/customer';
+
 
 /* ── Mock Data ─────────────────────────── */
 const CUSTOMERS = [
@@ -98,11 +100,54 @@ const CustomerDetail = ({ customer, onClose, onStatusChange }) => {
 
 /* ── Main Component ──────────────────── */
 const CustomerManagement = () => {
-    const [customers, setCustomers] = useState(CUSTOMERS);
+    const [customers, setCustomers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState(null);
+
+    const loadCustomers = async () => {
+        try {
+            setLoading(true);
+            setError('');
+            const data = await getCustomers();
+            const customerList = Array.isArray(data) ? data : data.customers || data.data || [];
+            const formatted = customerList.map(customer => ({
+                id: `CUS-${String(customer.id).padStart(3, '0')}`,
+                backendId: customer.id,
+                name: customer.name || 'Unknown Customer',
+                email: customer.email || '',
+                phone: customer.phone || '',
+                city: customer.address || 'Not available',
+                orders: customer.orders_count || customer.orders?.length || 0,
+                totalSpent: customer.total_spend || 0,
+                avgOrder: customer.orders_count > 0 ? Math.round(customer.total_spend / customer.orders_count) : 0,
+                lastOrder: 'No orders yet',
+                rating: customer.rating || 5.0,
+                status: customer.status === 'inactive' ? 'Inactive' : customer.status === 'blocked' ? 'Blocked' : 'Active',
+                registered: customer.created_at
+                    ? new Date(customer.created_at).toLocaleDateString('en-GB', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                      })
+                    : 'Not available',
+                addresses: customer.addresses_count || 1,
+            }));
+            setCustomers(formatted);
+        } catch (err) {
+            console.error('Failed to load e-commerce customers:', err);
+            setError('Unable to load customers. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadCustomers();
+    }, []);
 
     const filtered = customers.filter(c => {
         const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -115,15 +160,29 @@ const CustomerManagement = () => {
     const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    const handleStatusChange = (id, newStatus) => {
-        setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
+    const handleStatusChange = async (id, newStatus) => {
+        const customer = customers.find(c => c.id === id);
+        if (!customer) return;
+
+        try {
+            setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
+            await updateCustomer(customer.backendId, { status: newStatus.toLowerCase() });
+        } catch (error) {
+            console.error('Failed to change customer status:', error);
+            // Revert state
+            setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: customer.status } : c));
+            alert('Unable to update customer status on the backend.');
+        }
     };
 
     const kpis = [
         { label: 'Total Customers', value: customers.length, color: '#6366f1', bg: '#eef2ff', icon: '👥' },
         { label: 'Active', value: customers.filter(c => c.status === 'Active').length, color: '#10b981', bg: '#ecfdf5', icon: '✅' },
-        { label: 'New This Month', value: 4, color: '#0ea5e9', bg: '#f0f9ff', icon: '🆕' },
-        { label: 'Top Spender', value: fmt(Math.max(...customers.map(c => c.totalSpent))), color: '#8b5cf6', bg: '#f5f3ff', icon: '🏆' },
+        { label: 'New This Month', value: customers.filter(c => {
+            const daysAgo = (new Date() - new Date(c.registered)) / (1000 * 60 * 60 * 24);
+            return daysAgo <= 30;
+        }).length, color: '#0ea5e9', bg: '#f0f9ff', icon: '🆕' },
+        { label: 'Top Spender', value: fmt(customers.length > 0 ? Math.max(...customers.map(c => c.totalSpent)) : 0), color: '#8b5cf6', bg: '#f5f3ff', icon: '🏆' },
     ];
 
     return (
@@ -176,7 +235,13 @@ const CustomerManagement = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {paginated.map((c, i) => {
+                        {loading && (
+                            <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#6366f1', fontSize: 14 }}>Loading customers...</td></tr>
+                        )}
+                        {!loading && error && (
+                            <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#ef4444', fontSize: 14 }}>{error}</td></tr>
+                        )}
+                        {!loading && !error && paginated.map((c, i) => {
                             const sc = statusCfg[c.status];
                             return (
                                 <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}
@@ -216,7 +281,7 @@ const CustomerManagement = () => {
                                 </tr>
                             );
                         })}
-                        {paginated.length === 0 && (
+                        {!loading && !error && paginated.length === 0 && (
                             <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 14 }}>No customers found</td></tr>
                         )}
                     </tbody>

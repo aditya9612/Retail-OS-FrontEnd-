@@ -11,6 +11,7 @@ import {
     createCustomer,
     getCustomerById,
     updateCustomer,
+    getCustomerStats,
     // deleteCustomer, // TODO: Replace with Active/Inactive API when backend is available.
 } from '../../services/customer';
 
@@ -978,6 +979,7 @@ const Customers = () => {
     // const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
     const [filterType, setFilterType] = useState('All');
@@ -1027,11 +1029,11 @@ const Customers = () => {
                     : 'Not available',
     
                 status:
-                    customer.status === 'active'
-                        ? 'Active'
-                        : customer.status === 'inactive'
-                          ? 'Inactive'
-                          : 'Blocked',
+                    customer.status === 'inactive'
+                        ? 'Inactive'
+                        : customer.status === 'blocked'
+                          ? 'Blocked'
+                          : 'Active',
     
                 type:
                     customer.segment === 'vip'
@@ -1068,6 +1070,8 @@ const Customers = () => {
     useEffect(() => {
         loadCustomers();
     }, []);
+
+
 
     const handleViewCustomer = async (customerId) => {
         try {
@@ -1266,23 +1270,38 @@ const Customers = () => {
     //     }
     // };
 
-    const handleStatusToggle = (customerId) => {
-        // TODO: Replace with Active/Inactive API when backend is available.
-        // Example when API is ready:
-        // const customer = customers.find(c => c.backendId === customerId);
-        // const apiStatus = customer.status === 'Active' ? 'inactive' : 'active';
-        // await updateCustomer(customerId, { status: apiStatus });
-
-        setCustomers(prev =>
-            prev.map(customer =>
-                customer.backendId === customerId
-                    ? {
-                          ...customer,
-                          status: customer.status === 'Active' ? 'Inactive' : 'Active',
-                      }
-                    : customer
-            )
-        );
+    const handleStatusToggle = async (customerId) => {
+        const customer = customers.find(c => c.backendId === customerId);
+        if (!customer) return;
+        const apiStatus = customer.status === 'Active' ? 'inactive' : 'active';
+        
+        try {
+            setCustomers(prev =>
+                prev.map(c =>
+                    c.backendId === customerId
+                        ? {
+                              ...c,
+                              status: c.status === 'Active' ? 'Inactive' : 'Active',
+                          }
+                        : c
+                )
+            );
+            await updateCustomer(customerId, { status: apiStatus });
+        } catch (error) {
+            console.error('Failed to toggle status:', error);
+            // Revert state
+            setCustomers(prev =>
+                prev.map(c =>
+                    c.backendId === customerId
+                        ? {
+                              ...c,
+                              status: c.status === 'Active' ? 'Inactive' : 'Active',
+                          }
+                        : c
+                )
+            );
+            alert(getApiErrorMessage(error, 'Unable to update status.'));
+        }
     };
 
     const filtered = customers.filter(c => {
@@ -1297,7 +1316,20 @@ const Customers = () => {
     const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    const handleStatusChange = (id, s) => setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: s } : c));
+    const handleStatusChange = async (id, s) => {
+        const customer = customers.find(c => c.id === id);
+        if (!customer) return;
+
+        try {
+            setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: s } : c));
+            await updateCustomer(customer.backendId, { status: s.toLowerCase() });
+        } catch (error) {
+            console.error('Failed to change status:', error);
+            // Revert state
+            setCustomers(prev => prev.map(c => c.id === id ? { ...c, status: customer.status } : c));
+            alert(getApiErrorMessage(error, 'Unable to update status.'));
+        }
+    };
     const kpis = [
         {
             label: 'Total Customers',

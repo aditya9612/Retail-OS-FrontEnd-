@@ -47,3 +47,12 @@ export const createCustomer = async (customerData) => {
     const response = await apiClient.post(CUSTOMER_API_URL, customerData);
     return response.data;
 };
+
+
+export async function getCustomerStats() {
+    const response = await apiClient.get('/customers/stats');
+    return response.data;
+};
+
+
+
