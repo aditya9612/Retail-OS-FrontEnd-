@@ -5,26 +5,28 @@ import {
   BsTrash,
 } from "react-icons/bs";
 
-const getStatusStyle = (status) => {
-  switch (status) {
-    case "In Stock":
-      return {
+const categoryMap = {
+  1: "Electronics",
+  2: "Groceries",
+  3: "Apparel",
+  4: "Accessories",
+  5: "Home & Kitchen",
+  6: "Beauty",
+  7: "Sports",
+  8: "Books",
+  9: "Toys",
+};
+
+const getStatusStyle = (isActive) => {
+  return isActive
+    ? {
         background: "#ECFDF5",
         color: "#10B981",
-      };
-
-    case "Low Stock":
-      return {
-        background: "#FEF3C7",
-        color: "#D97706",
-      };
-
-    default:
-      return {
+      }
+    : {
         background: "#FEE2E2",
         color: "#DC2626",
       };
-  }
 };
 
 const ProductTable = ({
@@ -43,7 +45,8 @@ const ProductTable = ({
       item.sku.toLowerCase().includes(search.toLowerCase());
 
     const matchesCategory =
-      category === "" || item.category === category;
+      category === "" ||
+      item.category_id === Number(category);
 
     return matchesSearch && matchesCategory;
   });
@@ -107,6 +110,7 @@ const ProductTable = ({
             <th>Category</th>
             <th>Stock</th>
             <th>Price</th>
+            <th>GST</th>
             <th>Status</th>
             <th align="center">Action</th>
           </tr>
@@ -130,18 +134,44 @@ const ProductTable = ({
             paginatedProducts.map((item) => (
               <tr key={item.id}>
                 <td>{item.name}</td>
+
                 <td>{item.sku}</td>
+
                 <td>{item.barcode}</td>
-                <td>{item.category}</td>
-                <td>{item.stock}</td>
-                <td>₹{item.price}</td>
+
+                <td>
+                  {
+                    categoryMap[item.category_id] ||
+                    categoryMap[Number(item.category_id)] ||
+                    item.category_name ||
+                    "-"
+              }
+                </td>
+
+                <td>-</td>
+
+                <td>
+                   <td>
+                      ₹{
+                        item.price !== undefined && item.price !== null
+                        ? Number(item.price).toFixed(2)
+                        : "0.00"
+                        }
+                  </td>
+                </td>
+
+                <td>
+                  {item.gst_rate ? `${item.gst_rate}%` : "-"}
+                </td>
 
                 <td>
                   <span
                     className="adm-status-badge"
-                    style={getStatusStyle(item.status)}
+                    style={getStatusStyle(item.is_active)}
                   >
-                    {item.status}
+                    {item.is_active
+                      ? "Active"
+                      : "Inactive"}
                   </span>
                 </td>
 
