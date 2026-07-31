@@ -4,25 +4,8 @@ import { BsEnvelope, BsLock, BsEye, BsEyeSlash } from "react-icons/bs";
 import { auth } from "../../services/auth";
 import { getCurrentUser } from "../../services/user";
 
-const BASE_URL = 'https://api-testing.myretailos.com/api/v1';
-
 const Login = () => {
-
     const navigate = useNavigate();
-<<<<<<< HEAD
-    const [form, setForm] = useState({ email: '', password: '' });
-    const [showPassword, setShowPassword] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setForm(prev => ({ ...prev, [name]: value }));
-        setError('');
-    };
-
-    const handleSubmit = async (e) => {
-=======
 
     const [form, setForm] = useState({
         email: "",
@@ -30,79 +13,56 @@ const Login = () => {
     });
 
     const [showPassword, setShowPassword] = useState(false);
+
+    const [loading, setLoading] = useState(false);
+
+    const [error, setError] = useState("");
+
     const handleChange = (e) => {
         const { name, value } = e.target;
-        setForm(prev => ({
+
+        setForm((prev) => ({
             ...prev,
             [name]: value,
         }));
 
+        setError("");
     };
 
 
     const handleSubmit = async (e) => {
-
->>>>>>> 6976be7f196ed78e59d072a67cea45d78e8bf958
         e.preventDefault();
-        if (!form.email.trim()) { alert('Email is required'); return; }
-        if (!form.password.trim()) { alert('Password is required'); return; }
-
-<<<<<<< HEAD
-        setLoading(true);
-        setError('');
-        try {
-            const res = await fetch(`${BASE_URL}/auth/login`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({ email: form.email, password: form.password }),
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                setError(data?.detail?.message || data?.detail || 'Login failed. Check your credentials.');
-                return;
-            }
-            // Persist tokens
-            localStorage.setItem('access_token', data.access_token);
-            localStorage.setItem('refresh_token', data.refresh_token);
-            navigate('/dashboard');
-        } catch (err) {
-            setError('Network error. Please try again.');
-        } finally {
-            setLoading(false);
-        }
-=======
 
         if (!form.email.trim()) {
-
-            alert("Email is required");
+            setError("Email is required");
             return;
-
         }
 
-
         if (!form.password.trim()) {
-
-            alert("Password is required");
+            setError("Password is required");
             return;
-
         }
 
 
         try {
+            setLoading(true);
 
             const data = await auth.login(form);
 
             console.log("Login response:", data);
-            
-            const user = await getCurrentUser();
-            
-            console.log("Current user response:", user);
 
-            localStorage.setItem("user", JSON.stringify(user));
-            
+
+            const user = await getCurrentUser();
+
+            console.log("Current user:", user);
+
+
+            localStorage.setItem(
+                "user",
+                JSON.stringify(user)
+            );
+
+
             navigate("/dashboard");
 
 
@@ -110,19 +70,21 @@ const Login = () => {
 
             console.log("Login failed:", error);
 
-            alert(
+            setError(
                 error.response?.data?.detail?.message ||
+                error.response?.data?.detail ||
                 "Invalid login"
             );
 
-        }
+        } finally {
 
->>>>>>> 6976be7f196ed78e59d072a67cea45d78e8bf958
+            setLoading(false);
+
+        }
     };
 
 
     return (
-
         <div
             style={{
                 minHeight: "100vh",
@@ -174,9 +136,7 @@ const Login = () => {
                         Login to continue Retail OS
                     </p>
 
-
                 </div>
-
 
 
                 <form onSubmit={handleSubmit}>
@@ -196,24 +156,11 @@ const Login = () => {
                             Email Address
                         </label>
 
-<<<<<<< HEAD
-                        <div style={{ position: 'relative' }}>
-                            <BsEnvelope size={16} style={{ position: 'absolute', top: '50%', left: 16, transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                            <input
-                                type="email"
-                                name="email"
-                                placeholder="Enter your email"
-                                value={form.email}
-                                onChange={handleChange}
-                                required
-=======
 
                         <div style={{ position: "relative" }}>
 
-
                             <BsEnvelope
                                 size={16}
->>>>>>> 6976be7f196ed78e59d072a67cea45d78e8bf958
                                 style={{
                                     position: "absolute",
                                     top: "50%",
@@ -225,19 +172,12 @@ const Login = () => {
 
 
                             <input
-
                                 type="email"
-
                                 name="email"
-
                                 placeholder="Enter your email"
-
                                 value={form.email}
-
                                 onChange={handleChange}
-
                                 required
-
                                 style={{
                                     width: "100%",
                                     padding: "14px 16px 14px 44px",
@@ -247,47 +187,17 @@ const Login = () => {
                                     outline: "none",
                                     fontSize: 14,
                                 }}
-
                             />
-
 
                         </div>
 
-
                     </div>
-
 
 
 
                     <div style={{ marginBottom: 10 }}>
 
-
-<<<<<<< HEAD
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(prev => !prev)}
-                                style={{
-                                    position: 'absolute',
-                                    top: '50%',
-                                    right: 14,
-                                    transform: 'translateY(-50%)',
-                                    border: 'none',
-                                    background: 'transparent',
-                                    cursor: 'pointer',
-                                    color: '#64748b',
-                                }}
-                            >
-                                {showPassword ? <BsEyeSlash size={18} /> : <BsEye size={18} />}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: error ? 12 : 24 }}>
-                        <button
-                            type="button"
-=======
                         <label
->>>>>>> 6976be7f196ed78e59d072a67cea45d78e8bf958
                             style={{
                                 display: "block",
                                 marginBottom: 8,
@@ -296,20 +206,15 @@ const Login = () => {
                                 color: "#334155",
                             }}
                         >
-
                             Password
-
                         </label>
-
 
 
                         <div style={{ position: "relative" }}>
 
 
                             <BsLock
-
                                 size={16}
-
                                 style={{
                                     position: "absolute",
                                     top: "50%",
@@ -317,28 +222,17 @@ const Login = () => {
                                     transform: "translateY(-50%)",
                                     color: "#94a3b8",
                                 }}
-
                             />
 
 
-
                             <input
-
                                 type={showPassword ? "text" : "password"}
-
                                 name="password"
-
                                 placeholder="Enter your password"
-
                                 value={form.password}
-
                                 onChange={handleChange}
-
                                 required
-
                                 minLength={6}
-
-
                                 style={{
                                     width: "100%",
                                     padding: "14px 46px 14px 44px",
@@ -348,19 +242,14 @@ const Login = () => {
                                     outline: "none",
                                     fontSize: 14,
                                 }}
-
                             />
 
 
-
                             <button
-
                                 type="button"
-
                                 onClick={() =>
-                                    setShowPassword(prev => !prev)
+                                    setShowPassword((prev) => !prev)
                                 }
-
                                 style={{
                                     position: "absolute",
                                     top: "50%",
@@ -370,50 +259,42 @@ const Login = () => {
                                     background: "transparent",
                                     cursor: "pointer",
                                 }}
-
                             >
 
                                 {
                                     showPassword
-                                        ? <BsEyeSlash size={18}/>
-                                        : <BsEye size={18}/>
+                                    ? <BsEyeSlash size={18}/>
+                                    : <BsEye size={18}/>
                                 }
-
 
                             </button>
 
-
                         </div>
-
 
                     </div>
 
-<<<<<<< HEAD
+
+
                     {error && (
-                        <div style={{
-                            background: '#fef2f2',
-                            border: '1px solid #fca5a5',
-                            borderRadius: 10,
-                            padding: '10px 14px',
-                            marginBottom: 16,
-                            fontSize: 13,
-                            color: '#dc2626',
-                            fontWeight: 600,
-                        }}>
+                        <div
+                            style={{
+                                background: "#fef2f2",
+                                border: "1px solid #fca5a5",
+                                borderRadius: 10,
+                                padding: "10px 14px",
+                                marginBottom: 16,
+                                fontSize: 13,
+                                color: "#dc2626",
+                                fontWeight: 600,
+                            }}
+                        >
                             ⚠️ {error}
                         </div>
                     )}
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="adm-btn-primary"
-=======
-
 
 
                     <div
->>>>>>> 6976be7f196ed78e59d072a67cea45d78e8bf958
                         style={{
                             display: "flex",
                             justifyContent: "flex-end",
@@ -422,34 +303,25 @@ const Login = () => {
                     >
 
                         <button
-
                             type="button"
-
                             style={{
                                 border: "none",
                                 background: "transparent",
                                 color: "#6366f1",
                                 cursor: "pointer",
                             }}
-
                         >
-
                             Forgot Password?
-
                         </button>
-
 
                     </div>
 
 
 
-
                     <button
-
                         type="submit"
-
+                        disabled={loading}
                         className="adm-btn-primary"
-
                         style={{
                             width: "100%",
                             justifyContent: "center",
@@ -458,31 +330,19 @@ const Login = () => {
                             fontSize: 15,
                             fontWeight: 800,
                             opacity: loading ? 0.7 : 1,
-                            cursor: loading ? 'not-allowed' : 'pointer',
+                            cursor: loading ? "not-allowed" : "pointer",
                         }}
-
                     >
-<<<<<<< HEAD
-                        {loading ? 'Logging in…' : 'Login'}
-=======
-
-                        Login
-
->>>>>>> 6976be7f196ed78e59d072a67cea45d78e8bf958
+                        {loading ? "Logging in..." : "Login"}
                     </button>
-
 
 
                 </form>
 
-
             </div>
 
-
         </div>
-
     );
-
 };
 
 
