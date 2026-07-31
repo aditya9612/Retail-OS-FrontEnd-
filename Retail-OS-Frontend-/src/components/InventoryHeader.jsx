@@ -7,6 +7,7 @@ const InventoryHeader = ({
   outOfStockCount,
   activeTab,
   setActiveTab,
+  setStockModal,
 }) => {
   return (
     <div className="inventory-header">
@@ -23,10 +24,20 @@ const InventoryHeader = ({
       </div>
 
       <div className="inventory-header-right">
-
-        <button className="header-btn stock-in-btn">
-          + Stock In
-        </button>
+<button
+  className="header-btn stock-in-btn"
+  onClick={() =>
+    setStockModal({
+      id: 1,
+      product_id: 1,
+      name: "Stock In",
+      quantity: 0,
+      unit: "Pcs",
+    })
+  }
+>
+  + Stock In
+</button>
 
         <button className="header-btn stock-out-btn">
           + Stock Out

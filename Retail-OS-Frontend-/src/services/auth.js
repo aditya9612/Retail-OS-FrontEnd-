@@ -5,22 +5,41 @@ import {
     clearTokens,
 } from '../utils/tokenStorage';
 
-
 const LOGIN_API_URL =
     'https://api-testing.myretailos.com/api/v1/auth/login';
 
 export const loginUser = async (credentials) => {
-    const response = await axios.post(
-        LOGIN_API_URL,
-        credentials,
-        {
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        }
-    );
+    try {
+        console.log("=== LOGIN REQUEST ===");
+        console.log("URL:", LOGIN_API_URL);
+        console.log("Payload:", credentials);
 
-    return response.data;
+        const response = await axios.post(
+            LOGIN_API_URL,
+            credentials,
+            {
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+
+        console.log("=== LOGIN SUCCESS ===");
+        console.log(response.data);
+
+        return response.data;
+    } catch (error) {
+        console.error("=== LOGIN ERROR ===");
+
+        if (error.response) {
+            console.error("Status:", error.response.status);
+            console.error("Response:", error.response.data);
+        } else {
+            console.error(error.message);
+        }
+
+        throw error;
+    }
 };
 
 export const refreshAccessToken = async () => {

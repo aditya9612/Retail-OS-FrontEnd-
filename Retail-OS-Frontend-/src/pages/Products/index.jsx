@@ -1,10 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from "react";
+
 import {
-    BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
-    BsBoxSeam, BsTag, BsArrowUpRight, BsChevronLeft, BsChevronRight,
-    BsCheckCircleFill, BsToggleOn, BsToggleOff, BsImage, BsStarFill,
+    BsSearch,
+    BsPlus,
+    BsDownload,
+    BsPencilFill,
+    BsTrashFill,
+    BsBoxSeam,
+    BsTag,
+    BsArrowUpRight,
+    BsChevronLeft,
+    BsChevronRight,
+    BsCheckCircleFill,
+    BsToggleOn,
+    BsToggleOff,
+    BsImage,
+    BsStarFill,
     BsXCircleFill,
-} from 'react-icons/bs';
+} from "react-icons/bs";
+
+import product from "../../services/product";
+import category from "../../services/categoryService";
 
 const CATEGORIES_LIST = ['Electronics', 'Groceries', 'Apparel', 'Accessories', 'Home & Kitchen', 'Beauty', 'Sports', 'Books', 'Toys'];
 const GST_RATES = ['0%', '5%', '12%', '18%', '28%'];
@@ -25,12 +41,13 @@ const PAGE_SIZE = 6;
 const fmt = (n) => '₹' + Number(n).toLocaleString('en-IN');
 
 const EMPTY_FORM = {
-    name: '', category: 'Electronics', brand: '', barcode: '', unit: 'Pcs',
-    mrp: '', sellingPrice: '', costPrice: '', gst: '18%', stock: '', hsnCode: '', status: true, featured: false,
-    description: '', minStock: 10,
+    name: '',
+    category: '',
+    brand: '',
+    barcode: '',
+    
 };
-
-const ProductFormModal = ({ product, onClose, onSave }) => {
+const ProductFormModal = ({ product, categories, onClose, onSave }) => {
     const isNew = !product;
     const [form, setForm] = useState(product ? { ...product } : { ...EMPTY_FORM });
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -60,7 +77,11 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                     <div className="ec-field">
                         <label>Category *</label>
                         <select className="ec-input" value={form.category} onChange={e => set('category', e.target.value)}>
-                            {CATEGORIES_LIST.map(c => <option key={c}>{c}</option>)}
+                           {categories.map((cat) => (
+    <option key={cat.id} value={cat.id}>
+        {cat.name}
+    </option>
+))}
                         </select>
                     </div>
                     <div className="ec-field">
@@ -174,41 +195,144 @@ const initialProducts = [
     },
 ];
 const Products = () => {
-    const [products, setProducts] = useState(PRODUCTS);
+    const [products, setProducts] = useState([]);
+    const [categories, setCategories] = useState([]);
     const [search, setSearch] = useState('');
     const [filterCat, setFilterCat] = useState('All');
     const [page, setPage] = useState(1);
     const [modal, setModal] = useState(null);
 
+    useEffect(() => {
+    loadProducts();
+    loadCategories();
+}, []);
+
+const loadProducts = async () => {
+    try {
+        const response = await product.getAll();
+
+        console.log("Products API Response:", response.data);
+
+        const apiProducts = response.data.map((item) => ({
+            id: item.id,
+            name: item.name,
+            category: item.category_id,
+            brand: "",
+            barcode: item.barcode,
+            unit: "Pcs",
+            mrp: Number(item.price),
+            sellingPrice: Number(item.price),
+            costPrice: Number(item.cost_price),
+            gst: item.gst_rate + "%",
+            stock: 0,
+            status: item.is_active,
+            featured: false,
+        }));
+
+        setProducts(apiProducts);
+
+    } catch (error) {
+        console.error("Failed to load products:", error);
+    }
+};
+const loadCategories = async () => {
+    try {
+        const response = await category.getAll();
+
+        console.log("Categories API Response:", response.data);
+
+        setCategories(response.data);
+    } catch (error) {
+        console.error("Failed to load categories:", error);
+    }
+};
+
     const filtered = products.filter(p => {
         const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
             p.brand?.toLowerCase().includes(search.toLowerCase()) ||
             p.barcode?.includes(search);
-        const matchCat = filterCat === 'All' || p.category === filterCat;
+        const matchCat =
+    filterCat === "All" ||
+    Number(p.category) === Number(filterCat);
         return matchSearch && matchCat;
     });
 
     const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    const handleSave = (form) => {
+  const handleSave = async (form) => {
+     console.log("Form Data:", form);
+    try {
+        const payload = {
+            name: form.name,
+            sku: form.sku || form.barcode || `SKU-${Date.now()}`,
+            barcode: form.barcode,
+            description: form.description,
+            category_id: Number(form.category),
+            hsn_code: form.hsnCode,
+            gst_rate: Number(form.gst.replace("%", "")),
+            price: Number(form.sellingPrice),
+            cost_price: Number(form.costPrice),
+            variants: {},
+            track_batch: false,
+            track_expiry: false,
+            image_url: "",
+        };
+
         if (form.id) {
-            setProducts(prev => prev.map(p => p.id === form.id ? { ...p, ...form } : p));
+            // UPDATE
+            await product.update(form.id, payload);
+            alert("Product updated successfully!");
         } else {
-            setProducts(prev => [...prev, { ...form, id: `PRD-${String(prev.length + 1).padStart(3, '0')}` }]);
+            // CREATE
+            await product.create(payload);
+            alert("Product created successfully!");
         }
-    };
 
+        await loadProducts();
+  } catch (error) {
+    console.error("UPDATE ERROR:", error);
+
+    if (error.response) {
+        console.log("Status:", error.response.status);
+        console.log("Data:", error.response.data);
+    }
+
+    alert("Operation failed");
+}
+  };
     const toggleStatus = (id) => setProducts(prev => prev.map(p => p.id === id ? { ...p, status: !p.status } : p));
-    const deleteProduct = (id) => setProducts(prev => prev.filter(p => p.id !== id));
+    const deleteProduct = async (id) => {
+    const confirmDelete = window.confirm(
+        "Are you sure you want to delete this product?"
+    );
 
+    if (!confirmDelete) return;
+
+    try {
+        await product.remove(id);
+
+        alert("Product deleted successfully!");
+
+        await loadProducts();
+    } catch (error) {
+        console.error("DELETE ERROR:", error);
+
+        if (error.response) {
+            console.log("Status:", error.response.status);
+            console.log("Data:", error.response.data);
+        }
+
+        alert("Failed to delete product");
+    }
+};
     const kpis = [
         { label: 'Total Products', value: products.length, color: '#6366f1', bg: '#eef2ff', icon: '📦' },
         { label: 'Active', value: products.filter(p => p.status).length, color: '#10b981', bg: '#ecfdf5', icon: '✅' },
         { label: 'Featured', value: products.filter(p => p.featured).length, color: '#8b5cf6', bg: '#f5f3ff', icon: '⭐' },
         { label: 'Out of Stock', value: products.filter(p => p.stock === 0).length, color: '#ef4444', bg: '#fef2f2', icon: '🚫' },
     ];
-
+    
     return (
         <div className="dash-page">
             <div className="adm-page-header">
@@ -233,15 +357,30 @@ const Products = () => {
                 ))}
             </div>
 
-            {/* Categories quick filter */}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {['All', ...CATEGORIES_LIST].map(cat => (
-                    <button key={cat} onClick={() => { setFilterCat(cat); setPage(1); }}
-                        style={{ padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${filterCat === cat ? '#6366f1' : '#e5e7eb'}`, background: filterCat === cat ? '#eef2ff' : '#fff', color: filterCat === cat ? '#6366f1' : '#6b7280' }}>
-                        {cat}
-                    </button>
-                ))}
-            </div>
+          {/* Categories quick filter */}
+<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+    {[{ id: "All", name: "All" }, ...categories].map((cat) => (
+        <button
+            key={cat.id}
+            onClick={() => {
+                setFilterCat(cat.id);
+                setPage(1);
+            }}
+            style={{
+                padding: '6px 14px',
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                border: `1.5px solid ${filterCat === cat.id ? '#6366f1' : '#e5e7eb'}`,
+                background: filterCat === cat.id ? '#eef2ff' : '#fff',
+                color: filterCat === cat.id ? '#6366f1' : '#6b7280'
+            }}
+        >
+            {cat.name}
+        </button>
+    ))}
+</div>
 
             {/* Filters */}
             <div style={{ background: '#fff', border: '1px solid #e8eaf0', borderRadius: 12, padding: '14px 16px', display: 'flex', gap: 12 }}>
@@ -281,9 +420,20 @@ const Products = () => {
                                         </div>
                                     </div>
                                 </td>
-                                <td style={{ padding: '12px 14px' }}>
-                                    <span style={{ fontSize: 11, background: '#eef2ff', color: '#6366f1', padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>{p.category}</span>
-                                </td>
+                               <td style={{ padding: '12px 14px' }}>
+    <span
+        style={{
+            fontSize: 11,
+            background: '#eef2ff',
+            color: '#6366f1',
+            padding: '3px 8px',
+            borderRadius: 20,
+            fontWeight: 600
+        }}
+    >
+        {categories.find(cat => cat.id === Number(p.category))?.name || "-"}
+    </span>
+</td>
                                 <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{p.barcode}</td>
                                 <td style={{ padding: '12px 14px', fontSize: 13, color: '#9ca3af', textDecoration: 'line-through' }}>{fmt(p.mrp)}</td>
                                 <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700, color: '#111827' }}>{fmt(p.sellingPrice)}</td>
@@ -298,9 +448,16 @@ const Products = () => {
                                 </td>
                                 <td style={{ padding: '12px 14px' }}>
                                     <div style={{ display: 'flex', gap: 6 }}>
-                                        <button className="adm-btn-secondary" style={{ padding: '5px 10px', fontSize: 11 }} onClick={() => setModal(p)}>
-                                            <BsPencilFill size={11} />
-                                        </button>
+                                        <button
+    className="adm-btn-secondary"
+    style={{ padding: '5px 10px', fontSize: 11 }}
+    onClick={() => {
+        console.log("Selected Product:", p);
+        setModal(p);
+    }}
+>
+    <BsPencilFill size={11} />
+</button>
                                         <button onClick={() => toggleStatus(p.id)}
                                             style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                                             {p.status ? <BsToggleOn size={16} color="#10b981" /> : <BsToggleOff size={16} color="#d1d5db" />}
@@ -333,13 +490,14 @@ const Products = () => {
                 )}
             </div>
 
-            {modal && (
-                <ProductFormModal
-                    product={modal === 'new' ? null : modal}
-                    onClose={() => setModal(null)}
-                    onSave={handleSave}
-                />
-            )}
+      {modal && (
+    <ProductFormModal
+        product={modal === 'new' ? null : modal}
+        categories={categories}
+        onClose={() => setModal(null)}
+        onSave={handleSave}
+    />
+)}
         </div>
     );
 };
