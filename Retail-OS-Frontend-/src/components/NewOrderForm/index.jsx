@@ -30,6 +30,7 @@ const NewOrderForm = ({ onClose }) => {
     };
 
     const handleSubmit = () => {
+         console.log("Submit button clicked");
         const { customerName, mobileNumber, productName, quantity, price, paymentMethod } = form;
 
         if (!customerName.trim()) {

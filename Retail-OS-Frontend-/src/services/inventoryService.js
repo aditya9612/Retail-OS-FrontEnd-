@@ -3,17 +3,16 @@ import { getAccessToken } from "../utils/tokenStorage";
 const API_BASE = 'https://api-testing.myretailos.com/api/v1';
 
 
-
 const getHeaders = () => {
   const token = getAccessToken();
+
+  console.log("ACCESS TOKEN =>", token);
 
   return {
     "Content-Type": "application/json",
     Authorization: `Bearer ${token}`,
   };
 };
-
-
 
 // 1. List Suppliers
 export const listSuppliers = () =>
@@ -53,17 +52,21 @@ export const deleteSupplier = (id) =>
 // 6. Stock In
 export const stockIn = async (body) => {
   try {
-    console.log("Inventory API Request");
+  
     const response = await fetch(`${API_BASE}/inventory/stock-in`, {
-      method: 'POST',
+      method: "POST",
       headers: getHeaders(),
       body: JSON.stringify(body),
     });
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const error = await response.json();
+
+      throw error;
     }
+
     const data = await response.json();
-    console.log("Inventory API Response:", data);
+
     return data;
   } catch (error) {
     console.error("Inventory API Error:", error);
@@ -74,17 +77,22 @@ export const stockIn = async (body) => {
 // 7. Stock Out
 export const stockOut = async (body) => {
   try {
-    console.log("Inventory API Request");
+    
     const response = await fetch(`${API_BASE}/inventory/stock-out`, {
       method: 'POST',
       headers: getHeaders(),
       body: JSON.stringify(body),
     });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+if (!response.ok) {
+  const error = await response.json();
+
+
+throw error;
+
+  
+}
     const data = await response.json();
-    console.log("Inventory API Response:", data);
+
     return data;
   } catch (error) {
     console.error("Inventory API Error:", error);
@@ -195,6 +203,30 @@ export const listProducts = async () => {
     return data;
   } catch (error) {
     console.error("Products API Error:", error);
+    throw error;
+  }
+};
+// 13. List Stores
+export const listStores = async () => {
+  try {
+    console.log("Stores API Request");
+
+    const response = await fetch(`${API_BASE}/stores/`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log("Stores API Response:", data);
+    console.log("inventoryService Loaded");
+
+    return data;
+  } catch (error) {
+    console.error("Stores API Error:", error);
     throw error;
   }
 };

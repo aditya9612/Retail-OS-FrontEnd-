@@ -6,15 +6,16 @@ const InventoryHeader = ({
   lowStockCount,
   outOfStockCount,
   activeTab,
-  setActiveTab,
+  setActiveTab,  
   setStockModal,
 }) => {
   return (
     <div className="inventory-header">
 
       <div className="inventory-header-left">
-
-        <h1>Inventory Management</h1>
+<h1 style={{ color: "red" }}>
+  Inventory Management TEST
+</h1>
 
         <p>
           Manage stock levels, warehouse operations, suppliers,
@@ -28,29 +29,68 @@ const InventoryHeader = ({
   className="header-btn stock-in-btn"
   onClick={() =>
     setStockModal({
-      id: 1,
-      product_id: 1,
       name: "Stock In",
       quantity: 0,
       unit: "Pcs",
+      action: "add",
     })
   }
 >
   + Stock In
 </button>
+<button
+  className="header-btn stock-out-btn"
+  onClick={() => {
+    console.log("STOCK OUT BUTTON CLICKED");
 
-        <button className="header-btn stock-out-btn">
-          + Stock Out
-        </button>
+    setStockModal({
+      id: 999,
+      product_id: 1,
+      store_id: 1,
+      name: "Stock Out",
+      quantity: 0,
+      unit: "Pcs",
+      action: "remove",
+    });
+  }}
+>
+  + Stock Out
+</button>
+{/*
+<button
+  className="header-btn transfer-btn"
+  onClick={() =>
+    setStockModal({
+      id: 1,
+      product_id: 1,
+      name: "Transfer",
+      quantity: 0,
+      unit: "Pcs",
+      action: "transfer",
+    })
+  }
+>
+  + Transfer
+</button>
+*/}
 
-        <button className="header-btn transfer-btn">
-          + Transfer
-        </button>
+{/*
+      <button
+  className="header-btn purchase-btn"
+  onClick={() =>
+    setStockModal({
+      id: 1,
+      product_id: 1,
+      name: "Purchase Order",
+      quantity: 0,
+      unit: "Pcs",
+    })
+  }
+>
+  + Purchase Order
+</button>
 
-        <button className="header-btn purchase-btn">
-          + Purchase Order
-        </button>
-
+*/}
       </div>
 <div className="inventory-tabs">
 

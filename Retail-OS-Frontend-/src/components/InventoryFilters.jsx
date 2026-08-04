@@ -7,7 +7,7 @@ const InventoryFilters = ({
 
   inventory,
   products,
-
+  stores,
 
   filterWarehouse,
   setFilterWarehouse,
@@ -24,8 +24,8 @@ const InventoryFilters = ({
   filterDate,
   setFilterDate,
 
-  onSearch
-}) => {
+  onSearch,
+}) =>  {
 
   return (
     <div className="inventory-filters">
@@ -55,14 +55,16 @@ const InventoryFilters = ({
   >
     <option value="All Warehouses">All Warehouses</option>
 
-  {[...new Set((inventory || []).map(item => `Store #${item.store_id}`))]
-  .map(store => (
-    <option key={store} value={store}>
-      {store}
-    </option>
-))}
-</select>
+    {(stores || []).map((store) => (
+      <option key={store.id} value={store.name}>
+        {store.name}
+      </option>
+    ))}
+  </select>
 </div>
+ 
+   
+
 
       {/* Category */}
   <div className="filter-group">

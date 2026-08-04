@@ -30,10 +30,10 @@ const InventoryTable = ({
         <tbody>
           {paginated.map((item, idx) => {
           
-            console.log("TABLE ITEM =>", item);
-            console.log("Product Name =>", item.name);
+            console.log("TABLE ITEM =>", item);         
+              console.log("Product Name =>", item.name);
             console.log("SKU =>", item.sku);
-            const st = stockStatus(item);
+          
 
             const name = item.name || item.product_name || `Product #${item.product_id || item.id}`;
             const sku = item.sku || `SKU-00${item.product_id || item.id}`;
@@ -50,6 +50,7 @@ const InventoryTable = ({
               ? Math.round(((sellingPrice - costPrice) / costPrice) * 100)
               : 0;
 
+         const st = stockStatus(item);
             return (
               <tr key={item.id || idx}>
                 {/* Product */}
@@ -199,6 +200,9 @@ const InventoryTable = ({
     className="adm-btn-primary"
     onClick={() => {
       console.log("Clicked Item =>", item);
+       console.log("STORE ID =>", item.store_id);
+      console.log("PRODUCT ID =>", item.product_id);
+
       setStockModal(item);
     }}
   >

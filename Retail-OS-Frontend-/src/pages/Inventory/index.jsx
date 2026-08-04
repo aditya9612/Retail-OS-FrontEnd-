@@ -12,26 +12,13 @@ import {
 import {
   listInventory,
   listProducts,
+  listStores,
   stockIn,
   stockOut,
+  transferStock,
   lowStock,
 } from "../../services/inventoryService";
-
-const INVENTORY = [
-    { id: 1, product_id: 1, name: 'Wireless Earbuds Pro', sku: 'ELEC-WEP-001', category: 'Electronics', brand: 'Samsung', mrp: 3499, costPrice: 1800, sellingPrice: 2499, stock: 145, minStock: 20, unit: 'Pcs', location: 'Shelf A1', lastUpdated: '26 Jun 2026' },
-    { id: 2, product_id: 2, name: 'Organic Green Tea (100g)', sku: 'GRO-OGT-002', category: 'Groceries', brand: 'Organic Valley', mrp: 599, costPrice: 280, sellingPrice: 449, stock: 320, minStock: 50, unit: 'Box', location: 'Shelf B2', lastUpdated: '25 Jun 2026' },
-    { id: 3, product_id: 3, name: 'Leather Crossbody Bag', sku: 'ACC-LCB-003', category: 'Accessories', brand: 'Nike', mrp: 2999, costPrice: 1200, sellingPrice: 2079, stock: 42, minStock: 10, unit: 'Pcs', location: 'Shelf C1', lastUpdated: '25 Jun 2026' },
-    { id: 4, product_id: 4, name: 'Smart Fitness Band X2', sku: 'ELEC-SFB-004', category: 'Electronics', brand: 'Samsung', mrp: 2799, costPrice: 1100, sellingPrice: 1999, stock: 12, minStock: 20, unit: 'Pcs', location: 'Shelf A2', lastUpdated: '24 Jun 2026' },
-    { id: 5, product_id: 5, name: "Men's Cotton Kurta", sku: 'APP-MCK-005', category: 'Apparel', brand: "Levi's", mrp: 999, costPrice: 350, sellingPrice: 699, stock: 0, minStock: 30, unit: 'Pcs', location: 'Shelf D1', lastUpdated: '24 Jun 2026' },
-    { id: 6, product_id: 6, name: 'iPhone 15 Pro Case', sku: 'ACC-IPC-006', category: 'Accessories', brand: 'Apple', mrp: 1499, costPrice: 400, sellingPrice: 999, stock: 8, minStock: 15, unit: 'Pcs', location: 'Shelf C2', lastUpdated: '23 Jun 2026' },
-    { id: 7, product_id: 7, name: 'Matte Lipstick Set', sku: 'BEA-MLS-007', category: 'Beauty', brand: 'Lakme', mrp: 799, costPrice: 280, sellingPrice: 599, stock: 180, minStock: 20, unit: 'Set', location: 'Shelf E1', lastUpdated: '23 Jun 2026' },
-    { id: 8, product_id: 8, name: 'Non-Stick Cookware Set', sku: 'HOM-NCS-008', category: 'Home & Kitchen', brand: 'Prestige', mrp: 4999, costPrice: 2200, sellingPrice: 3499, stock: 25, minStock: 10, unit: 'Set', location: 'Shelf F1', lastUpdated: '22 Jun 2026' },
-    { id: 9, product_id: 9, name: 'Running Shoes Pro', sku: 'APP-RSP-009', category: 'Apparel', brand: 'Nike', mrp: 6499, costPrice: 2800, sellingPrice: 4499, stock: 60, minStock: 15, unit: 'Pair', location: 'Shelf D2', lastUpdated: '22 Jun 2026' },
-    { id: 10, product_id: 10, name: 'Bluetooth Speaker Mini', sku: 'ELEC-BSM-010', category: 'Electronics', brand: 'JBL', mrp: 1999, costPrice: 850, sellingPrice: 1299, stock: 3, minStock: 10, unit: 'Pcs', location: 'Shelf A3', lastUpdated: '21 Jun 2026' },
-    { id: 11, product_id: 11, name: 'Rice Basmati (5kg)', sku: 'GRO-RBB-011', category: 'Groceries', brand: 'India Gate', mrp: 450, costPrice: 300, sellingPrice: 395, stock: 220, minStock: 50, unit: 'Bag', location: 'Shelf B1', lastUpdated: '21 Jun 2026' },
-    { id: 12, product_id: 12, name: 'Sunscreen SPF 50', sku: 'BEA-SS5-012', category: 'Beauty', brand: 'Neutrogena', mrp: 699, costPrice: 320, sellingPrice: 549, stock: 75, minStock: 20, unit: 'Pcs', location: 'Shelf E2', lastUpdated: '20 Jun 2026' },
-];
-
+ 
 const PAGE_SIZE = 8;
 const fmt = (n) => '₹' + (n || 0).toLocaleString('en-IN');
 
@@ -45,41 +32,85 @@ const stockStatus = (item) => {
     if (stock < minStock) return { label: 'Low Stock', color: '#f59e0b', bg: '#fffbeb' };
     return { label: 'In Stock', color: '#10b981', bg: '#ecfdf5' };
 };
-
-const StockUpdateModal = ({ item, onClose, onSave, products }) => {
+const StockUpdateModal = ({
+    item,
+    onClose,
+    onSave,
+    products,
+    stores,
+}) => {
     const [qty, setQty] = useState('');
     const [action, setAction] = useState('add');
     const [reason, setReason] = useState('Purchase');
     const [modalLoading, setModalLoading] = useState(false);
     const [modalError, setModalError] = useState('');
     const [selectedProduct, setSelectedProduct] = useState(0);
-    
-
     const currentStock = getItemStock(item);
+    const [fromStore, setFromStore] = useState(0); 
+     const [toStore, setToStore] = useState(0);
+
     useEffect(() => {
     if (item?.product_id) {
         setSelectedProduct(item.product_id);
     }
+if (item?.store_id) {
+    setFromStore(item.store_id);
+}
+
+    if (item?.action) {
+        setAction(item.action);
+    }
 }, [item]);
 
-    const handleSave = async () => {
-        const delta = parseInt(qty) || 0;
-        if (delta <= 0) return;
-         if (selectedProduct === 0) {
+const handleSave = async () => {
+    const delta = parseInt(qty) || 0;
+
+
+    if (delta <= 0) {
+        setModalError("Please enter a valid quantity");
+        return;
+    }
+
+    if (selectedProduct === 0) {
         setModalError("Please select a product");
         return;
     }
-     setModalLoading(true);
+
+   if (action === "transfer") {
+
+    if (fromStore === 0) {
+        setModalError("Please select From Store");
+        return;
+    }
+
+    if (toStore === 0) {
+        setModalError("Please select To Store");
+        return;
+    }
+
+} else {
+
+    if (fromStore === 0) {
+        setModalError("Please select Store");
+        return;
+    }
+
+}
+
+    setModalLoading(true);
     setModalError("");
 
     try {
-               await onSave(
-            item,
-            selectedProduct,
-            action,
-            delta,
-            reason
-        );
+
+      await onSave(
+    item,
+    selectedProduct,
+    fromStore,
+    toStore,
+    action,
+    delta,
+    reason
+);
 
         onClose();
     } catch (err) {
@@ -93,8 +124,7 @@ const StockUpdateModal = ({ item, onClose, onSave, products }) => {
         setModalLoading(false);
     }
 };
-      
-
+   
     return (
         <div className="ec-modal-overlay" onClick={onClose}>
             <div className="ec-modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
@@ -107,12 +137,7 @@ const StockUpdateModal = ({ item, onClose, onSave, products }) => {
                 </div>
                 {modalError && <div style={{ color: '#ef4444', fontSize: 12, marginBottom: 10 }}>{modalError}</div>}
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                {['add', 'remove'].map(a => (
-                        <button key={a} onClick={() => setAction(a)}
-                            style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1.5px solid ${action === a ? (a === 'add' ? '#10b981' : '#ef4444') : '#e5e7eb'}`, background: action === a ? (a === 'add' ? '#ecfdf5' : '#fef2f2') : '#fff', color: action === a ? (a === 'add' ? '#10b981' : '#ef4444') : '#6b7280', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-                            {a === 'add' ? '＋ Add Stock' : '－ Remove Stock'}
-                        </button>
-                    ))}
+                
                 </div>
                 <div className="ec-field">
     <label>Product</label>
@@ -131,6 +156,27 @@ const StockUpdateModal = ({ item, onClose, onSave, products }) => {
     ))}
 </select>
 </div>
+{/* 
+{action === "transfer" && (
+  
+)}
+*/}
+<label>Store</label>
+
+<select
+    className="ec-input"
+    value={fromStore}
+    onChange={(e) => setFromStore(Number(e.target.value))}
+>
+    <option value={0}>Select Store</option>
+
+    {stores.map((store) => (
+        <option key={store.id} value={store.id}>
+            {store.name} (ID: {store.id})
+        </option>
+    ))}
+</select>
+  
                 <div className="ec-form-row">
                     <div className="ec-field">
                         <label>Quantity</label>
@@ -154,9 +200,17 @@ const StockUpdateModal = ({ item, onClose, onSave, products }) => {
                 </div>
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                     <button className="adm-btn-secondary" onClick={onClose} disabled={modalLoading}>Cancel</button>
-                    <button className="adm-btn-primary" onClick={handleSave} disabled={modalLoading}>
-                        {modalLoading ? "Saving..." : "Update Stock"}
-                    </button>
+                    <button
+  className="adm-btn-primary"
+  onClick={() => {
+    alert("Update Button Clicked");
+    console.log("About to call handleSave");
+    handleSave();
+  }}
+  disabled={modalLoading}
+>
+  {modalLoading ? "Saving..." : "Update Stock"}
+</button>
                 </div>
             </div>
         </div>
@@ -164,7 +218,7 @@ const StockUpdateModal = ({ item, onClose, onSave, products }) => {
 };
 
    const Inventory = () => {
-    const [inventory, setInventory] = useState(INVENTORY);
+    const [inventory, setInventory] = useState([]);
     const [search, setSearch] = useState('');
     const [filterCat, setFilterCat] = useState('All Categories');
     const [filterStatus, setFilterStatus] = useState('All');
@@ -176,6 +230,7 @@ const StockUpdateModal = ({ item, onClose, onSave, products }) => {
     const [page, setPage] = useState(1);
     const [stockModal, setStockModal] = useState(null);
     const [products, setProducts] = useState([]);
+    const [stores, setStores] = useState([]);
     const [activeTab, setActiveTab] = useState('All Items');
 
     const [loading, setLoading] = useState(false);
@@ -192,27 +247,34 @@ const fetchInventory = async () => {
         setError("");
 
         const response = await listInventory();
+    
 
-        console.log("FULL INVENTORY RESPONSE =>", response);
+        const data =
+    response?.data ??
+    response?.items ??
+    response?.content ??
+    response;
 
-        const data = Array.isArray(response)
-            ? response
-            : (response?.data || response?.content || response?.items || null);
-            console.log("Products State =>", products);
-console.log("Inventory Data =>", data);
-
-     if (Array.isArray(data)) {
-
-    const mergedInventory = data.map((item) => {
+if (!Array.isArray(data)) {
+    setInventory([]);
+    return;
+}
 
 
-    console.log("Products Count =>", products.length);
-    console.log("Current Product ID =>", item.product_id);
+console.log("Products Data =>", data);
+
+
+
+    const mergedInventory = data.map((item) => {    
 
     const product = products.find(
         (p) => p.id === item.product_id
     );
-     console.log("Matched Product =>", product);
+   
+
+
+     
+    
        
   return {
     ...item,
@@ -235,10 +297,9 @@ console.log("Inventory Data =>", data);
     image_url: product?.image_url || "",
 };
     });
-console.log("Merged Inventory =>", mergedInventory);
     setInventory(mergedInventory);
 }
-    } catch (err) {
+     catch (err) {
         console.error("Inventory API Error:", err);
         setError("Failed to load inventory from server");
     } finally {
@@ -252,31 +313,27 @@ const fetchProducts = async () => {
 
         console.log("FULL PRODUCTS RESPONSE =>", response);
 
-        const data = Array.isArray(response)
-            ? response
-            : (response?.data || response?.content || response?.items || []);
+       const data =
+    response?.data ??
+    response?.items ??
+    response?.content ??
+    response;
+    console.table(data);
+           
 
-             console.log("Products Data =>", data);
-             console.table(data);
-
-data.forEach((p) => {
-    console.log(
-        "Product:",
-        p.name,
-        "category:",
-        p.category,
-        "category_name:",
-        p.category_name,
-        "category_id:",
-        p.category_id
-    );
-});
+        console.log(
+            "PRODUCT ID 13 =>",
+            data.find((p) => p.id === 13)
+        );
 
         setProducts(data);
+
     } catch (err) {
-        console.error("Products API Error:", err);
+        console.error(err);
     }
+
 };
+
 
 const fetchLowStock = async () => {
     try {
@@ -307,10 +364,51 @@ const handleSearch = () => {
     fetchInventory();
 };
 
- useEffect(() => {
+
+const fetchStores = async () => {
+    try {
+        const response = await listStores();
+        
+
+        console.log("FULL STORES RESPONSE =>", response);
+
+        const data =
+            response?.data ??
+            response?.items ??
+            response?.content ??
+            response;
+
+        if (Array.isArray(data)) {
+            setStores(data);
+            console.log("Stores API Data =>", data);
+        }
+    } catch (err) {
+        console.error("Stores API Error:", err);
+    }
+
+};
+useEffect(() => {
+    
     fetchProducts();
+    fetchStores();
     fetchLowStock();
 }, []);
+
+useEffect(() => {
+    console.log("===== PRODUCTS =====");
+
+    products.forEach((p) => {
+        console.log("Product ID:", p.id, "| Product Name:", p.name);
+    });
+}, [products]);
+
+useEffect(() => {
+    console.log("===== STORES =====");
+
+    stores.forEach((s) => {
+        console.log("Store ID:", s.id, "| Store Name:", s.name);
+    });
+}, [stores]);
 
 useEffect(() => {
     if (products.length > 0) {
@@ -436,31 +534,82 @@ const paginated = filtered.slice(
 console.log("Filtered =>", filtered);
 console.log("Paginated =>", paginated);
 
-
- const handleStockUpdate = async (
+const handleStockUpdate = async (
     item,
     selectedProduct,
+    fromStore,
+    toStore,
     action,
     delta,
     reason
 ) => {
 
-    const payload = {
-        store_id: item.store_id || 1,
+     console.log("ITEM =>", item);
+    console.log("ITEM STORE ID =>", item.store_id);
+    console.log("🔥 STOCK UPDATE CALLED");
+    console.log("ITEM =>", item);
+    console.log("SELECTED PRODUCT =>", selectedProduct);
+    console.log("ACTION =>", action);
+    console.log("DELTA =>", delta);
+
+    console.log("ITEM =>", item);
+console.log("ITEM STORE ID =>", item.store_id);
+let payload;
+
+if (action === "transfer") {
+    payload = {
+         from_store_id: Number(fromStore),
+        to_store_id: Number(toStore),
         product_id: Number(selectedProduct),
-        quantity: delta,
+        quantity: Number(delta),
         notes: reason,
     };
+} else {
+  payload = {
+    store_id: Number(fromStore),   // <-- fromStore aivaji toStore
+    product_id: Number(selectedProduct),
+    quantity: Number(delta),
+    notes: reason,
+};
+}
 
-    console.log("Stock Payload =>", payload);
+console.log("FINAL PAYLOAD =>", payload);
+    console.log("FINAL PAYLOAD BEFORE API =>", payload);
+try {
+    console.log("BEFORE API");
 
-    if (action === "add") {
-        await stockIn(payload);
-    } else {
-        await stockOut(payload);
+ if (action === "add") {
+    console.log("CALLING STOCK IN API");
+    console.log("PAYLOAD =>", payload);
+
+    const response = await stockIn(payload);
+
+    console.log("STOCK IN RESPONSE =>", response);
+}
+else if (action === "remove") {
+    console.log("CALLING STOCK OUT API");
+    console.log("PAYLOAD =>", payload);
+
+    const response = await stockOut(payload);
+
+    console.log("STOCK OUT RESPONSE =>", response);
+}
+    else if (action === "transfer") {
+        console.log("CALLING TRANSFER API");
+        await transferStock(payload);
     }
 
+    console.log("AFTER API");
+
     await fetchInventory();
+}
+catch (err) {
+    console.error("FULL ERROR =>", err);
+    console.error("ERROR RESPONSE =>", err.response);
+    console.error("ERROR DATA =>", err.response?.data);
+
+    throw err;
+}
 };
     const totalValue = inventory.reduce((sum, i) => sum + getItemStock(i) * (i.costPrice || i.unit_cost || 0), 0);
     const lowStockCount = inventory.filter(i => getItemStock(i) > 0 && getItemStock(i) < getItemMinStock(i)).length;
@@ -474,6 +623,11 @@ console.log("Paginated =>", paginated);
         { label: 'Out of Stock', value: outOfStockCount, color: '#ef4444', bg: '#fef2f2', icon: '🚫' },
         { label: 'Inventory Value', value: fmt(totalValue), color: '#8b5cf6', bg: '#f5f3ff', icon: '💰' },
     ];
+     console.log("InventoryTable Props =>", {
+    paginated,
+    length: paginated?.length,
+  });
+
 
     return (
         <div className="dash-page">
@@ -520,25 +674,24 @@ console.log("Paginated =>", paginated);
             <div style={{ marginTop: "-20px" }}>
                 <InventoryCards />
             </div>
-             <LowStockAlert
-             loading={lowStockLoading}
-             error={lowStockError}
-             items={lowStockItems}
-              />
-          <InventoryFilters
+          <LowStockAlert
+    loading={lowStockLoading}
+    error={lowStockError}
+    items={lowStockItems}
+/>
+
+<InventoryFilters
     search={search}
     setSearch={setSearch}
 
-     inventory={inventory}
-    products={products} 
+    inventory={inventory}
+    products={products}
 
     filterWarehouse={filterWarehouse}
     setFilterWarehouse={setFilterWarehouse}
 
     filterCat={filterCat}
     setFilterCat={setFilterCat}
-
-    
 
     filterSupplier={filterSupplier}
     setFilterSupplier={setFilterSupplier}
@@ -552,7 +705,7 @@ console.log("Paginated =>", paginated);
     onSearch={handleSearch}
 />
 
-            <InventoryHeader
+              <InventoryHeader
                 totalItems={inventory.length}
                 lowStockCount={lowStockCount}
                 outOfStockCount={outOfStockCount}
@@ -560,13 +713,12 @@ console.log("Paginated =>", paginated);
                 setActiveTab={setActiveTab}
                 setStockModal={setStockModal}
             />
-
-            <InventoryTable
-                paginated={paginated}
-                stockStatus={stockStatus}
-                fmt={fmt}
-                setStockModal={setStockModal}
-            />
+<InventoryTable
+    paginated={paginated}
+    stockStatus={stockStatus}
+    fmt={fmt}
+    setStockModal={setStockModal}
+/>
 
             {totalPages > 1 && (
                 <div
@@ -613,15 +765,16 @@ console.log("Paginated =>", paginated);
             )}
 
             {stockModal && (
-                <StockUpdateModal
-                    item={stockModal}
-                    products={products}
-                    onClose={() => setStockModal(null)}
-                    onSave={handleStockUpdate}
-                />
+              <StockUpdateModal
+    item={stockModal}
+    products={products}
+    stores={stores}
+    onClose={() => setStockModal(null)}
+    onSave={handleStockUpdate}
+/>
             )}
         </div>
     );
-};
+   }
 
 export default Inventory;
