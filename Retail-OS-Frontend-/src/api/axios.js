@@ -1,4 +1,5 @@
 import axios from "axios";
+import { getAccessToken } from "../utils/tokenStorage";
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -11,13 +12,13 @@ const axiosInstance = axios.create({
 // Request Interceptor
 axiosInstance.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("token");
+    const token = getAccessToken();
+
+    console.log("Token:", token);
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-
-    console.log("API Request:", config.method?.toUpperCase(), config.url);
 
     return config;
   },
@@ -27,13 +28,10 @@ axiosInstance.interceptors.request.use(
 // Response Interceptor
 axiosInstance.interceptors.response.use(
   (response) => {
-    console.log("API Response:", response);
-
     return response;
   },
   (error) => {
     console.error("API Error:", error);
-
     return Promise.reject(error);
   }
 );

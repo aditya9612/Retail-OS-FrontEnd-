@@ -6,14 +6,15 @@ const InventoryHeader = ({
   lowStockCount,
   outOfStockCount,
   activeTab,
-  setActiveTab,
+  setActiveTab,  
+  setStockModal,
 }) => {
   return (
     <div className="inventory-header">
 
       <div className="inventory-header-left">
+  Inventory Management 
 
-        <h1>Inventory Management</h1>
 
         <p>
           Manage stock levels, warehouse operations, suppliers,
@@ -23,24 +24,34 @@ const InventoryHeader = ({
       </div>
 
       <div className="inventory-header-right">
+<button
+  className="header-btn stock-in-btn"
+  onClick={() =>
+    setStockModal({
+      name: "Stock In",
+      quantity: 0,
+      unit: "Pcs",
+      action: "add",
+    })
+  }
+>
+  + Stock In
+</button>
 
-        <button className="header-btn stock-in-btn">
-          + Stock In
-        </button>
-
-        <button className="header-btn stock-out-btn">
-          + Stock Out
-        </button>
-
-        <button className="header-btn transfer-btn">
-          + Transfer
-        </button>
-
-        <button className="header-btn purchase-btn">
-          + Purchase Order
-        </button>
-
-      </div>
+      <button
+  className="header-btn stock-out-btn"
+  onClick={() =>
+    setStockModal({
+      name: "Stock Out",
+      quantity: 0,
+      unit: "Pcs",
+      action: "remove",
+    })
+  }
+>
+  + Stock Out
+</button>
+</div>
 <div className="inventory-tabs">
 
   <button

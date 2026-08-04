@@ -1,10 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { product as productService } from "../../services/product";
+
+import React, { useState, useEffect } from "react";
+
 import {
-    BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
-    BsChevronLeft, BsChevronRight, BsCheckCircleFill,
-    BsToggleOn, BsToggleOff, BsImage,
-} from 'react-icons/bs';
+  BsSearch,
+  BsPlus,
+  BsDownload,
+  BsPencilFill,
+  BsTrashFill,
+  BsChevronLeft,
+  BsChevronRight,
+  BsCheckCircleFill,
+  BsToggleOn,
+  BsToggleOff,
+  BsImage,
+} from "react-icons/bs";
+
+import category from "../../services/categoryService";
+import { product as productService } from "../../services/product";
+
+
 
 const CATEGORIES_LIST = ['Electronics', 'Groceries', 'Apparel', 'Accessories', 'Home & Kitchen', 'Beauty', 'Sports', 'Books', 'Toys'];
 const GST_RATES = ['0%', '5%', '12%', '18%', '28%'];
@@ -14,7 +28,7 @@ const CATEGORY_IDS = {
     Electronics: 1, Groceries: 2, Apparel: 3, Accessories: 4,
     "Home & Kitchen": 5, Beauty: 6, Sports: 7, Books: 8, Toys: 9,
 };
-// reverse map: id -> name
+
 const CATEGORY_NAMES = Object.fromEntries(
     Object.entries(CATEGORY_IDS).map(([name, id]) => [id, name])
 );
@@ -23,16 +37,43 @@ const PAGE_SIZE = 6;
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
 
 const EMPTY_FORM = {
-    name: '', sku: '', category: 'Electronics', brand: '', barcode: '', unit: 'Pcs',
-    mrp: '', sellingPrice: '', costPrice: '', gst: '18%', stock: '', hsnCode: '',
-    status: true, featured: false, description: '', minStock: 10,
+  name: "",
+  sku: "",
+  category: "",
+  brand: "",
+  barcode: "",
+  hsnCode: "",
+  mrp: "",
+  sellingPrice: "",
+  costPrice: "",
+  gst: "18%",
+  stock: 0,
+  minStock: 10,
+  unit: "Pcs",
+  description: "",
+  featured: false,
+  status: true,
 };
+const ProductFormModal = ({
+  product,
+  categories,
+  onClose,
+  onSave,
+}) => {
+  const isNew = !product;
 
-const ProductFormModal = ({ product, onClose, onSave }) => {
-    const isNew = !product;
-    const [form, setForm] = useState(product ? { ...EMPTY_FORM, ...product } : { ...EMPTY_FORM });
-    const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [form, setForm] = useState(
+    product
+      ? { ...EMPTY_FORM, ...product }
+      : EMPTY_FORM
+  );
 
+  const set = (key, value) => {
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
+  };
     return (
         <div className="ec-modal-overlay" onClick={onClose}>
             <div className="ec-modal" style={{ maxWidth: 680 }} onClick={e => e.stopPropagation()}>
@@ -64,9 +105,17 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                 <div className="ec-form-row">
                     <div className="ec-field">
                         <label>Category *</label>
-                        <select className="ec-input" value={form.category} onChange={e => set('category', e.target.value)}>
-                            {CATEGORIES_LIST.map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
+<select
+    className="ec-input"
+    value={form.category}
+    onChange={e => set('category', e.target.value)}
+>
+    {CATEGORIES_LIST.map(c => (
+        <option key={c} value={c}>
+            {c}
+        </option>
+    ))}
+</select>
                     </div>
                     <div className="ec-field">
                         <label>Unit</label>
@@ -148,112 +197,159 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
 };
 
 const Products = () => {
-    const [products, setProducts] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
-    const [filterCat, setFilterCat] = useState('All');
-    const [page, setPage] = useState(1);
-    const [modal, setModal] = useState(null);
+  const [products, setProducts] = useState([]);
+const [loading, setLoading] = useState(true);
+const [categories, setCategories] = useState([]);
+const [search, setSearch] = useState("");
+const [filterCat, setFilterCat] = useState("All");
+const [page, setPage] = useState(1);
+const [modal, setModal] = useState(null);
 
-    useEffect(() => { fetchProducts(); }, []);
+useEffect(() => {
+      loadProducts();
+    loadCategories();
+}, []);
 
-    const fetchProducts = async () => {
-        try {
-            setLoading(true);
-            const data = await productService.getAll();
-            // API may return [], {data:[]} or {items:[]}
-            const list = Array.isArray(data) ? data : (data?.data || data?.items || []);
+const loadCategories = async () => {
+    try {
+        const response = await category.getAll();
+        setCategories(response.data || []);
+    } catch (error) {
+        console.error(error);
+    }
+};
+    
+    const filtered = products.filter((p) => {
+    const q = search.toLowerCase();
 
-            const formatted = list.map((p) => ({
-                id: p.id,
-                name: p.name,
-                sku: p.sku,
-                brand: p.brand || '—',
-                barcode: p.barcode,
-                category: CATEGORY_NAMES[p.category_id] || 'Unknown',
-                mrp: Number(p.price) || 0,
-                sellingPrice: Number(p.price) || 0,
-                costPrice: Number(p.cost_price) || 0,
-                gst: p.gst_rate ? `${Math.round(Number(p.gst_rate))}%` : '0%',
-                hsnCode: p.hsn_code || '',
-                stock: Number(p.stock ?? 0),
-                unit: 'Pcs',
-                status: p.is_active ?? true,
-                featured: false,
-                description: p.description || '',
-            }));
+    const matchSearch =
+        (p.name || "").toLowerCase().includes(q) ||
+        (p.brand || "").toLowerCase().includes(q) ||
+        (p.barcode || "").includes(search);
 
-            setProducts(formatted);
-        } catch (error) {
-            console.error('Failed to fetch products:', error?.response?.status, error?.response?.data);
-        } finally {
-            setLoading(false);
-        }
-    };
+    const matchCat = filterCat === "All" || p.category === filterCat;
 
-    const filtered = products.filter(p => {
-        const q = search.toLowerCase();
-        const matchSearch =
-            (p.name || '').toLowerCase().includes(q) ||
-            (p.brand || '').toLowerCase().includes(q) ||
-            (p.barcode || '').includes(search);
-        const matchCat = filterCat === 'All' || p.category === filterCat;
-        return matchSearch && matchCat;
-    });
+    return matchSearch && matchCat;
+});
+
+
+const loadProducts = async () => {
+    try {
+        const response = await productService.getAll();
+
+        console.log("Products API Response:", response.data);
+
+        const apiProducts = response.data.map((item) => ({
+            id: item.id,
+            name: item.name,
+            category: item.category_id,
+            brand: "",
+            barcode: item.barcode,
+            unit: "Pcs",
+            mrp: Number(item.price),
+            sellingPrice: Number(item.price),
+            costPrice: Number(item.cost_price),
+            gst: item.gst_rate + "%",
+            stock: 0,
+            status: item.is_active,
+            featured: false,
+        }));
+
+        setProducts(apiProducts);
+
+    } catch (error) {
+        console.error("Failed to load products:", error);
+    }
+     finally {
+        setLoading(false);
+    }
+};
+
+
+
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-    const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+   const paginated = filtered.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE
+);
 
-    const handleSave = async (form) => {
-        try {
-            const payload = {
-                name: form.name,
-                sku: form.sku || `SKU-${Date.now()}`,
-                barcode: form.barcode || '',
-                category_id: CATEGORY_IDS[form.category] || 1,
-                description: form.description || '',
-                hsn_code: form.hsnCode || '1234',
-                gst_rate: Number(String(form.gst).replace('%', '')) || 0,
-                price: Number(form.sellingPrice) || 0,
-                cost_price: Number(form.costPrice) || 0,
-                variants: null,          // backend crashes on {} — send null
-                track_batch: false,
-                track_expiry: false,
-                image_url: '',
-                is_active: form.status ?? true,
-            };
+  const handleSave = async (form) => {
+    console.log("Form Data:", form);
 
-            if (form.id) {
-                await productService.update(form.id, payload);
-            } else {
-                await productService.create(payload);
-            }
+    try {
+        const payload = {
+            name: form.name,
+            sku: form.sku || form.barcode || `SKU-${Date.now()}`,
+            barcode: form.barcode,
+            description: form.description,
+            category_id: Number(form.category),
+            hsn_code: form.hsnCode,
+            gst_rate: Number(form.gst.replace("%", "")),
+            price: Number(form.sellingPrice),
+            cost_price: Number(form.costPrice),
+            variants: {},
+            track_batch: false,
+            track_expiry: false,
+            image_url: "",
+        };
 
-            await fetchProducts();
-            setModal(null);
-        } catch (error) {
-            console.error('Save failed:', error?.response?.status, error?.response?.data);
-            alert(`Save failed (${error?.response?.status || 'network'}). Check console.`);
+        if (form.id) {
+            await productService.update(form.id, payload);
+            alert("Product updated successfully!");
+        } else {
+            await productService.create(payload);
+            alert("Product created successfully!");
         }
-    };
 
+        setModal(null);
+        await loadProducts();
+
+    } catch (error) {
+        console.error("UPDATE ERROR:", error);
+
+        if (error.response) {
+            console.log("Status:", error.response.status);
+            console.log("Data:", error.response.data);
+        }
+
+        alert("Operation failed");
+    }
+};
     const toggleStatus = (id) => setProducts(prev => prev.map(p => p.id === id ? { ...p, status: !p.status } : p));
-    const deleteProduct = async (id) => {
-        try {
-            if (productService.remove) await productService.remove(id);
-            setProducts(prev => prev.filter(p => p.id !== id));
-        } catch (e) {
-            console.error('Delete failed:', e?.response?.data);
-        }
-    };
+   const deleteProduct = async (id) => {
+    const confirmDelete = window.confirm(
+        "Are you sure you want to delete this product?"
+    );
 
+    if (!confirmDelete) return;
+
+    try {
+        await productService.remove(id);
+
+        alert("Product deleted successfully!");
+
+        await loadProducts();
+    } catch (error) {
+        console.error("DELETE ERROR:", error);
+
+        if (error.response) {
+            console.log("Status:", error.response.status);
+            console.log("Data:", error.response.data);
+        }
+
+        alert("Failed to delete product");
+    }
+};
+
+  
     const kpis = [
         { label: 'Total Products', value: products.length, color: '#6366f1', icon: '📦' },
         { label: 'Active', value: products.filter(p => p.status).length, color: '#10b981', icon: '✅' },
         { label: 'Featured', value: products.filter(p => p.featured).length, color: '#8b5cf6', icon: '⭐' },
         { label: 'Out of Stock', value: products.filter(p => p.stock === 0).length, color: '#ef4444', icon: '🚫' },
     ];
-
+    
     return (
         <div className="dash-page">
             <div className="adm-page-header">
@@ -285,6 +381,30 @@ const Products = () => {
                     </button>
                 ))}
             </div>
+
+<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+    {[{ id: "All", name: "All" }, ...categories].map((cat) => (
+        <button
+            key={cat.id}
+            onClick={() => {
+                setFilterCat(cat.id);
+                setPage(1);
+            }}
+            style={{
+                padding: '6px 14px',
+                borderRadius: 20,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                border: `1.5px solid ${filterCat === cat.id ? '#6366f1' : '#e5e7eb'}`,
+                background: filterCat === cat.id ? '#eef2ff' : '#fff',
+                color: filterCat === cat.id ? '#6366f1' : '#6b7280'
+            }}
+        >
+            {cat.name}
+        </button>
+    ))}
+</div>
 
             <div style={{ background: '#fff', border: '1px solid #e8eaf0', borderRadius: 12, padding: '14px 16px', display: 'flex', gap: 12 }}>
                 <div style={{ position: 'relative', flex: 1 }}>
@@ -320,9 +440,20 @@ const Products = () => {
                                         </div>
                                     </div>
                                 </td>
-                                <td style={{ padding: '12px 14px' }}>
-                                    <span style={{ fontSize: 11, background: '#eef2ff', color: '#6366f1', padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>{p.category}</span>
-                                </td>
+                               <td style={{ padding: '12px 14px' }}>
+    <span
+        style={{
+            fontSize: 11,
+            background: '#eef2ff',
+            color: '#6366f1',
+            padding: '3px 8px',
+            borderRadius: 20,
+            fontWeight: 600
+        }}
+    >
+        {categories.find(cat => cat.id === Number(p.category))?.name || "-"}
+    </span>
+</td>
                                 <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 11, color: '#6b7280' }}>{p.barcode}</td>
                                 <td style={{ padding: '12px 14px', fontSize: 13, color: '#9ca3af', textDecoration: 'line-through' }}>{fmt(p.mrp)}</td>
                                 <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700, color: '#111827' }}>{fmt(p.sellingPrice)}</td>
@@ -337,9 +468,16 @@ const Products = () => {
                                 </td>
                                 <td style={{ padding: '12px 14px' }}>
                                     <div style={{ display: 'flex', gap: 6 }}>
-                                        <button className="adm-btn-secondary" style={{ padding: '5px 10px', fontSize: 11 }} onClick={() => setModal(p)}>
-                                            <BsPencilFill size={11} />
-                                        </button>
+                                        <button
+    className="adm-btn-secondary"
+    style={{ padding: '5px 10px', fontSize: 11 }}
+    onClick={() => {
+        console.log("Selected Product:", p);
+        setModal(p);
+    }}
+>
+    <BsPencilFill size={11} />
+</button>
                                         <button onClick={() => toggleStatus(p.id)}
                                             style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                                             {p.status ? <BsToggleOn size={16} color="#10b981" /> : <BsToggleOff size={16} color="#d1d5db" />}
@@ -379,13 +517,14 @@ const Products = () => {
                 )}
             </div>
 
-            {modal && (
-                <ProductFormModal
-                    product={modal === 'new' ? null : modal}
-                    onClose={() => setModal(null)}
-                    onSave={handleSave}
-                />
-            )}
+      {modal && (
+    <ProductFormModal
+        product={modal === 'new' ? null : modal}
+        categories={categories}
+        onClose={() => setModal(null)}
+        onSave={handleSave}
+    />
+)}
         </div>
     );
 };

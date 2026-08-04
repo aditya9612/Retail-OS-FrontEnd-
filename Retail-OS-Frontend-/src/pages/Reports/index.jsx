@@ -1,7 +1,20 @@
 import React, { useState } from 'react';
 import {
-    AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-    Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line,
+    AreaChart,
+    Area,
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    Legend,
+    ResponsiveContainer,
+    PieChart,
+    Pie,
+    Cell,
+    LineChart,
+    Line,
 } from 'recharts';
 import {
     BsDownload, BsBarChartFill, BsCalendar, BsArrowUpRight,
@@ -11,13 +24,13 @@ import {
 const fmt = (n) => '₹' + n.toLocaleString('en-IN');
 
 const salesData = [
-    { day: 'Mon', revenue: 42000, orders: 28, online: 14000, pos: 28000 },
-    { day: 'Tue', revenue: 38000, orders: 22, online: 12000, pos: 26000 },
-    { day: 'Wed', revenue: 55000, orders: 34, online: 18000, pos: 37000 },
-    { day: 'Thu', revenue: 48000, orders: 29, online: 15000, pos: 33000 },
-    { day: 'Fri', revenue: 62000, orders: 41, online: 22000, pos: 40000 },
-    { day: 'Sat', revenue: 78000, orders: 52, online: 28000, pos: 50000 },
-    { day: 'Sun', revenue: 45000, orders: 30, online: 16000, pos: 29000 },
+  { day: "Mon", revenue: 42000, target: 30000 },
+  { day: "Tue", revenue: 38000, target: 28000 },
+  { day: "Wed", revenue: 55000, target: 42000 },
+  { day: "Thu", revenue: 48000, target: 35000 },
+  { day: "Fri", revenue: 62000, target: 50000 },
+  { day: "Sat", revenue: 78000, target: 60000 },
+  { day: "Sun", revenue: 45000, target: 34000 },
 ];
 
 const monthlySales = [
@@ -129,8 +142,9 @@ const Reports = () => {
                                 <h2 className="chart-title">Daily Revenue Trend</h2>
                                 <span style={{ fontSize: 11, color: '#9ca3af' }}>{period}</span>
                             </div>
-                            <ResponsiveContainer width="100%" height={240}>
-                                <AreaChart data={salesData} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
+                            <ResponsiveContainer width="100%" height={320}>
+                            
+                                <AreaChart data={salesData} margin={{ top: 10, right: 20, bottom: 20, left: 20 }}>
                                     <defs>
                                         <linearGradient id="gradOnline" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="5%" stopColor="#6366f1" stopOpacity={0.18} />
@@ -142,8 +156,8 @@ const Reports = () => {
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false}   tickMargin={12}/>
+                                    <YAxis width={45}tickMargin={10}tick={{ fontSize: 11, fill: '#94a3b8' }}axisLine={false} tickLine={false}tickFormatter={v => `${(v / 1000).toFixed(0)}k`}/>
                                     <Tooltip content={<CustomTooltip />} />
                                     <Area type="monotone" dataKey="online" name="Online" stroke="#6366f1" strokeWidth={2} fill="url(#gradOnline)" dot={false} />
                                     <Area type="monotone" dataKey="pos" name="POS" stroke="#10b981" strokeWidth={2} fill="url(#gradPos)" dot={false} />
@@ -187,11 +201,13 @@ const Reports = () => {
                             <h2 className="chart-title">Monthly Revenue vs Target</h2>
                         </div>
                         <ResponsiveContainer width="100%" height={220}>
-                            <BarChart data={monthlySales} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
+                            <BarChart data={monthlySales} margin={{ top: 30, right: 20, bottom: 20, left: 10 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 100000).toFixed(1)}L`} />
                                 <Tooltip content={<CustomTooltip />} />
+
+                                 <Legend verticalAlign="top"align="right"iconType="circle"/>
                                 <Bar dataKey="revenue" name="Revenue" fill="#6366f1" radius={[4, 4, 0, 0]} />
                                 <Bar dataKey="target" name="Target" fill="#e2e8f0" radius={[4, 4, 0, 0]} />
                             </BarChart>

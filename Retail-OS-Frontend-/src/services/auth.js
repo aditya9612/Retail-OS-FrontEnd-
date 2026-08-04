@@ -2,34 +2,29 @@ import apiClient from "./api";
 import { setTokens, clearTokens } from "../utils/tokenStorage";
 
 export const auth = {
+  login: async (credentials) => {
+    const response = await apiClient.post(
+      "/auth/login",
+      credentials
+    );
 
-    login: async (credentials) => {
+    console.log("API Login Response:", response.data);
 
-        const response = await apiClient.post(
-            "/auth/login",
-            credentials
-        );
+    setTokens({
+      access_token: response.data.access_token,
+      refresh_token: response.data.refresh_token,
+      token_type: response.data.token_type,
+    });
 
-        console.log("API Login Response:", response.data);
+    return response.data;
+  },
 
-        setTokens({
-            access_token: response.data.access_token,
-            refresh_token: response.data.refresh_token,
-            token_type: response.data.token_type,
-        });
-
-        return response.data;
-    },
-
-
-    logout: () => {
-        clearTokens();
-    },
-
+  logout: () => {
+    clearTokens();
+  },
 };
-
 
 // Keep compatibility with existing imports
 export const logoutUser = () => {
-    clearTokens();
+  clearTokens();
 };
