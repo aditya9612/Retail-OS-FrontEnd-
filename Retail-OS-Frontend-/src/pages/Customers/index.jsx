@@ -966,134 +966,136 @@ const Customers = () => {
 
             {/* CRM Customer Directory Table */}
             <div className="chart-card" style={{ padding: 0, overflow: 'hidden', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', background: '#fff' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                        <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                            {['Customer Profile', 'Email', 'Phone', 'City', 'Type', 'Wallet Balance', 'Loyalty Points', 'Status', 'Actions'].map(h => (
-                                <th key={h} style={{ padding: '14px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading && Array.from({ length: 6 }).map((_, idx) => <TableRowSkeleton key={idx} />)}
-
-                        {!loading && error && (
-                            <tr>
-                                <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#ef4444', fontSize: 13 }}>
-                                    {error}
-                                </td>
+                <div className="table-scroll-container">
+                    <table style={{ width: '100%', minWidth: 960, borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                {['Customer Profile', 'Email', 'Phone', 'City', 'Type', 'Wallet Balance', 'Loyalty Points', 'Status', 'Actions'].map(h => (
+                                    <th key={h} style={{ padding: '14px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                                ))}
                             </tr>
-                        )}
+                        </thead>
+                        <tbody>
+                            {loading && Array.from({ length: 6 }).map((_, idx) => <TableRowSkeleton key={idx} />)}
 
-                        {!loading && !error && paginatedCustomers.map((c) => {
-                            const tc = typeCfg[c.type] || typeCfg.Regular;
-
-                            return (
-                                <tr
-                                    key={c.backendId}
-                                    style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}
-                                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                >
-                                    {/* Name & ID */}
-                                    <td style={{ padding: '14px 16px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
-                                                {c.name ? c.name[0].toUpperCase() : 'C'}
-                                            </div>
-                                            <div>
-                                                <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', margin: 0 }}>{c.name}</p>
-                                                <p style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'monospace', margin: '2px 0 0 0' }}>{c.id}</p>
-                                            </div>
-                                        </div>
-                                    </td>
-
-                                    {/* Email */}
-                                    <td style={{ padding: '14px 16px', fontSize: 12, color: '#374151' }}>{c.email || '—'}</td>
-
-                                    {/* Phone */}
-                                    <td style={{ padding: '14px 16px', fontSize: 12, color: '#4b5563', fontFamily: 'monospace' }}>{c.phone || '—'}</td>
-
-                                    {/* City */}
-                                    <td style={{ padding: '14px 16px', fontSize: 12, color: '#374151', fontWeight: 500 }}>{c.city}</td>
-
-                                    {/* Type */}
-                                    <td style={{ padding: '14px 16px' }}>
-                                        <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: tc.bg, color: tc.color }}>
-                                            {c.type}
-                                        </span>
-                                    </td>
-
-                                    {/* Wallet Balance */}
-                                    <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 700, color: '#111827' }}>
-                                        {c.credit > 0 ? fmt(c.credit) : '₹0'}
-                                    </td>
-
-                                    {/* Loyalty Points */}
-                                    <td style={{ padding: '14px 16px' }}>
-                                        <span style={{ fontSize: 12, fontWeight: 700, color: '#d97706', background: '#fffbeb', padding: '3px 8px', borderRadius: 8, border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                            <BsGift size={12} /> {c.loyaltyPoints || 0} pts
-                                        </span>
-                                    </td>
-
-                                    {/* Status Toggle Switch Component */}
-                                    <td style={{ padding: '14px 16px' }}>
-                                        <CustomerStatusToggle
-                                            isActive={c.status === 'Active'}
-                                            onToggle={() => handleStatusToggle(c.backendId, c.status)}
-                                        />
-                                    </td>
-
-                                    {/* Actions Column */}
-                                    <td style={{ padding: '14px 16px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <button
-                                                type="button"
-                                                className="adm-btn-secondary"
-                                                title="View CRM Profile"
-                                                aria-label="View CRM Profile"
-                                                onClick={() => handleViewCustomerProfile(c.backendId)}
-                                                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, color: '#6366f1', borderColor: '#c7d2fe', background: '#fff' }}
-                                            >
-                                                <BsEye size={15} />
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                className="adm-btn-secondary"
-                                                title="Edit Customer"
-                                                aria-label="Edit Customer"
-                                                onClick={() => setEditingCustomer(c)}
-                                                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, color: '#4b5563', borderColor: '#e5e7eb', background: '#fff' }}
-                                            >
-                                                <BsPencilSquare size={14} />
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                className="adm-btn-secondary"
-                                                title="Delete Customer"
-                                                aria-label="Delete Customer"
-                                                onClick={() => handleDeleteCustomer(c)}
-                                                style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, color: '#ef4444', borderColor: '#fecaca', background: '#fff' }}
-                                            >
-                                                <BsTrash size={14} />
-                                            </button>
-                                        </div>
+                            {!loading && error && (
+                                <tr>
+                                    <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#ef4444', fontSize: 13 }}>
+                                        {error}
                                     </td>
                                 </tr>
-                            );
-                        })}
+                            )}
 
-                        {!loading && !error && paginatedCustomers.length === 0 && (
-                            <tr>
-                                <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-                                    No customers found in directory.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                            {!loading && !error && paginatedCustomers.map((c) => {
+                                const tc = typeCfg[c.type] || typeCfg.Regular;
+
+                                return (
+                                    <tr
+                                        key={c.backendId}
+                                        style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}
+                                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                    >
+                                        {/* Name & ID */}
+                                        <td style={{ padding: '14px 16px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                                                    {c.name ? c.name[0].toUpperCase() : 'C'}
+                                                </div>
+                                                <div>
+                                                    <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', margin: 0 }}>{c.name}</p>
+                                                    <p style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'monospace', margin: '2px 0 0 0' }}>{c.id}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        {/* Email */}
+                                        <td style={{ padding: '14px 16px', fontSize: 12, color: '#374151', whiteSpace: 'nowrap' }}>{c.email || '—'}</td>
+
+                                        {/* Phone */}
+                                        <td style={{ padding: '14px 16px', fontSize: 12, color: '#4b5563', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{c.phone || '—'}</td>
+
+                                        {/* City */}
+                                        <td style={{ padding: '14px 16px', fontSize: 12, color: '#374151', fontWeight: 500, whiteSpace: 'nowrap' }}>{c.city}</td>
+
+                                        {/* Type */}
+                                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                                            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: tc.bg, color: tc.color }}>
+                                                {c.type}
+                                            </span>
+                                        </td>
+
+                                        {/* Wallet Balance */}
+                                        <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>
+                                            {c.credit > 0 ? fmt(c.credit) : '₹0'}
+                                        </td>
+
+                                        {/* Loyalty Points */}
+                                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#d97706', background: '#fffbeb', padding: '3px 8px', borderRadius: 8, border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                <BsGift size={12} /> {c.loyaltyPoints || 0} pts
+                                            </span>
+                                        </td>
+
+                                        {/* Status Toggle Switch Component */}
+                                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                                            <CustomerStatusToggle
+                                                isActive={c.status === 'Active'}
+                                                onToggle={() => handleStatusToggle(c.backendId, c.status)}
+                                            />
+                                        </td>
+
+                                        {/* Actions Column */}
+                                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <button
+                                                    type="button"
+                                                    className="adm-btn-secondary"
+                                                    title="View CRM Profile"
+                                                    aria-label="View CRM Profile"
+                                                    onClick={() => handleViewCustomerProfile(c.backendId)}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, color: '#6366f1', borderColor: '#c7d2fe', background: '#fff' }}
+                                                >
+                                                    <BsEye size={15} />
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className="adm-btn-secondary"
+                                                    title="Edit Customer"
+                                                    aria-label="Edit Customer"
+                                                    onClick={() => setEditingCustomer(c)}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, color: '#4b5563', borderColor: '#e5e7eb', background: '#fff' }}
+                                                >
+                                                    <BsPencilSquare size={14} />
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className="adm-btn-secondary"
+                                                    title="Delete Customer"
+                                                    aria-label="Delete Customer"
+                                                    onClick={() => handleDeleteCustomer(c)}
+                                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, color: '#ef4444', borderColor: '#fecaca', background: '#fff' }}
+                                                >
+                                                    <BsTrash size={14} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+
+                            {!loading && !error && paginatedCustomers.length === 0 && (
+                                <tr>
+                                    <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                                        No customers found in directory.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
 
                 {/* Pagination */}
                 {totalPages > 1 && (

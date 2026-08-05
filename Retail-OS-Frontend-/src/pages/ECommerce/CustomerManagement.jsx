@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
     BsSearch, BsDownload, BsEye, BsChevronLeft, BsChevronRight,
     BsCheckCircleFill, BsXCircleFill, BsBagCheck,
-    BsGraphUp, BsTrash, BsFunnel, BsPencilSquare, BsBoxSeam
+    BsGraphUp, BsTrash, BsFunnel, BsBoxSeam
 } from 'react-icons/bs';
 import {
     getCustomers,
@@ -144,7 +144,7 @@ const CustomerManagement = () => {
         }
     };
 
-    // Active / Inactive Toggle (Kept exactly as requested)
+    // Active / Inactive Toggle
     const handleToggleStatus = async (customer) => {
         const newStatus = customer.status === 'Active' ? 'Inactive' : 'Active';
         setUpdatingId(customer.backendId);
@@ -413,177 +413,179 @@ const CustomerManagement = () => {
                 </div>
             </div>
 
-            {/* Customers Table */}
+            {/* Customers Table with Dedicated Horizontal Scroll Container */}
             <div className="chart-card" style={{ padding: 0, overflow: 'hidden', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', background: '#fff' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                        <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                            {['Customer', 'Email', 'Phone', 'City', 'Orders', 'Total Spent', 'Avg. Order', 'Last Order', 'Status', 'Actions'].map(h => (
-                                <th key={h} style={{ padding: '14px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading && Array.from({ length: 6 }).map((_, idx) => <TableRowSkeleton key={idx} />)}
-
-                        {!loading && error && (
-                            <tr>
-                                <td colSpan={10} style={{ padding: 40, textAlign: 'center', color: '#ef4444', fontSize: 13 }}>
-                                    {error}
-                                </td>
+                <div className="table-scroll-container">
+                    <table style={{ width: '100%', minWidth: 960, borderCollapse: 'collapse' }}>
+                        <thead>
+                            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
+                                {['Customer', 'Email', 'Phone', 'City', 'Orders', 'Total Spent', 'Avg. Order', 'Last Order', 'Status', 'Actions'].map(h => (
+                                    <th key={h} style={{ padding: '14px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                                ))}
                             </tr>
-                        )}
+                        </thead>
+                        <tbody>
+                            {loading && Array.from({ length: 6 }).map((_, idx) => <TableRowSkeleton key={idx} />)}
 
-                        {!loading && !error && paginatedCustomers.map((c) => {
-                            const sc = statusCfg[c.status] || statusCfg.Inactive;
-                            const tc = typeCfg[c.type] || typeCfg.Regular;
-                            const isSelected = selectedCustomer?.backendId === c.backendId;
-
-                            return (
-                                <tr
-                                    key={c.backendId}
-                                    style={{
-                                        borderBottom: '1px solid #f3f4f6',
-                                        background: isSelected ? '#f5f3ff' : 'transparent',
-                                        transition: 'background 0.15s ease'
-                                    }}
-                                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
-                                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
-                                >
-                                    {/* Customer */}
-                                    <td style={{ padding: '14px 16px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0, boxShadow: '0 2px 4px rgba(99,102,241,0.2)' }}>
-                                                {c.name ? c.name[0].toUpperCase() : 'C'}
-                                            </div>
-                                            <div>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                    <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', margin: 0 }}>{c.name}</p>
-                                                    <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 10, background: tc.bg, color: tc.color }}>
-                                                        {c.type}
-                                                    </span>
-                                                </div>
-                                                <p style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'monospace', margin: '2px 0 0 0' }}>{c.id}</p>
-                                            </div>
-                                        </div>
-                                    </td>
-
-                                    {/* Email */}
-                                    <td style={{ padding: '14px 16px', fontSize: 12, color: '#374151' }}>{c.email || '—'}</td>
-
-                                    {/* Phone */}
-                                    <td style={{ padding: '14px 16px', fontSize: 12, color: '#4b5563', fontFamily: 'monospace' }}>{c.phone || '—'}</td>
-
-                                    {/* City */}
-                                    <td style={{ padding: '14px 16px', fontSize: 12, color: '#374151', fontWeight: 500 }}>{c.city}</td>
-
-                                    {/* Orders Count */}
-                                    <td style={{ padding: '14px 16px' }}>
-                                        <span style={{ fontSize: 12, fontWeight: 700, color: '#6366f1', background: '#eef2ff', padding: '4px 10px', borderRadius: 8 }}>
-                                            {c.orders} {c.orders === 1 ? 'order' : 'orders'}
-                                        </span>
-                                    </td>
-
-                                    {/* Total Spent */}
-                                    <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 800, color: '#111827' }}>{fmt(c.totalSpent)}</td>
-
-                                    {/* Avg Order */}
-                                    <td style={{ padding: '14px 16px', fontSize: 12, color: '#4b5563', fontWeight: 600 }}>{fmt(c.avgOrder)}</td>
-
-                                    {/* Last Order */}
-                                    <td style={{ padding: '14px 16px', fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap' }}>{c.lastOrder}</td>
-
-                                    {/* Active/Inactive Toggle (Preserved exactly) */}
-                                    <td style={{ padding: '14px 16px' }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleToggleStatus(c)}
-                                            disabled={updatingId === c.backendId}
-                                            title="Click to toggle Active/Inactive"
-                                            style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 5,
-                                                padding: '4px 10px',
-                                                borderRadius: 20,
-                                                fontSize: 11,
-                                                fontWeight: 700,
-                                                background: sc.bg,
-                                                color: sc.color,
-                                                border: `1px solid ${sc.color}33`,
-                                                cursor: 'pointer',
-                                            }}
-                                        >
-                                            {sc.icon} {c.status}
-                                        </button>
-                                    </td>
-
-                                    {/* Action Column: Eye icon ONLY + Outlined buttons */}
-                                    <td style={{ padding: '14px 16px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <button
-                                                type="button"
-                                                className="adm-btn-secondary"
-                                                title="View Orders & Details"
-                                                aria-label="View Orders"
-                                                onClick={() => handleViewCustomerOrders(c.backendId)}
-                                                style={{
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    width: 34,
-                                                    height: 34,
-                                                    padding: 0,
-                                                    borderRadius: 8,
-                                                    cursor: 'pointer',
-                                                    color: '#6366f1',
-                                                    borderColor: '#c7d2fe',
-                                                    background: '#fff',
-                                                }}
-                                            >
-                                                <BsEye size={15} />
-                                            </button>
-
-                                            <button
-                                                type="button"
-                                                className="adm-btn-secondary"
-                                                title="Delete Customer"
-                                                aria-label="Delete Customer"
-                                                onClick={() => handleDeleteCustomer(c)}
-                                                disabled={deletingId === c.backendId}
-                                                style={{
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    width: 34,
-                                                    height: 34,
-                                                    padding: 0,
-                                                    borderRadius: 8,
-                                                    color: '#ef4444',
-                                                    borderColor: '#fecaca',
-                                                    background: '#fff',
-                                                    cursor: 'pointer',
-                                                }}
-                                            >
-                                                <BsTrash size={14} />
-                                            </button>
-                                        </div>
+                            {!loading && error && (
+                                <tr>
+                                    <td colSpan={10} style={{ padding: 40, textAlign: 'center', color: '#ef4444', fontSize: 13 }}>
+                                        {error}
                                     </td>
                                 </tr>
-                            );
-                        })}
+                            )}
 
-                        {!loading && !error && paginatedCustomers.length === 0 && (
-                            <tr>
-                                <td colSpan={10} style={{ padding: 48, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-                                    No e-commerce customers found matching your filters.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
+                            {!loading && !error && paginatedCustomers.map((c) => {
+                                const sc = statusCfg[c.status] || statusCfg.Inactive;
+                                const tc = typeCfg[c.type] || typeCfg.Regular;
+                                const isSelected = selectedCustomer?.backendId === c.backendId;
 
-                {/* Pagination */}
+                                return (
+                                    <tr
+                                        key={c.backendId}
+                                        style={{
+                                            borderBottom: '1px solid #f3f4f6',
+                                            background: isSelected ? '#f5f3ff' : 'transparent',
+                                            transition: 'background 0.15s ease'
+                                        }}
+                                        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
+                                        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                                    >
+                                        {/* Customer */}
+                                        <td style={{ padding: '14px 16px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0, boxShadow: '0 2px 4px rgba(99,102,241,0.2)' }}>
+                                                    {c.name ? c.name[0].toUpperCase() : 'C'}
+                                                </div>
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                        <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', margin: 0 }}>{c.name}</p>
+                                                        <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 10, background: tc.bg, color: tc.color }}>
+                                                            {c.type}
+                                                        </span>
+                                                    </div>
+                                                    <p style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'monospace', margin: '2px 0 0 0' }}>{c.id}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        {/* Email */}
+                                        <td style={{ padding: '14px 16px', fontSize: 12, color: '#374151', whiteSpace: 'nowrap' }}>{c.email || '—'}</td>
+
+                                        {/* Phone */}
+                                        <td style={{ padding: '14px 16px', fontSize: 12, color: '#4b5563', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{c.phone || '—'}</td>
+
+                                        {/* City */}
+                                        <td style={{ padding: '14px 16px', fontSize: 12, color: '#374151', fontWeight: 500, whiteSpace: 'nowrap' }}>{c.city}</td>
+
+                                        {/* Orders Count */}
+                                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#6366f1', background: '#eef2ff', padding: '4px 10px', borderRadius: 8 }}>
+                                                {c.orders} {c.orders === 1 ? 'order' : 'orders'}
+                                            </span>
+                                        </td>
+
+                                        {/* Total Spent */}
+                                        <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 800, color: '#111827', whiteSpace: 'nowrap' }}>{fmt(c.totalSpent)}</td>
+
+                                        {/* Avg Order */}
+                                        <td style={{ padding: '14px 16px', fontSize: 12, color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>{fmt(c.avgOrder)}</td>
+
+                                        {/* Last Order */}
+                                        <td style={{ padding: '14px 16px', fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap' }}>{c.lastOrder}</td>
+
+                                        {/* Active/Inactive Toggle */}
+                                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleStatus(c)}
+                                                disabled={updatingId === c.backendId}
+                                                title="Click to toggle Active/Inactive"
+                                                style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: 5,
+                                                    padding: '4px 10px',
+                                                    borderRadius: 20,
+                                                    fontSize: 11,
+                                                    fontWeight: 700,
+                                                    background: sc.bg,
+                                                    color: sc.color,
+                                                    border: `1px solid ${sc.color}33`,
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                {sc.icon} {c.status}
+                                            </button>
+                                        </td>
+
+                                        {/* Action Column */}
+                                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <button
+                                                    type="button"
+                                                    className="adm-btn-secondary"
+                                                    title="View Orders & Details"
+                                                    aria-label="View Orders"
+                                                    onClick={() => handleViewCustomerOrders(c.backendId)}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        width: 34,
+                                                        height: 34,
+                                                        padding: 0,
+                                                        borderRadius: 8,
+                                                        cursor: 'pointer',
+                                                        color: '#6366f1',
+                                                        borderColor: '#c7d2fe',
+                                                        background: '#fff',
+                                                    }}
+                                                >
+                                                    <BsEye size={15} />
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    className="adm-btn-secondary"
+                                                    title="Delete Customer"
+                                                    aria-label="Delete Customer"
+                                                    onClick={() => handleDeleteCustomer(c)}
+                                                    disabled={deletingId === c.backendId}
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        width: 34,
+                                                        height: 34,
+                                                        padding: 0,
+                                                        borderRadius: 8,
+                                                        color: '#ef4444',
+                                                        borderColor: '#fecaca',
+                                                        background: '#fff',
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    <BsTrash size={14} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+
+                            {!loading && !error && paginatedCustomers.length === 0 && (
+                                <tr>
+                                    <td colSpan={10} style={{ padding: 48, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                                        No e-commerce customers found matching your filters.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Fixed Pagination Footer */}
                 {totalPages > 1 && (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #f3f4f6', background: '#fafafa' }}>
                         <span style={{ fontSize: 12, color: '#6b7280' }}>
