@@ -5,14 +5,15 @@ import {
     BsCalendar, BsCurrencyRupee, BsStarFill, BsPlus, BsEye, BsPencilSquare,
     BsChevronLeft, BsChevronRight, BsCheckCircleFill, BsXCircleFill,
     BsWallet2, BsChatText, BsJournalText, BsShare,
-    BsTrash, BsFunnel, BsGift, BsTrophy, BsGraphUp
+    BsFunnel, BsGift, BsTrophy, BsGraphUp,
+    //   BsTrash,
 } from 'react-icons/bs';
 import {
     getCustomers,
     createCustomer,
     getCustomerById,
     updateCustomer,
-    deleteCustomer,
+    // deleteCustomer,
     getCustomerStats,
     getBirthdayCustomers,
     getReferrals,
@@ -106,7 +107,7 @@ const CustomerStatusToggle = ({ isActive, onToggle }) => {
                 />
             </span>
 
-            <span
+            {/* <span
                 style={{
                     fontSize: 11,
                     fontWeight: 700,
@@ -115,7 +116,7 @@ const CustomerStatusToggle = ({ isActive, onToggle }) => {
                 }}
             >
                 {isActive ? 'Active' : 'Inactive'}
-            </span>
+            </span> */}
         </button>
     );
 };
@@ -536,19 +537,19 @@ const Customers = () => {
         }
     };
 
-    // Handler for DELETE button (Preserves icon UI, updates frontend state for UI testing)
-    const handleDeleteCustomer = (customer) => {
-        if (!window.confirm(`Are you sure you want to delete customer profile "${customer.name}"?`)) return;
+    // // Handler for DELETE button (Preserves icon UI, updates frontend state for UI testing)
+    // const handleDeleteCustomer = (customer) => {
+    //     if (!window.confirm(`Are you sure you want to delete customer profile "${customer.name}"?`)) return;
 
         // TODO:
         // Uncomment and connect the Delete Customer API
         // once the backend endpoint is finalized.
         // await deleteCustomer(customer.backendId);
 
-        console.log(`[UI DELETE] Customer removed from state for backendId: ${customer.backendId}`);
-        setCustomers(prev => prev.filter(c => c.backendId !== customer.backendId));
-        if (selectedCustomer?.backendId === customer.backendId) setSelectedCustomer(null);
-    };
+    //     console.log(`[UI DELETE] Customer removed from state for backendId: ${customer.backendId}`);
+    //     setCustomers(prev => prev.filter(c => c.backendId !== customer.backendId));
+    //     if (selectedCustomer?.backendId === customer.backendId) setSelectedCustomer(null);
+    // };
 
     // Handler for ACTIVE / INACTIVE Toggle Switch (Updates UI state per instructions)
     const handleStatusToggle = (id, currentStatus) => {
@@ -1070,7 +1071,7 @@ const Customers = () => {
                                                     <BsPencilSquare size={14} />
                                                 </button>
 
-                                                <button
+                                                {/* <button
                                                     type="button"
                                                     className="adm-btn-secondary"
                                                     title="Delete Customer"
@@ -1079,7 +1080,7 @@ const Customers = () => {
                                                     style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, color: '#ef4444', borderColor: '#fecaca', background: '#fff' }}
                                                 >
                                                     <BsTrash size={14} />
-                                                </button>
+                                                </button> */}
                                             </div>
                                         </td>
                                     </tr>
