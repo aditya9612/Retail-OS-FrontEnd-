@@ -7,6 +7,8 @@ const LowStockAlert = ({
   items = [],
 }) => {
   return (
+     
+   
     <div className="low-stock-alert">
       <div className="low-stock-header">
         <div>
@@ -49,6 +51,8 @@ const LowStockAlert = ({
         </thead>
 
         <tbody>
+
+
           {!loading && items.length === 0 ? (
             <tr>
               <td colSpan="9" style={{ textAlign: "center", padding: "20px" }}>
@@ -56,14 +60,14 @@ const LowStockAlert = ({
               </td>
             </tr>
           ) : (
-            items.map((item, idx) => {
+            items.map((item) => {
               const qty =
                 item.quantity !== undefined
                   ? item.quantity
                   : item.stock !== undefined
                   ? item.stock
                   : 0;
-
+               
               const reorderLevel =
                 item.low_stock_threshold ??
                 item.reorderLevel ??
@@ -73,15 +77,25 @@ const LowStockAlert = ({
               const isCritical = qty <= 10;
 
               return (
-                <tr key={item.id || idx}>
-                  <td>{item.product || item.name || "-"}</td>
-                  <td>{item.sku || "-"}</td>
-                  <td>{item.supplier || "-"}</td>
-                  <td>{item.warehouse || item.location || "-"}</td>
-                  <td>{qty}</td>
-                  <td>{reorderLevel}</td>
-                  <td>{item.lastUpdated || item.updated_at || "-"}</td>
+                
+                <tr key={item.id}>
+                 <td>{item.product_name || item.name || "-"}</td>
 
+<td>{item.sku || "-"}</td>
+
+<td>{item.supplier_name || "-"}</td>
+
+<td>{item.store_name || "-"}</td>
+
+<td>{qty}</td>
+
+<td>{reorderLevel}</td>
+
+<td>
+  {item.created_at
+    ? item.created_at.split("T")[0]
+    : "-"}
+</td>
                   <td>
                     <span
                       className={
@@ -105,8 +119,7 @@ const LowStockAlert = ({
           )}
         </tbody>
       </table>
-    </div>
-  );
+</div>
+);
 };
-
 export default LowStockAlert;

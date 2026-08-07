@@ -57,10 +57,12 @@ const menuGroups = [
     {
         label: 'Inventory',
         items: [
-
+           
+            { name: 'Inventory', icon: <BsBoxSeam />, path: '/inventory', hasArrow: true },
             { name: 'Categories', icon: <BsTag />, path: '/categories', hasArrow: true },
             { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases', hasArrow: true },
             { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/returns', hasArrow: true },
+            
         ],
     },
     {

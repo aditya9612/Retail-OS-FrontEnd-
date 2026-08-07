@@ -38,7 +38,10 @@ const StockUpdateModal = ({
     onSave,
     products,
     stores,
+    
 }) => {
+    
+
     const [qty, setQty] = useState('');
     const [action, setAction] = useState('add');
     const [reason, setReason] = useState('Purchase');
@@ -63,7 +66,15 @@ if (item?.store_id) {
 }, [item]);
 
 const handleSave = async () => {
+    
+console.log("HANDLE SAVE STARTED");
+
     const delta = parseInt(qty) || 0;
+
+    console.log("QTY =>", delta);
+
+
+   
 
 
     if (delta <= 0) {
@@ -101,6 +112,17 @@ const handleSave = async () => {
     setModalError("");
 
     try {
+        console.log("ACTION =>", action);
+
+console.log("handleStockUpdate CALLED");
+
+console.log("ITEM =>", item);
+console.log("SELECTED PRODUCT =>", selectedProduct);
+console.log("FROM STORE =>", fromStore);
+console.log("TO STORE =>", toStore);
+console.log("ACTION =>", action);
+console.log("DELTA =>", delta);
+console.log("REASON =>", reason);
 
       await onSave(
     item,
@@ -111,6 +133,9 @@ const handleSave = async () => {
     delta,
     reason
 );
+
+console.log("TRANSFER SUCCESS");
+console.log("Refreshing inventory...");
 
         onClose();
     } catch (err) {
@@ -124,6 +149,8 @@ const handleSave = async () => {
         setModalLoading(false);
     }
 };
+console.log("SELECTED PRODUCT =>", selectedProduct);
+console.log("PRODUCTS LENGTH =>", products.length);
    
     return (
         <div className="ec-modal-overlay" onClick={onClose}>
@@ -142,18 +169,19 @@ const handleSave = async () => {
                 <div className="ec-field">
     <label>Product</label>
 
-   <select
-    className="ec-input"
-    value={selectedProduct}
-    onChange={(e) => setSelectedProduct(Number(e.target.value))}
->
-    <option value={0}>Select Product</option>
 
-    {products.map((product) => (
-        <option key={product.id} value={product.id}>
-            {product.name}
-        </option>
-    ))}
+  <select
+  className="ec-input"
+  value={selectedProduct}
+  onChange={(e) => setSelectedProduct(Number(e.target.value))}
+>
+  <option value={0}>Select Product</option>
+
+ {products.map((product) => (
+    <option key={product.id} value={product.id}>
+        {`${product.id} - ${product.name}`}
+    </option>
+))}
 </select>
 </div>
 {/* 
@@ -164,19 +192,42 @@ const handleSave = async () => {
 <label>Store</label>
 
 <select
-    className="ec-input"
-    value={fromStore}
-    onChange={(e) => setFromStore(Number(e.target.value))}
+  className="ec-input"
+  value={fromStore}
+  onChange={(e) => setFromStore(Number(e.target.value))}
 >
-    <option value={0}>Select Store</option>
+  <option value={0}>Select Store</option>
 
-    {stores.map((store) => (
-        <option key={store.id} value={store.id}>
-            {store.name} (ID: {store.id})
-        </option>
-    ))}
+  {stores.map((store) => (
+    <option key={store.id} value={store.id}>
+      {store.name} (ID: {store.id})
+    </option>
+  ))}
 </select>
-  
+
+{action === "transfer" && (
+  <div className="ec-field">
+    <label>To Store</label>
+
+    <select
+      className="ec-input"
+      value={toStore}
+      onChange={(e) => setToStore(Number(e.target.value))}
+    >
+      <option value={0}>Select To Store</option>
+
+      {stores
+        .filter((store) => store.id !== fromStore)
+        .map((store) => (
+          <option key={store.id} value={store.id}>
+            {store.name} (ID: {store.id})
+          </option>
+        ))}
+    </select>
+  </div>
+)}
+
+
                 <div className="ec-form-row">
                     <div className="ec-field">
                         <label>Quantity</label>
@@ -200,12 +251,18 @@ const handleSave = async () => {
                 </div>
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                     <button className="adm-btn-secondary" onClick={onClose} disabled={modalLoading}>Cancel</button>
-                    <button
+<button
   className="adm-btn-primary"
-  onClick={() => {
-    alert("Update Button Clicked");
-    console.log("About to call handleSave");
-    handleSave();
+  onClick={async () => {
+  
+
+    try {
+      await handleSave();
+      console.log("handleSave completed");
+    } catch (e) {
+      console.error("HANDLE SAVE ERROR =>", e);
+      alert(e.message);
+    }
   }}
   disabled={modalLoading}
 >
@@ -267,9 +324,18 @@ console.log("Products Data =>", data);
 
     const mergedInventory = data.map((item) => {    
 
-    const product = products.find(
-        (p) => p.id === item.product_id
-    );
+ const product = products.find(
+    (p) => Number(p.id) === Number(item.product_id)
+);
+
+if (
+    product &&
+    product.name &&
+    product.name.toLowerCase().includes("boat")
+) {
+    console.log("ITEM =>", item);
+    console.log("MATCHED PRODUCT =>", product);
+}
    
 
 
@@ -318,6 +384,7 @@ const fetchProducts = async () => {
     response?.items ??
     response?.content ??
     response;
+    
     console.table(data);
            
 
@@ -326,6 +393,11 @@ const fetchProducts = async () => {
             data.find((p) => p.id === 13)
         );
 
+        // ADD THESE LINES
+        const boatProduct = data.find((p) =>
+            p.name?.toLowerCase().includes("boat")
+        );
+        
         setProducts(data);
 
     } catch (err) {
@@ -333,24 +405,52 @@ const fetchProducts = async () => {
     }
 
 };
-
-
 const fetchLowStock = async () => {
     try {
         setLowStockLoading(true);
         setLowStockError("");
-
-
         const response = await lowStock();
-
-        console.log("LOW STOCK RESPONSE =>", response);
-
         const data = Array.isArray(response)
             ? response
             : (response?.data || response?.content || response?.items || []);
 
+        const mergedLowStock = data.map((item) => {
+            const product = products.find(
+                (p) => Number(p.id) === Number(item.product_id)
+            );
 
-        setLowStockItems(data);
+            const store = stores.find(
+                (s) => Number(s.id) === Number(item.store_id)
+            );
+
+            return {
+                ...item,
+
+                // Product
+                product_name: product?.name || `Product #${item.product_id}`,
+
+                // SKU
+                sku: product?.sku || "",
+
+                // Category
+                category: product?.category || "",
+
+                // Supplier
+                supplier_name:
+                    product?.supplier_name ||
+                    product?.supplier ||
+                    "",
+
+                // Warehouse
+                store_name:
+                    store?.name ||
+                    `Store #${item.store_id}`,
+            };
+        });
+
+        console.log("MERGED LOW STOCK =>", mergedLowStock);
+
+        setLowStockItems(mergedLowStock);
 
     } catch (err) {
         console.error("LOW STOCK API ERROR:", err);
@@ -359,6 +459,12 @@ const fetchLowStock = async () => {
         setLowStockLoading(false);
     }
 };
+
+
+
+
+
+
 const handleSearch = () => {
     console.log("Searching...");
     fetchInventory();
@@ -391,8 +497,13 @@ useEffect(() => {
     
     fetchProducts();
     fetchStores();
-    fetchLowStock();
 }, []);
+
+useEffect(() => {
+    if (products.length > 0 && stores.length > 0) {
+        fetchLowStock();
+    }
+}, [products, stores]);
 
 useEffect(() => {
     console.log("===== PRODUCTS =====");
@@ -436,9 +547,21 @@ const filtered = inventory.filter((item) => {
 
     const sku = item.sku || "";
 
+
+    if (name.toLowerCase().includes("boat")) {
+        console.log("FILTER ITEM =>", item);
+        console.log("FILTER NAME =>", name);
+    }
+
     const matchSearch =
         name.toLowerCase().includes(search.toLowerCase()) ||
         sku.toLowerCase().includes(search.toLowerCase());
+        if (name.toLowerCase().includes("boat")) {
+    console.log("SEARCH VALUE =>", search);
+    console.log("FILTER NAME =>", name);
+    console.log("MATCH SEARCH =>", matchSearch);
+}
+
 
     // Warehouse
     const warehouse = `Store #${item.store_id || ""}`;
@@ -446,6 +569,13 @@ const filtered = inventory.filter((item) => {
     const matchWarehouse =
         filterWarehouse === "All Warehouses" ||
         warehouse === filterWarehouse;
+
+
+    if (name.toLowerCase().includes("boat")) {
+        console.log("FILTER ITEM =>", item);
+        console.log("FILTER NAME =>", name);
+        console.log("MATCH SEARCH =>", matchSearch);
+    }
 
     // Category
     const matchCat =
@@ -564,44 +694,56 @@ if (action === "transfer") {
         quantity: Number(delta),
         notes: reason,
     };
-} else {
-  payload = {
-    store_id: Number(fromStore),   // <-- fromStore aivaji toStore
-    product_id: Number(selectedProduct),
-    quantity: Number(delta),
-    notes: reason,
-};
+    } else {
+    payload = {
+        store_id: Number(fromStore),
+        product_id: Number(selectedProduct),
+        quantity: Number(delta),
+        notes: reason,
+    };
 }
 
-console.log("FINAL PAYLOAD =>", payload);
-    console.log("FINAL PAYLOAD BEFORE API =>", payload);
-try {
+
+    
+
+    console.log("AFTER API");
+
+    await fetchInventory();
+    await fetchLowStock();
+    try {
     console.log("BEFORE API");
 
- if (action === "add") {
-    console.log("CALLING STOCK IN API");
-    console.log("PAYLOAD =>", payload);
+    if (action === "add") {
+        console.log("CALLING STOCK IN API");
 
-    const response = await stockIn(payload);
+        const response = await stockIn(payload);
+        console.log("STOCK IN RESPONSE =>", response);
+    }
 
-    console.log("STOCK IN RESPONSE =>", response);
-}
-else if (action === "remove") {
-    console.log("CALLING STOCK OUT API");
-    console.log("PAYLOAD =>", payload);
+    else if (action === "remove") {
+        console.log("CALLING STOCK OUT API");
+        console.log("PAYLOAD =>", payload);
 
-    const response = await stockOut(payload);
+        const response = await stockOut(payload);
+        console.log("STOCK OUT RESPONSE =>", response);
+    }
 
-    console.log("STOCK OUT RESPONSE =>", response);
-}
+    else if (action === "purchase") {
+        alert("Purchase Order feature is under development");
+        return;
+    }
+
     else if (action === "transfer") {
         console.log("CALLING TRANSFER API");
-        await transferStock(payload);
+
+        const response = await transferStock(payload);
+        console.log("TRANSFER RESPONSE =>", response);
     }
 
     console.log("AFTER API");
 
     await fetchInventory();
+    await fetchLowStock();
 }
 catch (err) {
     console.error("FULL ERROR =>", err);
@@ -610,7 +752,9 @@ catch (err) {
 
     throw err;
 }
+
 };
+    
     const totalValue = inventory.reduce((sum, i) => sum + getItemStock(i) * (i.costPrice || i.unit_cost || 0), 0);
     const lowStockCount = inventory.filter(i => getItemStock(i) > 0 && getItemStock(i) < getItemMinStock(i)).length;
     const outOfStockCount = inventory.filter(i => getItemStock(i) === 0).length;
@@ -671,10 +815,13 @@ catch (err) {
                 ))}
             </div>
 
-            <div style={{ marginTop: "-20px" }}>
-                <InventoryCards />
-            </div>
-          <LowStockAlert
+    <div style={{ marginTop: "-20px" }}>
+    <InventoryCards />
+</div>
+
+
+
+<LowStockAlert
     loading={lowStockLoading}
     error={lowStockError}
     items={lowStockItems}
@@ -776,5 +923,4 @@ catch (err) {
         </div>
     );
    }
-
 export default Inventory;

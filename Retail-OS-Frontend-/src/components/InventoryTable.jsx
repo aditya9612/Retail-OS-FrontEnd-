@@ -8,6 +8,9 @@ const InventoryTable = ({
   fmt,
   setStockModal,
 }) => {
+    console.log("PAGINATED INSIDE TABLE =>", paginated);
+  console.log("PAGINATED LENGTH =>", paginated?.length);
+
   return (
     <div className="inventory-table-container">
       <table className="inventory-table">
@@ -26,19 +29,20 @@ const InventoryTable = ({
             <th>Actions</th>
           </tr>
         </thead>
+             
+             
+             <tbody>
+       {paginated.map((item, idx) => {
+                                                                              
+      console.log("TABLE ITEM =>", item);
+console.log("Product Name =>", item.name);
+      console.log("SKU =>", item.sku);
+                                                                              
 
-        <tbody>
-          {paginated.map((item, idx) => {
-          
-            console.log("TABLE ITEM =>", item);         
-              console.log("Product Name =>", item.name);
-            console.log("SKU =>", item.sku);
-          
-
-            const name = item.name || item.product_name || `Product #${item.product_id || item.id}`;
-            const sku = item.sku || `SKU-00${item.product_id || item.id}`;
-            const category = item.category || item.category_name || "General";
-            const location = item.location || item.warehouse || `Store #${item.store_id || 1}`;
+       const name = item.name || item.product_name || `Product #${item.product_id || item.id}`;
+       const sku = item.sku || `SKU-00${item.product_id || item.id}`;
+       const category = item.category || item.category_name || "General";
+       const location = item.location || item.warehouse || `Store #${item.store_id || 1}`;
             const qty = item.quantity !== undefined ? item.quantity : (item.stock !== undefined ? item.stock : 0);
             const minStock = item.low_stock_threshold !== undefined ? item.low_stock_threshold : (item.minStock !== undefined ? item.minStock : 0);
             const costPrice = item.costPrice !== undefined ? item.costPrice : (item.unit_cost !== undefined ? item.unit_cost : 0);
