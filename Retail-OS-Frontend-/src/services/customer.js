@@ -1,4 +1,4 @@
-import apiClient from './axiosInstance';
+import apiClient from './api';
 
 const CUSTOMER_API_URL = '/customers';
 
@@ -26,6 +26,19 @@ export const updateCustomer = async (customerId, customerData) => {
         return response.data;
     } catch (error) {
         console.error('Update customer error:', error);
+        throw error;
+    }
+};
+
+export const deleteCustomer = async (customerId) => {
+    try {
+        const response = await apiClient.delete(
+            `${CUSTOMER_API_URL}/${customerId}`
+        );
+
+        return response.data;
+    } catch (error) {
+        console.error('Delete customer error:', error);
         throw error;
     }
 };

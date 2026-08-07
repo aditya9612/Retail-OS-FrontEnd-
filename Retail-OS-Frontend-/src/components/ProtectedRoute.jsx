@@ -1,6 +1,6 @@
-import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
-import { isAuthenticated } from '../utils/tokenStorage';
+import React from "react";
+import { Navigate, Outlet } from "react-router-dom";
+import { isAuthenticated } from "../utils/tokenStorage";
 
 const ProtectedRoute = () => {
     if (!isAuthenticated()) {

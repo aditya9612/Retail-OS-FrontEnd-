@@ -73,19 +73,29 @@ export const stockIn = async (body) => {
 };
 
 // 7. Stock Out
+
+// 7. Stock Out
 export const stockOut = async (body) => {
   try {
-    
     const response = await fetch(`${API_BASE}/inventory/stock-out`, {
-      method: 'POST',
+      method: "POST",
       headers: getHeaders(),
       body: JSON.stringify(body),
     });
 
+    
 if (!response.ok) {
-  const error = await response.json();
+      const error = await response.json();
 
+      console.log("HTTP STATUS =>", response.status);
+      console.log("FULL STOCK OUT ERROR =>");
+      console.log(JSON.stringify(error, null, 2));
+
+      alert(JSON.stringify(error, null, 2));
   console.log(JSON.stringify(error, null, 2));
+
+      throw error;
+    }
 
   throw error;
 }
@@ -95,12 +105,16 @@ if (!response.ok) {
   
     const data = await response.json();
 
+    console.log("STOCK OUT SUCCESS =>", data);
+
     return data;
   } catch (error) {
     console.error("Inventory API Error:", error);
     throw error;
   }
 };
+
+
 
 // 8. Transfer Stock
 export const transferStock = async (body) => {

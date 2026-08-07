@@ -1,90 +1,30 @@
-import axios from 'axios';
-import {
-    setTokens,
-    getRefreshToken,
-    clearTokens,
-} from '../utils/tokenStorage';
+import apiClient from "./api";
+import { setTokens, clearTokens } from "../utils/tokenStorage";
 
-const LOGIN_API_URL =
-    'https://api-testing.myretailos.com/api/v1/auth/login';
-
-export const loginUser = async (credentials) => {
-    try {
-        console.log("=== LOGIN REQUEST ===");
-        console.log("URL:", LOGIN_API_URL);
-        console.log("Payload:", credentials);
-
-        const response = await axios.post(
-            LOGIN_API_URL,
-            credentials,
-            {
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            }
-        );
-
-        console.log("=== LOGIN SUCCESS ===");
-        console.log(response.data);
-
-        return response.data;
-    } catch (error) {
-        console.error("=== LOGIN ERROR ===");
-
-        if (error.response) {
-            console.error("Status:", error.response.status);
-            console.error("Response:", error.response.data);
-        } else {
-            console.error(error.message);
-        }
-
-        throw error;
-    }
-};
-
-export const refreshAccessToken = async () => {
-    const refreshToken = getRefreshToken();
-
-    const response = await axios.post(
-        'https://api-testing.myretailos.com/api/v1/auth/refresh',
-        {
-            refresh_token: refreshToken,
-        },
-        {
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        }
+export const auth = {
+  login: async (credentials) => {
+    const response = await apiClient.post(
+      "/auth/login",
+      credentials
     );
 
+    console.log("API Login Response:", response.data);
+
     setTokens({
-        access_token: response.data.access_token,
-        refresh_token: response.data.refresh_token,
-        token_type: response.data.token_type,
+      access_token: response.data.access_token,
+      refresh_token: response.data.refresh_token,
+      token_type: response.data.token_type,
     });
 
     return response.data;
-};
+  },
 
-export const registerUser = async (registerData) => {
-    const response = await axios.post(
-        'https://api-testing.myretailos.com/api/v1/auth/register',
-        null,
-        {
-            params: {
-                tenant_name: registerData.tenant_name,
-                slug: registerData.slug,
-                email: registerData.email,
-                admin_name: registerData.admin_name,
-                password: registerData.password,
-                phone: registerData.phone || undefined,
-            },
-        }
-    );
-
-    return response.data;
-};
-
-export const logoutUser = () => {
+  logout: () => {
     clearTokens();
+  },
+};
+
+// Keep compatibility with existing imports
+export const logoutUser = () => {
+  clearTokens();
 };

@@ -4,9 +4,9 @@ import {
     BsSearch, BsDownload, BsPeopleFill, BsPhone, BsGeoAlt,
     BsCalendar, BsCurrencyRupee, BsCartCheck, BsStarFill,
     BsChevronLeft, BsChevronRight, BsCheckCircleFill, BsXCircleFill,
-    BsEnvelope, BsFilter,BsPlus,BsEye, BsPencilSquare,
+    BsEnvelope, BsFilter,BsPlus,BsEye, BsPencilSquare,BsTrash,
 } from 'react-icons/bs';
-import { getCustomers, createCustomer, getCustomerById, updateCustomer } from '../../services/customer';
+import { getCustomers, createCustomer, getCustomerById, updateCustomer, deleteCustomer } from '../../services/customer';
 
 const CUSTOMERS = [
     { id: 'CUS-001', name: 'Aarav Mehta', email: 'aarav@email.com', phone: '+91 98765 11111', city: 'Bangalore', state: 'Karnataka', orders: 24, totalSpent: 68400, lastOrder: '26 Jun 2026', registered: '12 Jan 2026', status: 'Active', type: 'Regular', credit: 0 },
@@ -23,6 +23,62 @@ const CUSTOMERS = [
 
 const PAGE_SIZE = 8;
 const fmt = (n) => '₹' + n.toLocaleString('en-IN');
+
+const NAME_PATTERN = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
+const EMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+
+const getTodayDateString = () => new Date().toISOString().split('T')[0];
+
+const fieldErrorStyle = {
+    fontSize: 11,
+    color: '#ef4444',
+    marginTop: 4,
+};
+
+const validateCustomerName = (name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return 'Customer name is required';
+    if (trimmed.length < 2) return 'Name must be at least 2 characters';
+    if (!NAME_PATTERN.test(trimmed)) return 'Name can only contain letters and spaces';
+    return '';
+};
+
+const validateCustomerEmail = (email) => {
+    const trimmed = email.trim();
+    if (!trimmed) return 'Email is required';
+    if (/[\s,]/.test(trimmed)) return 'Email cannot contain spaces or commas';
+    if (!EMAIL_PATTERN.test(trimmed)) return 'Please enter a valid email address';
+    return '';
+};
+
+const validateCustomerBirthday = (birthday) => {
+    if (!birthday) return '';
+    if (birthday > getTodayDateString()) return 'Birthday cannot be in the future';
+    return '';
+};
+
+const validateCustomerForm = ({ name, email, birthday }) => {
+    const errors = {};
+    const nameError = validateCustomerName(name);
+    const emailError = validateCustomerEmail(email);
+    const birthdayError = validateCustomerBirthday(birthday);
+
+    if (nameError) errors.name = nameError;
+    if (emailError) errors.email = emailError;
+    if (birthdayError) errors.birthday = birthdayError;
+
+    return {
+        isValid: Object.keys(errors).length === 0,
+        errors,
+    };
+};
+
+const getApiErrorMessage = (error, fallback) =>
+    error.response?.data?.detail?.[0]?.msg ||
+    error.response?.data?.detail?.message ||
+    error.response?.data?.detail ||
+    error.response?.data?.message ||
+    fallback;
 
 const statusCfg = {
     Active: { color: '#10b981', bg: '#ecfdf5' },
@@ -109,7 +165,9 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
         stateCode: '',
         type: '',
         credit: '',
+        birthday: '',
     });
+    const [errors, setErrors] = useState({});
     
     const indianStates = State.getStatesOfCountry('IN');
     
@@ -151,6 +209,14 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
                 ...prev,
                 [name]: value,
             }));
+
+            if (errors[name]) {
+                setErrors(prev => {
+                    const next = { ...prev };
+                    delete next[name];
+                    return next;
+                });
+            }
         };
 
 
@@ -169,12 +235,19 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
             alert('Please fill all required fields');
             return;
         }
-        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-        if (!emailPattern.test(form.email.trim())) {
-            alert('Please enter a valid email address');
+        const validation = validateCustomerForm({
+            name: form.name,
+            email: form.email,
+            birthday: form.birthday,
+        });
+
+        if (!validation.isValid) {
+            setErrors(validation.errors);
             return;
         }
+
+        setErrors({});
     
 
         const customerData = {
@@ -182,7 +255,7 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
             email: form.email.trim().toLowerCase(),
             phone: form.phone.trim(),
             address: `${form.city.trim()}, ${form.state.trim()}`,
-            birthday: null,
+            birthday: form.birthday || null,
             whatsapp_opt_in: false,
             sms_opt_in: false,
             status: 'active',
@@ -201,7 +274,7 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
             onClose();
         } catch (err) {
             console.error('Create customer failed:', err);
-            alert('Unable to create customer. Backend server may not be available.');
+            alert(getApiErrorMessage(err, 'Unable to create customer. Backend server may not be available.'));
         }
     };
     
@@ -273,6 +346,9 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
                                 value={form.name}
                                 onChange={handleChange}
                             />
+                            {errors.name && (
+                                <p style={fieldErrorStyle}>{errors.name}</p>
+                            )}
                         </div>
 
                         <div>
@@ -288,8 +364,9 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
                                 autoComplete="email"
                                 required
                             />
-
-                            
+                            {errors.email && (
+                                <p style={fieldErrorStyle}>{errors.email}</p>
+                            )}
                         </div>
 
                        
@@ -414,6 +491,24 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
                                 onChange={handleChange}
                             />
                         </div>
+
+                        <div style={{ gridColumn: '1 / -1' }}>
+                            <label style={labelStyle}>
+                                Birthday
+                            </label>
+
+                            <input
+                                className="ec-input"
+                                type="date"
+                                name="birthday"
+                                value={form.birthday}
+                                onChange={handleChange}
+                                max={getTodayDateString()}
+                            />
+                            {errors.birthday && (
+                                <p style={fieldErrorStyle}>{errors.birthday}</p>
+                            )}
+                        </div>
                     </div>
 
                     <div
@@ -451,6 +546,8 @@ const EditCustomerModal = ({
     updating,
     onClose,
     onSave,
+    errors = {},
+    onClearError,
 }) => {
     const indianStates = State.getStatesOfCountry('IN');
 
@@ -501,6 +598,10 @@ const EditCustomerModal = ({
             ...prev,
             [name]: type === 'checkbox' ? checked : value,
         }));
+
+        if (onClearError && errors[name]) {
+            onClearError(name);
+        }
     };
 
     return (
@@ -565,6 +666,9 @@ const EditCustomerModal = ({
                                 onChange={handleChange}
                                 required
                             />
+                            {errors.name && (
+                                <p style={fieldErrorStyle}>{errors.name}</p>
+                            )}
                         </div>
 
                         {/* Email */}
@@ -582,6 +686,9 @@ const EditCustomerModal = ({
                                 onChange={handleChange}
                                 required
                             />
+                            {errors.email && (
+                                <p style={fieldErrorStyle}>{errors.email}</p>
+                            )}
                         </div>
 
                         {/* Phone */}
@@ -694,7 +801,11 @@ const EditCustomerModal = ({
                                 name="birthday"
                                 value={customer?.birthday || ''}
                                 onChange={handleChange}
+                                max={getTodayDateString()}
                             />
+                            {errors.birthday && (
+                                <p style={fieldErrorStyle}>{errors.birthday}</p>
+                            )}
                         </div>
 
                         {/* Opt-in options */}
@@ -802,6 +913,7 @@ const Customers = () => {
     const [showAddModal, setShowAddModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState(null);
+    const [editErrors, setEditErrors] = useState({});
     const [updating, setUpdating] = useState(false);
     
     const loadCustomers = async (showLoader = true) => {
@@ -979,6 +1091,7 @@ const Customers = () => {
                 customerData.sms_opt_in || false,
         });
 
+        setEditErrors({});
         setShowEditModal(true);
     } catch (error) {
         console.error(
@@ -994,6 +1107,19 @@ const Customers = () => {
         e.preventDefault();
     
         if (!editingCustomer) return;
+
+        const validation = validateCustomerForm({
+            name: editingCustomer.name,
+            email: editingCustomer.email,
+            birthday: editingCustomer.birthday,
+        });
+
+        if (!validation.isValid) {
+            setEditErrors(validation.errors);
+            return;
+        }
+
+        setEditErrors({});
     
         try {
             setUpdating(true);
@@ -1029,14 +1155,40 @@ const Customers = () => {
         } catch (error) {
             console.error('Failed to update customer:', error);
     
-            const message =
-                error.response?.data?.detail?.[0]?.msg ||
-                error.response?.data?.detail?.message ||
-                'Unable to update customer.';
-    
-            alert(message);
+            alert(getApiErrorMessage(error, 'Unable to update customer.'));
         } finally {
             setUpdating(false);
+        }
+    };
+
+    const clearEditError = (field) => {
+        setEditErrors(prev => {
+            if (!prev[field]) return prev;
+            const next = { ...prev };
+            delete next[field];
+            return next;
+        });
+    };
+
+    const handleDeleteCustomer = async (customerId) => {
+        try {
+            await deleteCustomer(customerId);
+    
+            await loadCustomers(false);
+        } catch (error) {
+            console.error('Failed to delete customer:', error);
+    
+            const message =
+                error.response?.data?.detail?.message ||
+                error.response?.data?.detail ||
+                error.response?.data?.message ||
+                'Unable to delete customer.';
+    
+            console.error(
+                typeof message === 'string'
+                    ? message
+                    : 'Unable to delete customer.'
+            );
         }
     };
 
@@ -1059,7 +1211,7 @@ const Customers = () => {
             value: customers.length,
             color: '#6366f1',
             bg: '#eef2ff',
-            icon: '👥',
+            icon: <BsPeopleFill size={22} style={{ color: '#5B5FEF', flexShrink: 0 }} />,
         },
         {
             label: 'Active',
@@ -1068,6 +1220,17 @@ const Customers = () => {
             bg: '#ecfdf5',
             icon: '✅',
         },
+
+        {
+            label: 'Inactive',
+            value: customers.filter(
+                c => c.status === 'Inactive'
+            ).length,
+            color: '#f59e0b',
+            bg: '#fffbeb',
+            icon: '👤',
+        },
+
         {
             label: 'VIP',
             value: customers.filter(c => c.type === 'VIP').length,
@@ -1092,9 +1255,41 @@ const Customers = () => {
         <div className="dash-page">
             <div className="adm-page-header">
                 <div>
-                    <h1 className="adm-page-title">👥 Customer Directory</h1>
-                    <p className="adm-page-sub">Manage customer accounts, credit limits and purchase history</p>
+                    <div 
+                        style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                    }}
+                >
+                    <BsPeopleFill 
+                        size={22} 
+                        style={{ 
+                            color: '#5B5FEF', 
+                            flexShrink: 0 
+                        }} 
+                    />
+                    <h1 
+                        className="adm-page-title" 
+                        style={{ 
+                            margin: 0 
+                        }}
+                    >
+                        Customer Directory
+                    </h1>
                 </div>
+                <p 
+                    className="adm-page-sub" 
+                    style={{ 
+                        marginTop: 4, 
+                        marginLeft: 30 
+                    }}
+                >
+                    Manage customer accounts, credit limits and purchase history
+                </p>
+                </div>
+            
+                
                 <div className="adm-header-actions">
                     <button className="adm-btn-secondary">
                         <BsDownload size={14} />
@@ -1113,9 +1308,9 @@ const Customers = () => {
             </div>
 
             {/* KPIs */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns:'repeat(5, minmax(0, 1fr))', gap: 12 }}>
                 {kpis.map((k, i) => (
-                    <div key={i} className="adm-kpi-card" style={{ padding: '14px 18px' }}>
+                    <div key={i} className="adm-kpi-card" style={{ padding: '14px 16px', minWidth: 0, }}>
                         <span style={{ fontSize: 22 }}>{k.icon}</span>
                         <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 8 }}>{k.label}</p>
                         <p style={{ fontSize: 20, fontWeight: 800, color: k.color, marginTop: 4 }}>{k.value}</p>
@@ -1123,26 +1318,133 @@ const Customers = () => {
                 ))}
             </div>
 
+
             {/* Filters */}
-            <div style={{ background: '#fff', border: '1px solid #e8eaf0', borderRadius: 12, padding: '14px 16px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-                    <BsSearch size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-                    <input className="ec-input" style={{ paddingLeft: 32 }} placeholder="Search by name, email, phone or city..."
-                        value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+            <div
+                style={{
+                    background: '#fff',
+                    border: '1px solid #e8eaf0',
+                    borderRadius: 12,
+                    padding: '12px 14px',
+                    display: 'grid',
+                    gridTemplateColumns:
+                        'minmax(320px, 1.6fr) minmax(160px, 0.7fr) minmax(160px, 0.7fr)',
+                    gap: 12,
+                    alignItems: 'end',
+                }}
+            >
+                <div
+                    style={{
+                        position: 'relative',
+                        minWidth: 0,
+                    }}
+                >
+                    <BsSearch
+                        size={13}
+                        style={{
+                            position: 'absolute',
+                            left: 11,
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            color: '#9ca3af',
+                        }}
+                    />
+
+                    <input
+                        className="ec-input"
+                        style={{
+                            paddingLeft: 32,
+                            height: 42,
+                        }}
+                        placeholder="Search by name, email, phone or city..."
+                        value={search}
+                        onChange={e => {
+                            setSearch(e.target.value);
+                            setPage(1);
+                        }}
+                    />
                 </div>
-                <select className="ec-input" style={{ minWidth: 140 }} value={filterStatus}
-                    onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
-                    {['All', 'Active', 'Inactive', 'Blocked'].map(s => <option key={s}>{s}</option>)}
-                </select>
-                <select className="ec-input" style={{ minWidth: 140 }} value={filterType}
-                    onChange={e => { setFilterType(e.target.value); setPage(1); }}>
-                    {['All', 'Regular', 'VIP'].map(t => <option key={t}>{t}</option>)}
-                </select>
+
+                <div>
+                    <label
+                        style={{
+                            display: 'block',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: '#9ca3af',
+                            marginBottom: 4,
+                        }}
+                    >
+                        Status
+                    </label>
+
+                    <select
+                        className="ec-input"
+                        style={{
+                            width: '100%',
+                            height: 42,
+                        }}
+                        value={filterStatus}
+                        onChange={e => {
+                            setFilterStatus(e.target.value);
+                            setPage(1);
+                        }}
+                    >
+                        {[
+                            'All',
+                            'Active',
+                            'Inactive',
+                            'Blocked',
+                        ].map(status => (
+                            <option key={status}>
+                                {status}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                <div>
+                    <label
+                        style={{
+                            display: 'block',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            color: '#9ca3af',
+                            marginBottom: 4,
+                        }}
+                    >
+                        Customer Type
+                    </label>
+
+                    <select
+                        className="ec-input"
+                        style={{
+                            width: '100%',
+                            height: 42,
+                        }}
+                        value={filterType}
+                        onChange={e => {
+                            setFilterType(e.target.value);
+                            setPage(1);
+                        }}
+                    >
+                        {[
+                            'All',
+                            'New',
+                            'Regular',
+                            'VIP',
+                        ].map(type => (
+                            <option key={type}>
+                                {type}
+                            </option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
             {/* Table */}
-            <div className="chart-card" style={{ padding: 0, overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="chart-card-content custom-scrollbar" style={{ padding: 0, overflowX: 'auto', overflowY: 'hidden' }}>
+                <table style={{ minWidth: '1300px', borderCollapse: 'collapse' }}>
                     <thead>
                         <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e8eaf0' }}>
                             {['Customer', 'Contact', 'City', 'Type', 'Orders', 'Total Spent', 'Last Purchase', 'Status', 'Action'].map(h => (
@@ -1267,10 +1569,36 @@ const Customers = () => {
                                                 <BsPencilSquare size={14} />
                                                 Edit
                                             </button>
+
+                                            <button
+                                                onClick={() => handleDeleteCustomer(c.backendId)}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: '5px',
+                                                    padding: '7px 12px',
+                                                    fontSize: '12px',
+                                                    fontWeight: '600',
+                                                    color: '#DC2626',
+                                                    background: '#FEF2F2',
+                                                    border: '1px solid #FECACA',
+                                                    borderRadius: '8px',
+                                                    cursor: 'pointer',
+                                                }}
+                                            >
+                                                <BsTrash size={14} />
+                                                Delete
+                                            </button>
+
                                         </div>
                                     </td>
                                 </tr>
                             );
+                            
+
+
+
+                            
                         })}
                         {!loading && !error && paginated.length === 0 && (
                             <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 14 }}>No customers found</td></tr>
@@ -1307,9 +1635,12 @@ const Customers = () => {
                 setCustomer={setEditingCustomer}
                 updating={updating}
                 onSave={handleUpdateCustomer}
+                errors={editErrors}
+                onClearError={clearEditError}
                 onClose={() => {
                 setShowEditModal(false);
                 setEditingCustomer(null);
+                setEditErrors({});
                     }}
                 />
             )}

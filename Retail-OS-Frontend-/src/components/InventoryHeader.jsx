@@ -80,9 +80,6 @@ const InventoryHeader = ({
   + Purchase Order
 </button>
 </div>
-
-
-
       <div className="inventory-tabs">
 
         <button
