@@ -72,8 +72,8 @@ export const stockIn = async (body) => {
   }
 };
 
-// 7. Stock Out
 
+// 7. Stock Out
 // 7. Stock Out
 export const stockOut = async (body) => {
   try {
@@ -83,8 +83,7 @@ export const stockOut = async (body) => {
       body: JSON.stringify(body),
     });
 
-    
-if (!response.ok) {
+    if (!response.ok) {
       const error = await response.json();
 
       console.log("HTTP STATUS =>", response.status);
@@ -92,17 +91,10 @@ if (!response.ok) {
       console.log(JSON.stringify(error, null, 2));
 
       alert(JSON.stringify(error, null, 2));
-  console.log(JSON.stringify(error, null, 2));
 
       throw error;
     }
 
-  throw error;
-}
-
-
-
-  
     const data = await response.json();
 
     console.log("STOCK OUT SUCCESS =>", data);
@@ -113,6 +105,9 @@ if (!response.ok) {
     throw error;
   }
 };
+
+   
+
 
 
 
