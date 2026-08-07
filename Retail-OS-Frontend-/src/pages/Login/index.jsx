@@ -94,8 +94,7 @@ const Login = () => {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-
-        setForm((prev) => ({
+        setForm(prev => ({
             ...prev,
             [name]: value,
         }));
@@ -121,25 +120,14 @@ const Login = () => {
             const user = await getCurrentUser();
             console.log("Current user response:", user);
 
-
-            // const user = await getCurrentUser();
-
-            // console.log("Current user:", user);
-
-
-            localStorage.setItem(
-                "user",
-                JSON.stringify(user)
-            );
-
-
+            localStorage.setItem("user", JSON.stringify(user));
+            
             navigate("/dashboard");
         } catch (error) {
             console.log("Login failed:", error);
 
-            setError(
+            alert(
                 error.response?.data?.detail?.message ||
-                error.response?.data?.detail ||
                 "Invalid login"
             );
         }
