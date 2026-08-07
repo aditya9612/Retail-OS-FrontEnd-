@@ -2,9 +2,7 @@ import apiClient from "./api";
 import { setTokens, clearTokens, getRefreshToken } from "../utils/tokenStorage";
 
 export const auth = {
-
     login: async (credentials) => {
-
         const response = await apiClient.post(
             "/auth/login",
             credentials
@@ -43,9 +41,7 @@ export const auth = {
     logout: () => {
         clearTokens();
     },
-
 };
-
 
 // Keep compatibility with existing imports
 export const logoutUser = () => {
