@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BsEnvelope, BsLock, BsEye, BsEyeSlash, BsArrowRight,} from "react-icons/bs";
+import { BsEnvelope, BsLock, BsEye, BsEyeSlash, BsArrowRight, } from "react-icons/bs";
 import { auth } from "../../services/auth";
 import { getCurrentUser } from "../../services/user";
 
@@ -116,12 +116,12 @@ const Login = () => {
         try {
             const data = await auth.login(form);
             console.log("Login response:", data);
-            
+
             const user = await getCurrentUser();
             console.log("Current user response:", user);
 
             localStorage.setItem("user", JSON.stringify(user));
-            
+
             navigate("/dashboard");
         } catch (error) {
             console.log("Login failed:", error);
@@ -664,10 +664,10 @@ const Login = () => {
                             </button>
                             <button type="button" className="social-btn">
                                 <svg width="18" height="18" viewBox="0 0 23 23">
-                                    <path fill="#f35325" d="M1 1h10v10H1z"/>
-                                    <path fill="#81bc06" d="M12 1h10v10H12z"/>
-                                    <path fill="#05a6f0" d="M1 12h10v10H1z"/>
-                                    <path fill="#ffba08" d="M12 12h10v10H12z"/>
+                                    <path fill="#f35325" d="M1 1h10v10H1z" />
+                                    <path fill="#81bc06" d="M12 1h10v10H12z" />
+                                    <path fill="#05a6f0" d="M1 12h10v10H1z" />
+                                    <path fill="#ffba08" d="M12 12h10v10H12z" />
                                 </svg>
                                 Microsoft
                             </button>
