@@ -1,86 +1,26 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BsEnvelope, BsLock, BsEye, BsEyeSlash, BsArrowRight, } from "react-icons/bs";
+import {
+    BsEnvelope,
+    BsLock,
+    BsEye,
+    BsEyeSlash,
+    BsArrowRight,
+    BsShieldCheck,
+    BsLightningCharge,
+    BsCloudCheck,
+    BsPhone,
+    BsHeadset,
+    BsGraphUpArrow,
+    BsBoxSeam,
+    BsPeople,
+    BsReceipt,
+    BsPercent,
+    BsShop,
+    BsPieChart,
+} from "react-icons/bs";
 import { auth } from "../../services/auth";
 import { getCurrentUser } from "../../services/user";
-
-// RetailOS Official Brand Logo Component matching exact brand guidelines
-const RetailOSBrandLogo = ({ size = 44, showText = true, layout = "row" }) => {
-    return (
-        <div style={{
-            display: "inline-flex",
-            flexDirection: layout === "column" ? "column" : "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: layout === "column" ? 14 : 12
-        }}>
-            <svg width={size} height={size * 0.88} viewBox="0 0 220 195" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <linearGradient id="logoOrangeHalf" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#FF3D00" />
-                        <stop offset="100%" stopColor="#FF8500" />
-                    </linearGradient>
-                    <linearGradient id="logoBlueHalf" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#0837B8" />
-                        <stop offset="55%" stopColor="#1E65F3" />
-                        <stop offset="100%" stopColor="#00A3FF" />
-                    </linearGradient>
-                    <linearGradient id="logoHandle" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#FF5500" />
-                        <stop offset="100%" stopColor="#FF8800" />
-                    </linearGradient>
-                </defs>
-
-                {/* Bag Handle */}
-                <path
-                    d="M86 58 C86 26, 134 26, 134 58"
-                    stroke="url(#logoHandle)"
-                    strokeWidth="15"
-                    strokeLinecap="round"
-                    fill="none"
-                />
-
-                {/* Top Orange Bag Section */}
-                <path
-                    d="M 68 55 H 152 C 158 55 162 60 160 66 L 151 77 L 55 117 L 57 66 C 58 60 62 55 68 55 Z"
-                    fill="url(#logoOrangeHalf)"
-                />
-
-                {/* Bottom Blue Bag Section */}
-                <path
-                    d="M 53 124 L 149 84 L 158 136 C 160 148 151 160 138 160 H 82 C 69 160 58 148 56 136 L 53 124 Z"
-                    fill="url(#logoBlueHalf)"
-                />
-
-                {/* Pixel Dispersion Burst (Right Side) */}
-                {/* Orange pixels */}
-                <rect x="185" y="48" width="14" height="14" rx="2.5" fill="#FF9100" />
-                <rect x="163" y="58" width="14" height="14" rx="2.5" fill="#FF6600" />
-                <rect x="188" y="72" width="14" height="14" rx="2.5" fill="#FF7700" />
-                <rect x="166" y="82" width="14" height="14" rx="2.5" fill="#FF5500" />
-
-                {/* Blue / Cyan pixels */}
-                <rect x="190" y="96" width="14" height="14" rx="2.5" fill="#00C3FF" />
-                <rect x="168" y="106" width="14" height="14" rx="2.5" fill="#0094FF" />
-                <rect x="172" y="128" width="15" height="15" rx="2.5" fill="#1E65F3" />
-                <rect x="150" y="136" width="14" height="14" rx="2.5" fill="#0088FF" />
-            </svg>
-
-            {showText && (
-                <span style={{
-                    fontSize: layout === "column" ? size * 0.52 : size * 0.58,
-                    fontWeight: 800,
-                    letterSpacing: "-0.03em",
-                    fontFamily: "system-ui, -apple-system, sans-serif",
-                    lineHeight: 1
-                }}>
-                    <span style={{ color: "#061338" }}>Retail</span>
-                    <span style={{ color: "#FF5500" }}>OS</span>
-                </span>
-            )}
-        </div>
-    );
-};
 
 const Login = () => {
     const navigate = useNavigate();
@@ -133,148 +73,477 @@ const Login = () => {
         }
     };
 
+    const handleGoogleLogin = () => {
+        window.open("https://accounts.google.com/", "_blank");
+    };
+
+    const handleMicrosoftLogin = () => {
+        window.open("https://login.live.com/", "_blank");
+    };
+
     return (
         <div className="login-page-container">
             <style>{`
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(12px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes pulseSlow {
-                    0%, 100% { opacity: 0.6; }
-                    50% { opacity: 0.9; }
-                }
-                .login-page-container {
-                    min-height: 100vh;
-                    background: linear-gradient(135deg, #F3F7FE 0%, #EAEFFC 50%, #F5F8FF 100%);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 32px 24px;
-                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                    position: relative;
-                    overflow: hidden;
+                * {
                     box-sizing: border-box;
                 }
-                .bg-glow-1 {
+
+                html, body {
+                    margin: 0;
+                    padding: 0;
+                    height: 100%;
+                    overflow-x: hidden;
+                }
+
+                /* Viewport-adaptive container ensuring NO vertical scrollbar at 90% and 100% zoom */
+                .login-page-container {
+                    height: 100vh;
+                    max-height: 100vh;
+                    width: 100%;
+                    background: linear-gradient(135deg, #F0F4FE 0%, #E6EEFA 55%, #F4F7FF 100%);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: clamp(10px, 1.8vh, 26px) clamp(16px, 2vw, 40px);
+                    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                    position: relative;
+                    overflow-y: auto;
+                    overflow-x: hidden;
+                }
+
+                /* Light & Professional Background Shapes without expensive blur filters */
+                .bg-circle-left {
                     position: absolute;
-                    top: -120px;
-                    left: -120px;
-                    width: 500px;
-                    height: 500px;
-                    background: radial-gradient(circle, rgba(37, 99, 235, 0.1) 0%, rgba(255, 255, 255, 0) 70%);
+                    top: -140px;
+                    left: -140px;
+                    width: 650px;
+                    height: 650px;
+                    background: radial-gradient(circle, rgba(37, 99, 235, 0.08) 0%, rgba(255, 255, 255, 0) 70%);
                     border-radius: 50%;
                     pointer-events: none;
                 }
-                .bg-glow-2 {
+
+                .bg-circle-right {
                     position: absolute;
-                    bottom: -150px;
-                    right: -100px;
-                    width: 550px;
-                    height: 550px;
-                    background: radial-gradient(circle, rgba(255, 87, 34, 0.08) 0%, rgba(255, 255, 255, 0) 70%);
+                    bottom: -140px;
+                    right: -140px;
+                    width: 650px;
+                    height: 650px;
+                    background: radial-gradient(circle, rgba(255, 87, 34, 0.06) 0%, rgba(255, 255, 255, 0) 70%);
                     border-radius: 50%;
                     pointer-events: none;
                 }
-                .split-layout {
+
+                /* Bottom-right soft decorative wave shape matching ORIGINAL REFERENCE */
+                .bg-bottom-right-wave {
+                    position: absolute;
+                    bottom: -30px;
+                    right: -30px;
+                    width: 420px;
+                    height: 300px;
+                    background: radial-gradient(ellipse at bottom right, rgba(147, 197, 253, 0.3) 0%, rgba(199, 210, 254, 0.18) 45%, rgba(255, 255, 255, 0) 75%);
+                    border-radius: 60% 0 0 0;
+                    pointer-events: none;
+                    z-index: 0;
+                }
+
+                /* Subtle Faded Dots Pattern */
+                .bg-dots-pattern {
+                    position: absolute;
+                    top: 20px;
+                    right: 42%;
+                    width: 240px;
+                    height: 160px;
+                    background-image: radial-gradient(#94A3B8 1.2px, transparent 1.2px);
+                    background-size: 16px 16px;
+                    opacity: 0.3;
+                    pointer-events: none;
+                }
+
+                .split-screen-layout {
                     display: flex;
                     width: 100%;
-                    max-width: 1280px;
+                    max-width: 1640px;
+                    height: 100%;
+                    max-height: 95vh;
                     align-items: center;
-                    gap: 56px;
+                    justify-content: space-between;
+                    gap: clamp(16px, 2.5vw, 36px);
                     z-index: 1;
                 }
-                .left-section {
-                    flex: 1.25;
+
+                /* LEFT SECTION (~64% Width for Larger Store Illustration & 7 Cards) */
+                .left-section-wrapper {
+                    flex: 0 0 64%;
+                    width: 64%;
+                    height: 100%;
                     display: flex;
                     flex-direction: column;
-                    gap: 28px;
-                    min-width: 0;
+                    justify-content: space-between;
+                    gap: clamp(6px, 1.2vh, 12px);
                 }
-                .right-section {
-                    flex: 0.95;
-                    display: flex;
-                    justify-content: center;
-                    min-width: 0;
+
+                /* Transparent RetailOS Brand Logo - NO white box background */
+                .brand-header-box {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 10px;
+                    background: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    padding: 0 !important;
+                    margin: 0 !important;
                 }
-                .dot-grid {
-                    display: grid;
-                    grid-template-columns: repeat(12, 4px);
-                    gap: 6px;
-                    margin-bottom: -12px;
-                    opacity: 0.35;
+                .brand-header-logo-img {
+                    height: clamp(32px, 3.8vh, 42px);
+                    width: auto;
+                    object-fit: contain;
+                    background: transparent !important;
                 }
-                .dot-grid div {
-                    width: 4px;
-                    height: 4px;
-                    background-color: #64748B;
-                    border-radius: 50%;
+                .brand-header-text {
+                    font-size: clamp(22px, 2.8vh, 28px);
+                    font-weight: 800;
+                    letter-spacing: -0.03em;
+                    line-height: 1;
                 }
-                .dashboard-card-mock {
-                    background: #FFFFFF;
-                    border-radius: 20px;
-                    border: 1px solid #E2E8F0;
-                    box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.07);
-                    padding: 20px;
-                    overflow: hidden;
+                .brand-dark { color: #0F172A; }
+                .brand-orange { color: #FF5500; }
+
+                /* Main Title & Subtitle */
+                .left-main-heading {
+                    font-size: clamp(28px, 3.6vh, 42px);
+                    font-weight: 800;
+                    color: #0F172A;
+                    line-height: 1.15;
+                    margin: 0;
+                    letter-spacing: -0.03em;
                 }
-                .feature-card {
+                .highlight-blue { color: #2563EB; }
+                .highlight-orange { color: #FF5500; }
+                .highlight-darkblue { color: #0F172A; }
+
+                .left-subtitle-text {
+                    font-size: clamp(12.5px, 1.5vh, 15px);
+                    color: #475569;
+                    margin: 2px 0 0 0;
+                    font-weight: 450;
+                    line-height: 1.4;
+                }
+
+                /* 3D Store Illustration Stage - Prominent & Large Store Graphic */
+                .hero-stage-container {
+                    position: relative;
+                    width: 100%;
                     flex: 1;
+                    min-height: clamp(260px, 42vh, 410px);
+                    max-height: clamp(290px, 46vh, 430px);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 2px 0;
+                }
+
+                .stage-bg-glow {
+                    position: absolute;
+                    width: 420px;
+                    height: 420px;
+                    background: radial-gradient(circle, rgba(37, 99, 235, 0.08) 0%, rgba(255, 255, 255, 0) 70%);
+                    border-radius: 50%;
+                    pointer-events: none;
+                }
+
+                /* Soft & Crisp SVG Overlay for Blue Dashed Connector Lines with Arrowheads */
+                .connectors-svg-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    pointer-events: none;
+                    z-index: 1;
+                }
+
+                /* Larger, Crisp & Prominent 3D Store Illustration */
+                .hero-store-img {
+                    max-width: 94%;
+                    max-height: clamp(250px, 42vh, 420px);
+                    object-fit: contain;
+                    filter: drop-shadow(0 16px 32px rgba(15, 23, 42, 0.09));
+                    z-index: 2;
+                    position: relative;
+                }
+
+                /* Compact Horizontal Rounded-Rectangle Feature Cards (slightly wider than tall) */
+                .floating-feature-card {
+                    position: absolute;
                     background: #FFFFFF;
-                    border-radius: 16px;
-                    padding: 16px 10px;
                     border: 1px solid #E2E8F0;
-                    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.02);
+                    border-radius: 12px;
+                    padding: clamp(6px, 0.9vh, 9px) clamp(10px, 1.1vw, 14px);
+                    box-shadow: 0 6px 18px -2px rgba(15, 23, 42, 0.06);
+                    display: flex;
+                    align-items: center;
+                    gap: 9px;
+                    z-index: 3;
+                    min-width: 155px;
+                    max-width: 200px;
+                    transition: transform 0.2s ease, box-shadow 0.2s ease;
+                }
+                .floating-feature-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 10px 24px -4px rgba(15, 23, 42, 0.1);
+                    border-color: #CBD5E1;
+                }
+
+                .floating-icon-wrapper {
+                    width: clamp(28px, 3.4vh, 34px);
+                    height: clamp(28px, 3.4vh, 34px);
+                    border-radius: 9px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: clamp(14px, 1.7vh, 16px);
+                    flex-shrink: 0;
+                }
+
+                .floating-card-title {
+                    font-size: clamp(11px, 1.3vh, 12.5px);
+                    font-weight: 700;
+                    color: #0F172A;
+                    line-height: 1.2;
+                    white-space: nowrap;
+                }
+                .floating-card-desc {
+                    font-size: clamp(9.5px, 1.1vh, 10.5px);
+                    color: #64748B;
+                    line-height: 1.2;
+                    margin-top: 1px;
+                    white-space: nowrap;
+                }
+
+                /* Exact Compact Rounded-Rectangle Positions around Store Graphic matching ORIGINAL REFERENCE */
+                .pos-gst { top: 32%; left: -2%; }
+                .pos-inventory { top: 0%; left: 16%; }
+                .pos-customers { top: -4%; right: 28%; }
+                .pos-billing { top: 2%; right: -1%; }
+                .pos-multistore { top: 36%; right: -3%; }
+                .pos-analytics { bottom: 4%; left: 1%; }
+                .pos-secure { bottom: 1%; right: 8%; }
+
+                /* Bottom Feature Bar (6 Columns in Single Wide Container) */
+                .bottom-feature-bar-container {
+                    background: #FFFFFF;
+                    border: 1px solid #E2E8F0;
+                    border-radius: 16px;
+                    padding: clamp(8px, 1.2vh, 12px) clamp(10px, 1.2vw, 16px);
+                    box-shadow: 0 5px 16px -3px rgba(15, 23, 42, 0.04);
+                }
+
+                .bottom-feature-row {
+                    display: grid;
+                    grid-template-columns: repeat(6, 1fr);
+                    gap: clamp(6px, 0.8vw, 12px);
+                }
+
+                .feature-item-pill {
                     display: flex;
                     flex-direction: column;
                     align-items: center;
                     text-align: center;
-                    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                    padding: 2px;
                 }
-                .feature-card:hover {
-                    transform: translateY(-4px);
-                    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.07);
-                    border-color: #CBD5E1;
+
+                .feature-pill-icon {
+                    width: clamp(24px, 3vh, 30px);
+                    height: clamp(24px, 3vh, 30px);
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: clamp(12px, 1.4vh, 15px);
+                    margin-bottom: 4px;
                 }
+
+                .feature-pill-title {
+                    font-size: clamp(10px, 1.2vh, 11.5px);
+                    font-weight: 700;
+                    color: #0F172A;
+                    line-height: 1.2;
+                }
+
+                .feature-pill-desc {
+                    font-size: clamp(8.5px, 1vh, 9.5px);
+                    color: #64748B;
+                    margin-top: 1px;
+                    line-height: 1.2;
+                }
+
+                .left-footer-copyright {
+                    text-align: center;
+                    font-size: clamp(10px, 1.2vh, 11.5px);
+                    color: #94A3B8;
+                    font-weight: 500;
+                    margin-top: 1px;
+                }
+
+                /* RIGHT SECTION (~34% Width for a Sleek Vertically Slender Card) */
+                .right-login-section {
+                    flex: 0 0 34%;
+                    width: 34%;
+                    height: 100%;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                }
+
                 .login-card {
                     width: 100%;
-                    max-width: 460px;
+                    max-width: 395px;
                     background: #FFFFFF;
-                    border-radius: 24px;
-                    padding: 40px 36px;
-                    box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.1), 0 0 1px rgba(15, 23, 42, 0.15);
-                    border: 1px solid rgba(255, 255, 255, 0.8);
-                    animation: fadeIn 0.4s ease-out;
-                    box-sizing: border-box;
+                    border-radius: 28px;
+                    padding: clamp(22px, 3.2vh, 36px) clamp(20px, 2vw, 32px);
+                    box-shadow: 0 18px 45px -8px rgba(15, 23, 42, 0.08), 0 0 1px rgba(15, 23, 42, 0.12);
+                    border: 1px solid rgba(255, 255, 255, 0.95);
                 }
-                .input-container {
+
+                .card-logo-box {
+                    display: flex;
+                    justify-content: center;
+                    margin-bottom: clamp(8px, 1.4vh, 14px);
+                }
+
+                .card-logo-img {
+                    height: clamp(36px, 4.5vh, 48px);
+                    width: auto;
+                    object-fit: contain;
+                    background: transparent !important;
+                }
+
+                .login-card-header {
+                    text-align: center;
+                    margin-bottom: clamp(10px, 1.8vh, 18px);
+                }
+
+                .welcome-headline {
+                    font-size: clamp(19px, 2.4vh, 23px);
+                    font-weight: 800;
+                    color: #0F172A;
+                    margin: 0 0 3px 0;
+                    letter-spacing: -0.02em;
+                }
+
+                .welcome-subtext {
+                    color: #64748B;
+                    font-size: clamp(12px, 1.4vh, 13px);
+                    margin: 0;
+                    font-weight: 500;
+                }
+
+                .form-field-group {
+                    margin-bottom: clamp(9px, 1.4vh, 14px);
+                }
+
+                .form-field-label {
+                    display: block;
+                    margin-bottom: 4px;
+                    font-size: clamp(12px, 1.3vh, 13px);
+                    font-weight: 600;
+                    color: #334155;
+                }
+
+                .input-field-relative {
                     position: relative;
                 }
-                .input-field {
+
+                .input-prefix-icon {
+                    position: absolute;
+                    top: 50%;
+                    left: 13px;
+                    transform: translateY(-50%);
+                    color: #94A3B8;
+                    pointer-events: none;
+                }
+
+                .form-control-input {
                     width: 100%;
-                    padding: 14px 16px 14px 44px;
-                    border-radius: 14px;
+                    height: clamp(36px, 4.2vh, 42px);
+                    padding: 0 13px 0 38px;
+                    border-radius: 10px;
                     border: 1.5px solid #E2E8F0;
                     background: #F8FAFC;
                     outline: none;
-                    font-size: 14px;
+                    font-size: 13px;
                     color: #0F172A;
-                    transition: all 0.2s ease;
-                    box-sizing: border-box;
+                    transition: border-color 0.2s, box-shadow 0.2s;
                 }
-                .input-field:focus {
+
+                .form-control-input:focus {
                     background: #FFFFFF;
                     border-color: #2563EB;
-                    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+                    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
                 }
-                .input-field-pwd {
-                    padding-right: 48px;
+
+                .form-control-input-pwd {
+                    padding-right: 38px;
                 }
-                .btn-submit {
+
+                .password-toggle-button {
+                    position: absolute;
+                    top: 50%;
+                    right: 11px;
+                    transform: translateY(-50%);
+                    border: none;
+                    background: transparent;
+                    cursor: pointer;
+                    color: #94A3B8;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 3px;
+                    border-radius: 5px;
+                }
+
+                .password-toggle-button:hover {
+                    color: #475569;
+                }
+
+                .form-sub-row {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: clamp(10px, 1.6vh, 16px);
+                }
+
+                .checkbox-remember-label {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    cursor: pointer;
+                    font-size: 12.5px;
+                    color: #334155;
+                    font-weight: 500;
+                    user-select: none;
+                }
+
+                .forgot-password-link {
+                    border: none;
+                    background: transparent;
+                    color: #2563EB;
+                    cursor: pointer;
+                    font-size: 12.5px;
+                    font-weight: 600;
+                    padding: 0;
+                }
+
+                .forgot-password-link:hover {
+                    text-decoration: underline;
+                }
+
+                .btn-submit-primary {
                     width: 100%;
-                    padding: 14px;
-                    border-radius: 14px;
-                    font-size: 16px;
+                    height: clamp(38px, 4.4vh, 44px);
+                    border-radius: 10px;
+                    font-size: 14.5px;
                     font-weight: 700;
                     color: #FFFFFF;
                     background: linear-gradient(135deg, #1D4ED8 0%, #2563EB 100%);
@@ -284,272 +553,393 @@ const Login = () => {
                     align-items: center;
                     justify-content: center;
                     gap: 8px;
-                    transition: all 0.2s ease;
-                    box-shadow: 0 8px 20px -4px rgba(37, 99, 235, 0.35);
+                    transition: background 0.2s, transform 0.15s;
+                    box-shadow: 0 5px 15px -3px rgba(37, 99, 235, 0.32);
                 }
-                .btn-submit:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 12px 25px -4px rgba(37, 99, 235, 0.45);
+
+                .btn-submit-primary:hover {
+                    transform: translateY(-1px);
                     background: linear-gradient(135deg, #1E40AF 0%, #1D4ED8 100%);
                 }
-                .btn-submit:active {
+
+                .btn-submit-primary:active {
                     transform: translateY(0);
                 }
-                .social-btn {
+
+                .or-divider-row {
+                    display: flex;
+                    align-items: center;
+                    margin: clamp(8px, 1.4vh, 14px) 0;
+                    gap: 10px;
+                }
+
+                .or-divider-line {
                     flex: 1;
+                    height: 1px;
+                    background: #E2E8F0;
+                }
+
+                .or-divider-label {
+                    font-size: 11px;
+                    color: #94A3B8;
+                    font-weight: 500;
+                }
+
+                .social-auth-row {
+                    display: flex;
+                    gap: 10px;
+                    margin-bottom: clamp(8px, 1.4vh, 14px);
+                }
+
+                .btn-social-auth {
+                    flex: 1;
+                    height: clamp(34px, 4vh, 39px);
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    gap: 10px;
-                    padding: 12px 16px;
-                    border-radius: 12px;
+                    gap: 6px;
+                    border-radius: 9px;
                     border: 1px solid #E2E8F0;
                     background: #FFFFFF;
                     color: #334155;
-                    font-size: 14px;
+                    font-size: 12.5px;
                     font-weight: 600;
                     cursor: pointer;
-                    transition: all 0.2s ease;
+                    transition: background 0.2s;
                 }
-                .social-btn:hover {
+
+                .btn-social-auth:hover {
                     background: #F8FAFC;
                     border-color: #CBD5E1;
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
                 }
-                @media (max-width: 1080px) {
-                    .split-layout {
-                        gap: 32px;
+
+                .contact-admin-box {
+                    text-align: center;
+                    font-size: 12.5px;
+                    color: #64748B;
+                }
+
+                .contact-admin-action {
+                    color: #2563EB;
+                    font-weight: 600;
+                    cursor: pointer;
+                }
+
+                .contact-admin-action:hover {
+                    text-decoration: underline;
+                }
+
+                .shekru-credit-box {
+                    margin-top: clamp(6px, 1vh, 12px);
+                    text-align: center;
+                    font-size: 12px;
+                    color: #64748B;
+                    font-weight: 500;
+                }
+
+                .shekru-link {
+                    color: #2563EB;
+                    font-weight: 700;
+                    text-decoration: none;
+                }
+                .shekru-link:hover {
+                    text-decoration: underline;
+                }
+
+                /* Responsive Design */
+                @media (max-width: 1200px) {
+                    .left-main-heading {
+                        font-size: 32px;
                     }
-                    .left-section {
-                        flex: 1;
+                    .hero-stage-container {
+                        min-height: 270px;
                     }
-                    .right-section {
-                        flex: 1;
+                    .floating-feature-card {
+                        min-width: 140px;
+                        padding: 5px 8px;
                     }
                 }
-                @media (max-width: 900px) {
-                    .left-section {
-                        display: none !important;
+
+                @media (max-width: 992px) {
+                    .login-page-container {
+                        padding: 20px 16px;
+                        height: auto;
+                        max-height: none;
                     }
-                    .split-layout {
-                        justify-content: center;
+                    .split-screen-layout {
+                        flex-direction: column;
+                        align-items: center;
+                        max-height: none;
                     }
-                    .right-section {
-                        flex: 1;
+                    .left-section-wrapper {
                         width: 100%;
+                        flex: 1;
+                        height: auto;
+                    }
+                    .right-login-section {
+                        width: 100%;
+                        flex: 1;
+                        height: auto;
+                        margin-top: 20px;
+                    }
+                    .bottom-feature-row {
+                        grid-template-columns: repeat(3, 1fr);
+                    }
+                    .connectors-svg-overlay {
+                        display: none;
+                    }
+                }
+
+                @media (max-width: 576px) {
+                    .bottom-feature-row {
+                        grid-template-columns: repeat(2, 1fr);
+                    }
+                    .floating-feature-card {
+                        display: none;
                     }
                     .login-card {
-                        max-width: 440px;
+                        padding: 20px 14px;
                     }
                 }
             `}</style>
 
-            <div className="bg-glow-1"></div>
-            <div className="bg-glow-2"></div>
+            {/* Background Decorative Shapes & Pattern */}
+            <div className="bg-circle-left"></div>
+            <div className="bg-circle-right"></div>
+            <div className="bg-bottom-right-wave"></div>
+            <div className="bg-dots-pattern"></div>
 
-            <div className="split-layout">
-                {/* LEFT SECTION */}
-                <div className="left-section">
-                    {/* Header Brand Logo */}
-                    <div style={{ display: "flex", alignItems: "center" }}>
-                        <RetailOSBrandLogo size={46} showText={true} />
+            <div className="split-screen-layout">
+                {/* LEFT SECTION (~64% Width for Larger Store Illustration & 7 Cards) */}
+                <div className="left-section-wrapper">
+                    {/* Brand Header Logo - Transparent PNG with NO white box background */}
+                    <div className="brand-header-box">
+                        <img
+                            src="/retailos-logo-transparent.png"
+                            alt="Retail OS Logo"
+                            className="brand-header-logo-img"
+                        />
+                        <span className="brand-header-text">
+                            <span className="brand-dark">Retail</span>
+                            <span className="brand-orange">OS</span>
+                        </span>
                     </div>
 
-                    {/* Dot grid decoration */}
-                    <div style={{ position: "relative", marginTop: 8 }}>
-                        <div className="dot-grid">
-                            {[...Array(36)].map((_, i) => (
-                                <div key={i} />
-                            ))}
-                        </div>
-                        <h1 style={{ fontSize: 36, fontWeight: 800, color: "#0F172A", lineHeight: 1.25, margin: 0 }}>
-                            Manage your retail business{" "}
-                            <span style={{ color: "#2563EB" }}>smarter</span>,{" "}
-                            <span style={{ color: "#FF5722" }}>faster</span>,{" "}
-                            <span style={{ color: "#0F172A" }}>better</span>
+                    {/* Main Headline */}
+                    <div>
+                        <h1 className="left-main-heading">
+                            Manage your retail<br />
+                            business<br />
+                            <span className="highlight-blue">smarter</span>,{" "}
+                            <span className="highlight-orange">faster</span>,{" "}
+                            <span className="highlight-darkblue">better</span>
                         </h1>
+                        <p className="left-subtitle-text">
+                            All-in-one platform for Inventory, Customers,<br />
+                            Billing, GST and Analytics.
+                        </p>
                     </div>
 
-                    <p style={{ fontSize: 16, color: "#64748B", margin: 0, fontWeight: 400, lineHeight: 1.5 }}>
-                        All-in-one solution for Inventory, Customers, Billing, GST and Analytics.
-                    </p>
+                    {/* 3D Store Illustration Stage with Prominent Store Building & Soft Blue SVG Connector Lines */}
+                    <div className="hero-stage-container">
+                        <div className="stage-bg-glow"></div>
 
-                    {/* Professional Dashboard Graphic Preview */}
-                    <div className="dashboard-card-mock">
-                        <div style={{ display: "flex", gap: 16 }}>
-                            {/* Mini Sidebar */}
-                            <div style={{ width: 140, borderRight: "1px solid #F1F5F9", paddingRight: 12, display: "flex", flexDirection: "column", gap: 6 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", marginBottom: 8 }}>
-                                    <RetailOSBrandLogo size={20} showText={false} />
-                                    <span style={{ fontSize: 11, fontWeight: 700, color: "#0F172A" }}>Retail OS</span>
-                                </div>
-                                <div style={{ background: "#2563EB", color: "#FFFFFF", padding: "6px 10px", borderRadius: 8, fontSize: 11, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                                    <span>📊</span> Dashboard
-                                </div>
-                                {["Inventory", "Customers", "Billing", "GST Management", "Reports", "Analytics", "Settings"].map((item, idx) => (
-                                    <div key={idx} style={{ color: "#64748B", padding: "5px 10px", fontSize: 11, fontWeight: 500, display: "flex", alignItems: "center", gap: 6 }}>
-                                        <span style={{ fontSize: 10 }}>•</span> {item}
-                                    </div>
-                                ))}
+                        {/* Soft & Crisp Blue Dashed SVG Connector Network with Arrowhead Markers */}
+                        <svg className="connectors-svg-overlay" viewBox="0 0 800 500" preserveAspectRatio="none">
+                            <defs>
+                                <marker id="soft-blue-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                                    <path d="M 0 1 L 9 5 L 0 9 z" fill="#60A5FA" opacity="0.8" />
+                                </marker>
+                            </defs>
+                            {/* Card 1: Inventory Management -> Cloud Icon */}
+                            <path d="M 230 40 L 230 110 L 385 110" fill="none" stroke="#60A5FA" strokeWidth="1.8" strokeDasharray="4 4" opacity="0.75" markerEnd="url(#soft-blue-arrow)" />
+                            {/* Card 2: Customers Management -> Cloud Icon */}
+                            <path d="M 430 30 L 430 90 L 415 90" fill="none" stroke="#60A5FA" strokeWidth="1.8" strokeDasharray="4 4" opacity="0.75" markerEnd="url(#soft-blue-arrow)" />
+                            {/* Card 3: Billing & Invoicing -> Store Roof */}
+                            <path d="M 640 45 L 640 130 L 515 130" fill="none" stroke="#60A5FA" strokeWidth="1.8" strokeDasharray="4 4" opacity="0.75" markerEnd="url(#soft-blue-arrow)" />
+                            {/* Card 4: GST Compliance -> Store Counter */}
+                            <path d="M 115 185 L 210 185" fill="none" stroke="#60A5FA" strokeWidth="1.8" strokeDasharray="4 4" opacity="0.75" markerEnd="url(#soft-blue-arrow)" />
+                            {/* Card 5: Multi-Store Management -> Store Wall */}
+                            <path d="M 660 205 L 575 205" fill="none" stroke="#60A5FA" strokeWidth="1.8" strokeDasharray="4 4" opacity="0.75" markerEnd="url(#soft-blue-arrow)" />
+                            {/* Card 6: Analytics & Reports -> Store Base */}
+                            <path d="M 140 430 L 275 430 L 275 365" fill="none" stroke="#60A5FA" strokeWidth="1.8" strokeDasharray="4 4" opacity="0.75" markerEnd="url(#soft-blue-arrow)" />
+                            {/* Card 7: Secure & Reliable -> Store Delivery Truck */}
+                            <path d="M 600 440 L 530 440 L 530 385" fill="none" stroke="#60A5FA" strokeWidth="1.8" strokeDasharray="4 4" opacity="0.75" markerEnd="url(#soft-blue-arrow)" />
+                        </svg>
+
+                        {/* Larger High-Res Isolated 3D Retail Store Graphic (House, Truck, Cloud, Counter) */}
+                        <img
+                            src="/retail-store-3d.png"
+                            alt="Retail Store 3D Illustration"
+                            className="hero-store-img"
+                        />
+
+                        {/* Floating Compact Horizontal Rounded-Rectangle Feature Card 1: GST Compliance */}
+                        <div className="floating-feature-card pos-gst">
+                            <div className="floating-icon-wrapper" style={{ background: "#FFEDD5", color: "#EA580C" }}>
+                                <BsPercent />
                             </div>
+                            <div>
+                                <div className="floating-card-title">GST Compliance</div>
+                                <div className="floating-card-desc">Simplify GST compliance</div>
+                            </div>
+                        </div>
 
-                            {/* Main Content Area */}
-                            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 14 }}>
-                                {/* Topbar inside dashboard */}
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: "#0F172A" }}>Dashboard Overview</span>
-                                    <span style={{ fontSize: 10, background: "#F1F5F9", color: "#475569", padding: "4px 8px", borderRadius: 6, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
-                                        Aug 06, 2026 📅
-                                    </span>
-                                </div>
+                        {/* Floating Compact Horizontal Rounded-Rectangle Feature Card 2: Inventory Management */}
+                        <div className="floating-feature-card pos-inventory">
+                            <div className="floating-icon-wrapper" style={{ background: "#F3E8FF", color: "#9333EA" }}>
+                                <BsBoxSeam />
+                            </div>
+                            <div>
+                                <div className="floating-card-title">Inventory Management</div>
+                                <div className="floating-card-desc">Track stock in real-time</div>
+                            </div>
+                        </div>
 
-                                {/* 4 KPI Cards */}
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                                    {[
-                                        { title: "Total Sales", val: "₹ 2,45,680", change: "↑ 12.5%", bg: "#EFF6FF", icon: "💳", iconBg: "#DBEAFE" },
-                                        { title: "Orders", val: "1,320", change: "↑ 8.2%", bg: "#EFF6FF", icon: "📑", iconBg: "#DBEAFE" },
-                                        { title: "Customers", val: "860", change: "↑ 11.3%", bg: "#ECFDF5", icon: "👤", iconBg: "#D1FAE5" },
-                                        { title: "Products", val: "2,350", change: "↑ 6.7%", bg: "#FFF7ED", icon: "📦", iconBg: "#FFEDD5" },
-                                    ].map((kpi, i) => (
-                                        <div key={i} style={{ background: kpi.bg, borderRadius: 10, padding: 8 }}>
-                                            <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
-                                                <span style={{ fontSize: 10, background: kpi.iconBg, padding: 3, borderRadius: 4 }}>{kpi.icon}</span>
-                                                <span style={{ fontSize: 9, color: "#64748B", fontWeight: 600 }}>{kpi.title}</span>
-                                            </div>
-                                            <div style={{ fontSize: 12, fontWeight: 800, color: "#0F172A" }}>{kpi.val}</div>
-                                            <div style={{ fontSize: 9, color: "#16A34A", fontWeight: 700, marginTop: 2 }}>{kpi.change}</div>
-                                        </div>
-                                    ))}
-                                </div>
+                        {/* Floating Compact Horizontal Rounded-Rectangle Feature Card 3: Customers Management */}
+                        <div className="floating-feature-card pos-customers">
+                            <div className="floating-icon-wrapper" style={{ background: "#DCFCE7", color: "#16A34A" }}>
+                                <BsPeople />
+                            </div>
+                            <div>
+                                <div className="floating-card-title">Customers Management</div>
+                                <div className="floating-card-desc">Build stronger relationships</div>
+                            </div>
+                        </div>
 
-                                {/* Charts Row */}
-                                <div style={{ display: "flex", gap: 12 }}>
-                                    {/* Line Chart Card */}
-                                    <div style={{ flex: 1.5, background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 12, padding: 10 }}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                                            <span style={{ fontSize: 10, fontWeight: 700, color: "#0F172A" }}>Sales Overview</span>
-                                            <span style={{ fontSize: 8, background: "#FFFFFF", border: "1px solid #E2E8F0", padding: "2px 6px", borderRadius: 4, color: "#475569" }}>₹ 2,45,680</span>
-                                        </div>
-                                        <svg width="100%" height="70" viewBox="0 0 240 70" fill="none">
-                                            <defs>
-                                                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="0%" stopColor="#2563EB" stopOpacity="0.25" />
-                                                    <stop offset="100%" stopColor="#2563EB" stopOpacity="0.0" />
-                                                </linearGradient>
-                                            </defs>
-                                            <path d="M 0 55 Q 30 40, 60 48 T 120 30 T 180 40 T 240 10 L 240 70 L 0 70 Z" fill="url(#areaGrad)" />
-                                            <path d="M 0 55 Q 30 40, 60 48 T 120 30 T 180 40 T 240 10" stroke="#2563EB" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-                                            <circle cx="240" cy="10" r="4" fill="#2563EB" stroke="#FFFFFF" strokeWidth="2" />
-                                        </svg>
-                                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8, color: "#94A3B8", marginTop: 4 }}>
-                                            <span>May 6</span>
-                                            <span>May 7</span>
-                                            <span>May 8</span>
-                                            <span>May 9</span>
-                                            <span>May 10</span>
-                                            <span>May 11</span>
-                                            <span>May 12</span>
-                                        </div>
-                                    </div>
+                        {/* Floating Compact Horizontal Rounded-Rectangle Feature Card 4: Billing & Invoicing */}
+                        <div className="floating-feature-card pos-billing">
+                            <div className="floating-icon-wrapper" style={{ background: "#DBEAFE", color: "#2563EB" }}>
+                                <BsReceipt />
+                            </div>
+                            <div>
+                                <div className="floating-card-title">Billing & Invoicing</div>
+                                <div className="floating-card-desc">Fast & accurate invoicing</div>
+                            </div>
+                        </div>
 
-                                    {/* Donut Chart Card */}
-                                    <div style={{ flex: 1, background: "#F8FAFC", border: "1px solid #F1F5F9", borderRadius: 12, padding: 10, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                                        <span style={{ fontSize: 10, fontWeight: 700, color: "#0F172A" }}>Top Categories</span>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                            <svg width="50" height="50" viewBox="0 0 42 42">
-                                                <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#E2E8F0" strokeWidth="6" />
-                                                <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#2563EB" strokeWidth="6" strokeDasharray="45 55" strokeDashoffset="25" />
-                                                <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#38BDF8" strokeWidth="6" strokeDasharray="30 70" strokeDashoffset="80" />
-                                                <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#FF5722" strokeWidth="6" strokeDasharray="15 85" strokeDashoffset="50" />
-                                                <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#FBBF24" strokeWidth="6" strokeDasharray="10 90" strokeDashoffset="35" />
-                                            </svg>
-                                            <div style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 8 }}>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2563EB" }}></span> Electronics 45%</div>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#38BDF8" }}></span> Clothing 30%</div>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#FF5722" }}></span> Footwear 15%</div>
-                                                <div style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#FBBF24" }}></span> Others 10%</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                        {/* Floating Compact Horizontal Rounded-Rectangle Feature Card 5: Multi-Store Management */}
+                        <div className="floating-feature-card pos-multistore">
+                            <div className="floating-icon-wrapper" style={{ background: "#FEF3C7", color: "#D97706" }}>
+                                <BsShop />
+                            </div>
+                            <div>
+                                <div className="floating-card-title">Multi-Store Management</div>
+                                <div className="floating-card-desc">Manage all stores in one place</div>
+                            </div>
+                        </div>
+
+                        {/* Floating Compact Horizontal Rounded-Rectangle Feature Card 6: Analytics & Reports */}
+                        <div className="floating-feature-card pos-analytics">
+                            <div className="floating-icon-wrapper" style={{ background: "#E0E7FF", color: "#4F46E5" }}>
+                                <BsGraphUpArrow />
+                            </div>
+                            <div>
+                                <div className="floating-card-title">Analytics & Reports</div>
+                                <div className="floating-card-desc">Data-driven insights</div>
+                            </div>
+                        </div>
+
+                        {/* Floating Compact Horizontal Rounded-Rectangle Feature Card 7: Secure & Reliable */}
+                        <div className="floating-feature-card pos-secure">
+                            <div className="floating-icon-wrapper" style={{ background: "#D1FAE5", color: "#059669" }}>
+                                <BsShieldCheck />
+                            </div>
+                            <div>
+                                <div className="floating-card-title">Secure & Reliable</div>
+                                <div className="floating-card-desc">Your data is safe with us</div>
                             </div>
                         </div>
                     </div>
 
-                    {/* 5 Feature Cards */}
-                    <div style={{ display: "flex", gap: 12 }}>
-                        {[
-                            { title: "Inventory", sub: "Track stock in real-time", bg: "#EFF6FF", color: "#2563EB", icon: "📦" },
-                            { title: "Customers", sub: "Build stronger relationships", bg: "#EEF2FF", color: "#4F46E5", icon: "👥" },
-                            { title: "Billing", sub: "Fast & accurate invoicing", bg: "#ECFDF5", color: "#059669", icon: "📄" },
-                            { title: "GST", sub: "Simplify GST compliance", bg: "#FFF7ED", color: "#EA580C", icon: "%" },
-                            { title: "Analytics", sub: "Data-driven insights", bg: "#F3E8FF", color: "#9333EA", icon: "📊" },
-                        ].map((item, index) => (
-                            <div key={index} className="feature-card">
-                                <div style={{
-                                    width: 38,
-                                    height: 38,
-                                    borderRadius: 10,
-                                    background: item.bg,
-                                    color: item.color,
-                                    display: "flex",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    fontSize: 16,
-                                    fontWeight: 800,
-                                    marginBottom: 8
-                                }}>
-                                    {item.icon}
+                    {/* Bottom Feature Bar (6 Columns in Single Rounded Container) */}
+                    <div className="bottom-feature-bar-container">
+                        <div className="bottom-feature-row">
+                            <div className="feature-item-pill">
+                                <div className="feature-pill-icon" style={{ background: "#EFF6FF", color: "#2563EB" }}>
+                                    <BsShieldCheck />
                                 </div>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 2 }}>
-                                    {item.title}
-                                </div>
-                                <div style={{ fontSize: 10, color: "#64748B", lineHeight: 1.3 }}>
-                                    {item.sub}
-                                </div>
+                                <div className="feature-pill-title">Secure Data</div>
+                                <div className="feature-pill-desc">Enterprise-grade security</div>
                             </div>
-                        ))}
+
+                            <div className="feature-item-pill">
+                                <div className="feature-pill-icon" style={{ background: "#DCFCE7", color: "#16A34A" }}>
+                                    <BsLightningCharge />
+                                </div>
+                                <div className="feature-pill-title">Lightning Fast</div>
+                                <div className="feature-pill-desc">Optimized for speed</div>
+                            </div>
+
+                            <div className="feature-item-pill">
+                                <div className="feature-pill-icon" style={{ background: "#E0F2FE", color: "#0284C7" }}>
+                                    <BsCloudCheck />
+                                </div>
+                                <div className="feature-pill-title">Cloud Based</div>
+                                <div className="feature-pill-desc">Access anywhere, anytime</div>
+                            </div>
+
+                            <div className="feature-item-pill">
+                                <div className="feature-pill-icon" style={{ background: "#FFEDD5", color: "#EA580C" }}>
+                                    <BsPhone />
+                                </div>
+                                <div className="feature-pill-title">Mobile Friendly</div>
+                                <div className="feature-pill-desc">Manage on the go from any device</div>
+                            </div>
+
+                            <div className="feature-item-pill">
+                                <div className="feature-pill-icon" style={{ background: "#F3E8FF", color: "#9333EA" }}>
+                                    <BsHeadset />
+                                </div>
+                                <div className="feature-pill-title">24/7 Support</div>
+                                <div className="feature-pill-desc">We're here to help you</div>
+                            </div>
+
+                            <div className="feature-item-pill">
+                                <div className="feature-pill-icon" style={{ background: "#FEF3C7", color: "#D97706" }}>
+                                    <BsPieChart />
+                                </div>
+                                <div className="feature-pill-title">Smart Insights</div>
+                                <div className="feature-pill-desc">Grow with intelligent decisions</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Left Footer Copyright */}
+                    <div className="left-footer-copyright">
+                        © 2026 Retail OS. All rights reserved.
                     </div>
                 </div>
 
-                {/* RIGHT SECTION */}
-                <div className="right-section">
+                {/* RIGHT SECTION (~34% Width for a Sleek Vertically Slender Card) */}
+                <div className="right-login-section">
                     <div className="login-card">
-                        {/* Centered Large Official Logo */}
-                        <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
-                            <RetailOSBrandLogo size={70} showText={false} layout="column" />
+                        {/* Centered Transparent Retail OS Logo */}
+                        <div className="card-logo-box">
+                            <img
+                                src="/retailos-logo-transparent.png"
+                                alt="Retail OS Logo"
+                                className="card-logo-img"
+                            />
                         </div>
 
-                        {/* Title & Subtitle */}
-                        <div style={{ textAlign: "center", marginBottom: 28 }}>
-                            <h2 style={{ fontSize: 26, fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0" }}>
-                                Welcome Back!
-                            </h2>
-                            <p style={{ color: "#64748B", fontSize: 14, margin: 0, fontWeight: 500 }}>
-                                Login to continue to <span style={{ color: "#061338", fontWeight: 700 }}>Retail</span> <span style={{ color: "#FF5500", fontWeight: 700 }}>OS</span>
+                        {/* Welcome Back Header */}
+                        <div className="login-card-header">
+                            <h2 className="welcome-headline">Welcome Back!</h2>
+                            <p className="welcome-subtext">
+                                Login to continue to{" "}
+                                <span style={{ color: "#0F172A", fontWeight: 700 }}>Retail</span>
+                                <span style={{ color: "#FF5500", fontWeight: 700 }}>OS</span>
                             </p>
                         </div>
 
-                        {/* Form */}
+                        {/* Login Form */}
                         <form onSubmit={handleSubmit}>
-                            {/* Email Field */}
-                            <div style={{ marginBottom: 20 }}>
-                                <label style={{ display: "block", marginBottom: 8, fontSize: 14, fontWeight: 600, color: "#334155" }}>
-                                    Email Address
-                                </label>
-                                <div className="input-container">
-                                    <BsEnvelope
-                                        size={18}
-                                        style={{
-                                            position: "absolute",
-                                            top: "50%",
-                                            left: 16,
-                                            transform: "translateY(-50%)",
-                                            color: "#94A3B8",
-                                            pointerEvents: "none"
-                                        }}
-                                    />
+                            {/* Email Address Field */}
+                            <div className="form-field-group">
+                                <label className="form-field-label">Email Address</label>
+                                <div className="input-field-relative">
+                                    <BsEnvelope size={16} className="input-prefix-icon" />
                                     <input
                                         type="email"
                                         name="email"
@@ -557,28 +947,16 @@ const Login = () => {
                                         value={form.email}
                                         onChange={handleChange}
                                         required
-                                        className="input-field"
+                                        className="form-control-input"
                                     />
                                 </div>
                             </div>
 
                             {/* Password Field */}
-                            <div style={{ marginBottom: 18 }}>
-                                <label style={{ display: "block", marginBottom: 8, fontSize: 14, fontWeight: 600, color: "#334155" }}>
-                                    Password
-                                </label>
-                                <div className="input-container">
-                                    <BsLock
-                                        size={18}
-                                        style={{
-                                            position: "absolute",
-                                            top: "50%",
-                                            left: 16,
-                                            transform: "translateY(-50%)",
-                                            color: "#94A3B8",
-                                            pointerEvents: "none"
-                                        }}
-                                    />
+                            <div className="form-field-group">
+                                <label className="form-field-label">Password</label>
+                                <div className="input-field-relative">
+                                    <BsLock size={16} className="input-prefix-icon" />
                                     <input
                                         type={showPassword ? "text" : "password"}
                                         name="password"
@@ -587,74 +965,51 @@ const Login = () => {
                                         onChange={handleChange}
                                         required
                                         minLength={6}
-                                        className="input-field input-field-pwd"
+                                        className="form-control-input form-control-input-pwd"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(prev => !prev)}
-                                        style={{
-                                            position: "absolute",
-                                            top: "50%",
-                                            right: 14,
-                                            transform: "translateY(-50%)",
-                                            border: "none",
-                                            background: "transparent",
-                                            cursor: "pointer",
-                                            color: "#94A3B8",
-                                            display: "flex",
-                                            alignItems: "center",
-                                            justifyContent: "center",
-                                            padding: 4
-                                        }}
+                                        className="password-toggle-button"
+                                        aria-label={showPassword ? "Hide password" : "Show password"}
                                     >
-                                        {showPassword ? <BsEyeSlash size={18} /> : <BsEye size={18} />}
+                                        {showPassword ? <BsEyeSlash size={16} /> : <BsEye size={16} />}
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Remember me & Forgot password */}
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 14, color: "#334155", fontWeight: 500, userSelect: "none" }}>
+                            {/* Options Row */}
+                            <div className="form-sub-row">
+                                <label className="checkbox-remember-label">
                                     <input
                                         type="checkbox"
                                         defaultChecked
-                                        style={{ width: 16, height: 16, accentColor: "#2563EB", cursor: "pointer", borderRadius: 4 }}
+                                        style={{ width: 15, height: 15, accentColor: "#2563EB", cursor: "pointer" }}
                                     />
                                     Remember Me
                                 </label>
-                                <button
-                                    type="button"
-                                    style={{
-                                        border: "none",
-                                        background: "transparent",
-                                        color: "#2563EB",
-                                        cursor: "pointer",
-                                        fontSize: 14,
-                                        fontWeight: 600,
-                                        padding: 0
-                                    }}
-                                >
+                                <button type="button" className="forgot-password-link">
                                     Forgot Password?
                                 </button>
                             </div>
 
                             {/* Submit Button */}
-                            <button type="submit" className="btn-submit">
-                                Login <BsArrowRight size={18} />
+                            <button type="submit" className="btn-submit-primary">
+                                Login <BsArrowRight size={16} />
                             </button>
                         </form>
 
                         {/* Divider */}
-                        <div style={{ display: "flex", alignItems: "center", margin: "24px 0", gap: 12 }}>
-                            <div style={{ flex: 1, height: 1, background: "#E2E8F0" }}></div>
-                            <span style={{ fontSize: 12, color: "#94A3B8", fontWeight: 500 }}>or continue with</span>
-                            <div style={{ flex: 1, height: 1, background: "#E2E8F0" }}></div>
+                        <div className="or-divider-row">
+                            <div className="or-divider-line"></div>
+                            <span className="or-divider-label">or continue with</span>
+                            <div className="or-divider-line"></div>
                         </div>
 
                         {/* Social Login Buttons */}
-                        <div style={{ display: "flex", gap: 12, marginBottom: 28 }}>
-                            <button type="button" className="social-btn">
-                                <svg width="18" height="18" viewBox="0 0 24 24">
+                        <div className="social-auth-row">
+                            <button type="button" onClick={handleGoogleLogin} className="btn-social-auth">
+                                <svg width="16" height="16" viewBox="0 0 24 24">
                                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                                     <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.62z" />
@@ -662,8 +1017,8 @@ const Login = () => {
                                 </svg>
                                 Google
                             </button>
-                            <button type="button" className="social-btn">
-                                <svg width="18" height="18" viewBox="0 0 23 23">
+                            <button type="button" onClick={handleMicrosoftLogin} className="btn-social-auth">
+                                <svg width="16" height="16" viewBox="0 0 23 23">
                                     <path fill="#f35325" d="M1 1h10v10H1z" />
                                     <path fill="#81bc06" d="M12 1h10v10H12z" />
                                     <path fill="#05a6f0" d="M1 12h10v10H1z" />
@@ -673,12 +1028,23 @@ const Login = () => {
                             </button>
                         </div>
 
-                        {/* Footer Contact Admin */}
-                        <div style={{ textAlign: "center", fontSize: 14, color: "#64748B" }}>
+                        {/* Contact Admin */}
+                        <div className="contact-admin-box">
                             Don't have an account?{" "}
-                            <span style={{ color: "#2563EB", fontWeight: 600, cursor: "pointer" }}>
-                                Contact Admin
-                            </span>
+                            <span className="contact-admin-action">Contact Admin</span>
+                        </div>
+
+                        {/* Powered By Shekru Labs Link Under Contact Admin */}
+                        <div className="shekru-credit-box">
+                            Powered By{" "}
+                            <a
+                                href="https://www.shekruweb.com/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="shekru-link"
+                            >
+                                Shekru Labs India Pvt Ltd
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -688,4 +1054,3 @@ const Login = () => {
 };
 
 export default Login;
-
