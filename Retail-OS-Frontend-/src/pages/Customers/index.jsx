@@ -38,7 +38,7 @@ import {
     formatAnalyticsVal,
 } from '../../components/customers/customerHelpers';
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 10;
 const NAME_PATTERN = /^[A-Za-z]+(?: [A-Za-z]+)*$/;
 const EMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 const getTodayDateString = () => new Date().toISOString().split('T')[0];
@@ -541,10 +541,10 @@ const Customers = () => {
     // const handleDeleteCustomer = (customer) => {
     //     if (!window.confirm(`Are you sure you want to delete customer profile "${customer.name}"?`)) return;
 
-        // TODO:
-        // Uncomment and connect the Delete Customer API
-        // once the backend endpoint is finalized.
-        // await deleteCustomer(customer.backendId);
+    // TODO:
+    // Uncomment and connect the Delete Customer API
+    // once the backend endpoint is finalized.
+    // await deleteCustomer(customer.backendId);
 
     //     console.log(`[UI DELETE] Customer removed from state for backendId: ${customer.backendId}`);
     //     setCustomers(prev => prev.filter(c => c.backendId !== customer.backendId));
