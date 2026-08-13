@@ -2782,6 +2782,37 @@ width:100%;
 
 }
 
+/* ─────────────────────────────────────────
+   Custom Table Horizontal Scrollbar
+───────────────────────────────────────── */
+.table-scroll-container {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: #c5c5c5 #f3f4f6;
+}
+
+.table-scroll-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-scroll-container::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 8px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: #c5c5c5;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #7c7c7c;
+}
+
+
 
 /* Product table horizontal scrollbar */
 .table-scroll::-webkit-scrollbar {

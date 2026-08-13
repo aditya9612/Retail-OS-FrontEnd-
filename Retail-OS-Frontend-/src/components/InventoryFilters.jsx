@@ -4,11 +4,29 @@ import "./InventoryFilters.css";
 const InventoryFilters = ({
   search,
   setSearch,
+
+  inventory,
+  products,
+  stores,
+
+  filterWarehouse,
+  setFilterWarehouse,
+
   filterCat,
   setFilterCat,
+
+  filterSupplier,
+  setFilterSupplier,
+
   filterStatus,
   setFilterStatus,
-}) => {
+
+  filterDate,
+  setFilterDate,
+
+  onSearch,
+}) =>  {
+
   return (
     <div className="inventory-filters">
 
@@ -28,46 +46,85 @@ const InventoryFilters = ({
   onChange={(e) => setSearch(e.target.value)}
 />
       </div>
+<div className="filter-group">
+  <label>Warehouse</label>
 
-      {/* Warehouse */}
-      <div className="filter-group">
-        <label>Warehouse</label>
-        <select>
-          <option>All Warehouses</option>
-          <option>Main Warehouse</option>
-          <option>Store Warehouse</option>
-          <option>Cold Storage</option>
-        </select>
-      </div>
+  <select
+    value={filterWarehouse}
+    onChange={(e) => setFilterWarehouse(e.target.value)}
+  >
+    <option value="All Warehouses">All Warehouses</option>
+
+    {(stores || []).map((store) => (
+      <option key={store.id} value={store.name}>
+        {store.name}
+      </option>
+    ))}
+  </select>
+</div>
+ 
+   
+
 
       {/* Category */}
-      <div className="filter-group">
-        <label>Category</label>
-      <select
-  value={filterCat}
-  onChange={(e) => setFilterCat(e.target.value)}
->
-  <option>All Categories</option>
-  <option>Electronics</option>
-  <option>Groceries</option>
-  <option>Apparel</option>
-  <option>Accessories</option>
-  <option>Home & Kitchen</option>
-  <option>Beauty</option>
-</select>
-      </div>
+  <div className="filter-group">
+  <label>Category</label>
 
+  <select
+    value={filterCat}
+    onChange={(e) => setFilterCat(e.target.value)}
+  >
+    <option value="All Categories">All Categories</option>
+
+     {console.log("Products =>", products)}
+
+
+  {(products || []).map((p) =>
+    console.log(
+      "Product:",
+      p.name,
+      "category =", p.category,
+      "category_name =", p.category_name,
+      "category_id =", p.category_id
+    )
+  )}
+  {[...new Set(
+    (products || [])
+      .map(p => p.category || p.category_name)
+      .filter(Boolean)
+  )].map(category => (
+    <option key={category} value={category}>
+      {category}
+    </option>
+  ))}
+</select>
+
+  
+</div>
+
+      
       {/* Supplier */}
-      <div className="filter-group">
-        <label>Supplier</label>
-        <select>
-          <option>All Suppliers</option>
-          <option>ABC Distributors</option>
-          <option>Fresh Foods Pvt Ltd</option>
-          <option>Global Traders</option>
-          <option>HealthCare Supplies</option>
-        </select>
-      </div>
+<div className="filter-group">
+  <label>Supplier</label>
+
+  <select
+    value={filterSupplier}
+    onChange={(e) => setFilterSupplier(e.target.value)}
+  >
+    <option value="All Suppliers">All Suppliers</option>
+
+    {[...new Set(
+      (inventory || [])
+  .map(item => item.supplier_name)
+        .filter(Boolean)
+    )].map(supplier => (
+      <option key={supplier} value={supplier}>
+        {supplier}
+      </option>
+    ))}
+  </select>
+</div>
+   
 
       {/* Stock Status */}
       <div className="filter-group">
@@ -84,31 +141,45 @@ const InventoryFilters = ({
       </div>
 
       {/* Date */}
-      <div className="filter-group">
-        <label>Created Date</label>
-        <input type="date" />
-      </div>
+<div className="filter-group">
+  <label>Created Date</label>
+
+  <input
+    type="date"
+    value={filterDate}
+    onChange={(e) => setFilterDate(e.target.value)}
+  />
+</div>
 
       {/* Buttons */}
-      <div className="filter-actions">
-<button
-  className="reset-btn"
-  onClick={() => {
-    setSearch("");
-    setFilterCat("All Categories");
-    setFilterStatus("All");
-  }}
->
-  Reset
-</button>
+<div className="filter-actions">
 
-      <button className="search-btn">
-  Search
-</button>
+  <button
+    className="reset-btn"
+    onClick={() => {
+      setSearch("");
+      setFilterWarehouse("All Warehouses");
+      setFilterCat("All Categories");
+      setFilterSupplier("All Suppliers");
+      setFilterStatus("All");
+      setFilterDate("");
 
-        <button className="export-btn">
-          Export
-        </button>
+      onSearch();
+    }}
+  >
+    Reset
+  </button>
+
+  <button
+    className="search-btn"
+    onClick={onSearch}
+  >
+    Search
+  </button>
+
+  <button className="export-btn">
+    Export
+  </button>
 
       </div>
 
@@ -116,4 +187,4 @@ const InventoryFilters = ({
   );
 };
 
-export default InventoryFilters;
+export default InventoryFilters

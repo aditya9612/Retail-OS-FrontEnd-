@@ -3,8 +3,7 @@ import "./CategoryTable.css";
 
 const CategoryTable = ({
   categories,
-  onEdit,
-  onDelete,
+  
 }) => {
   return (
     <div className="category-table-container">
@@ -78,19 +77,23 @@ const CategoryTable = ({
 
                   <div className="table-actions">
 
+                    {/*
                     <button
                       className="edit-btn"
                       onClick={() => onEdit(item)}
                     >
                       Edit
                     </button>
+                    */}
 
+                    {/*
                     <button
                       className="delete-btn"
                       onClick={() => onDelete(item.id)}
                     >
                       Delete
                     </button>
+                    */}
 
                   </div>
 

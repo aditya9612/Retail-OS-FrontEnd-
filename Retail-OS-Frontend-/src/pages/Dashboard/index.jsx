@@ -125,6 +125,8 @@ const Dashboard = () => {
     const [overviewPeriod, setOverviewPeriod] = useState('This Month');
     const [paretoPeriod, setParetoPeriod] = useState('This Month');
 
+    const user = JSON.parse(localStorage.getItem("user"));
+
     const hour = new Date().getHours();
     const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
@@ -134,7 +136,7 @@ const Dashboard = () => {
             {/* ── Hero greeting + stat cards ── */}
             <div className="dash-hero">
                 <div className="dash-greeting">
-                    <h1 className="dash-greeting-title">Hi Graham, {greeting}</h1>
+                    <h1 className="dash-greeting-title"> Hi {user?.full_name || "User"}, {greeting}</h1>
                     <p className="dash-greeting-sub">
                         Your dashboard gives you views of key performance<br />or business process.
                     </p>

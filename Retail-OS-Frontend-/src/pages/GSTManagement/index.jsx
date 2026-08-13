@@ -1,15 +1,16 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts';
 import {
     BsDownload, BsSearch, BsFilter, BsArrowUpRight,
-    BsReceiptCutoff, BsCurrencyRupee, BsFileEarmarkBarGraph,
+    BsReceiptCutoff, BsCurrencyRupee, BsFileEarmarkBarGraph, BsPlus, BsPencilFill,
 } from 'react-icons/bs';
+import { getGstRates, createGstRate, updateGstRate } from '../../services/billingService';
 
-/* ── Mock GST data ──────────────────────── */
-const GST_INVOICES = [
+/* ── Seed GST data (shown when no real invoices have been created yet) ── */
+const SEED_INVOICES = [
     { id: 'INV-2024001', customer: 'Rahul Sharma', gstin: '27AAPFU0939F1ZV', date: '2026-06-24', taxable: 3893, cgst: 350.37, sgst: 350.37, igst: 0, total: 4580, rate: 18 },
     { id: 'INV-2024002', customer: 'Priya Patel', gstin: '—', date: '2026-06-24', taxable: 1919, cgst: 0, sgst: 0, igst: 0, total: 2340, rate: 5 },
     { id: 'INV-2024003', customer: 'Amit Kumar', gstin: '07BCEPK4283R1ZJ', date: '2026-06-23', taxable: 7315, cgst: 0, sgst: 0, igst: 1605, total: 8920, rate: 18 },
@@ -40,16 +41,122 @@ const monthlyGST = [
 
 const fmt = (n) => '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/** Load invoices from localStorage (saved by Billing module on sale complete) */
+const loadInvoices = () => {
+    try {
+        const stored = localStorage.getItem('gst_invoices');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+    } catch (_) { }
+    return SEED_INVOICES;
+};
+
 const GSTManagement = () => {
+    const [GST_INVOICES, setGstInvoices] = useState(loadInvoices);
     const [search, setSearch] = useState('');
     const [rateFilter, setRateFilter] = useState('All');
     const [activeTab, setActiveTab] = useState('gstr1'); // gstr1 | gstr3b | slabs
+
+    // Refresh when user tabs back to this module (localStorage may have been updated in Billing)
+    useEffect(() => {
+        const onFocus = () => setGstInvoices(loadInvoices());
+        window.addEventListener('focus', onFocus);
+        return () => window.removeEventListener('focus', onFocus);
+    }, []);
+
+    const [gstRates, setGstRates] = useState([]);
+    const [ratesLoading, setRatesLoading] = useState(false);
+    useEffect(() => {
+        let active = true;
+        setRatesLoading(true);
+        getGstRates().then(data => {
+            if (active) setGstRates(data);
+        }).catch(err => console.error('[GSTManagement] Error fetching rates:', err)).finally(() => {
+            if (active) setRatesLoading(false);
+        });
+        return () => { active = false; };
+    }, []);
+
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [newHsn, setNewHsn] = useState('');
+    const [newRate, setNewRate] = useState('');
+    const [formSaving, setFormSaving] = useState(false);
+    const [formError, setFormError] = useState('');
+
+    const handleAddRate = async () => {
+        if (!newHsn.trim()) {
+            setFormError('HSN code is required.');
+            return;
+        }
+        if (newRate === '' || isNaN(Number(newRate))) {
+            setFormError('Valid GST rate percentage is required.');
+            return;
+        }
+        setFormSaving(true);
+        setFormError('');
+        try {
+            const addedRate = await createGstRate({
+                hsn_code: newHsn.trim(),
+                gst_rate: Number(newRate),
+            });
+            setGstRates(prev => [addedRate, ...prev]);
+            setShowAddModal(false);
+            setNewHsn('');
+            setNewRate('');
+        } catch (err) {
+            console.error('[GSTManagement] Error creating GST rate:', err);
+            setFormError(err.message || 'Failed to create GST rate. Please try again.');
+        } finally {
+            setFormSaving(false);
+        }
+    };
+
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editingRate, setEditingRate] = useState(null);
+    const [editRateVal, setEditRateVal] = useState('');
+    const [editStatus, setEditStatus] = useState(true);
+    const [editSaving, setEditSaving] = useState(false);
+    const [editError, setEditError] = useState('');
+
+    const openEdit = (rate) => {
+        setEditingRate(rate);
+        setEditRateVal(String(Math.round(Number(rate.gst_rate))));
+        setEditStatus(rate.status);
+        setEditError('');
+        setShowEditModal(true);
+    };
+
+    const handleUpdateRate = async () => {
+        if (!editingRate) return;
+        if (editRateVal === '') {
+            setEditError('GST rate percentage is required.');
+            return;
+        }
+        setEditSaving(true);
+        setEditError('');
+        try {
+            const updated = await updateGstRate(editingRate.id, {
+                gst_rate: Number(editRateVal),
+                status: editStatus,
+            });
+            setGstRates(prev => prev.map(r => r.id === editingRate.id ? updated : r));
+            setShowEditModal(false);
+            setEditingRate(null);
+        } catch (err) {
+            console.error('[GSTManagement] Error updating GST rate:', err);
+            setEditError(err.message || 'Failed to update GST rate. Please try again.');
+        } finally {
+            setEditSaving(false);
+        }
+    };
 
     const filtered = useMemo(() => GST_INVOICES.filter(inv =>
         (rateFilter === 'All' || String(inv.rate) === rateFilter) &&
         (inv.id.toLowerCase().includes(search.toLowerCase()) ||
             inv.customer.toLowerCase().includes(search.toLowerCase()))
-    ), [search, rateFilter]);
+    ), [search, rateFilter, GST_INVOICES]);
 
     /* Slab breakdown */
     const slabSummary = useMemo(() => {
@@ -64,7 +171,7 @@ const GSTManagement = () => {
             map[inv.rate].total += inv.total;
         });
         return Object.values(map).sort((a, b) => a.rate - b.rate);
-    }, []);
+    }, [GST_INVOICES]);
 
     const totalGST = GST_INVOICES.reduce((s, i) => s + i.cgst + i.sgst + i.igst, 0);
     const totalCGST = GST_INVOICES.reduce((s, i) => s + i.cgst, 0);
@@ -117,6 +224,7 @@ const GSTManagement = () => {
                     { id: 'gstr1', label: 'GSTR-1 Report' },
                     { id: 'gstr3b', label: 'GSTR-3B Summary' },
                     { id: 'slabs', label: 'Slab-Wise Breakdown' },
+                    { id: 'rates', label: 'Configured Rates' },
                 ].map(t => (
                     <button
                         key={t.id}
@@ -317,6 +425,211 @@ const GSTManagement = () => {
                             ))}
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* ── GST Rates (Config) ── */}
+            {activeTab === 'rates' && (
+                <div className="chart-card">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                        <h2 className="chart-title" style={{ margin: 0 }}>Configured GST Rates</h2>
+                        <button className="adm-btn-primary" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => { setShowAddModal(true); setFormError(''); }}>
+                            <BsPlus size={16} /> Add GST Rate
+                        </button>
+                    </div>
+                    {ratesLoading ? (
+                        <p style={{ fontSize: 13, color: '#64748b', padding: 20 }}>Loading GST Rates...</p>
+                    ) : (
+                        <table className="dash-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>HSN Code</th>
+                                    <th>GST Rate</th>
+                                    <th>CGST</th>
+                                    <th>SGST</th>
+                                    <th>IGST</th>
+                                    <th>Status</th>
+                                    <th>Created At</th>
+                                    <th style={{ textAlign: 'right' }}>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {gstRates.length === 0 ? (
+                                    <tr><td colSpan="9" style={{ textAlign: 'center', padding: 20 }}>No global GST rates fetched</td></tr>
+                                ) : (
+                                    gstRates.map((r, idx) => (
+                                        <tr key={r.id || idx}>
+                                            <td className="dash-table-id" style={{ width: 60 }}>{r.id || '—'}</td>
+                                            <td style={{ fontWeight: 600, fontFamily: 'monospace' }}>{r.hsn_code}</td>
+                                            <td>
+                                                <span className="adm-slab-badge" style={{ background: (slabColors[Math.round(r.gst_rate)] || '#94a3b8') + '18', color: slabColors[Math.round(r.gst_rate)] || '#64748b' }}>
+                                                    {Number(r.gst_rate)}%
+                                                </span>
+                                            </td>
+                                            <td style={{ color: '#10b981' }}>{Number(r.cgst)}%</td>
+                                            <td style={{ color: '#22d3ee' }}>{Number(r.sgst)}%</td>
+                                            <td style={{ color: '#f59e0b' }}>{Number(r.igst)}%</td>
+                                            <td>
+                                                {r.status ? (
+                                                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: '#ecfdf5', color: '#10b981', fontWeight: 600 }}>Active</span>
+                                                ) : (
+                                                    <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: '#fef2f2', color: '#ef4444', fontWeight: 600 }}>Inactive</span>
+                                                )}
+                                            </td>
+                                            <td style={{ fontSize: 12, color: '#9ca3af' }}>{new Date(r.created_at).toLocaleDateString()}</td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <button
+                                                    onClick={() => openEdit(r)}
+                                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#6366f1', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 4 }}
+                                                    title="Edit GST Rate"
+                                                >
+                                                    <BsPencilFill size={13} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    )}
+
+                    {/* Add GST Rate Modal */}
+                    {showAddModal && (
+                        <div className="ec-modal-overlay" onClick={() => setShowAddModal(false)}>
+                            <div className="ec-modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+                                <div className="ec-modal-header">
+                                    <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                        Add New GST Rate
+                                    </h3>
+                                    <button className="ec-modal-close" onClick={() => setShowAddModal(false)}>✕</button>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 10 }}>
+                                    {formError && (
+                                        <div style={{
+                                            background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2',
+                                            padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500
+                                        }}>
+                                            ⚠️ {formError}
+                                        </div>
+                                    )}
+                                    <div className="ec-field">
+                                        <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: '#4b5563' }}>HSN Code *</label>
+                                        <input
+                                            className="ec-input"
+                                            placeholder="e.g. 00000000"
+                                            value={newHsn}
+                                            onChange={e => setNewHsn(e.target.value)}
+                                            style={{ width: '100%' }}
+                                        />
+                                    </div>
+                                    <div className="ec-field">
+                                        <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: '#4b5563' }}>GST Rate (%) *</label>
+                                        <select
+                                            className="ec-input"
+                                            value={newRate}
+                                            onChange={e => setNewRate(e.target.value)}
+                                            style={{ width: '100%' }}
+                                        >
+                                            <option value="">Select Rate...</option>
+                                            <option value="0">0%</option>
+                                            <option value="5">5%</option>
+                                            <option value="12">12%</option>
+                                            <option value="18">18%</option>
+                                            <option value="28">28%</option>
+                                        </select>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                                        <button
+                                            className="adm-btn-secondary"
+                                            style={{ flex: 1, justifyContent: 'center' }}
+                                            onClick={() => setShowAddModal(false)}
+                                            disabled={formSaving}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            className="adm-btn-primary"
+                                            style={{ flex: 1, justifyContent: 'center' }}
+                                            onClick={handleAddRate}
+                                            disabled={formSaving}
+                                        >
+                                            {formSaving ? 'Saving...' : 'Save Rate'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Edit GST Rate Modal */}
+                    {showEditModal && editingRate && (
+                        <div className="ec-modal-overlay" onClick={() => setShowEditModal(false)}>
+                            <div className="ec-modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+                                <div className="ec-modal-header">
+                                    <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                        Edit GST Rate (HSN: {editingRate.hsn_code})
+                                    </h3>
+                                    <button className="ec-modal-close" onClick={() => setShowEditModal(false)}>✕</button>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 10 }}>
+                                    {editError && (
+                                        <div style={{
+                                            background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2',
+                                            padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500
+                                        }}>
+                                            ⚠️ {editError}
+                                        </div>
+                                    )}
+                                    <div className="ec-field">
+                                        <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: '#4b5563' }}>GST Rate (%) *</label>
+                                        <select
+                                            className="ec-input"
+                                            value={editRateVal}
+                                            onChange={e => setEditRateVal(e.target.value)}
+                                            style={{ width: '100%' }}
+                                        >
+                                            <option value="0">0%</option>
+                                            <option value="5">5%</option>
+                                            <option value="12">12%</option>
+                                            <option value="18">18%</option>
+                                            <option value="28">28%</option>
+                                        </select>
+                                    </div>
+                                    <div className="ec-field" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                                        <input
+                                            type="checkbox"
+                                            id="edit-rate-status"
+                                            checked={editStatus}
+                                            onChange={e => setEditStatus(e.target.checked)}
+                                            style={{ width: 16, height: 16, cursor: 'pointer' }}
+                                        />
+                                        <label htmlFor="edit-rate-status" style={{ fontSize: 13, fontWeight: 650, color: '#374151', cursor: 'pointer' }}>
+                                            Active Status (Enable rate for billing)
+                                        </label>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                                        <button
+                                            className="adm-btn-secondary"
+                                            style={{ flex: 1, justifyContent: 'center' }}
+                                            onClick={() => setShowEditModal(false)}
+                                            disabled={editSaving}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            className="adm-btn-primary"
+                                            style={{ flex: 1, justifyContent: 'center' }}
+                                            onClick={handleUpdateRate}
+                                            disabled={editSaving}
+                                        >
+                                            {editSaving ? 'Saving...' : 'Save Changes'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

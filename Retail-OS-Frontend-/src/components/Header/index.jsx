@@ -9,6 +9,10 @@ import { logoutUser } from '../../services/auth';
 const Header = () => {
     const navigate = useNavigate();
     const [showNewOrder, setShowNewOrder] = useState(false);
+    const user = JSON.parse(localStorage.getItem("user"));
+
+    const userName = user?.full_name || "User";
+    const userRole = user?.role?.name || "";
 
     const handleLogout = () => {
         logoutUser();
@@ -63,10 +67,11 @@ const Header = () => {
                 {/* Avatar + Logout */}
                 <div className="header-avatar-wrap" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <img
-                        src="https://ui-avatars.com/api/?name=Graham+Smith&background=6366f1&color=fff&size=80"
-                        alt="User Avatar"
-                        className="header-avatar"
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=6366f1&color=fff&size=80`}
+                    alt={`${userName} Avatar`}
+                    className="header-avatar"
                     />
+
                     <button
                         type="button"
                         className="header-icon-btn"

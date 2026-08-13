@@ -8,6 +8,9 @@ const InventoryTable = ({
   fmt,
   setStockModal,
 }) => {
+    console.log("PAGINATED INSIDE TABLE =>", paginated);
+  console.log("PAGINATED LENGTH =>", paginated?.length);
+
   return (
     <div className="inventory-table-container">
       <table className="inventory-table">
@@ -26,17 +29,34 @@ const InventoryTable = ({
             <th>Actions</th>
           </tr>
         </thead>
+             
+             
+             <tbody>
+       {paginated.map((item, idx) => {
+                                                                              
+      console.log("TABLE ITEM =>", item);
+console.log("Product Name =>", item.name);
+      console.log("SKU =>", item.sku);
+                                                                              
 
-        <tbody>
-          {paginated.map((item) => {
-            const st = stockStatus(item);
+       const name = item.name || item.product_name || `Product #${item.product_id || item.id}`;
+       const sku = item.sku || `SKU-00${item.product_id || item.id}`;
+       const category = item.category || item.category_name || "General";
+       const location = item.location || item.warehouse || `Store #${item.store_id || 1}`;
+            const qty = item.quantity !== undefined ? item.quantity : (item.stock !== undefined ? item.stock : 0);
+            const minStock = item.low_stock_threshold !== undefined ? item.low_stock_threshold : (item.minStock !== undefined ? item.minStock : 0);
+            const costPrice = item.costPrice !== undefined ? item.costPrice : (item.unit_cost !== undefined ? item.unit_cost : 0);
+            const sellingPrice = item.sellingPrice !== undefined ? item.sellingPrice : (item.price !== undefined ? item.price : costPrice);
+            const unit = item.unit || "Pcs";
+            const brand = item.brand || "Brand";
 
-            const margin = Math.round(
-              ((item.sellingPrice - item.costPrice) / item.costPrice) * 100
-            );
+            const margin = costPrice > 0
+              ? Math.round(((sellingPrice - costPrice) / costPrice) * 100)
+              : 0;
 
+         const st = stockStatus(item);
             return (
-              <tr key={item.id}>
+              <tr key={item.id || idx}>
                 {/* Product */}
                 <td>
                   <div
@@ -62,7 +82,7 @@ const InventoryTable = ({
 
                     <div>
                       <div style={{ fontWeight: 600 }}>
-                        {item.name}
+                        {name}
                       </div>
 
                       <div
@@ -71,14 +91,14 @@ const InventoryTable = ({
                           color: "#6b7280",
                         }}
                       >
-                        {item.brand} • {item.location}
+                        {brand} • {location}
                       </div>
                     </div>
                   </div>
                 </td>
 
                 {/* SKU */}
-                <td>{item.sku}</td>
+                <td>{sku}</td>
 
                 {/* Category */}
                 <td>
@@ -92,12 +112,12 @@ const InventoryTable = ({
                       fontWeight: 600,
                     }}
                   >
-                    {item.category}
+                    {category}
                   </span>
                 </td>
 
                 {/* Warehouse */}
-                <td>{item.location}</td>
+                <td>{location}</td>
 
                 {/* Stock */}
                 <td>
@@ -108,18 +128,18 @@ const InventoryTable = ({
                         color: st.color,
                       }}
                     >
-                      {item.stock} {item.unit}
+                      {qty} {unit}
                     </div>
 
-                    {item.stock > 0 &&
-                      item.stock < item.minStock && (
+                    {qty > 0 &&
+                      qty < minStock && (
                         <div
                           style={{
                             fontSize: 11,
                             color: "#f59e0b",
                           }}
                         >
-                          Below Min ({item.minStock})
+                          Below Min ({minStock})
                         </div>
                       )}
                   </div>
@@ -127,11 +147,11 @@ const InventoryTable = ({
 
                 {/* Min Stock */}
                 <td>
-                  {item.minStock} {item.unit}
+                  {minStock} {unit}
                 </td>
 
                 {/* Cost Price */}
-                <td>{fmt(item.costPrice)}</td>
+                <td>{fmt(costPrice)}</td>
 
                 {/* Selling Price */}
                 <td
@@ -140,7 +160,7 @@ const InventoryTable = ({
                     color: "#111827",
                   }}
                 >
-                  {fmt(item.sellingPrice)}
+                  {fmt(sellingPrice)}
                 </td>
 
                 {/* Margin */}
@@ -179,14 +199,20 @@ const InventoryTable = ({
                 </td>
 
                 {/* Actions */}
-                <td>
-                  <button
-                    className="adm-btn-primary"
-                    onClick={() => setStockModal(item)}
-                  >
-                    Update
-                  </button>
-                </td>
+               <td>
+  <button
+    className="adm-btn-primary"
+    onClick={() => {
+      console.log("Clicked Item =>", item);
+       console.log("STORE ID =>", item.store_id);
+      console.log("PRODUCT ID =>", item.product_id);
+
+      setStockModal(item);
+    }}
+  >
+    Update
+  </button>
+</td>
               </tr>
             );
           })}

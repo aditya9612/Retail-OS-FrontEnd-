@@ -1,120 +1,56 @@
-import axiosInstance from "./axios";
+import {
+  listInventory,
+  lowStock,
+  listMovements,
+  stockIn as serviceStockIn,
+  stockOut as serviceStockOut,
+  transferStock as serviceTransferStock,
+} from "../services/inventoryService";
 
 /**
- * Get All Inventory
- * GET /api/v1/inventory
+ * List Inventory
+ * GET /inventory
  */
-export const getInventory = async () => {
-  console.log("========== GET INVENTORY ==========");
-
-  try {
-    const response = await axiosInstance.get("/api/v1/inventory");
-
-    console.log("STATUS CODE :", response.status);
-    console.log("RESPONSE DATA :", response.data);
-    console.log("HEADERS :", response.headers);
-    console.log("FULL RESPONSE :", response);
-
-    return response.data;
-  } catch (error) {
-    console.log("========== INVENTORY ERROR ==========");
-
-    if (error.response) {
-      console.log("STATUS :", error.response.status);
-      console.log("ERROR DATA :", error.response.data);
-      console.log("ERROR HEADERS :", error.response.headers);
-    } else {
-      console.log("ERROR :", error.message);
-    }
-
-    throw error;
-  }
+export const getInventory = async (params = {}) => {
+  return await listInventory(params?.store_id || params?.storeId);
 };
 
 /**
- * Get Low Stock Products
- * GET /api/v1/inventory/low-stock
+ * Low Stock Inventory
+ * GET /inventory/low-stock
  */
-export const getLowStock = async () => {
-  try {
-    const response = await axiosInstance.get("/api/v1/inventory/low-stock");
-    return response.data;
-  } catch (error) {
-    console.error("Low Stock Error:", error);
-    throw error;
-  }
+export const getLowStock = async (params = {}) => {
+  return await lowStock(params?.store_id || params?.storeId);
 };
 
 /**
- * Get Inventory Movements
- * GET /api/v1/inventory/movements
+ * List Movements
+ * GET /inventory/movements
  */
 export const getMovements = async (storeId) => {
-  try {
-    const response = await axiosInstance.get(
-      "/api/v1/inventory/movements",
-      {
-        params: { storeId },
-      }
-    );
-
-    return response.data;
-  } catch (error) {
-    console.error("Movement Error:", error);
-    throw error;
-  }
+  return await listMovements(storeId);
 };
 
 /**
  * Stock In
- * POST /api/v1/inventory/stock-in
+ * POST /inventory/stock-in
  */
 export const stockIn = async (data) => {
-  try {
-    const response = await axiosInstance.post(
-      "/api/v1/inventory/stock-in",
-      data
-    );
-
-    return response.data;
-  } catch (error) {
-    console.error("Stock In Error:", error);
-    throw error;
-  }
+  return await serviceStockIn(data);
 };
 
 /**
  * Stock Out
- * POST /api/v1/inventory/stock-out
+ * POST /inventory/stock-out
  */
 export const stockOut = async (data) => {
-  try {
-    const response = await axiosInstance.post(
-      "/api/v1/inventory/stock-out",
-      data
-    );
-
-    return response.data;
-  } catch (error) {
-    console.error("Stock Out Error:", error);
-    throw error;
-  }
+  return await serviceStockOut(data);
 };
 
 /**
  * Transfer Stock
- * POST /api/v1/inventory/transfer
+ * POST /inventory/transfer
  */
 export const transferStock = async (data) => {
-  try {
-    const response = await axiosInstance.post(
-      "/api/v1/inventory/transfer",
-      data
-    );
-
-    return response.data;
-  } catch (error) {
-    console.error("Transfer Stock Error:", error);
-    throw error;
-  }
+  return await serviceTransferStock(data);
 };
