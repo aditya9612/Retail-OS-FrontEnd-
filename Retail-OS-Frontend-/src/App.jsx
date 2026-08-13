@@ -15,9 +15,11 @@ import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
 
 import Products from './pages/Products';
+import Supplier from './pages/Supplier';
 import Inventory from './pages/Inventory';
 import CategoryManagement from './pages/Categories/CategoryManagement';
 import Orders from './pages/Orders';
+import Purchases from './pages/Purchases';
 import Customers from './pages/Customers';
 import Returns from './pages/Reports';
 
@@ -53,6 +55,7 @@ function App() {
     return (
         <Router>
             <Routes>
+
                 {/* Login page */}
                 <Route
                     path="/login"
@@ -66,6 +69,7 @@ function App() {
                 {/* Protected dashboard routes */}
                 <Route element={<ProtectedRoute />}>
                     <Route element={<DashboardLayout />}>
+
                         {/* Main */}
                         <Route path="/dashboard" element={<Dashboard />} />
 
@@ -134,22 +138,48 @@ function App() {
                         />
 
                         {/* Inventory */}
-                        <Route path="/inventory" element={<Inventory />} />
+                        <Route
+                            path="/inventory"
+                            element={<Inventory />}
+                        />
 
-                        <Route path="/products" element={<Products />} />
+                        {/* Products */}
+                        <Route
+                            path="/products"
+                            element={<Products />}
+                        />
 
+                        {/* Suppliers */}
+                        <Route
+                            path="/suppliers"
+                            element={<Supplier />}
+                        />
+
+                        {/* Categories */}
                         <Route
                             path="/categories"
                             element={<CategoryManagement />}
                         />
 
-                        <Route path="/purchases" element={<Orders />} />
+                       {/* Purchases */}
+<Route
+    path="/purchases"
+    element={<Purchases />}
+/>
 
-                        <Route path="/returns" element={<Returns />} />
+                        {/* Returns */}
+                        <Route
+                            path="/returns"
+                            element={<Returns />}
+                        />
 
-                        {/* Customers and Staff */}
-                        <Route path="/customers" element={<Customers />} />
+                        {/* Customers */}
+                        <Route
+                            path="/customers"
+                            element={<Customers />}
+                        />
 
+                        {/* Staff */}
                         <Route
                             path="/employees"
                             element={
@@ -157,7 +187,7 @@ function App() {
                             }
                         />
 
-                        {/* Reports and Settings */}
+                        {/* Reports */}
                         <Route
                             path="/reports"
                             element={
@@ -165,6 +195,7 @@ function App() {
                             }
                         />
 
+                        {/* Settings */}
                         <Route
                             path="/settings"
                             element={
@@ -176,23 +207,38 @@ function App() {
                         <Route
                             path="*"
                             element={
-                                <Navigate to="/dashboard" replace />
+                                <Navigate
+                                    to="/dashboard"
+                                    replace
+                                />
                             }
                         />
+
                     </Route>
                 </Route>
 
                 {/* Default page */}
                 <Route
                     path="/"
-                    element={<Navigate to="/login" replace />}
+                    element={
+                        <Navigate
+                            to="/login"
+                            replace
+                        />
+                    }
                 />
 
                 {/* Unknown public route */}
                 <Route
                     path="*"
-                    element={<Navigate to="/login" replace />}
+                    element={
+                        <Navigate
+                            to="/login"
+                            replace
+                        />
+                    }
                 />
+
             </Routes>
         </Router>
     );

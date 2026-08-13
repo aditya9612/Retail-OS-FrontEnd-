@@ -18,20 +18,9 @@ import {
 import category from "../../services/categoryService";
 import { product as productService } from "../../services/product";
 
-
-
-const CATEGORIES_LIST = ['Electronics', 'Groceries', 'Apparel', 'Accessories', 'Home & Kitchen', 'Beauty', 'Sports', 'Books', 'Toys'];
 const GST_RATES = ['0%', '5%', '12%', '18%', '28%'];
 const UNITS = ['Pcs', 'Kg', 'Ltr', 'Box', 'Set', 'Pair', 'Bag', 'Dozen'];
 
-const CATEGORY_IDS = {
-    Electronics: 1, Groceries: 2, Apparel: 3, Accessories: 4,
-    "Home & Kitchen": 5, Beauty: 6, Sports: 7, Books: 8, Toys: 9,
-};
-
-const CATEGORY_NAMES = Object.fromEntries(
-    Object.entries(CATEGORY_IDS).map(([name, id]) => [id, name])
-);
 
 const PAGE_SIZE = 6;
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
@@ -105,17 +94,20 @@ const ProductFormModal = ({
                 <div className="ec-form-row">
                     <div className="ec-field">
                         <label>Category *</label>
-<select
-    className="ec-input"
-    value={form.category}
-    onChange={e => set('category', e.target.value)}
+                        <select
+  className="ec-input"
+  value={form.category}
+  onChange={(e) => set("category", e.target.value)}
 >
-    {CATEGORIES_LIST.map(c => (
-        <option key={c} value={c}>
-            {c}
-        </option>
-    ))}
+  <option value="">Select Category</option>
+
+  {categories.map((cat) => (
+    <option key={cat.id} value={cat.id}>
+      {cat.name}
+    </option>
+  ))}
 </select>
+
                     </div>
                     <div className="ec-field">
                         <label>Unit</label>
@@ -226,8 +218,9 @@ const loadCategories = async () => {
         (p.name || "").toLowerCase().includes(q) ||
         (p.brand || "").toLowerCase().includes(q) ||
         (p.barcode || "").includes(search);
-
-    const matchCat = filterCat === "All" || p.category === filterCat;
+const matchCat =
+  filterCat === "All" ||
+  Number(p.category) === Number(filterCat);
 
     return matchSearch && matchCat;
 });
@@ -370,15 +363,6 @@ const loadProducts = async () => {
                         <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 8 }}>{k.label}</p>
                         <p style={{ fontSize: 26, fontWeight: 800, color: k.color, marginTop: 4 }}>{k.value}</p>
                     </div>
-                ))}
-            </div>
-
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {['All', ...CATEGORIES_LIST].map(cat => (
-                    <button key={cat} onClick={() => { setFilterCat(cat); setPage(1); }}
-                        style={{ padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${filterCat === cat ? '#6366f1' : '#e5e7eb'}`, background: filterCat === cat ? '#eef2ff' : '#fff', color: filterCat === cat ? '#6366f1' : '#6b7280' }}>
-                        {cat}
-                    </button>
                 ))}
             </div>
 

@@ -4,6 +4,8 @@ import InventoryCards from "../../components/InventoryCards";
 import InventoryFilters from "../../components/InventoryFilters";
 import InventoryTable from "../../components/InventoryTable";
 import LowStockAlert from "../../components/LowStockAlert";
+import category from "../../services/categoryService";
+
 
 {/*import { getInventory, stockIn, stockOut } from "../../api/inventoryApi"; */}
 import {
@@ -170,18 +172,19 @@ console.log("PRODUCTS LENGTH =>", products.length);
     <label>Product</label>
 
 
-  <select
-  className="ec-input"
-  value={selectedProduct}
-  onChange={(e) => setSelectedProduct(Number(e.target.value))}
+  
+<select
+    className="ec-input"
+    value={selectedProduct}
+    onChange={(e) => setSelectedProduct(Number(e.target.value))}
 >
-  <option value={0}>Select Product</option>
+    <option value={0}>Select Product</option>
 
- {products.map((product) => (
-    <option key={product.id} value={product.id}>
-        {`${product.id} - ${product.name}`}
-    </option>
-))}
+    {products.map((product) => (
+        <option key={product.id} value={product.id}>
+            {`${product.id} - ${product.name}`}
+        </option>
+    ))}
 </select>
 </div>
 {/* 
@@ -289,6 +292,8 @@ console.log("PRODUCTS LENGTH =>", products.length);
     const [products, setProducts] = useState([]);
     const [stores, setStores] = useState([]);
     const [activeTab, setActiveTab] = useState('All Items');
+    const [categories, setCategories] = useState([]);
+
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -379,31 +384,73 @@ const fetchProducts = async () => {
 
         console.log("FULL PRODUCTS RESPONSE =>", response);
 
-       const data =
-    response?.data ??
-    response?.items ??
-    response?.content ??
-    response;
-    
-    console.table(data);
-           
+        const data =
+            response?.data ??
+            response?.items ??
+            response?.content ??
+            response;
+
+        console.log("========== PRODUCTS CHECK ==========");
+
+        console.log("PRODUCTS DATA =>", data);
+        console.log("PRODUCTS LENGTH =>", data?.length);
+
+        console.log(
+            "PRODUCT ID 4 =>",
+            data?.find((p) => Number(p.id) === 4)
+        );
 
         console.log(
             "PRODUCT ID 13 =>",
-            data.find((p) => p.id === 13)
+            data?.find((p) => Number(p.id) === 13)
         );
 
-        // ADD THESE LINES
-        const boatProduct = data.find((p) =>
+        console.table(data);
+
+        const boatProduct = data?.find((p) =>
             p.name?.toLowerCase().includes("boat")
         );
-        
-        setProducts(data);
+
+        console.log("BOAT PRODUCT =>", boatProduct);
+
+        if (Array.isArray(data)) {
+            setProducts(data);
+        } else {
+            console.error("Products data is NOT an array =>", data);
+            setProducts([]);
+        }
 
     } catch (err) {
-        console.error(err);
+        console.error("Products API Error =>", err);
+        setProducts([]);
     }
+};
 
+
+const fetchCategories = async () => {
+    try {
+        const response = await category.getAll();
+
+        console.log("FULL CATEGORIES RESPONSE =>", response);
+
+        const data =
+            response?.data?.data ??
+            response?.data ??
+            response?.items ??
+            response?.content ??
+            response;
+             console.log("CATEGORIES DATA =>", data);
+
+        if (Array.isArray(data)) {
+            setCategories(data);
+        } else {
+            setCategories([]);
+        }
+
+    } catch (err) {
+        console.error("Categories API Error:", err);
+        setCategories([]);
+    }
 };
 const fetchLowStock = async () => {
     try {
@@ -497,6 +544,7 @@ useEffect(() => {
     
     fetchProducts();
     fetchStores();
+     fetchCategories();
 }, []);
 
 useEffect(() => {
@@ -576,11 +624,10 @@ const filtered = inventory.filter((item) => {
         console.log("FILTER NAME =>", name);
         console.log("MATCH SEARCH =>", matchSearch);
     }
-
-    // Category
-    const matchCat =
-        filterCat === "All Categories" ||
-        item.category === filterCat;
+/// Category
+const matchCat =
+    filterCat === "All Categories" ||
+    String(item.category_id) === String(filterCat);
 
     // Supplier
     const supplier = item.supplier_name || "";
@@ -826,30 +873,31 @@ catch (err) {
     error={lowStockError}
     items={lowStockItems}
 />
-
 <InventoryFilters
-    search={search}
-    setSearch={setSearch}
+  search={search}
+  setSearch={setSearch}
 
-    inventory={inventory}
-    products={products}
+  inventory={inventory}
+  products={products}
+  stores={stores}
+  categories={categories}
 
-    filterWarehouse={filterWarehouse}
-    setFilterWarehouse={setFilterWarehouse}
+  filterWarehouse={filterWarehouse}
+  setFilterWarehouse={setFilterWarehouse}
 
-    filterCat={filterCat}
-    setFilterCat={setFilterCat}
+  filterCat={filterCat}
+  setFilterCat={setFilterCat}
 
-    filterSupplier={filterSupplier}
-    setFilterSupplier={setFilterSupplier}
+  filterSupplier={filterSupplier}
+  setFilterSupplier={setFilterSupplier}
 
-    filterStatus={filterStatus}
-    setFilterStatus={setFilterStatus}
+  filterStatus={filterStatus}
+  setFilterStatus={setFilterStatus}
 
-    filterDate={filterDate}
-    setFilterDate={setFilterDate}
+  filterDate={filterDate}
+  setFilterDate={setFilterDate}
 
-    onSearch={handleSearch}
+  onSearch={handleSearch}
 />
 
               <InventoryHeader

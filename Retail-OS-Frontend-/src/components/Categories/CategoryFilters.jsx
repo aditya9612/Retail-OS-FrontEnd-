@@ -55,10 +55,15 @@ const CategoryFilters = ({
           Reset
         </button>
 
-        <button className="search-btn">
-          Search
-        </button>
-
+        <button
+  className="search-btn"
+  onClick={() => {
+    setSearch(search);
+    setStatusFilter(statusFilter);
+  }}
+>
+  Search
+</button>
         <button className="export-btn">
           Export
         </button>

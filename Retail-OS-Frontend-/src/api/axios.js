@@ -3,10 +3,6 @@ import { getAccessToken } from "../utils/tokenStorage";
 
 const axiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
-  timeout: 10000,
 });
 
 // Request Interceptor
@@ -27,9 +23,7 @@ axiosInstance.interceptors.request.use(
 
 // Response Interceptor
 axiosInstance.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   (error) => {
     console.error("API Error:", error);
     return Promise.reject(error);
