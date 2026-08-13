@@ -104,11 +104,10 @@ const Login = () => {
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    padding: clamp(10px, 1.8vh, 26px) clamp(16px, 2vw, 40px);
+                    padding: clamp(10px, 1.6vh, 22px) clamp(16px, 2vw, 36px);
                     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
                     position: relative;
-                    overflow-y: auto;
-                    overflow-x: hidden;
+                    overflow: hidden;
                 }
 
                 /* Light & Professional Background Shapes without expensive blur filters */
@@ -165,22 +164,22 @@ const Login = () => {
                     width: 100%;
                     max-width: 1640px;
                     height: 100%;
-                    max-height: 95vh;
+                    max-height: 100%;
                     align-items: center;
                     justify-content: space-between;
-                    gap: clamp(16px, 2.5vw, 36px);
+                    gap: clamp(16px, 2.5vw, 40px);
                     z-index: 1;
                 }
 
-                /* LEFT SECTION (~64% Width for Larger Store Illustration & 7 Cards) */
+                /* LEFT SECTION (~57% Width for Store Illustration & 7 Cards) */
                 .left-section-wrapper {
-                    flex: 0 0 64%;
-                    width: 64%;
+                    flex: 0 0 57%;
+                    width: 57%;
                     height: 100%;
                     display: flex;
                     flex-direction: column;
                     justify-content: space-between;
-                    gap: clamp(6px, 1.2vh, 12px);
+                    gap: clamp(4px, 1vh, 10px);
                 }
 
                 /* Transparent RetailOS Brand Logo - NO white box background */
@@ -195,13 +194,13 @@ const Login = () => {
                     margin: 0 !important;
                 }
                 .brand-header-logo-img {
-                    height: clamp(32px, 3.8vh, 42px);
+                    height: clamp(30px, 3.6vh, 40px);
                     width: auto;
                     object-fit: contain;
                     background: transparent !important;
                 }
                 .brand-header-text {
-                    font-size: clamp(22px, 2.8vh, 28px);
+                    font-size: clamp(20px, 2.6vh, 26px);
                     font-weight: 800;
                     letter-spacing: -0.03em;
                     line-height: 1;
@@ -211,7 +210,7 @@ const Login = () => {
 
                 /* Main Title & Subtitle */
                 .left-main-heading {
-                    font-size: clamp(28px, 3.6vh, 42px);
+                    font-size: clamp(26px, 3.4vh, 40px);
                     font-weight: 800;
                     color: #0F172A;
                     line-height: 1.15;
@@ -223,7 +222,7 @@ const Login = () => {
                 .highlight-darkblue { color: #0F172A; }
 
                 .left-subtitle-text {
-                    font-size: clamp(12.5px, 1.5vh, 15px);
+                    font-size: clamp(12px, 1.4vh, 14.5px);
                     color: #475569;
                     margin: 2px 0 0 0;
                     font-weight: 450;
@@ -235,8 +234,8 @@ const Login = () => {
                     position: relative;
                     width: 100%;
                     flex: 1;
-                    min-height: clamp(260px, 42vh, 410px);
-                    max-height: clamp(290px, 46vh, 430px);
+                    min-height: clamp(230px, 38vh, 390px);
+                    max-height: clamp(260px, 44vh, 410px);
                     display: flex;
                     align-items: center;
                     justify-content: center;
@@ -266,7 +265,7 @@ const Login = () => {
                 /* Larger, Crisp & Prominent 3D Store Illustration */
                 .hero-store-img {
                     max-width: 94%;
-                    max-height: clamp(250px, 42vh, 420px);
+                    max-height: clamp(230px, 40vh, 390px);
                     object-fit: contain;
                     filter: drop-shadow(0 16px 32px rgba(15, 23, 42, 0.09));
                     z-index: 2;
@@ -279,14 +278,14 @@ const Login = () => {
                     background: #FFFFFF;
                     border: 1px solid #E2E8F0;
                     border-radius: 12px;
-                    padding: clamp(6px, 0.9vh, 9px) clamp(10px, 1.1vw, 14px);
+                    padding: clamp(5px, 0.8vh, 8px) clamp(8px, 1vw, 13px);
                     box-shadow: 0 6px 18px -2px rgba(15, 23, 42, 0.06);
                     display: flex;
                     align-items: center;
-                    gap: 9px;
+                    gap: 8px;
                     z-index: 3;
-                    min-width: 155px;
-                    max-width: 200px;
+                    min-width: 145px;
+                    max-width: 195px;
                     transition: transform 0.2s ease, box-shadow 0.2s ease;
                 }
                 .floating-feature-card:hover {
@@ -296,25 +295,25 @@ const Login = () => {
                 }
 
                 .floating-icon-wrapper {
-                    width: clamp(28px, 3.4vh, 34px);
-                    height: clamp(28px, 3.4vh, 34px);
-                    border-radius: 9px;
+                    width: clamp(26px, 3.2vh, 32px);
+                    height: clamp(26px, 3.2vh, 32px);
+                    border-radius: 8px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: clamp(14px, 1.7vh, 16px);
+                    font-size: clamp(13px, 1.6vh, 15px);
                     flex-shrink: 0;
                 }
 
                 .floating-card-title {
-                    font-size: clamp(11px, 1.3vh, 12.5px);
+                    font-size: clamp(10.5px, 1.2vh, 12px);
                     font-weight: 700;
                     color: #0F172A;
                     line-height: 1.2;
                     white-space: nowrap;
                 }
                 .floating-card-desc {
-                    font-size: clamp(9.5px, 1.1vh, 10.5px);
+                    font-size: clamp(9px, 1vh, 10px);
                     color: #64748B;
                     line-height: 1.2;
                     margin-top: 1px;
@@ -335,14 +334,14 @@ const Login = () => {
                     background: #FFFFFF;
                     border: 1px solid #E2E8F0;
                     border-radius: 16px;
-                    padding: clamp(8px, 1.2vh, 12px) clamp(10px, 1.2vw, 16px);
+                    padding: clamp(6px, 1vh, 10px) clamp(8px, 1vw, 14px);
                     box-shadow: 0 5px 16px -3px rgba(15, 23, 42, 0.04);
                 }
 
                 .bottom-feature-row {
                     display: grid;
                     grid-template-columns: repeat(6, 1fr);
-                    gap: clamp(6px, 0.8vw, 12px);
+                    gap: clamp(4px, 0.7vw, 10px);
                 }
 
                 .feature-item-pill {
@@ -354,25 +353,25 @@ const Login = () => {
                 }
 
                 .feature-pill-icon {
-                    width: clamp(24px, 3vh, 30px);
-                    height: clamp(24px, 3vh, 30px);
+                    width: clamp(22px, 2.6vh, 28px);
+                    height: clamp(22px, 2.6vh, 28px);
                     border-radius: 8px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    font-size: clamp(12px, 1.4vh, 15px);
-                    margin-bottom: 4px;
+                    font-size: clamp(11px, 1.3vh, 14px);
+                    margin-bottom: 3px;
                 }
 
                 .feature-pill-title {
-                    font-size: clamp(10px, 1.2vh, 11.5px);
+                    font-size: clamp(9.5px, 1.1vh, 11px);
                     font-weight: 700;
                     color: #0F172A;
                     line-height: 1.2;
                 }
 
                 .feature-pill-desc {
-                    font-size: clamp(8.5px, 1vh, 9.5px);
+                    font-size: clamp(8px, 0.9vh, 9px);
                     color: #64748B;
                     margin-top: 1px;
                     line-height: 1.2;
@@ -380,16 +379,16 @@ const Login = () => {
 
                 .left-footer-copyright {
                     text-align: center;
-                    font-size: clamp(10px, 1.2vh, 11.5px);
+                    font-size: clamp(9.5px, 1.1vh, 11px);
                     color: #94A3B8;
                     font-weight: 500;
                     margin-top: 1px;
                 }
 
-                /* RIGHT SECTION (~34% Width for a Sleek Vertically Slender Card) */
+                /* RIGHT SECTION (~41% Width for Larger Balanced Login Card) */
                 .right-login-section {
-                    flex: 0 0 34%;
-                    width: 34%;
+                    flex: 0 0 41%;
+                    width: 41%;
                     height: 100%;
                     display: flex;
                     justify-content: center;
@@ -398,22 +397,22 @@ const Login = () => {
 
                 .login-card {
                     width: 100%;
-                    max-width: 395px;
+                    max-width: 475px;
                     background: #FFFFFF;
                     border-radius: 28px;
-                    padding: clamp(22px, 3.2vh, 36px) clamp(20px, 2vw, 32px);
-                    box-shadow: 0 18px 45px -8px rgba(15, 23, 42, 0.08), 0 0 1px rgba(15, 23, 42, 0.12);
+                    padding: clamp(26px, 3.8vh, 44px) clamp(24px, 2.4vw, 38px);
+                    box-shadow: 0 20px 50px -10px rgba(15, 23, 42, 0.09), 0 0 1px rgba(15, 23, 42, 0.12);
                     border: 1px solid rgba(255, 255, 255, 0.95);
                 }
 
                 .card-logo-box {
                     display: flex;
                     justify-content: center;
-                    margin-bottom: clamp(8px, 1.4vh, 14px);
+                    margin-bottom: clamp(10px, 1.5vh, 16px);
                 }
 
                 .card-logo-img {
-                    height: clamp(36px, 4.5vh, 48px);
+                    height: clamp(50px, 6.2vh, 64px);
                     width: auto;
                     object-fit: contain;
                     background: transparent !important;
@@ -421,31 +420,31 @@ const Login = () => {
 
                 .login-card-header {
                     text-align: center;
-                    margin-bottom: clamp(10px, 1.8vh, 18px);
+                    margin-bottom: clamp(14px, 2vh, 20px);
                 }
 
                 .welcome-headline {
-                    font-size: clamp(19px, 2.4vh, 23px);
+                    font-size: clamp(26px, 3.5vh, 32px);
                     font-weight: 800;
                     color: #0F172A;
-                    margin: 0 0 3px 0;
-                    letter-spacing: -0.02em;
+                    margin: 0 0 4px 0;
+                    letter-spacing: -0.025em;
                 }
 
                 .welcome-subtext {
                     color: #64748B;
-                    font-size: clamp(12px, 1.4vh, 13px);
+                    font-size: clamp(12.5px, 1.5vh, 14px);
                     margin: 0;
                     font-weight: 500;
                 }
 
                 .form-field-group {
-                    margin-bottom: clamp(9px, 1.4vh, 14px);
+                    margin-bottom: clamp(10px, 1.6vh, 16px);
                 }
 
                 .form-field-label {
                     display: block;
-                    margin-bottom: 4px;
+                    margin-bottom: 5px;
                     font-size: clamp(12px, 1.3vh, 13px);
                     font-weight: 600;
                     color: #334155;
@@ -466,13 +465,13 @@ const Login = () => {
 
                 .form-control-input {
                     width: 100%;
-                    height: clamp(36px, 4.2vh, 42px);
+                    height: clamp(40px, 4.5vh, 46px);
                     padding: 0 13px 0 38px;
                     border-radius: 10px;
                     border: 1.5px solid #E2E8F0;
                     background: #F8FAFC;
                     outline: none;
-                    font-size: 13px;
+                    font-size: 13.5px;
                     color: #0F172A;
                     transition: border-color 0.2s, box-shadow 0.2s;
                 }
@@ -511,7 +510,7 @@ const Login = () => {
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
-                    margin-bottom: clamp(10px, 1.6vh, 16px);
+                    margin-bottom: clamp(12px, 1.8vh, 18px);
                 }
 
                 .checkbox-remember-label {
@@ -541,7 +540,7 @@ const Login = () => {
 
                 .btn-submit-primary {
                     width: 100%;
-                    height: clamp(38px, 4.4vh, 44px);
+                    height: clamp(40px, 4.6vh, 46px);
                     border-radius: 10px;
                     font-size: 14.5px;
                     font-weight: 700;
@@ -569,7 +568,7 @@ const Login = () => {
                 .or-divider-row {
                     display: flex;
                     align-items: center;
-                    margin: clamp(8px, 1.4vh, 14px) 0;
+                    margin: clamp(10px, 1.5vh, 16px) 0;
                     gap: 10px;
                 }
 
@@ -580,32 +579,32 @@ const Login = () => {
                 }
 
                 .or-divider-label {
-                    font-size: 11px;
+                    font-size: 11.5px;
                     color: #94A3B8;
                     font-weight: 500;
                 }
 
                 .social-auth-row {
                     display: flex;
-                    gap: 10px;
-                    margin-bottom: clamp(8px, 1.4vh, 14px);
+                    justify-content: center;
+                    margin-bottom: clamp(10px, 1.5vh, 16px);
                 }
 
                 .btn-social-auth {
-                    flex: 1;
-                    height: clamp(34px, 4vh, 39px);
+                    width: 100%;
+                    height: clamp(40px, 4.5vh, 46px);
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    gap: 6px;
-                    border-radius: 9px;
-                    border: 1px solid #E2E8F0;
+                    gap: 8px;
+                    border-radius: 10px;
+                    border: 1.5px solid #E2E8F0;
                     background: #FFFFFF;
                     color: #334155;
-                    font-size: 12.5px;
+                    font-size: 13.5px;
                     font-weight: 600;
                     cursor: pointer;
-                    transition: background 0.2s;
+                    transition: background 0.2s, border-color 0.2s;
                 }
 
                 .btn-social-auth:hover {
@@ -647,12 +646,20 @@ const Login = () => {
                 }
 
                 /* Responsive Design */
-                @media (max-width: 1200px) {
+                @media (max-width: 1150px) {
+                    .left-section-wrapper {
+                        flex: 0 0 54%;
+                        width: 54%;
+                    }
+                    .right-login-section {
+                        flex: 0 0 44%;
+                        width: 44%;
+                    }
                     .left-main-heading {
                         font-size: 32px;
                     }
                     .hero-stage-container {
-                        min-height: 270px;
+                        min-height: 250px;
                     }
                     .floating-feature-card {
                         min-width: 140px;
@@ -660,27 +667,33 @@ const Login = () => {
                     }
                 }
 
-                @media (max-width: 992px) {
+                @media (max-width: 920px) {
                     .login-page-container {
                         padding: 20px 16px;
                         height: auto;
+                        min-height: 100vh;
                         max-height: none;
+                        overflow-y: auto;
                     }
                     .split-screen-layout {
                         flex-direction: column;
                         align-items: center;
                         max-height: none;
+                        gap: 20px;
                     }
                     .left-section-wrapper {
                         width: 100%;
-                        flex: 1;
+                        flex: 1 1 auto;
                         height: auto;
                     }
                     .right-login-section {
                         width: 100%;
-                        flex: 1;
+                        flex: 1 1 auto;
                         height: auto;
-                        margin-top: 20px;
+                        margin-top: 10px;
+                    }
+                    .login-card {
+                        max-width: 460px;
                     }
                     .bottom-feature-row {
                         grid-template-columns: repeat(3, 1fr);
@@ -698,7 +711,8 @@ const Login = () => {
                         display: none;
                     }
                     .login-card {
-                        padding: 20px 14px;
+                        padding: 20px 16px;
+                        border-radius: 20px;
                     }
                 }
             `}</style>
@@ -1006,25 +1020,16 @@ const Login = () => {
                             <div className="or-divider-line"></div>
                         </div>
 
-                        {/* Social Login Buttons */}
+                        {/* Social Login Button */}
                         <div className="social-auth-row">
                             <button type="button" onClick={handleGoogleLogin} className="btn-social-auth">
-                                <svg width="16" height="16" viewBox="0 0 24 24">
+                                <svg width="18" height="18" viewBox="0 0 24 24">
                                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
                                     <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.62z" />
                                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                                 </svg>
                                 Google
-                            </button>
-                            <button type="button" onClick={handleMicrosoftLogin} className="btn-social-auth">
-                                <svg width="16" height="16" viewBox="0 0 23 23">
-                                    <path fill="#f35325" d="M1 1h10v10H1z" />
-                                    <path fill="#81bc06" d="M12 1h10v10H12z" />
-                                    <path fill="#05a6f0" d="M1 12h10v10H1z" />
-                                    <path fill="#ffba08" d="M12 12h10v10H12z" />
-                                </svg>
-                                Microsoft
                             </button>
                         </div>
 

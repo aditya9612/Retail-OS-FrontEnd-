@@ -25,6 +25,15 @@ export const updateCustomer = async (customerId, customerData) => {
     return response.data;
 };
 
+export const updateCustomerStatus = async (customerId, status) => {
+    const payload = typeof status === 'object' ? status : { status: typeof status === 'string' ? status.toLowerCase() : status };
+    const response = await apiClient.patch(
+        `${CUSTOMER_API_URL}/${customerId}/status`,
+        payload
+    );
+    return response.data;
+};
+
 export const deleteCustomer = async (customerId) => {
     const response = await apiClient.delete(
         `${CUSTOMER_API_URL}/${customerId}`

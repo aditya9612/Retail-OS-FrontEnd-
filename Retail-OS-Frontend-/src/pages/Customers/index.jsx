@@ -13,6 +13,7 @@ import {
     createCustomer,
     getCustomerById,
     updateCustomer,
+    updateCustomerStatus,
     // deleteCustomer,
     getCustomerStats,
     getBirthdayCustomers,
@@ -30,6 +31,7 @@ import {
     getLoyaltyHistory,
 } from '../../services/customer';
 import CustomerDetailPanel from '../../components/customers/CustomerDetailPanel';
+import ExportDirectoryModal from '../../components/customers/ExportDirectoryModal';
 import {
     fmt,
     normalizeApiList,
@@ -420,6 +422,7 @@ const Customers = () => {
 
     // Modals & Detail States
     const [showAddModal, setShowAddModal] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [detailExtras, setDetailExtras] = useState({});
@@ -551,16 +554,28 @@ const Customers = () => {
     //     if (selectedCustomer?.backendId === customer.backendId) setSelectedCustomer(null);
     // };
 
-    // Handler for ACTIVE / INACTIVE Toggle Switch (Updates UI state per instructions)
-    const handleStatusToggle = (id, currentStatus) => {
-        // TODO:
-        // Connect PATCH Customer Status API here when backend provides the endpoint.
-        // For now, only update the UI state.
-
+    // Handler for ACTIVE / INACTIVE Toggle Switch (Calls PATCH /api/v1/customers/{customer_id}/status)
+    const handleStatusToggle = async (id, currentStatus) => {
         const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+
+        // Optimistic UI update
         setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: newStatus } : c));
-        if (selectedCustomer?.backendId === id) {
+        if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
             setSelectedCustomer(prev => prev ? { ...prev, status: newStatus } : prev);
+        }
+
+        try {
+            if (id) {
+                await updateCustomerStatus(id, newStatus.toLowerCase());
+            }
+        } catch (err) {
+            console.error('Failed to update customer status via API:', err);
+            // Rollback UI on error
+            setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: currentStatus } : c));
+            if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
+                setSelectedCustomer(prev => prev ? { ...prev, status: currentStatus } : prev);
+            }
+            alert(getApiErrorMessage(err, 'Failed to update customer status.'));
         }
     };
 
@@ -637,15 +652,7 @@ const Customers = () => {
                     <button
                         type="button"
                         className="adm-btn-secondary"
-                        onClick={() => {
-                            const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(customers, null, 2));
-                            const anchor = document.createElement('a');
-                            anchor.setAttribute("href", jsonStr);
-                            anchor.setAttribute("download", "crm_customers_directory.json");
-                            document.body.appendChild(anchor);
-                            anchor.click();
-                            anchor.remove();
-                        }}
+                        onClick={() => setShowExportModal(true)}
                     >
                         <BsDownload size={14} /> Export Directory
                     </button>
@@ -1129,6 +1136,12 @@ const Customers = () => {
             </div>
 
             {/* Modals & Profile Detail Panel */}
+            <ExportDirectoryModal
+                isOpen={showExportModal}
+                onClose={() => setShowExportModal(false)}
+                customers={customers}
+            />
+
             {showAddModal && (
                 <AddCustomerModal
                     onClose={() => setShowAddModal(false)}
