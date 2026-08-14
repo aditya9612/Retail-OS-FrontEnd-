@@ -2810,4 +2810,24 @@ width:100%;
 
 .table-scroll-container::-webkit-scrollbar-thumb:hover {
   background: #7c7c7c;
-}
+}
+
+
+
+/* Product table horizontal scrollbar */
+.table-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  background: #c7c7c7;
+  border-radius: 10px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}

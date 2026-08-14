@@ -18,14 +18,19 @@ axiosInstance.interceptors.request.use(
 
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    return Promise.reject(error);
+  }
 );
 
 // Response Interceptor
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
+    console.error("API Error:", error.response || error.message);
+
     console.error("API Error:", error);
+
     return Promise.reject(error);
   }
 );

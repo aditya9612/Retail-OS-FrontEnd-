@@ -7,6 +7,7 @@ import {
 import {
     getCustomers,
     updateCustomer,
+    updateCustomerStatus,
     deleteCustomer,
     getCustomerById,
     getCustomerStats,
@@ -144,7 +145,7 @@ const CustomerManagement = () => {
         }
     };
 
-    // Active / Inactive Toggle
+    // Active / Inactive Toggle (Calls PATCH /api/v1/customers/{customer_id}/status)
     const handleToggleStatus = async (customer) => {
         const newStatus = customer.status === 'Active' ? 'Inactive' : 'Active';
         setUpdatingId(customer.backendId);
@@ -155,7 +156,7 @@ const CustomerManagement = () => {
                 setSelectedCustomer(prev => prev ? { ...prev, status: newStatus } : prev);
             }
 
-            await updateCustomer(customer.backendId, { status: newStatus.toLowerCase() });
+            await updateCustomerStatus(customer.backendId, newStatus.toLowerCase());
         } catch (err) {
             console.error('Status update failed:', err);
             setCustomers(prev => prev.map(c => c.backendId === customer.backendId ? { ...c, status: customer.status } : c));
