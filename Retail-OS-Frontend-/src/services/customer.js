@@ -18,7 +18,7 @@ export const createCustomer = async (customerData) => {
 };
 
 export const updateCustomer = async (customerId, customerData) => {
-    const response = await apiClient.patch(
+    const response = await apiClient.put(
         `${CUSTOMER_API_URL}/${customerId}`,
         customerData
     );
@@ -117,10 +117,12 @@ export const getCustomerOrders = async (customerId, params = {}) => {
     return response.data;
 };
 
-export const addLoyalty = async (customerId, data) => {
+export const addLoyalty = async (customerId, points) => {
+    const pts = typeof points === 'object' ? (points.points || points.amount || 0) : points;
     const response = await apiClient.post(
         `${CUSTOMER_API_URL}/${customerId}/loyalty`,
-        data
+        null,
+        { params: { points: Number(pts) } }
     );
     return response.data;
 };

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { State, City } from 'country-state-city';
 import {
     BsSearch, BsDownload, BsPeopleFill, BsPhone, BsGeoAlt,
@@ -6,7 +6,7 @@ import {
     BsChevronLeft, BsChevronRight, BsCheckCircleFill, BsXCircleFill,
     BsWallet2, BsChatText, BsJournalText, BsShare,
     BsFunnel, BsGift, BsTrophy, BsGraphUp,
-    //   BsTrash,
+    BsTrash,
 } from 'react-icons/bs';
 import {
     getCustomers,
@@ -14,7 +14,6 @@ import {
     getCustomerById,
     updateCustomer,
     updateCustomerStatus,
-    // deleteCustomer,
     getCustomerStats,
     getBirthdayCustomers,
     getReferrals,
@@ -29,6 +28,8 @@ import {
     getCustomerWallet,
     getWalletTransactions,
     getLoyaltyHistory,
+    getCustomerOrders,
+    sendCampaign,
 } from '../../services/customer';
 import CustomerDetailPanel from '../../components/customers/CustomerDetailPanel';
 import ExportDirectoryModal from '../../components/customers/ExportDirectoryModal';
@@ -58,7 +59,7 @@ const typeCfg = {
     New: { color: '#0ea5e9', bg: '#f0f9ff' },
 };
 
-// Professional Active / Inactive Toggle Switch Component (Exactly per reference UI)
+// Professional Active / Inactive Toggle Switch Component
 const CustomerStatusToggle = ({ isActive, onToggle }) => {
     const activeColor = '#10b981';
     const inactiveColor = '#ef4444';
@@ -108,17 +109,6 @@ const CustomerStatusToggle = ({ isActive, onToggle }) => {
                     }}
                 />
             </span>
-
-            {/* <span
-                style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: isActive ? activeColor : inactiveColor,
-                    userSelect: 'none',
-                }}
-            >
-                {isActive ? 'Active' : 'Inactive'}
-            </span> */}
         </button>
     );
 };
@@ -403,6 +393,105 @@ const EditCustomerModal = ({ customer, onClose, onSaved }) => {
     );
 };
 
+// Send Marketing Campaign Modal
+const SendCampaignModal = ({ onClose }) => {
+    const [title, setTitle] = useState('');
+    const [channel, setChannel] = useState('sms');
+    const [targetAudience, setTargetAudience] = useState('all');
+    const [subject, setSubject] = useState('');
+    const [message, setMessage] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!title.trim() || !message.trim()) {
+            alert('Please enter a campaign title and message content.');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            await sendCampaign({
+                title: title.trim(),
+                channel,
+                target_audience: targetAudience,
+                subject: subject.trim() || undefined,
+                message: message.trim(),
+            });
+            alert('Marketing campaign sent successfully!');
+            onClose();
+        } catch (err) {
+            console.error('Send campaign error:', err);
+            alert(getApiErrorMessage(err, 'Failed to send marketing campaign.'));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose}>
+            <div className="ec-modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+                <div className="ec-modal-header">
+                    <div>
+                        <h3 style={{ fontWeight: 700, fontSize: 17, color: '#111827' }}>Send Marketing Campaign</h3>
+                        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>Blast promotional SMS, WhatsApp, or Email campaigns to customer segments</p>
+                    </div>
+                    <button type="button" className="ec-modal-close" onClick={onClose}>✕</button>
+                </div>
+
+                <form onSubmit={handleSubmit} style={{ marginTop: 14 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <div>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Campaign Name / Title *</label>
+                            <input className="ec-input" type="text" placeholder="e.g., Festival Clearance Sale" value={title} onChange={e => setTitle(e.target.value)} required />
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Communication Channel *</label>
+                                <select className="ec-input" value={channel} onChange={e => setChannel(e.target.value)}>
+                                    <option value="sms">SMS Notification</option>
+                                    <option value="whatsapp">WhatsApp Message</option>
+                                    <option value="email">Email Blast</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Target Audience *</label>
+                                <select className="ec-input" value={targetAudience} onChange={e => setTargetAudience(e.target.value)}>
+                                    <option value="all">All Customers</option>
+                                    <option value="vip">VIP Segment Only</option>
+                                    <option value="regular">Regular Customers</option>
+                                    <option value="active">Active Customers</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {channel === 'email' && (
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Email Subject</label>
+                                <input className="ec-input" type="text" placeholder="e.g., Special Offer Just For You!" value={subject} onChange={e => setSubject(e.target.value)} />
+                            </div>
+                        )}
+
+                        <div>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Campaign Message *</label>
+                            <textarea className="ec-input" rows={4} placeholder="Enter your campaign announcement or offer code details..." value={message} onChange={e => setMessage(e.target.value)} required style={{ width: '100%', resize: 'vertical' }} />
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+                        <button type="button" className="adm-btn-secondary" onClick={onClose}>Cancel</button>
+                        <button type="submit" className="adm-btn-primary" disabled={submitting || !title.trim() || !message.trim()}>
+                            {submitting ? 'Sending Campaign...' : '🚀 Send Campaign'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 // Main Customer Directory Component
 const Customers = () => {
     // Initial Page Load States
@@ -423,38 +512,22 @@ const Customers = () => {
     // Modals & Detail States
     const [showAddModal, setShowAddModal] = useState(false);
     const [showExportModal, setShowExportModal] = useState(false);
+    const [showCampaignModal, setShowCampaignModal] = useState(false);
     const [editingCustomer, setEditingCustomer] = useState(null);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [detailExtras, setDetailExtras] = useState({});
     const [viewLoading, setViewLoading] = useState(false);
 
-    // Initial Load: Loads CRM Overview APIs once on page mount
+    const hasLoadedRef = useRef(false);
+
+    // Initial Load: Loads ONLY directory APIs (customers & stats) once on page mount
     const loadCrmDashboard = async (showLoader = true) => {
         if (showLoader) setLoading(true);
         setError('');
 
-        const [
-            customersRes,
-            statsRes,
-            birthdaysRes,
-            topCustRes,
-            retentionRes,
-            ltvRes,
-            loyaltyRepRes,
-            referralsRes,
-            commsRes,
-            notesRes,
-        ] = await Promise.allSettled([
+        const [customersRes, statsRes] = await Promise.allSettled([
             getCustomers(),
             getCustomerStats(),
-            getBirthdayCustomers(),
-            getTopCustomers(),
-            getRetentionReport(),
-            getLifetimeValue(),
-            getLoyaltyReport(),
-            getReferrals(),
-            getCommunications(),
-            getNotes(),
         ]);
 
         if (customersRes.status === 'fulfilled') {
@@ -464,75 +537,30 @@ const Customers = () => {
             setError('Unable to load customer directory.');
         }
 
-        if (statsRes.status === 'fulfilled') setCustomerStats(statsRes.value);
-        if (birthdaysRes.status === 'fulfilled') setBirthdayCustomers(normalizeApiList(birthdaysRes.value));
-
-        setCustomerInsights({
-            topCustomers: topCustRes.status === 'fulfilled' ? topCustRes.value : null,
-            retention: retentionRes.status === 'fulfilled' ? retentionRes.value : null,
-            lifetimeValue: ltvRes.status === 'fulfilled' ? ltvRes.value : null,
-            loyaltyReport: loyaltyRepRes.status === 'fulfilled' ? loyaltyRepRes.value : null,
-            referrals: referralsRes.status === 'fulfilled' ? referralsRes.value : null,
-            communications: commsRes.status === 'fulfilled' ? commsRes.value : null,
-            notes: notesRes.status === 'fulfilled' ? notesRes.value : null,
-        });
+        if (statsRes.status === 'fulfilled') {
+            setCustomerStats(statsRes.value);
+        }
 
         if (showLoader) setLoading(false);
     };
 
     useEffect(() => {
+        if (hasLoadedRef.current) return;
+        hasLoadedRef.current = true;
         loadCrmDashboard();
     }, []);
 
-    // ON-DEMAND: Loaded ONLY when clicking Eye icon
+    // ON-DEMAND: Loaded ONLY when clicking Eye icon (Calls ONLY GET /api/v1/customers/{customer_id})
     const handleViewCustomerProfile = async (backendId) => {
         const localCust = customers.find(c => c.backendId === backendId);
         if (localCust) setSelectedCustomer(localCust);
 
         setViewLoading(true);
-        setDetailExtras({});
 
         try {
-            const [
-                custDetailsRes,
-                walletRes,
-                walletTxRes,
-                loyaltyRes,
-                loyaltyHistRes,
-                notesRes,
-                commsRes,
-            ] = await Promise.allSettled([
-                getCustomerById(backendId),
-                getCustomerWallet(backendId),
-                getWalletTransactions(backendId),
-                getCustomerLoyalty(backendId),
-                getLoyaltyHistory(backendId),
-                getNotes({ customer_id: backendId }),
-                getCommunications({ customer_id: backendId }),
-            ]);
-
-            let fullRecord = localCust;
-            const walletData = walletRes.status === 'fulfilled' ? walletRes.value : null;
-            const loyaltyData = loyaltyRes.status === 'fulfilled' ? loyaltyRes.value : null;
-
-            if (custDetailsRes.status === 'fulfilled') {
-                const raw = custDetailsRes.value;
-                fullRecord = formatCustomerRecord({
-                    ...raw,
-                    wallet_balance: walletData?.balance ?? walletData?.wallet_balance ?? raw.wallet_balance,
-                    loyalty_points: loyaltyData?.points ?? loyaltyData?.loyalty_points ?? raw.loyalty_points,
-                });
-                setSelectedCustomer(fullRecord);
-            }
-
-            setDetailExtras({
-                wallet: walletData,
-                walletTransactions: walletTxRes.status === 'fulfilled' ? walletTxRes.value : null,
-                loyalty: loyaltyData,
-                loyaltyHistory: loyaltyHistRes.status === 'fulfilled' ? loyaltyHistRes.value : null,
-                notes: notesRes.status === 'fulfilled' ? notesRes.value : null,
-                communications: commsRes.status === 'fulfilled' ? commsRes.value : null,
-            });
+            const rawDetails = await getCustomerById(backendId);
+            const fullRecord = formatCustomerRecord(rawDetails);
+            setSelectedCustomer(fullRecord);
         } catch (err) {
             console.error('Error fetching customer profile on demand:', err);
         } finally {
@@ -540,19 +568,7 @@ const Customers = () => {
         }
     };
 
-    // // Handler for DELETE button (Preserves icon UI, updates frontend state for UI testing)
-    // const handleDeleteCustomer = (customer) => {
-    //     if (!window.confirm(`Are you sure you want to delete customer profile "${customer.name}"?`)) return;
 
-    // TODO:
-    // Uncomment and connect the Delete Customer API
-    // once the backend endpoint is finalized.
-    // await deleteCustomer(customer.backendId);
-
-    //     console.log(`[UI DELETE] Customer removed from state for backendId: ${customer.backendId}`);
-    //     setCustomers(prev => prev.filter(c => c.backendId !== customer.backendId));
-    //     if (selectedCustomer?.backendId === customer.backendId) setSelectedCustomer(null);
-    // };
 
     // Handler for ACTIVE / INACTIVE Toggle Switch (Calls PATCH /api/v1/customers/{customer_id}/status)
     const handleStatusToggle = async (id, currentStatus) => {
@@ -652,6 +668,15 @@ const Customers = () => {
                     <button
                         type="button"
                         className="adm-btn-secondary"
+                        onClick={() => setShowCampaignModal(true)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                        <BsChatText size={14} /> Send Campaign
+                    </button>
+
+                    <button
+                        type="button"
+                        className="adm-btn-secondary"
                         onClick={() => setShowExportModal(true)}
                     >
                         <BsDownload size={14} /> Export Directory
@@ -732,14 +757,14 @@ const Customers = () => {
                 </div>
             )}
 
-            {/* Customer Intelligence & Analytics Grid (Strict 190px uniform height cards, NO raw object output) */}
+            {/* Customer Intelligence & Analytics Grid */}
             <div style={{ marginBottom: 20 }}>
                 <h3 style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <BsStarFill style={{ color: '#6366f1' }} /> Customer Intelligence & Analytics
                 </h3>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-                    {/* Card 1: Top Customers (Ranked List) */}
+                    {/* Card 1: Top Customers */}
                     <div style={analyticsCardStyle}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -773,7 +798,7 @@ const Customers = () => {
                         </div>
                     </div>
 
-                    {/* Card 2: Retention Report (Structured KPIs) */}
+                    {/* Card 2: Retention Report */}
                     <div style={analyticsCardStyle}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -808,7 +833,7 @@ const Customers = () => {
                         </div>
                     </div>
 
-                    {/* Card 3: Lifetime Value (LTV Top 5 Compact List) */}
+                    {/* Card 3: Lifetime Value (LTV) */}
                     <div style={analyticsCardStyle}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -840,7 +865,7 @@ const Customers = () => {
                                                 </span>
                                             </div>
                                             <span style={{ fontWeight: 700, color: '#8b5cf6' }}>
-                                                {fmt(c.total_spend || c.ltv || c.lifetime_value || c.totalSpent || 0)}
+                                                {fmt(c.ltv || c.lifetime_value || c.total_spend || c.totalSpent || 0)}
                                             </span>
                                         </div>
                                     ))
@@ -849,303 +874,371 @@ const Customers = () => {
                         </div>
                     </div>
 
-                    {/* Card 4: Loyalty Report (Summary Metrics) */}
+                    {/* Card 4: Loyalty Summary */}
                     <div style={analyticsCardStyle}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 🎁 Loyalty Summary
                             </span>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: '#d97706', background: '#fffbeb', padding: '2px 8px', borderRadius: 10 }}>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: '#d97706', background: '#fffbeb', padding: '2px 8px', borderRadius: 10 }}>
                                 Rewards
                             </span>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
                             <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
                                 <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Enrolled</span>
-                                <p style={{ fontSize: 15, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
-                                    {customerInsights.loyaltyReport?.total_members ?? customers.filter(c => (c.loyaltyPoints || 0) > 0).length} members
+                                <p style={{ fontSize: 16, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
+                                    {customerInsights.loyaltyReport?.enrolled_members ?? customerInsights.loyaltyReport?.total_enrolled ?? customers.filter(c => c.loyaltyPoints > 0).length} members
                                 </p>
                             </div>
                             <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
                                 <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Points Issued</span>
-                                <p style={{ fontSize: 15, fontWeight: 800, color: '#8b5cf6', margin: '2px 0 0 0' }}>
-                                    {(customerInsights.loyaltyReport?.total_points ?? customers.reduce((sum, c) => sum + (c.loyaltyPoints || 0), 0)).toLocaleString('en-IN')} pts
+                                <p style={{ fontSize: 16, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
+                                    {customerInsights.loyaltyReport?.total_points_issued ? `${customerInsights.loyaltyReport.total_points_issued.toLocaleString('en-IN')} pts` : `${customers.reduce((acc, c) => acc + (c.loyaltyPoints || 0), 0).toLocaleString('en-IN')} pts`}
                                 </p>
                             </div>
                         </div>
                         <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
                             <span>Redeemed Points</span>
                             <span style={{ fontWeight: 700, color: '#111827' }}>
-                                {customerInsights.loyaltyReport?.points_redeemed ?? 0} pts
+                                {customerInsights.loyaltyReport?.total_points_redeemed ? `${customerInsights.loyaltyReport.total_points_redeemed.toLocaleString('en-IN')} pts` : '0 pts'}
                             </span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Relationship Overview Hub */}
+            {/* CRM Relationship Hub (Fixed 190px uniform height cards, NO raw object output) */}
             <div style={{ marginBottom: 20 }}>
                 <h3 style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <BsJournalText style={{ color: '#6366f1' }} /> CRM Relationship Hub
                 </h3>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-                    <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>Recent Notes</span>
-                            <BsJournalText size={14} style={{ color: '#6366f1' }} />
+                    {/* CRM Card 1: Recent Notes */}
+                    <div style={analyticsCardStyle}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Recent Notes
+                            </span>
+                            <BsJournalText size={16} style={{ color: '#3b82f6' }} />
                         </div>
-                        <p style={{ fontSize: 16, fontWeight: 800, color: '#111827', marginTop: 6, margin: 0 }}>{notesList.length} notes logged</p>
+                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }} className="custom-scrollbar">
+                            {notesList.length === 0 ? (
+                                <div style={{ margin: 'auto', textAlign: 'center' }}>
+                                    <p style={{ fontSize: 14, fontWeight: 800, color: '#111827', margin: 0 }}>0 notes logged</p>
+                                </div>
+                            ) : (
+                                notesList.slice(0, 4).map((n, i) => (
+                                    <div key={n.id || i} style={{ fontSize: 11, padding: '4px 8px', background: '#f9fafb', borderRadius: 6, border: '1px solid #f3f4f6' }}>
+                                        <p style={{ margin: 0, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            {n.content || n.note || n.text || 'Interaction note'}
+                                        </p>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
 
-                    <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>Communications</span>
-                            <BsChatText size={14} style={{ color: '#0ea5e9' }} />
+                    {/* CRM Card 2: Communications */}
+                    <div style={analyticsCardStyle}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#06b6d4', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Communications
+                            </span>
+                            <BsChatText size={16} style={{ color: '#06b6d4' }} />
                         </div>
-                        <p style={{ fontSize: 16, fontWeight: 800, color: '#111827', marginTop: 6, margin: 0 }}>{commsList.length} touchpoints</p>
+                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }} className="custom-scrollbar">
+                            {commsList.length === 0 ? (
+                                <div style={{ margin: 'auto', textAlign: 'center' }}>
+                                    <p style={{ fontSize: 14, fontWeight: 800, color: '#111827', margin: 0 }}>0 touchpoints</p>
+                                </div>
+                            ) : (
+                                commsList.slice(0, 4).map((m, i) => (
+                                    <div key={m.id || i} style={{ fontSize: 11, padding: '4px 8px', background: '#f9fafb', borderRadius: 6, border: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ fontWeight: 700, color: '#06b6d4', textTransform: 'uppercase' }}>{m.channel || m.type || 'SMS'}</span>
+                                        <span style={{ color: '#6b7280', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.message || m.content || 'Sent'}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
 
-                    <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>Referrals</span>
-                            <BsShare size={14} style={{ color: '#10b981' }} />
+                    {/* CRM Card 3: Referrals */}
+                    <div style={analyticsCardStyle}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Referrals
+                            </span>
+                            <BsShare size={16} style={{ color: '#10b981' }} />
                         </div>
-                        <p style={{ fontSize: 16, fontWeight: 800, color: '#111827', marginTop: 6, margin: 0 }}>{referralsList.length} referrals</p>
+                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }} className="custom-scrollbar">
+                            {referralsList.length === 0 ? (
+                                <div style={{ margin: 'auto', textAlign: 'center' }}>
+                                    <p style={{ fontSize: 14, fontWeight: 800, color: '#111827', margin: 0 }}>0 referrals</p>
+                                </div>
+                            ) : (
+                                referralsList.slice(0, 4).map((r, i) => (
+                                    <div key={r.id || i} style={{ fontSize: 11, padding: '4px 8px', background: '#f9fafb', borderRadius: 6, border: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between' }}>
+                                        <span style={{ fontWeight: 600, color: '#111827' }}>{r.email || r.code || 'Referral'}</span>
+                                        <span style={{ fontWeight: 700, color: '#10b981' }}>{r.status || 'Active'}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
 
-                    <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>Wallet & Loyalty</span>
-                            <BsGift size={14} style={{ color: '#8b5cf6' }} />
+                    {/* CRM Card 4: Wallet & Loyalty Quick Stats */}
+                    <div style={analyticsCardStyle}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                Wallet & Loyalty
+                            </span>
+                            <BsWallet2 size={16} style={{ color: '#8b5cf6' }} />
                         </div>
-                        <p style={{ fontSize: 16, fontWeight: 800, color: '#111827', marginTop: 6, margin: 0 }}>Active rewards</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
+                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Total Wallet</span>
+                                <p style={{ fontSize: 15, fontWeight: 800, color: '#8b5cf6', margin: '2px 0 0 0' }}>
+                                    {fmt(customers.reduce((acc, c) => acc + (c.credit || 0), 0))}
+                                </p>
+                            </div>
+                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
+                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Loyalty Pool</span>
+                                <p style={{ fontSize: 15, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
+                                    {customers.reduce((acc, c) => acc + (c.loyaltyPoints || 0), 0)} pts
+                                </p>
+                            </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Active rewards</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Filter Bar */}
-            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '14px 18px', marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                <div style={{ position: 'relative', flex: 1, minWidth: 260 }}>
-                    <BsSearch size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-                    <input
-                        className="ec-input"
-                        style={{ paddingLeft: 36, width: '100%', height: 38, fontSize: 13 }}
-                        placeholder="Search by customer name, email, phone or city..."
-                        value={search}
-                        onChange={e => { setSearch(e.target.value); setPage(1); }}
-                    />
-                </div>
-
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <BsFunnel size={13} style={{ color: '#6b7280' }} />
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Status:</span>
-                        <select className="ec-input" style={{ height: 38, fontSize: 12 }} value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
-                            <option value="All">All Statuses</option>
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                            <option value="Blocked">Blocked</option>
-                        </select>
+            {/* Main Customer Table Card */}
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                {/* Search & Filter Bar */}
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                            <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14 }} />
+                            <input
+                                type="text"
+                                className="ec-input"
+                                placeholder="Search by customer name, email, phone or city..."
+                                value={search}
+                                onChange={e => { setSearch(e.target.value); setPage(1); }}
+                                style={{ paddingLeft: 34, width: '100%', height: 38 }}
+                            />
+                        </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Segment:</span>
-                        <select className="ec-input" style={{ height: 38, fontSize: 12 }} value={filterType} onChange={e => { setFilterType(e.target.value); setPage(1); }}>
-                            <option value="All">All Types</option>
-                            <option value="Regular">Regular</option>
-                            <option value="VIP">VIP</option>
-                            <option value="Wholesale">Wholesale</option>
-                            <option value="New">New</option>
-                        </select>
-                    </div>
-
-                    {availableCities.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>City:</span>
-                            <select className="ec-input" style={{ height: 38, fontSize: 12 }} value={filterCity} onChange={e => { setFilterCity(e.target.value); setPage(1); }}>
-                                <option value="All">All Cities</option>
-                                {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
+                            <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>Status:</span>
+                            <select
+                                className="ec-input"
+                                value={filterStatus}
+                                onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+                                style={{ height: 38, fontSize: 12, padding: '0 10px' }}
+                            >
+                                <option value="All">All Statuses</option>
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                                <option value="Blocked">Blocked</option>
                             </select>
                         </div>
-                    )}
-                </div>
-            </div>
 
-            {/* CRM Customer Directory Table */}
-            <div className="chart-card" style={{ padding: 0, overflow: 'hidden', borderRadius: 14, border: '1px solid #e5e7eb', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', background: '#fff' }}>
-                <div className="table-scroll-container">
-                    <table style={{ width: '100%', minWidth: 960, borderCollapse: 'collapse' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>Segment:</span>
+                            <select
+                                className="ec-input"
+                                value={filterType}
+                                onChange={e => { setFilterType(e.target.value); setPage(1); }}
+                                style={{ height: 38, fontSize: 12, padding: '0 10px' }}
+                            >
+                                <option value="All">All Types</option>
+                                <option value="Regular">Regular</option>
+                                <option value="VIP">VIP</option>
+                                <option value="Wholesale">Wholesale</option>
+                                <option value="New">New</option>
+                            </select>
+                        </div>
+
+                        {availableCities.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>City:</span>
+                                <select
+                                    className="ec-input"
+                                    value={filterCity}
+                                    onChange={e => { setFilterCity(e.target.value); setPage(1); }}
+                                    style={{ height: 38, fontSize: 12, padding: '0 10px' }}
+                                >
+                                    <option value="All">All Cities</option>
+                                    {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Directory Table */}
+                <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                         <thead>
-                            <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
-                                {['Customer Profile', 'Email', 'Phone', 'City', 'Type', 'Wallet Balance', 'Loyalty Points', 'Status', 'Actions'].map(h => (
-                                    <th key={h} style={{ padding: '14px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
-                                ))}
+                            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <th style={{ padding: '12px 16px' }}>Customer Name</th>
+                                <th style={{ padding: '12px 16px' }}>ID & Segment</th>
+                                <th style={{ padding: '12px 16px' }}>Phone</th>
+                                <th style={{ padding: '12px 16px' }}>Location</th>
+                                <th style={{ padding: '12px 16px' }}>Orders</th>
+                                <th style={{ padding: '12px 16px' }}>Total Spent</th>
+                                <th style={{ padding: '12px 16px' }}>Wallet / Points</th>
+                                <th style={{ padding: '12px 16px' }}>Status Switch</th>
+                                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {loading && Array.from({ length: 6 }).map((_, idx) => <TableRowSkeleton key={idx} />)}
-
-                            {!loading && error && (
+                            {loading ? (
+                                <>
+                                    <TableRowSkeleton />
+                                    <TableRowSkeleton />
+                                    <TableRowSkeleton />
+                                    <TableRowSkeleton />
+                                    <TableRowSkeleton />
+                                </>
+                            ) : paginatedCustomers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#ef4444', fontSize: 13 }}>
-                                        {error}
+                                    <td colSpan={9} style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
+                                        <p style={{ fontSize: 15, fontWeight: 700, color: '#374151', margin: 0 }}>No Customers Found</p>
+                                        <p style={{ fontSize: 12, marginTop: 4 }}>Try adjusting your search filter or add a new customer.</p>
                                     </td>
                                 </tr>
-                            )}
-
-                            {!loading && !error && paginatedCustomers.map((c) => {
-                                const tc = typeCfg[c.type] || typeCfg.Regular;
-
-                                return (
-                                    <tr
-                                        key={c.backendId}
-                                        style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }}
-                                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                    >
-                                        {/* Name & ID */}
+                            ) : (
+                                paginatedCustomers.map((cust) => (
+                                    <tr key={cust.id} style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }} className="table-row-hover">
                                         <td style={{ padding: '14px 16px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
-                                                    {c.name ? c.name[0].toUpperCase() : 'C'}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff', fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                    {cust.name?.[0]?.toUpperCase() || '?'}
                                                 </div>
                                                 <div>
-                                                    <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', margin: 0 }}>{c.name}</p>
-                                                    <p style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'monospace', margin: '2px 0 0 0' }}>{c.id}</p>
+                                                    <p style={{ fontWeight: 700, color: '#111827', margin: 0, fontSize: 13 }}>{cust.name}</p>
+                                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0 0' }}>{cust.email}</p>
                                                 </div>
                                             </div>
                                         </td>
 
-                                        {/* Email */}
-                                        <td style={{ padding: '14px 16px', fontSize: 12, color: '#374151', whiteSpace: 'nowrap' }}>{c.email || '—'}</td>
-
-                                        {/* Phone */}
-                                        <td style={{ padding: '14px 16px', fontSize: 12, color: '#4b5563', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{c.phone || '—'}</td>
-
-                                        {/* City */}
-                                        <td style={{ padding: '14px 16px', fontSize: 12, color: '#374151', fontWeight: 500, whiteSpace: 'nowrap' }}>{c.city}</td>
-
-                                        {/* Type */}
-                                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
-                                            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: tc.bg, color: tc.color }}>
-                                                {c.type}
-                                            </span>
+                                        <td style={{ padding: '14px 16px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                                                <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>{cust.id}</span>
+                                                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1' }}>
+                                                    {cust.type}
+                                                </span>
+                                            </div>
                                         </td>
 
-                                        {/* Wallet Balance */}
-                                        <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 700, color: '#111827', whiteSpace: 'nowrap' }}>
-                                            {c.credit > 0 ? fmt(c.credit) : '₹0'}
+                                        <td style={{ padding: '14px 16px', color: '#374151', fontWeight: 500 }}>
+                                            {cust.phone || '—'}
                                         </td>
 
-                                        {/* Loyalty Points */}
-                                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
-                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#d97706', background: '#fffbeb', padding: '3px 8px', borderRadius: 8, border: '1px solid #fde68a', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                                <BsGift size={12} /> {c.loyaltyPoints || 0} pts
-                                            </span>
+                                        <td style={{ padding: '14px 16px', color: '#374151' }}>
+                                            {cust.city || '—'}
                                         </td>
 
-                                        {/* Status Toggle Switch Component */}
-                                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                                        <td style={{ padding: '14px 16px', fontWeight: 700, color: '#111827' }}>
+                                            {cust.orders} orders
+                                        </td>
+
+                                        <td style={{ padding: '14px 16px', fontWeight: 800, color: '#10b981' }}>
+                                            {fmt(cust.totalSpent)}
+                                        </td>
+
+                                        <td style={{ padding: '14px 16px' }}>
+                                            <div style={{ fontSize: 11 }}>
+                                                <span style={{ color: '#6366f1', fontWeight: 700, display: 'block' }}>Wallet: {fmt(cust.credit || 0)}</span>
+                                                <span style={{ color: '#d97706', fontWeight: 600 }}>Points: {cust.loyaltyPoints || 0} pts</span>
+                                            </div>
+                                        </td>
+
+                                        <td style={{ padding: '14px 16px' }}>
                                             <CustomerStatusToggle
-                                                isActive={c.status === 'Active'}
-                                                onToggle={() => handleStatusToggle(c.backendId, c.status)}
+                                                isActive={cust.status === 'Active'}
+                                                onToggle={() => handleStatusToggle(cust.backendId || cust.id, cust.status)}
                                             />
                                         </td>
 
-                                        {/* Actions Column */}
-                                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                                            <div style={{ display: 'inline-flex', gap: 6 }}>
                                                 <button
                                                     type="button"
-                                                    className="adm-btn-secondary"
-                                                    title="View CRM Profile"
-                                                    aria-label="View CRM Profile"
-                                                    onClick={() => handleViewCustomerProfile(c.backendId)}
-                                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, color: '#6366f1', borderColor: '#c7d2fe', background: '#fff' }}
+                                                    title="View Profile Details"
+                                                    onClick={() => handleViewCustomerProfile(cust.backendId || cust.id)}
+                                                    style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#6366f1', cursor: 'pointer' }}
                                                 >
-                                                    <BsEye size={15} />
+                                                    <BsEye size={14} />
                                                 </button>
 
                                                 <button
                                                     type="button"
-                                                    className="adm-btn-secondary"
                                                     title="Edit Customer"
-                                                    aria-label="Edit Customer"
-                                                    onClick={() => setEditingCustomer(c)}
-                                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, color: '#4b5563', borderColor: '#e5e7eb', background: '#fff' }}
+                                                    onClick={() => setEditingCustomer(cust)}
+                                                    style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer' }}
                                                 >
                                                     <BsPencilSquare size={14} />
                                                 </button>
 
-                                                {/* <button
-                                                    type="button"
-                                                    className="adm-btn-secondary"
-                                                    title="Delete Customer"
-                                                    aria-label="Delete Customer"
-                                                    onClick={() => handleDeleteCustomer(c)}
-                                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, padding: 0, color: '#ef4444', borderColor: '#fecaca', background: '#fff' }}
-                                                >
-                                                    <BsTrash size={14} />
-                                                </button> */}
+
                                             </div>
                                         </td>
                                     </tr>
-                                );
-                            })}
-
-                            {!loading && !error && paginatedCustomers.length === 0 && (
-                                <tr>
-                                    <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-                                        No customers found in directory.
-                                    </td>
-                                </tr>
+                                ))
                             )}
                         </tbody>
                     </table>
                 </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderTop: '1px solid #f3f4f6', background: '#fafafa' }}>
-                        <span style={{ fontSize: 12, color: '#6b7280' }}>
-                            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredCustomers.length)} of {filteredCustomers.length} directory profiles
+                {/* Pagination Controls */}
+                <div style={{ padding: '14px 20px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb' }}>
+                    <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+                        Showing <strong>{filteredCustomers.length > 0 ? (page - 1) * PAGE_SIZE + 1 : 0}</strong> to <strong>{Math.min(page * PAGE_SIZE, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> customers
+                    </p>
+
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <button
+                            type="button"
+                            className="adm-btn-secondary"
+                            disabled={page === 1}
+                            onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                            style={{ padding: '5px 10px', fontSize: 12 }}
+                        >
+                            <BsChevronLeft size={12} /> Prev
+                        </button>
+
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
+                            Page {page} of {totalPages}
                         </span>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                            <button type="button" className="adm-btn-secondary" style={{ padding: '4px 10px' }} disabled={page === 1} onClick={() => setPage(p => p - 1)}>
-                                <BsChevronLeft size={12} />
-                            </button>
 
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                                <button
-                                    key={p}
-                                    type="button"
-                                    onClick={() => setPage(p)}
-                                    style={{ width: 30, height: 30, borderRadius: 6, border: `1.5px solid ${p === page ? '#6366f1' : '#e5e7eb'}`, background: p === page ? '#eef2ff' : '#fff', color: p === page ? '#6366f1' : '#6b7280', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                                >
-                                    {p}
-                                </button>
-                            ))}
-
-                            <button type="button" className="adm-btn-secondary" style={{ padding: '4px 10px' }} disabled={page === totalPages} onClick={() => setPage(p => p + 1)}>
-                                <BsChevronRight size={12} />
-                            </button>
-                        </div>
+                        <button
+                            type="button"
+                            className="adm-btn-secondary"
+                            disabled={page >= totalPages}
+                            onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                            style={{ padding: '5px 10px', fontSize: 12 }}
+                        >
+                            Next <BsChevronRight size={12} />
+                        </button>
                     </div>
-                )}
+                </div>
             </div>
 
-            {/* Modals & Profile Detail Panel */}
-            <ExportDirectoryModal
-                isOpen={showExportModal}
-                onClose={() => setShowExportModal(false)}
-                customers={customers}
-            />
-
+            {/* Modals & Slide-over Detail Panel */}
             {showAddModal && (
                 <AddCustomerModal
                     onClose={() => setShowAddModal(false)}
-                    onCreated={() => loadCrmDashboard(false)}
+                    onCreated={loadCrmDashboard}
                 />
             )}
 
@@ -1153,7 +1246,21 @@ const Customers = () => {
                 <EditCustomerModal
                     customer={editingCustomer}
                     onClose={() => setEditingCustomer(null)}
-                    onSaved={() => loadCrmDashboard(false)}
+                    onSaved={loadCrmDashboard}
+                />
+            )}
+
+            {showCampaignModal && (
+                <SendCampaignModal
+                    onClose={() => setShowCampaignModal(false)}
+                />
+            )}
+
+            {showExportModal && (
+                <ExportDirectoryModal
+                    isOpen={showExportModal}
+                    customers={filteredCustomers}
+                    onClose={() => setShowExportModal(false)}
                 />
             )}
 
@@ -1162,15 +1269,10 @@ const Customers = () => {
                     customer={selectedCustomer}
                     detailExtras={detailExtras}
                     loading={viewLoading}
-                    showFeedback
-                    onClose={() => {
-                        setSelectedCustomer(null);
-                        setDetailExtras({});
-                    }}
-                    onStatusChange={(id, s) => {
-                        handleStatusToggle(id, s);
-                    }}
-                    onRefresh={() => handleViewCustomerProfile(selectedCustomer.backendId)}
+                    onClose={() => setSelectedCustomer(null)}
+                    onStatusChange={handleStatusToggle}
+                    onRefresh={handleViewCustomerProfile}
+                    showFeedback={true}
                 />
             )}
         </div>

@@ -1048,7 +1048,7 @@ const Login = () => {
                                 rel="noopener noreferrer"
                                 className="shekru-link"
                             >
-                                Shekru Labs India Pvt Ltd
+                                Shekru Labs India Pvt. Ltd
                             </a>
                         </div>
                     </div>
