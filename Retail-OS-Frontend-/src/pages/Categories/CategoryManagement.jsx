@@ -1,74 +1,68 @@
-import React, { useState, useEffect } from "react";
-import category from "../../services/categoryService";
+import React, { useState } from "react";
+
 import CategoryHeader from "../../components/Categories/CategoryHeader";
 import CategoryCards from "../../components/Categories/CategoryCards";
 import CategoryFilters from "../../components/Categories/CategoryFilters";
 import CategoryTable from "../../components/Categories/CategoryTable";
 import CategoryModel from "../../components/Categories/CategoryModel";
-import "./CategoryManagement.css";
+
+const INITIAL_CATEGORIES = [
+  {
+    id: 1,
+    name: "Electronics",
+    products: 145,
+    status: "Active",
+    created: "10 Jul 2026",
+  },
+  {
+    id: 2,
+    name: "Groceries",
+    products: 82,
+    status: "Active",
+    created: "09 Jul 2026",
+  },
+  {
+    id: 3,
+    name: "Clothing",
+    products: 64,
+    status: "Active",
+    created: "08 Jul 2026",
+  },
+  {
+    id: 4,
+    name: "Beauty",
+    products: 35,
+    status: "Inactive",
+    created: "07 Jul 2026",
+  },
+  {
+    id: 5,
+    name: "Home & Kitchen",
+    products: 56,
+    status: "Active",
+    created: "05 Jul 2026",
+  },
+];
 
 const CategoryManagement = () => {
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState(INITIAL_CATEGORIES);
+
   const [search, setSearch] = useState("");
+
   const [statusFilter, setStatusFilter] = useState("All");
+
   const [showModal, setShowModal] = useState(false);
+
   const [selectedCategory, setSelectedCategory] = useState(null);
-
-  // Loading & Error states
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const loadCategories = async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      const response = await category.getAll();
-        console.log("🔥 Categories API Response:", response);
-    console.log("🔥 Categories DATA:", response.data);
-
-
-      console.log(
-        "Categories API Response:",
-        JSON.stringify(response.data, null, 2)
-      );
-
-      const apiCategories = response.data.map((item) => ({
-        id: item.id,
-        name: item.name,
-        products: 0,
-         status:
-    item.status ||
-    (item.is_active === false ? "Inactive" : "Active"),
-
-        created: item.created_at
-          ? new Date(item.created_at).toLocaleDateString("en-GB")
-          : "-",
-        description: item.description || "",
-        parent_id: item.parent_id ?? null,
-      }));
-
-      setCategories(apiCategories);
-    } catch (error) {
-      console.error("Failed to load categories:", error);
-      setError("Failed to load categories. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadCategories();
-  }, []);
 
   const filteredCategories = categories.filter((item) => {
     const searchMatch = item.name
-      ?.toLowerCase()
+      .toLowerCase()
       .includes(search.toLowerCase());
 
     const statusMatch =
       statusFilter === "All" ||
-      item.status?.toLowerCase() === statusFilter.toLowerCase();
+      item.status === statusFilter;
 
     return searchMatch && statusMatch;
   });
@@ -78,63 +72,62 @@ const CategoryManagement = () => {
     setShowModal(true);
   };
 
-  const handleSave = async (data) => {
-   try {
-  await category.create({
-    name: data.name,
-    description: data.description || "",
-    parent_id: data.parent_id || null,
-  });
+  const handleEdit = (category) => {
+    setSelectedCategory(category);
+    setShowModal(true);
+  };
 
-      await loadCategories();
+  const handleDelete = (id) => {
+    setCategories((prev) =>
+      prev.filter((item) => item.id !== id)
+    );
+  };
 
-      setShowModal(false);
-      setSelectedCategory(null);
-    } catch (error) {
-      console.error("Create Category Error:", error);
+  const handleSave = (data) => {
+    if (selectedCategory) {
+      setCategories((prev) =>
+        prev.map((item) =>
+          item.id === selectedCategory.id
+            ? { ...item, ...data }
+            : item
+        )
+      );
+    } else {
+      const newCategory = {
+        id: Date.now(),
+        products: 0,
+        created: new Date().toLocaleDateString("en-GB"),
+        ...data,
+      };
 
-      if (error.response) {
-        console.log("API Error Response:", error.response.data);
-      }
-
-      alert("Failed to create category");
+      setCategories((prev) => [...prev, newCategory]);
     }
+
+    setShowModal(false);
+    setSelectedCategory(null);
   };
 
   const activeCount = categories.filter(
-    (item) => item.status?.toLowerCase() === "active"
+    (item) => item.status === "Active"
   ).length;
 
   const inactiveCount = categories.filter(
-    (item) => item.status?.toLowerCase() === "inactive"
+    (item) => item.status === "Inactive"
   ).length;
 
   return (
-    <div>
-    <CategoryHeader
-  total={categories.length}
-  active={activeCount}
-  inactive={inactiveCount}  
-  onAdd={handleAdd}
-  statusFilter={statusFilter}
-  setStatusFilter={setStatusFilter}
-/>
+    <div className="dash-page">
 
-      <CategoryCards categories={categories} />
+      <CategoryHeader
+        total={categories.length}
+        active={activeCount}
+        inactive={inactiveCount}
+        onAdd={handleAdd}
+      />
 
-      {/* Loading */}
-      {loading && (
-        <div className="category-message">
-          Loading categories...
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="category-error">
-          {error}
-        </div>
-      )}
+      <CategoryCards
+        categories={categories}
+      />
 
       <CategoryFilters
         search={search}
@@ -143,18 +136,22 @@ const CategoryManagement = () => {
         setStatusFilter={setStatusFilter}
       />
 
-      <CategoryTable categories={filteredCategories} />
+      <CategoryTable
+        categories={filteredCategories}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+      />
+{showModal && (
+  <CategoryModel
+    category={selectedCategory}
+    onSave={handleSave}
+    onClose={() => {
+      setShowModal(false);
+      setSelectedCategory(null);
+    }}
+  />
+)}
 
-      {showModal && (
-        <CategoryModel
-          category={selectedCategory}
-          onSave={handleSave}
-          onClose={() => {
-            setShowModal(false);
-            setSelectedCategory(null);
-          }}
-        />
-      )}
     </div>
   );
 };
