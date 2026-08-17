@@ -6,8 +6,6 @@ const API_BASE = "https://api-testing.myretailos.com/api/v1";
 const getHeaders = () => {
     const token = getAccessToken();
 
-    console.log("ACCESS TOKEN =>", token);
-
     return {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,

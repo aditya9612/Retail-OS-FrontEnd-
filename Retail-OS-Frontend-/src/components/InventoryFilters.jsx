@@ -8,17 +8,15 @@ const InventoryFilters = ({
   inventory,
   products,
   stores,
-  categories,
 
   filterWarehouse,
   setFilterWarehouse,
 
   filterCat,
-setFilterCat,
+  setFilterCat,
 
-
-filterSupplier,
-setFilterSupplier,
+  filterSupplier,
+  setFilterSupplier,
 
   filterStatus,
   setFilterStatus,
@@ -28,9 +26,6 @@ setFilterSupplier,
 
   onSearch,
 }) =>  {
-
-  console.log("CATEGORIES INSIDE FILTERS =>", categories);
-console.log("CATEGORIES LENGTH =>", categories?.length);
 
   return (
     <div className="inventory-filters">
@@ -68,8 +63,11 @@ console.log("CATEGORIES LENGTH =>", categories?.length);
   </select>
 </div>
  
-   {/* Category */}
-<div className="filter-group">
+   
+
+
+      {/* Category */}
+  <div className="filter-group">
   <label>Category</label>
 
   <select
@@ -78,16 +76,31 @@ console.log("CATEGORIES LENGTH =>", categories?.length);
   >
     <option value="All Categories">All Categories</option>
 
-    {(categories || []).map((cat) => (
-      <option key={cat.id} value={cat.id}>
-        {cat.name}
-      </option>
-    ))}
-  </select>
+     {console.log("Products =>", products)}
+
+
+  {(products || []).map((p) =>
+    console.log(
+      "Product:",
+      p.name,
+      "category =", p.category,
+      "category_name =", p.category_name,
+      "category_id =", p.category_id
+    )
+  )}
+  {[...new Set(
+    (products || [])
+      .map(p => p.category || p.category_name)
+      .filter(Boolean)
+  )].map(category => (
+    <option key={category} value={category}>
+      {category}
+    </option>
+  ))}
+</select>
+
+  
 </div>
-
-
-
 
       
       {/* Supplier */}
