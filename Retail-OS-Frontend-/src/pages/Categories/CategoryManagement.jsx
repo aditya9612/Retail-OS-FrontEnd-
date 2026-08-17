@@ -5,87 +5,70 @@ import CategoryCards from "../../components/Categories/CategoryCards";
 import CategoryFilters from "../../components/Categories/CategoryFilters";
 import CategoryTable from "../../components/Categories/CategoryTable";
 import CategoryModel from "../../components/Categories/CategoryModel";
-
-const INITIAL_CATEGORIES = [
-  {
-    id: 1,
-    name: "Electronics",
-    products: 145,
-    status: "Active",
-    created: "10 Jul 2026",
-  },
-  {
-    id: 2,
-    name: "Groceries",
-    products: 82,
-    status: "Active",
-    created: "09 Jul 2026",
-  },
-  {
-    id: 3,
-    name: "Clothing",
-    products: 64,
-    status: "Active",
-    created: "08 Jul 2026",
-  },
-  {
-    id: 4,
-    name: "Beauty",
-    products: 35,
-    status: "Inactive",
-    created: "07 Jul 2026",
-  },
-  {
-    id: 5,
-    name: "Home & Kitchen",
-    products: 56,
-    status: "Active",
-    created: "05 Jul 2026",
-  },
-];
+import "./CategoryManagement.css";
 
 const CategoryManagement = () => {
- const [categories, setCategories] = useState([]);
-
+  const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
-
   const [statusFilter, setStatusFilter] = useState("All");
-
   const [showModal, setShowModal] = useState(false);
-
   const [selectedCategory, setSelectedCategory] = useState(null);
+
+  // Loading & Error states
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
   const loadCategories = async () => {
-  try {
-    const response = await category.getAll();
+    try {
+      setLoading(true);
+      setError("");
 
-    console.log("Categories API Response:", response.data);
+      const response = await category.getAll();
+        console.log("🔥 Categories API Response:", response);
+    console.log("🔥 Categories DATA:", response.data);
 
-    const apiCategories = response.data.map((item) => ({
-      id: item.id,
-      name: item.name,
-      products: 0,
-      status: "Active",
-      created: new Date(item.created_at).toLocaleDateString("en-GB"),
-    }));
 
-    setCategories(apiCategories);
-  } catch (error) {
-    console.error("Failed to load categories:", error);
-  }
-};
+      console.log(
+        "Categories API Response:",
+        JSON.stringify(response.data, null, 2)
+      );
 
-useEffect(() => {
-  loadCategories();
-}, []);
+      const apiCategories = response.data.map((item) => ({
+        id: item.id,
+        name: item.name,
+        products: 0,
+         status:
+    item.status ||
+    (item.is_active === false ? "Inactive" : "Active"),
+
+        created: item.created_at
+          ? new Date(item.created_at).toLocaleDateString("en-GB")
+          : "-",
+        description: item.description || "",
+        parent_id: item.parent_id ?? null,
+      }));
+
+      setCategories(apiCategories);
+    } catch (error) {
+      console.error("Failed to load categories:", error);
+      setError("Failed to load categories. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
 
   const filteredCategories = categories.filter((item) => {
     const searchMatch = item.name
-      .toLowerCase()
+      ?.toLowerCase()
       .includes(search.toLowerCase());
 
     const statusMatch =
       statusFilter === "All" ||
-      item.status === statusFilter;
+      item.status?.toLowerCase() === statusFilter.toLowerCase();
 
     return searchMatch && statusMatch;
   });
@@ -95,50 +78,63 @@ useEffect(() => {
     setShowModal(true);
   };
 
-  
-const handleSave = async (data) => {
-  try {
-    await category.create({
-      name: data.name,
-      description: data.description,
-      parent_id: null,
-    });
+  const handleSave = async (data) => {
+   try {
+  await category.create({
+    name: data.name,
+    description: data.description || "",
+    parent_id: data.parent_id || null,
+  });
 
-    await loadCategories();
+      await loadCategories();
 
-    setShowModal(false);
-    setSelectedCategory(null);
-  } catch (error) {
-    console.error("Create Category Error:", error);
+      setShowModal(false);
+      setSelectedCategory(null);
+    } catch (error) {
+      console.error("Create Category Error:", error);
 
-    if (error.response) {
-      console.log(error.response.data);
+      if (error.response) {
+        console.log("API Error Response:", error.response.data);
+      }
+
+      alert("Failed to create category");
     }
+  };
 
-    alert("Failed to create category");
-  }
-};
   const activeCount = categories.filter(
-    (item) => item.status === "Active"
+    (item) => item.status?.toLowerCase() === "active"
   ).length;
 
   const inactiveCount = categories.filter(
-    (item) => item.status === "Inactive"
+    (item) => item.status?.toLowerCase() === "inactive"
   ).length;
 
   return (
-    <div className="dash-page">
+    <div>
+    <CategoryHeader
+  total={categories.length}
+  active={activeCount}
+  inactive={inactiveCount}  
+  onAdd={handleAdd}
+  statusFilter={statusFilter}
+  setStatusFilter={setStatusFilter}
+/>
 
-      <CategoryHeader
-        total={categories.length}
-        active={activeCount}
-        inactive={inactiveCount}
-        onAdd={handleAdd}
-      />
+      <CategoryCards categories={categories} />
 
-      <CategoryCards
-        categories={categories}
-      />
+      {/* Loading */}
+      {loading && (
+        <div className="category-message">
+          Loading categories...
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div className="category-error">
+          {error}
+        </div>
+      )}
 
       <CategoryFilters
         search={search}
@@ -147,21 +143,18 @@ const handleSave = async (data) => {
         setStatusFilter={setStatusFilter}
       />
 
-      <CategoryTable
-        categories={filteredCategories}
-        
-      />
-{showModal && (
-  <CategoryModel
-    category={selectedCategory}
-    onSave={handleSave}
-    onClose={() => {
-      setShowModal(false);
-      setSelectedCategory(null);
-    }}
-  />
-)}
+      <CategoryTable categories={filteredCategories} />
 
+      {showModal && (
+        <CategoryModel
+          category={selectedCategory}
+          onSave={handleSave}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedCategory(null);
+          }}
+        />
+      )}
     </div>
   );
 };
