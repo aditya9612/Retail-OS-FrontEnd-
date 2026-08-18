@@ -1,0 +1,4 @@
+/orders?store_id=1&page=1&page_size=5 => 401
+/ecommerce/orders?store_id=1&page=1&page_size=5 => 404
+/store-orders?store_id=1&page=1&page_size=5 => 404
+/order?store_id=1&page=1&page_size=5 => 404

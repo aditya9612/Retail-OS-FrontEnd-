@@ -10,7 +10,6 @@ import DashboardLayout from './layouts/DashboardLayout';
 
 import Billing from './pages/Billing';
 import Dashboard from './pages/Dashboard';
-import AdminDashboard from './pages/AdminDashboard';
 import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
 
@@ -68,11 +67,6 @@ function App() {
                     <Route element={<DashboardLayout />}>
                         {/* Main */}
                         <Route path="/dashboard" element={<Dashboard />} />
-
-                        <Route
-                            path="/admin-dashboard"
-                            element={<AdminDashboard />}
-                        />
 
                         {/* Billing and GST */}
                         <Route path="/billing" element={<Billing />} />

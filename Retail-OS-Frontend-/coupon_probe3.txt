@@ -1,0 +1,7 @@
+GET /coupons?store_id=1 => 404
+GET /coupons/active?store_id=1 => 404
+GET /coupons/stats?store_id=1 => 404
+GET /ecommerce/coupons?store_id=1 => 404
+GET /store/1/coupons => 404
+GET /coupons/ => 404
+GET /coupons?page=1&page_size=10 => 404

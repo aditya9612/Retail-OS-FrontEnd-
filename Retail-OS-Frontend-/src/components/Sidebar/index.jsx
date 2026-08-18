@@ -28,7 +28,6 @@ const menuGroups = [
         label: 'Overview',
         items: [
             { name: 'Dashboard', icon: <BsGrid1X2Fill />, path: '/dashboard' },
-            { name: 'Admin Panel', icon: <BsActivity />, path: '/admin-dashboard' },
         ],
     },
     {

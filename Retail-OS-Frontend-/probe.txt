@@ -1,0 +1,4 @@
+/orders/ => 401
+/ecommerce/orders/ => 404
+/store/orders => 404
+/e-commerce/orders => 404

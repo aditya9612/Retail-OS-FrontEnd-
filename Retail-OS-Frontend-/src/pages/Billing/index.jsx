@@ -36,7 +36,7 @@ const Billing = () => {
     const [cart, setCart] = useState([]);
     const [serverCart, setServerCart] = useState(null); // last server cart response
     const [cartLoading, setCartLoading] = useState(true);  // initial fetch
-    const [cartLoadError, setCartLoadError] = useState(''); // non-blocking load error
+    const [offlineMode, setOfflineMode] = useState(false); // true = API unavailable, working locally
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [discountType, setDiscountType] = useState('percentage');
@@ -82,19 +82,19 @@ const Billing = () => {
         let cancelled = false;
         const fetchCart = async () => {
             setCartLoading(true);
-            setCartLoadError('');
             try {
                 const data = await getCart();
                 if (cancelled) return;
                 setServerCart(data);
+                setOfflineMode(false);
                 if (data?.items && data.items.length > 0) {
                     syncCartWithServer(data.items);
                 }
             } catch (err) {
                 if (cancelled) return;
-                console.warn('[Billing] getCart failed — starting with empty cart:', err.message);
-                setCartLoadError('Could not load server cart — starting fresh.');
-                setTimeout(() => setCartLoadError(''), 5000);
+                // API is down — switch to offline/local mode silently
+                console.warn('[Billing] getCart failed — switching to local mode:', err.message);
+                setOfflineMode(true);
             } finally {
                 if (!cancelled) setCartLoading(false);
             }
@@ -106,7 +106,9 @@ const Billing = () => {
     // ────────────────────────────────────────────────────────────────────────
 
     const syncCartWithServer = useCallback((responseItems) => {
-        if (!responseItems || responseItems.length === 0) {
+        // Only clear cart if server explicitly returns an empty array
+        if (!responseItems) return; // null/undefined means don't touch cart
+        if (responseItems.length === 0) {
             setCart([]);
             return;
         }
@@ -136,7 +138,7 @@ const Billing = () => {
     }, [products]);
 
     const addToCart = useCallback(async (product) => {
-        // Optimistic local update first (instant UI feedback)
+        // Optimistic local update first — instant UI feedback regardless of API status
         setCart(prev => {
             const existing = prev.find(i => i.id === product.id);
             if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
@@ -144,8 +146,8 @@ const Billing = () => {
         });
 
         setAddingItemId(product.id);
-        setApiError('');
 
+        // Always try the API — offlineMode doesn't block calls, it's just a display hint
         try {
             const currentQty = cart.find(i => i.id === product.id)?.qty ?? 0;
             const payload = {
@@ -156,49 +158,46 @@ const Billing = () => {
             };
 
             const response = await addCartItem(payload);
-            setServerCart(response);
-            if (response?.items) {
-                syncCartWithServer(response.items);
+            if (response) {
+                setServerCart(response);
+                setOfflineMode(false); // API works — go back online
+                if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] addCartItem API error:', err);
-            setApiError('Could not sync with server — cart updated locally.');
-            setTimeout(() => setApiError(''), 4000);
-        } finally {
-            setAddingItemId(null);
+            console.error('[Billing] addCartItem API error:', err.message);
+            setOfflineMode(true); // mark offline only for banner display, cart already updated locally
         }
+
+        setAddingItemId(null);
     }, [cart, syncCartWithServer]);
 
     const removeFromCart = useCallback(async (id) => {
         // Optimistic local removal — instant UI feedback
         setCart(prev => prev.filter(i => i.id !== id));
-        setApiError('');
 
+        // Always try the API
         try {
             const response = await removeCartItem(id);
-            setServerCart(response);
-            if (response?.items) {
-                syncCartWithServer(response.items);
-            } else {
-                setCart([]);
+            if (response) {
+                setServerCart(response);
+                setOfflineMode(false);
+                if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] removeCartItem API error:', err);
-            setApiError('Could not sync removal with server — item removed locally.');
-            setTimeout(() => setApiError(''), 4000);
+            console.error('[Billing] removeCartItem API error:', err.message);
+            setOfflineMode(true);
         }
     }, [syncCartWithServer]);
 
     const updateQty = useCallback(async (id, delta) => {
-        // Find the item before updating
         const item = cart.find(i => i.id === id);
         if (!item) return;
         const newQty = Math.max(1, item.qty + delta);
 
         // Optimistic local update
         setCart(prev => prev.map(i => i.id === id ? { ...i, qty: newQty } : i));
-        setApiError('');
 
+        // Always try the API
         try {
             const payload = {
                 product_id: item.id,
@@ -208,14 +207,14 @@ const Billing = () => {
             };
 
             const response = await updateCartItem(payload);
-            setServerCart(response);
-            if (response?.items) {
-                syncCartWithServer(response.items);
+            if (response) {
+                setServerCart(response);
+                setOfflineMode(false);
+                if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] updateCartItem API error:', err);
-            setApiError('Could not sync update with server — cart updated locally.');
-            setTimeout(() => setApiError(''), 4000);
+            console.error('[Billing] updateCartItem API error:', err.message);
+            setOfflineMode(true);
         }
     }, [cart, syncCartWithServer]);
 
@@ -304,6 +303,7 @@ const Billing = () => {
     const handleReset = () => {
         setCart([]);
         setServerCart(null);
+        setOfflineMode(false);
         setCustomer({ name: '', phone: '', gstin: '' });
         setBillDiscount(0);
         setCouponCode('');
@@ -352,15 +352,17 @@ const Billing = () => {
 
     return (
         <div className="pos-shell">
-            {/* ── Cart-load error banner (non-blocking) ── */}
-            {cartLoadError && (
+            {/* ── Offline mode banner — shows when API is unavailable ── */}
+            {offlineMode && (
                 <div style={{
                     position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)',
-                    background: '#fef3c7', color: '#92400e', borderRadius: 8,
-                    padding: '8px 16px', fontSize: 12, zIndex: 9999,
-                    border: '1px solid #fcd34d', boxShadow: '0 4px 12px rgba(0,0,0,.1)',
+                    background: '#fff3cd', color: '#856404', borderRadius: 8,
+                    padding: '6px 16px', fontSize: 12, zIndex: 9999,
+                    border: '1px solid #ffc107', boxShadow: '0 4px 12px rgba(0,0,0,.1)',
+                    display: 'flex', alignItems: 'center', gap: 8,
                 }}>
-                    ⚠️ {cartLoadError}
+                    <span>📡</span>
+                    <span><strong>Offline mode</strong> — server unavailable, cart is saved locally.</span>
                 </div>
             )}
             {/* ── LEFT: Product Catalog ── */}
@@ -707,7 +709,7 @@ const Billing = () => {
                         ))}
                     </div>
 
-                    {/* API error notice */}
+                    {/* API error notice — only for discount errors which are user-actionable */}
                     {apiError && (
                         <div style={{
                             background: '#fef3c7', color: '#92400e',

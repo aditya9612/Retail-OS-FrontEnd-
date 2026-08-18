@@ -1,7 +1,9 @@
 const BASE_URL = 'https://api-testing.myretailos.com/api/v1';
 
+import { getAccessToken } from '../utils/tokenStorage';
+
 const getAuthHeaders = () => {
-    const token = localStorage.getItem('access_token');
+    const token = getAccessToken();
     return {
         'Content-Type': 'application/json',
         Accept: 'application/json',
@@ -127,4 +129,36 @@ export const activateCoupon = (couponId) =>
 export const deactivateCoupon = (couponId) =>
     request(`${BASE_URL}/coupons/${encodeURIComponent(couponId)}/deactivate`, {
         method: 'PATCH',
+    });
+
+/**
+ * Validate a coupon code against an order amount.
+ * POST /api/v1/coupons/validate
+ * @param {string} coupon_code - The coupon code to check using exact casing
+ * @param {string|number} order_amount - The total order amount logic checking
+ * @returns {Promise<Object>} { valid: boolean, message: string }
+ */
+export const validateCoupon = (coupon_code, order_amount) =>
+    request(`${BASE_URL}/coupons/validate`, {
+        method: 'POST',
+        body: JSON.stringify({
+            coupon_code: coupon_code,
+            order_amount: String(order_amount)
+        }),
+    });
+
+/**
+ * Apply a coupon code to an order amount to get final calculations.
+ * POST /api/v1/coupons/apply
+ * @param {string} coupon_code - The coupon code to apply
+ * @param {string|number} order_amount - The total order amount
+ * @returns {Promise<Object>} { coupon_code, original_amount, discount_amount, final_amount, message }
+ */
+export const applyCoupon = (coupon_code, order_amount) =>
+    request(`${BASE_URL}/coupons/apply`, {
+        method: 'POST',
+        body: JSON.stringify({
+            coupon_code: coupon_code,
+            order_amount: String(order_amount)
+        }),
     });

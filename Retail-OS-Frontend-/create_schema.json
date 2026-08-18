@@ -1,0 +1,95 @@
+{
+  "properties": {
+    "store_id": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "title": "Store Id",
+      "description": "Store ID must be positive"
+    },
+    "customer_id": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Customer Id"
+    },
+    "order_type": {
+      "type": "string",
+      "title": "Order Type",
+      "default": "pos"
+    },
+    "coupon_code": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 50,
+          "minLength": 3
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Coupon Code"
+    },
+    "discount_amount": {
+      "anyOf": [
+        {
+          "type": "number",
+          "maximum": 999999.99,
+          "minimum": 0
+        },
+        {
+          "type": "string",
+          "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+        }
+      ],
+      "title": "Discount Amount",
+      "default": "0.00"
+    },
+    "delivery_address": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 500
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Delivery Address"
+    },
+    "notes": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 1000
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Notes"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/components/schemas/OrderItemCreate"
+      },
+      "type": "array",
+      "maxItems": 100,
+      "minItems": 1,
+      "title": "Items",
+      "description": "Order must have 1 to 100 items"
+    }
+  },
+  "type": "object",
+  "required": [
+    "store_id",
+    "items"
+  ],
+  "title": "OrderCreate"
+}

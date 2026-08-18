@@ -68,14 +68,23 @@ const GSTManagement = () => {
 
     const [gstRates, setGstRates] = useState([]);
     const [ratesLoading, setRatesLoading] = useState(false);
+    const [ratesError, setRatesError] = useState('');
     useEffect(() => {
         let active = true;
         setRatesLoading(true);
-        getGstRates().then(data => {
-            if (active) setGstRates(data);
-        }).catch(err => console.error('[GSTManagement] Error fetching rates:', err)).finally(() => {
-            if (active) setRatesLoading(false);
-        });
+        setRatesError('');
+        getGstRates()
+            .then(data => {
+                if (!active) return;
+                setGstRates(Array.isArray(data) ? data : []);
+                setRatesError('');
+            })
+            .catch(err => {
+                if (!active) return;
+                console.error('[GSTManagement] Error fetching rates:', err);
+                setRatesError('Could not load GST rates — server may be unavailable.');
+            })
+            .finally(() => { if (active) setRatesLoading(false); });
         return () => { active = false; };
     }, []);
 
@@ -439,6 +448,15 @@ const GSTManagement = () => {
                     </div>
                     {ratesLoading ? (
                         <p style={{ fontSize: 13, color: '#64748b', padding: 20 }}>Loading GST Rates...</p>
+                    ) : ratesError ? (
+                        <div style={{
+                            background: '#fff3cd', color: '#856404', border: '1px solid #ffc107',
+                            padding: '12px 16px', borderRadius: 8, fontSize: 13, display: 'flex',
+                            alignItems: 'center', gap: 8, margin: '8px 0'
+                        }}>
+                            <span>📡</span>
+                            <span><strong>Server unavailable</strong> — {ratesError}</span>
+                        </div>
                     ) : (
                         <table className="dash-table">
                             <thead>
