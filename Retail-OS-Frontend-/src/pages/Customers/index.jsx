@@ -277,7 +277,7 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
                             <select className="ec-input" name="type" value={form.type} onChange={handleChange}>
                                 <option value="regular">Regular</option>
                                 <option value="vip">VIP</option>
-                                <option value="wholesale">Wholesale</option>
+                                {/* <option value="wholesale">Wholesale</option> */}
                                 <option value="new">New</option>
                             </select>
                         </div>
@@ -394,28 +394,84 @@ const EditCustomerModal = ({ customer, onClose, onSaved }) => {
 };
 
 // Send Marketing Campaign Modal
-const SendCampaignModal = ({ onClose }) => {
-    const [title, setTitle] = useState('');
-    const [channel, setChannel] = useState('sms');
-    const [targetAudience, setTargetAudience] = useState('all');
-    const [subject, setSubject] = useState('');
+const SendCampaignModal = ({ customers = [], onClose }) => {
+    const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
+    const [communicationType, setCommunicationType] = useState('sms');
     const [message, setMessage] = useState('');
     const [submitting, setSubmitting] = useState(false);
+    const [customerSearch, setCustomerSearch] = useState('');
+    const [customerList, setCustomerList] = useState(customers);
+    const [loadingCustomers, setLoadingCustomers] = useState(false);
+
+    useEffect(() => {
+        if (!customers || customers.length === 0) {
+            setLoadingCustomers(true);
+            getCustomers()
+                .then(res => {
+                    const list = normalizeApiList(res);
+                    setCustomerList(list.map(c => formatCustomerRecord(c)));
+                })
+                .catch(err => console.error('Error loading customers for campaign:', err))
+                .finally(() => setLoadingCustomers(false));
+        } else {
+            setCustomerList(customers);
+        }
+    }, [customers]);
+
+    const getCustomerId = (c) => {
+        if (c.backendId !== undefined && c.backendId !== null) return Number(c.backendId);
+        if (typeof c.id === 'number') return c.id;
+        const parsed = parseInt(String(c.id).replace(/\D/g, ''), 10);
+        return Number.isNaN(parsed) ? c.id : parsed;
+    };
+
+    const handleToggleCustomer = (id) => {
+        setSelectedCustomerIds(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const filteredList = useMemo(() => {
+        if (!customerSearch.trim()) return customerList;
+        const q = customerSearch.toLowerCase();
+        return customerList.filter(c => (
+            (c.name && c.name.toLowerCase().includes(q)) ||
+            (c.email && c.email.toLowerCase().includes(q)) ||
+            (c.phone && c.phone.includes(q))
+        ));
+    }, [customerList, customerSearch]);
+
+    const allFilteredSelected = filteredList.length > 0 && filteredList.every(c => {
+        const id = getCustomerId(c);
+        return selectedCustomerIds.includes(id);
+    });
+
+    const handleToggleSelectAll = () => {
+        if (allFilteredSelected) {
+            const filteredIds = new Set(filteredList.map(c => getCustomerId(c)));
+            setSelectedCustomerIds(prev => prev.filter(id => !filteredIds.has(id)));
+        } else {
+            const filteredIds = filteredList.map(c => getCustomerId(c));
+            setSelectedCustomerIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!title.trim() || !message.trim()) {
-            alert('Please enter a campaign title and message content.');
+        if (selectedCustomerIds.length === 0) {
+            alert('Please select at least one customer.');
+            return;
+        }
+        if (!message.trim()) {
+            alert('Please enter a campaign message.');
             return;
         }
 
         setSubmitting(true);
         try {
             await sendCampaign({
-                title: title.trim(),
-                channel,
-                target_audience: targetAudience,
-                subject: subject.trim() || undefined,
+                customer_ids: selectedCustomerIds,
+                communication_type: communicationType,
                 message: message.trim(),
             });
             alert('Marketing campaign sent successfully!');
@@ -434,46 +490,104 @@ const SendCampaignModal = ({ onClose }) => {
                 <div className="ec-modal-header">
                     <div>
                         <h3 style={{ fontWeight: 700, fontSize: 17, color: '#111827' }}>Send Marketing Campaign</h3>
-                        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>Blast promotional SMS, WhatsApp, or Email campaigns to customer segments</p>
+                        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>Blast promotional SMS, WhatsApp, or Email campaigns to selected customers</p>
                     </div>
                     <button type="button" className="ec-modal-close" onClick={onClose}>✕</button>
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ marginTop: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {/* Select Customers */}
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Campaign Name / Title *</label>
-                            <input className="ec-input" type="text" placeholder="e.g., Festival Clearance Sale" value={title} onChange={e => setTitle(e.target.value)} required />
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Select Customers *</label>
+                                {selectedCustomerIds.length > 0 && (
+                                    <span style={{ fontSize: 11, fontWeight: 600, color: '#6366f1' }}>
+                                        {selectedCustomerIds.length} selected
+                                    </span>
+                                )}
+                            </div>
+
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                                <input
+                                    className="ec-input"
+                                    type="text"
+                                    placeholder="Search customers..."
+                                    value={customerSearch}
+                                    onChange={e => setCustomerSearch(e.target.value)}
+                                    style={{ fontSize: 12, padding: '6px 10px' }}
+                                />
+                                <button
+                                    type="button"
+                                    className="adm-btn-secondary"
+                                    onClick={handleToggleSelectAll}
+                                    style={{ fontSize: 11, padding: '4px 10px', whiteSpace: 'nowrap' }}
+                                >
+                                    {allFilteredSelected ? 'Deselect All' : 'Select All'}
+                                </button>
+                            </div>
+
+                            <div style={{
+                                maxHeight: 150,
+                                overflowY: 'auto',
+                                border: '1px solid #d1d5db',
+                                borderRadius: 8,
+                                padding: '6px 8px',
+                                background: '#ffffff',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 4
+                            }}>
+                                {loadingCustomers ? (
+                                    <p style={{ fontSize: 12, color: '#9ca3af', margin: 0, padding: 8, textAlign: 'center' }}>Loading customers...</p>
+                                ) : filteredList.length === 0 ? (
+                                    <p style={{ fontSize: 12, color: '#9ca3af', margin: 0, padding: 8, textAlign: 'center' }}>No customers found</p>
+                                ) : (
+                                    filteredList.map(c => {
+                                        const id = getCustomerId(c);
+                                        const isChecked = selectedCustomerIds.includes(id);
+                                        return (
+                                            <label
+                                                key={id || c.id}
+                                                style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 8,
+                                                    padding: '5px 8px',
+                                                    borderRadius: 6,
+                                                    background: isChecked ? '#eef2ff' : 'transparent',
+                                                    cursor: 'pointer',
+                                                    transition: 'background 0.15s ease',
+                                                    fontSize: 12
+                                                }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => handleToggleCustomer(id)}
+                                                    style={{ cursor: 'pointer', accentColor: '#6366f1' }}
+                                                />
+                                                <span style={{ fontWeight: 600, color: '#111827' }}>{c.name}</span>
+                                                {c.email && <span style={{ color: '#6b7280', fontSize: 11 }}>({c.email})</span>}
+                                                {c.phone && !c.email && <span style={{ color: '#6b7280', fontSize: 11 }}>({c.phone})</span>}
+                                            </label>
+                                        );
+                                    })
+                                )}
+                            </div>
                         </div>
 
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <div>
-                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Communication Channel *</label>
-                                <select className="ec-input" value={channel} onChange={e => setChannel(e.target.value)}>
-                                    <option value="sms">SMS Notification</option>
-                                    <option value="whatsapp">WhatsApp Message</option>
-                                    <option value="email">Email Blast</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Target Audience *</label>
-                                <select className="ec-input" value={targetAudience} onChange={e => setTargetAudience(e.target.value)}>
-                                    <option value="all">All Customers</option>
-                                    <option value="vip">VIP Segment Only</option>
-                                    <option value="regular">Regular Customers</option>
-                                    <option value="active">Active Customers</option>
-                                </select>
-                            </div>
+                        {/* Communication Channel */}
+                        <div>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Communication Channel *</label>
+                            <select className="ec-input" value={communicationType} onChange={e => setCommunicationType(e.target.value)}>
+                                <option value="sms">SMS</option>
+                                <option value="whatsapp">WhatsApp</option>
+                                <option value="email">Email</option>
+                            </select>
                         </div>
 
-                        {channel === 'email' && (
-                            <div>
-                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Email Subject</label>
-                                <input className="ec-input" type="text" placeholder="e.g., Special Offer Just For You!" value={subject} onChange={e => setSubject(e.target.value)} />
-                            </div>
-                        )}
-
+                        {/* Campaign Message */}
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Campaign Message *</label>
                             <textarea className="ec-input" rows={4} placeholder="Enter your campaign announcement or offer code details..." value={message} onChange={e => setMessage(e.target.value)} required style={{ width: '100%', resize: 'vertical' }} />
@@ -482,7 +596,7 @@ const SendCampaignModal = ({ onClose }) => {
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
                         <button type="button" className="adm-btn-secondary" onClick={onClose}>Cancel</button>
-                        <button type="submit" className="adm-btn-primary" disabled={submitting || !title.trim() || !message.trim()}>
+                        <button type="submit" className="adm-btn-primary" disabled={submitting || selectedCustomerIds.length === 0 || !message.trim()}>
                             {submitting ? 'Sending Campaign...' : '🚀 Send Campaign'}
                         </button>
                     </div>
@@ -1252,6 +1366,7 @@ const Customers = () => {
 
             {showCampaignModal && (
                 <SendCampaignModal
+                    customers={customers}
                     onClose={() => setShowCampaignModal(false)}
                 />
             )}
