@@ -1,12 +1,17 @@
 import React, { useEffect, useState } from "react";
+import "./purchase.css";
 
 import {
   getPurchaseOrders,
+   getPurchaseOrder,
   createPurchaseOrder,
+  updatePurchaseOrder,
+  updatePurchaseOrderStatus,
+  receivePurchaseOrder,
+  
 } from "../../api/purchaseOrdersApi";
 
 import { getSuppliers } from "../../api/supplierApi";
-
 
 import {
   BsSearch,
@@ -27,13 +32,11 @@ const STATUS_CONFIG = {
     bg: "#fffbeb",
     icon: <BsClockHistory size={11} />,
   },
-
   Received: {
     color: "#10b981",
     bg: "#ecfdf5",
     icon: <BsCheckCircleFill size={11} />,
   },
-
   Cancelled: {
     color: "#ef4444",
     bg: "#fef2f2",
@@ -45,6 +48,7 @@ const PAGE_SIZE = 8;
 
 const EMPTY_FORM = {
   supplier: "",
+  storeId: "",
   invoiceNumber: "",
   purchaseDate: "",
   items: "",
@@ -54,10 +58,48 @@ const EMPTY_FORM = {
   total: "",
   paymentStatus: "Pending",
   status: "Pending",
+  remarks: "",
 };
 
 const fmt = (n) =>
   "₹" + Number(n || 0).toLocaleString("en-IN");
+
+/* =====================================================
+   DATE HELPER
+===================================================== */
+
+const formatDateForInput = (date) => {
+  if (!date) return "";
+
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return date;
+  }
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  return parsed.toISOString().split("T")[0];
+};
+
+const formatDisplayDate = (date) => {
+  if (!date) return "-";
+
+  const parsed = new Date(date);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return date;
+  }
+
+  return parsed.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
 
 /* =====================================================
    PURCHASE FORM MODAL
@@ -67,20 +109,66 @@ const PurchaseFormModal = ({
   purchase,
   onClose,
   onSave,
+  suppliers,
 }) => {
   const isNew = !purchase;
 
-  const [form, setForm] = useState(
-    purchase
-      ? { ...EMPTY_FORM, ...purchase }
-      : EMPTY_FORM
-  );
+  const [form, setForm] = useState(() => {
+    if (!purchase) {
+      return {
+        ...EMPTY_FORM,
+      };
+    }
+
+    return {
+      ...EMPTY_FORM,
+      ...purchase,
+
+      supplier:
+        purchase.supplierId ??
+        purchase.supplier ??
+        "",
+
+      storeId:
+        purchase.storeId ??
+        "",
+
+      invoiceNumber:
+        purchase.invoiceNumber ??
+        purchase.id ??
+        "",
+
+      purchaseDate:
+        formatDateForInput(
+          purchase.purchaseDate
+        ),
+    };
+  });
 
   const set = (key, value) => {
     setForm((prev) => ({
       ...prev,
       [key]: value,
     }));
+  };
+
+  const handleSubmit = () => {
+    if (!form.supplier) {
+      alert("Please select supplier.");
+      return;
+    }
+
+    if (!form.storeId) {
+      alert("Please enter Store ID.");
+      return;
+    }
+
+    if (!form.items || Number(form.items) <= 0) {
+      alert("Please enter valid total items.");
+      return;
+    }
+
+    onSave(form);
   };
 
   return (
@@ -126,24 +214,54 @@ const PurchaseFormModal = ({
           </button>
         </div>
 
-        {/* Supplier + Invoice */}
+        {/* Supplier + Store ID */}
+
         <div className="ec-form-row">
           <div className="ec-field">
-            <label>Supplier ID *</label>
+            <label>Supplier *</label>
 
-            <input
+            <select
               className="ec-input"
-              type="number"
               value={form.supplier}
               onChange={(e) =>
                 set("supplier", e.target.value)
               }
-              placeholder="Enter supplier ID"
-            />
+            >
+              <option value="">
+                Select Supplier
+              </option>
+
+              {suppliers?.map((supplier) => (
+                <option
+                  key={supplier.id}
+                  value={supplier.id}
+                >
+                  {supplier.name} (ID: {supplier.id})
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="ec-field">
-            <label>Invoice Number *</label>
+            <label>Store ID *</label>
+
+            <input
+              className="ec-input"
+              type="number"
+              value={form.storeId}
+              onChange={(e) =>
+                set("storeId", e.target.value)
+              }
+              placeholder="Enter Store ID"
+            />
+          </div>
+        </div>
+
+        {/* Invoice Number */}
+
+        <div className="ec-form-row">
+          <div className="ec-field">
+            <label>Invoice Number</label>
 
             <input
               className="ec-input"
@@ -157,10 +275,7 @@ const PurchaseFormModal = ({
               placeholder="e.g. INV-1001"
             />
           </div>
-        </div>
 
-        {/* Date + Items */}
-        <div className="ec-form-row">
           <div className="ec-field">
             <label>Purchase Date</label>
 
@@ -176,13 +291,18 @@ const PurchaseFormModal = ({
               }
             />
           </div>
+        </div>
 
+        {/* Items */}
+
+        <div className="ec-form-row">
           <div className="ec-field">
-            <label>Total Items</label>
+            <label>Total Items *</label>
 
             <input
               className="ec-input"
               type="number"
+              min="1"
               value={form.items}
               onChange={(e) =>
                 set("items", e.target.value)
@@ -190,16 +310,14 @@ const PurchaseFormModal = ({
               placeholder="0"
             />
           </div>
-        </div>
 
-        {/* Amounts */}
-        <div className="ec-form-row">
           <div className="ec-field">
             <label>Subtotal (₹)</label>
 
             <input
               className="ec-input"
               type="number"
+              min="0"
               value={form.subtotal}
               onChange={(e) =>
                 set(
@@ -210,13 +328,18 @@ const PurchaseFormModal = ({
               placeholder="0"
             />
           </div>
+        </div>
 
+        {/* GST + Discount */}
+
+        <div className="ec-form-row">
           <div className="ec-field">
             <label>GST (₹)</label>
 
             <input
               className="ec-input"
               type="number"
+              min="0"
               value={form.gst}
               onChange={(e) =>
                 set("gst", e.target.value)
@@ -224,15 +347,14 @@ const PurchaseFormModal = ({
               placeholder="0"
             />
           </div>
-        </div>
 
-        <div className="ec-form-row">
           <div className="ec-field">
             <label>Discount (₹)</label>
 
             <input
               className="ec-input"
               type="number"
+              min="0"
               value={form.discount}
               onChange={(e) =>
                 set(
@@ -243,13 +365,18 @@ const PurchaseFormModal = ({
               placeholder="0"
             />
           </div>
+        </div>
 
+        {/* Total */}
+
+        <div className="ec-form-row">
           <div className="ec-field">
             <label>Total Amount (₹)</label>
 
             <input
               className="ec-input"
               type="number"
+              min="0"
               value={form.total}
               onChange={(e) =>
                 set("total", e.target.value)
@@ -257,10 +384,7 @@ const PurchaseFormModal = ({
               placeholder="0"
             />
           </div>
-        </div>
 
-        {/* Payment + Status */}
-        <div className="ec-form-row">
           <div className="ec-field">
             <label>Payment Status</label>
 
@@ -287,7 +411,11 @@ const PurchaseFormModal = ({
               </option>
             </select>
           </div>
+        </div>
 
+        {/* Purchase Status */}
+
+        <div className="ec-form-row">
           <div className="ec-field">
             <label>Purchase Status</label>
 
@@ -311,9 +439,26 @@ const PurchaseFormModal = ({
               </option>
             </select>
           </div>
+
+          <div className="ec-field">
+            <label>Remarks</label>
+
+            <input
+              className="ec-input"
+              value={form.remarks}
+              onChange={(e) =>
+                set(
+                  "remarks",
+                  e.target.value
+                )
+              }
+              placeholder="Optional remarks"
+            />
+          </div>
         </div>
 
         {/* Buttons */}
+
         <div
           style={{
             display: "flex",
@@ -331,7 +476,7 @@ const PurchaseFormModal = ({
 
           <button
             className="adm-btn-primary"
-            onClick={() => onSave(form)}
+            onClick={handleSubmit}
           >
             {isNew ? (
               <>
@@ -407,41 +552,30 @@ const PurchaseDetailsModal = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns:
-              "1fr 1fr",
+            gridTemplateColumns: "1fr 1fr",
             gap: 12,
           }}
         >
           {[
-            [
-              "Supplier",
-              purchase.supplier,
-            ],
-
+            ["Supplier", purchase.supplier],
+            ["Store ID", purchase.storeId],
             [
               "Invoice Number",
               purchase.invoiceNumber,
             ],
-
             [
               "Purchase Date",
               purchase.purchaseDate,
             ],
-
             [
               "Items",
               `${purchase.items} items`,
             ],
-
             [
               "Payment",
               purchase.paymentStatus,
             ],
-
-            [
-              "Status",
-              purchase.status,
-            ],
+            ["Status", purchase.status],
           ].map(([label, value]) => (
             <div
               key={label}
@@ -456,8 +590,7 @@ const PurchaseDetailsModal = ({
                   fontSize: 10,
                   color: "#9ca3af",
                   fontWeight: 600,
-                  textTransform:
-                    "uppercase",
+                  textTransform: "uppercase",
                 }}
               >
                 {label}
@@ -484,8 +617,7 @@ const PurchaseDetailsModal = ({
             borderRadius: 8,
             padding: "12px 14px",
             display: "flex",
-            justifyContent:
-              "space-between",
+            justifyContent: "space-between",
           }}
         >
           <span
@@ -517,179 +649,298 @@ const PurchaseDetailsModal = ({
 ===================================================== */
 
 const Purchases = () => {
-  const [purchases, setPurchases] =
-    useState([]);
+  const [purchases, setPurchases] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [page, setPage] = useState(1);
+  const [modal, setModal] = useState(null);
 
-  const [suppliers, setSuppliers] =
-    useState([]);
+  const handleViewPurchase = async (purchase) => { 
+  try { 
+    const details = await getPurchaseOrder( 
+      purchase.backendId 
+    ); 
+ 
+    console.log("SINGLE PURCHASE API:", details); 
+ 
+    setModal({ 
+      type: "view", 
+      purchase: { 
+        ...purchase, 
+        ...details, 
+      }, 
+    }); 
+  } catch (err) { 
+    console.error( 
+      "Get Single Purchase Error:", 
+      err 
+    ); 
+ 
+    alert("Failed to load purchase details."); 
+  } 
+}; 
+const handleReceivePurchase = async (purchase) => {
+  try {
+    const result = await receivePurchaseOrder(
+      purchase.backendId
+    );
 
-  const [loading, setLoading] =
-    useState(true);
+    console.log("RECEIVE PURCHASE API:", result);
 
-  const [error, setError] =
-    useState("");
+    setPurchases((prev) =>
+      prev.map((p) =>
+        p.backendId === purchase.backendId
+          ? {
+              ...p,
+              status: "Received",
+            }
+          : p
+      )
+    );
 
-  const [search, setSearch] =
-    useState("");
+    alert("Purchase order received successfully.");
+  } catch (err) {
+    console.error("Receive Purchase Error:", err);
+    console.error("Response:", err?.response?.data);
 
-  const [filterStatus, setFilterStatus] =
-    useState("All");
+    alert(
+      err?.response?.data?.detail ||
+        "Failed to receive purchase order."
+    );
+  }
+};
 
-  const [page, setPage] =
-    useState(1);
+const handleUpdatePurchaseStatus = async ( 
+  purchase, 
+  newStatus 
+) => { 
+  try { 
+    const updatedStatus = 
+      await updatePurchaseOrderStatus( 
+        purchase.backendId, 
+        { 
+          status: newStatus, 
+        } 
+      ); 
+ 
+    console.log( 
+      "UPDATE PURCHASE STATUS API:", 
+      updatedStatus 
+    ); 
+ 
+    setPurchases((prev) => 
+      prev.map((p) => 
+        p.backendId === purchase.backendId 
+          ? { 
+              ...p, 
+              status: 
+                updatedStatus?.status === "received" 
+                  ? "Received" 
+                  : updatedStatus?.status === "cancelled" 
+                  ? "Cancelled" 
+                  : "Pending", 
+            } 
+          : p 
+      ) 
+    ); 
+ 
+    alert( 
+      "Purchase status updated successfully." 
+    ); 
+  } catch (err) { 
+    console.error( 
+      "Update Purchase Status Error:", 
+      err 
+    ); 
+ 
+    console.error( 
+      "Response:", 
+      err?.response?.data 
+    ); 
+ 
+    alert( 
+      err?.response?.data?.detail || 
+        "Failed to update purchase status." 
+    ); 
+  } 
+}; 
 
-  const [modal, setModal] =
-    useState(null);
 
   /* =====================================================
-     FETCH PURCHASES
+     FETCH
   ===================================================== */
 
   useEffect(() => {
-    const fetchPurchases =
-      async () => {
-        try {
-          setLoading(true);
-          setError("");
+    const fetchPurchases = async () => {
+      try {
+        setLoading(true);
+        setError("");
 
-          const suppliersData =
-            await getSuppliers();
+        const suppliersData =
+          await getSuppliers();
 
-          console.log(
-            "Suppliers API:",
-            suppliersData
-          );
+        console.log(
+          "Suppliers API:",
+          suppliersData
+        );
 
-          setSuppliers(
-            suppliersData
-          );
+        const supplierList =
+          Array.isArray(suppliersData)
+            ? suppliersData
+            : suppliersData?.data || [];
 
-          const data =
-            await getPurchaseOrders(
-              1,
-              20
-            );
+        setSuppliers(supplierList);
 
-          const mappedPurchases =
-            data.map((po) => ({
-              id: po.po_number,
+        const data =
+          await getPurchaseOrders(1, 20);
 
-              supplier:
-                `Supplier #${po.supplier_id}`,
+        console.log(
+          "Purchase Orders API:",
+          data
+        );
 
-              invoiceNumber:
-                po.po_number,
+        const purchaseList =
+          Array.isArray(data)
+            ? data
+            : data?.data || [];
 
-              purchaseDate:
-                po.created_at
-                  ? new Date(
-                      po.created_at
-                    ).toLocaleDateString(
-                      "en-IN",
-                      {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      }
-                    )
-                  : "-",
+        const mappedPurchases =
+          purchaseList.map((po) => ({
+            backendId: po.id,
 
-              items:
-                po.items?.reduce(
-                  (sum, item) =>
-                    sum +
-                    Number(
-                      item.quantity || 0
-                    ),
-                  0
-                ) || 0,
+            id:
+              po.po_number ||
+              `PO-${po.id}`,
 
-              subtotal:
-                Number(
-                  po.total_amount || 0
-                ),
+            supplierId:
+              po.supplier_id,
 
-              gst: 0,
+            supplier:
+              `Supplier #${po.supplier_id}`,
 
-              discount: 0,
+            storeId:
+              po.store_id ?? "",
 
-              total:
-                Number(
-                  po.total_amount || 0
-                ),
+            invoiceNumber:
+              po.po_number || "",
 
-              paymentStatus:
-                "Pending",
+            purchaseDate:
+              po.created_at || "",
 
-              status:
-                po.status === "draft"
-                  ? "Pending"
-                  : po.status ===
-                    "received"
-                  ? "Received"
-                  : po.status ===
-                    "cancelled"
-                  ? "Cancelled"
-                  : "Pending",
-            }));
+            items:
+              po.items?.reduce(
+                (sum, item) =>
+                  sum +
+                  Number(
+                    item.quantity || 0
+                  ),
+                0
+              ) || 0,
 
-          setPurchases(
-            mappedPurchases
-          );
+            subtotal:
+              Number(
+                po.total_amount || 0
+              ),
 
-          console.log(
-            "Purchase Orders API:",
-            data
-          );
-        } catch (err) {
-          console.error(
-            "Purchase Orders API Error:",
-            err
-          );
+            gst: 0,
+            discount: 0,
 
-          setError(
-            "Failed to load purchase orders"
-          );
-        } finally {
-          setLoading(false);
-        }
-      };
+            total:
+              Number(
+                po.total_amount || 0
+              ),
+
+            paymentStatus:
+              "Pending",
+
+            status:
+              po.status === "draft"
+                ? "Pending"
+                : po.status === "received"
+                ? "Received"
+                : po.status === "cancelled"
+                ? "Cancelled"
+                : "Pending",
+
+            remarks:
+              po.remarks || "",
+          }));
+
+        setPurchases(mappedPurchases);
+      } catch (err) {
+        console.error(
+          "Purchase Orders API Error:",
+          err
+        );
+
+        console.error(
+          "Response:",
+          err?.response?.data
+        );
+
+        setError(
+          "Failed to load purchase orders"
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
     fetchPurchases();
   }, []);
 
   /* =====================================================
-     SAVE PURCHASE
+     SAVE
   ===================================================== */
 
-  const handleSave = async (
-    form
-  ) => {
+  const handleSave = async (form) => {
+
     try {
       setError("");
 
-      /* =========================
-         CREATE PURCHASE
-      ========================= */
+      /* =================================================
+         CREATE
+      ================================================= */
 
       if (modal === "new") {
+        const quantity =
+          Number(form.items) || 1;
+
+        const totalAmount =
+          Number(form.total) || 0;
+
+        const unitPrice =
+          quantity > 0
+            ? totalAmount / quantity
+            : 0;
+
         const payload = {
           supplier_id:
             Number(form.supplier),
 
-          po_number:
-            form.invoiceNumber,
+          // IMPORTANT:
+          // Previously store_id was hardcoded to 8.
+          store_id:
+            Number(form.storeId),
 
-          total_amount:
-            Number(form.total) || 0,
+          remarks:
+            form.remarks ||
+            "Purchase created from RetailOS",
 
-          status:
-            form.status === "Received"
-              ? "received"
-              : form.status ===
-                "Cancelled"
-              ? "cancelled"
-              : "draft",
+          items: [
+            {
+              product_id: 13,
+
+              quantity:
+                quantity,
+
+              unit_price:
+                unitPrice,
+            },
+          ],
         };
 
         console.log(
@@ -702,7 +953,7 @@ const Purchases = () => {
         );
 
         console.log(
-          "PAYLOAD:",
+          "CREATE PAYLOAD:",
           payload
         );
 
@@ -712,55 +963,195 @@ const Purchases = () => {
           );
 
         console.log(
-          "========== API SUCCESS =========="
-        );
-
-        console.log(
-          "CREATED:",
+          "CREATE SUCCESS:",
           created
         );
 
         const newPurchase = {
+          backendId:
+            created?.id,
+
           id:
-            created.po_number ||
-            form.invoiceNumber,
+            created?.po_number ||
+            `PO-${created?.id}`,
+
+          supplierId:
+            created?.supplier_id ||
+            Number(form.supplier),
 
           supplier:
             `Supplier #${
-              created.supplier_id ||
+              created?.supplier_id ||
               form.supplier
             }`,
 
+          storeId:
+            created?.store_id ??
+            Number(form.storeId),
+
           invoiceNumber:
-            created.po_number ||
+            created?.po_number ||
+            form.invoiceNumber ||
+            `PO-${created?.id}`,
+
+          purchaseDate:
+            created?.created_at ||
+            form.purchaseDate ||
+            "",
+
+          items:
+            quantity,
+
+          subtotal:
+            totalAmount,
+
+          gst:
+            Number(form.gst) || 0,
+
+          discount:
+            Number(form.discount) || 0,
+
+          total:
+            totalAmount,
+
+          paymentStatus:
+            form.paymentStatus ||
+            "Pending",
+
+          status:
+            created?.status === "received"
+              ? "Received"
+              : created?.status === "cancelled"
+              ? "Cancelled"
+              : "Pending",
+
+          remarks:
+            created?.remarks ||
+            form.remarks ||
+            "",
+        };
+
+        setPurchases((prev) => [
+          newPurchase,
+          ...prev,
+        ]);
+        
+        setError("");
+        setModal(null);
+
+        return;
+      }
+
+      /* =================================================
+         EDIT
+      ================================================= */
+
+      if (modal?.id) {
+        const purchaseOrderId =
+          modal.backendId;
+          
+
+        const totalAmount =
+          Number(form.total) || 0;
+const payload = {
+  supplier_id: Number(form.supplier),
+  store_id: Number(form.storeId),
+  remarks: form.remarks || "Updated purchase order",
+};
+
+        console.log(
+          "========== UPDATE PURCHASE =========="
+        );
+
+        console.log(
+          "Purchase Order ID:",
+          purchaseOrderId
+        );
+
+        console.log(
+          "UPDATE PAYLOAD:",
+          payload
+        );
+
+        const updated =
+          await updatePurchaseOrder(
+            purchaseOrderId,
+            payload
+          );
+
+          
+
+if (form.status) {
+  updatedStatus =
+    await updatePurchaseOrderStatus(
+      purchaseOrderId,
+      {
+        status:
+          form.status === "Pending"
+            ? "draft"
+            : form.status === "Received"
+            ? "received"
+            : form.status === "Cancelled"
+            ? "cancelled"
+            : form.status,
+      }
+    );
+}
+
+        const updatedPurchase = {
+          ...modal,
+
+          backendId:
+            updated?.id ??
+            modal.backendId,
+
+          id:
+            updated?.po_number ??
+            form.invoiceNumber ??
+            modal.id,
+
+          supplierId:
+            updated?.supplier_id ??
+            Number(form.supplier),
+
+          supplier:
+            `Supplier #${
+              updated?.supplier_id ??
+              form.supplier
+            }`,
+
+          storeId:
+            updated?.store_id ??
+            Number(form.storeId) ??
+            modal.storeId,
+
+          invoiceNumber:
+            updated?.po_number ??
             form.invoiceNumber,
 
           purchaseDate:
-            created.created_at
-              ? new Date(
-                  created.created_at
-                ).toLocaleDateString(
-                  "en-IN",
-                  {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  }
-                )
-              : new Date().toLocaleDateString(
-                  "en-IN",
-                  {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  }
-                ),
+            updated?.created_at ??
+            form.purchaseDate ??
+            modal.purchaseDate,
 
           items:
-            Number(form.items) || 0,
+            updated?.items?.reduce(
+              (sum, item) =>
+                sum +
+                Number(
+                  item.quantity || 0
+                ),
+              0
+            ) ||
+            Number(form.items) ||
+            modal.items ||
+            0,
 
           subtotal:
-            Number(form.subtotal) || 0,
+            Number(
+              updated?.total_amount ??
+              totalAmount
+            ),
 
           gst:
             Number(form.gst) || 0,
@@ -770,87 +1161,39 @@ const Purchases = () => {
 
           total:
             Number(
-              created.total_amount ??
-                form.total
-            ) || 0,
+              updated?.total_amount ??
+              totalAmount
+            ),
 
           paymentStatus:
-            form.paymentStatus,
+            form.paymentStatus ||
+            modal.paymentStatus ||
+            "Pending",
 
-          status:
-            form.status,
+         status:
+  updatedStatus?.status === "received"
+    ? "Received"
+    : updatedStatus?.status === "cancelled"
+    ? "Cancelled"
+    : "Pending",
+
+          remarks:
+            updated?.remarks ??
+            form.remarks ??
+            modal.remarks ??
+            "",
         };
 
-        setPurchases(
-          (prev) => [
-            newPurchase,
-            ...prev,
-          ]
+        setPurchases((prev) =>
+          prev.map((p) =>
+            p.backendId ===
+            purchaseOrderId
+              ? updatedPurchase
+              : p
+          )
         );
 
         setModal(null);
-
-        alert(
-          "Purchase created successfully!"
-        );
-
-        return;
-      }
-
-      /* =========================
-         EDIT PURCHASE
-      ========================= */
-
-      if (modal?.id) {
-        const updatedPurchase = {
-          ...modal,
-
-          supplier:
-            form.supplier,
-
-          invoiceNumber:
-            form.invoiceNumber,
-
-          purchaseDate:
-            form.purchaseDate ||
-            modal.purchaseDate,
-
-          items:
-            Number(form.items) || 0,
-
-          subtotal:
-            Number(form.subtotal) || 0,
-
-          gst:
-            Number(form.gst) || 0,
-
-          discount:
-            Number(form.discount) || 0,
-
-          total:
-            Number(form.total) || 0,
-
-          paymentStatus:
-            form.paymentStatus,
-
-          status:
-            form.status,
-        };
-
-        setPurchases(
-          (prev) =>
-            prev.map((p) =>
-              p.id === modal.id
-                ? updatedPurchase
-                : p
-            )
-        );
-
-        setModal(null);
-
-        alert(
-          "Purchase updated successfully!"
-        );
       }
     } catch (err) {
       console.error(
@@ -886,8 +1229,7 @@ const Purchases = () => {
         "Failed to save purchase";
 
       alert(
-        typeof message ===
-          "string"
+        typeof message === "string"
           ? message
           : JSON.stringify(
               message,
@@ -897,8 +1239,7 @@ const Purchases = () => {
       );
 
       setError(
-        typeof message ===
-          "string"
+        typeof message === "string"
           ? message
           : "Failed to save purchase"
       );
@@ -906,65 +1247,35 @@ const Purchases = () => {
   };
 
   /* =====================================================
-     DELETE PURCHASE
-  ===================================================== */
-
-  const deletePurchase = (
-    id
-  ) => {
-    const confirmDelete =
-      window.confirm(
-        "Are you sure you want to delete this purchase?"
-      );
-
-    if (!confirmDelete)
-      return;
-
-    setPurchases(
-      (prev) =>
-        prev.filter(
-          (p) => p.id !== id
-        )
-    );
-
-    alert(
-      "Purchase deleted successfully!"
-    );
-  };
-
-  /* =====================================================
      FILTER
   ===================================================== */
 
   const filtered =
-    purchases.filter(
-      (purchase) => {
-        const q =
-          search.toLowerCase();
+    purchases.filter((purchase) => {
+      const q =
+        search.toLowerCase();
 
-        const matchSearch =
-          purchase.id
-            ?.toLowerCase()
-            .includes(q) ||
-          purchase.supplier
-            ?.toLowerCase()
-            .includes(q) ||
-          purchase.invoiceNumber
-            ?.toLowerCase()
-            .includes(q);
+      const matchSearch =
+        purchase.id
+          ?.toLowerCase()
+          .includes(q) ||
+        purchase.supplier
+          ?.toLowerCase()
+          .includes(q) ||
+        purchase.invoiceNumber
+          ?.toLowerCase()
+          .includes(q);
 
-        const matchStatus =
-          filterStatus ===
-            "All" ||
-          purchase.status ===
-            filterStatus;
+      const matchStatus =
+        filterStatus === "All" ||
+        purchase.status ===
+          filterStatus;
 
-        return (
-          matchSearch &&
-          matchStatus
-        );
-      }
-    );
+      return (
+        matchSearch &&
+        matchStatus
+      );
+    });
 
   const totalPages =
     Math.max(
@@ -990,64 +1301,45 @@ const Purchases = () => {
     purchases.reduce(
       (sum, p) =>
         sum +
-        Number(
-          p.total || 0
-        ),
+        Number(p.total || 0),
       0
     );
 
   const pendingCount =
     purchases.filter(
       (p) =>
-        p.status ===
-        "Pending"
+        p.status === "Pending"
     ).length;
 
   const receivedCount =
     purchases.filter(
       (p) =>
-        p.status ===
-        "Received"
+        p.status === "Received"
     ).length;
 
   const kpis = [
     {
-      label:
-        "Total Purchases",
-      value:
-        purchases.length,
-      color:
-        "#6366f1",
+      label: "Total Purchases",
+      value: purchases.length,
+      color: "#6366f1",
       icon: "🛒",
     },
-
     {
       label: "Received",
-      value:
-        receivedCount,
-      color:
-        "#10b981",
+      value: receivedCount,
+      color: "#10b981",
       icon: "✅",
     },
-
     {
       label: "Pending",
-      value:
-        pendingCount,
-      color:
-        "#f59e0b",
+      value: pendingCount,
+      color: "#f59e0b",
       icon: "⏳",
     },
-
     {
-      label:
-        "Purchase Value",
-      value:
-        fmt(
-          totalPurchaseAmount
-        ),
-      color:
-        "#0ea5e9",
+      label: "Purchase Value",
+      value: fmt(totalPurchaseAmount),
+      color: "#0ea5e9",
       icon: "💰",
     },
   ];
@@ -1058,6 +1350,7 @@ const Purchases = () => {
 
   return (
     <div className="dash-page">
+       <div className="purchase-page-content">
 
       {/* HEADER */}
 
@@ -1069,8 +1362,7 @@ const Purchases = () => {
 
           <p className="adm-page-sub">
             Manage purchase orders,
-            suppliers and incoming
-            stock
+            suppliers and incoming stock
           </p>
         </div>
 
@@ -1092,10 +1384,8 @@ const Purchases = () => {
       {error && (
         <div
           style={{
-            background:
-              "#fef2f2",
-            color:
-              "#dc2626",
+            background: "#fef2f2",
+            color: "#dc2626",
             padding: 12,
             borderRadius: 8,
             marginBottom: 12,
@@ -1103,6 +1393,7 @@ const Purchases = () => {
         >
           {error}
         </div>
+        
       )}
 
       {/* LOADING */}
@@ -1111,17 +1402,15 @@ const Purchases = () => {
         <div
           style={{
             padding: 20,
-            textAlign:
-              "center",
-            color:
-              "#6b7280",
+            textAlign: "center",
+            color: "#6b7280",
           }}
         >
           Loading purchases...
         </div>
       )}
 
-      {/* KPIs */}
+      {/* KPI */}
 
       <div
         style={{
@@ -1131,82 +1420,70 @@ const Purchases = () => {
           gap: 14,
         }}
       >
-        {kpis.map(
-          (k, i) => (
-            <div
-              key={i}
-              className="adm-kpi-card"
+        {kpis.map((k, i) => (
+          <div
+            key={i}
+            className="adm-kpi-card"
+            style={{
+              padding: "14px 18px",
+            }}
+          >
+            <span
               style={{
-                padding:
-                  "14px 18px",
+                fontSize: 22,
               }}
             >
-              <span
-                style={{
-                  fontSize: 22,
-                }}
-              >
-                {k.icon}
-              </span>
+              {k.icon}
+            </span>
 
-              <p
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color:
-                    "#9ca3af",
-                  textTransform:
-                    "uppercase",
-                  letterSpacing:
-                    "0.05em",
-                  marginTop: 8,
-                }}
-              >
-                {k.label}
-              </p>
+            <p
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: "#9ca3af",
+                textTransform:
+                  "uppercase",
+                letterSpacing:
+                  "0.05em",
+                marginTop: 8,
+              }}
+            >
+              {k.label}
+            </p>
 
-              <p
-                style={{
-                  fontSize:
-                    i === 3
-                      ? 16
-                      : 26,
-                  fontWeight: 800,
-                  color:
-                    k.color,
-                  marginTop: 4,
-                }}
-              >
-                {k.value}
-              </p>
-            </div>
-          )
-        )}
+            <p
+              style={{
+                fontSize:
+                  i === 3 ? 16 : 26,
+                fontWeight: 800,
+                color: k.color,
+                marginTop: 4,
+              }}
+            >
+              {k.value}
+            </p>
+          </div>
+        ))}
       </div>
 
       {/* SEARCH + FILTER */}
 
       <div
         style={{
-          background:
-            "#fff",
+          background: "#fff",
           border:
             "1px solid #e8eaf0",
           borderRadius: 12,
-          padding:
-            "14px 16px",
+          padding: "14px 16px",
           display: "flex",
           gap: 12,
-          flexWrap:
-            "wrap",
-          alignItems:
-            "center",
+          flexWrap: "wrap",
+          alignItems: "center",
         }}
       >
         <div
           style={{
-            position:
-              "relative",
+            position: "relative",
             flex: 1,
             minWidth: 220,
           }}
@@ -1220,8 +1497,7 @@ const Purchases = () => {
               top: "50%",
               transform:
                 "translateY(-50%)",
-              color:
-                "#9ca3af",
+              color: "#9ca3af",
             }}
           />
 
@@ -1233,10 +1509,7 @@ const Purchases = () => {
             placeholder="Search purchase ID, supplier or invoice..."
             value={search}
             onChange={(e) => {
-              setSearch(
-                e.target.value
-              );
-
+              setSearch(e.target.value);
               setPage(1);
             }}
           />
@@ -1247,14 +1520,11 @@ const Purchases = () => {
           style={{
             minWidth: 150,
           }}
-          value={
-            filterStatus
-          }
+          value={filterStatus}
           onChange={(e) => {
             setFilterStatus(
               e.target.value
             );
-
             setPage(1);
           }}
         >
@@ -1264,18 +1534,14 @@ const Purchases = () => {
 
           {Object.keys(
             STATUS_CONFIG
-          ).map(
-            (status) => (
-              <option
-                key={status}
-                value={
-                  status
-                }
-              >
-                {status}
-              </option>
-            )
-          )}
+          ).map((status) => (
+            <option
+              key={status}
+              value={status}
+            >
+              {status}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -1285,8 +1551,7 @@ const Purchases = () => {
         className="chart-card"
         style={{
           padding: 0,
-          overflow:
-            "hidden",
+          overflow: "hidden",
         }}
       >
         <table
@@ -1315,35 +1580,28 @@ const Purchases = () => {
                 "Payment",
                 "Status",
                 "Actions",
-              ].map(
-                (heading) => (
-                  <th
-                    key={
-                      heading
-                    }
-                    style={{
-                      padding:
-                        "12px 14px",
-                      textAlign:
-                        "left",
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color:
-                        "#9ca3af",
-                      textTransform:
-                        "uppercase",
-                      letterSpacing:
-                        "0.05em",
-                      whiteSpace:
-                        "nowrap",
-                    }}
-                  >
-                    {
-                      heading
-                    }
-                  </th>
-                )
-              )}
+              ].map((heading) => (
+                <th
+                  key={heading}
+                  style={{
+                    padding:
+                      "12px 14px",
+                    textAlign:
+                      "left",
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#9ca3af",
+                    textTransform:
+                      "uppercase",
+                    letterSpacing:
+                      "0.05em",
+                    whiteSpace:
+                      "nowrap",
+                  }}
+                >
+                  {heading}
+                </th>
+              ))}
             </tr>
           </thead>
 
@@ -1352,14 +1610,14 @@ const Purchases = () => {
               (purchase) => {
                 const sc =
                   STATUS_CONFIG[
-                    purchase
-                      .status
+                    purchase.status
                   ] ||
                   STATUS_CONFIG.Pending;
 
                 return (
                   <tr
                     key={
+                      purchase.backendId ||
                       purchase.id
                     }
                     style={{
@@ -1377,13 +1635,10 @@ const Purchases = () => {
                           "monospace",
                         fontSize: 12,
                         fontWeight: 600,
-                        color:
-                          "#6b7280",
+                        color: "#6b7280",
                       }}
                     >
-                      {
-                        purchase.id
-                      }
+                      {purchase.id}
                     </td>
 
                     {/* Supplier */}
@@ -1415,12 +1670,12 @@ const Purchases = () => {
                         padding:
                           "12px 14px",
                         fontSize: 12,
-                        color:
-                          "#6b7280",
+                        color: "#6b7280",
                       }}
                     >
                       {
-                        purchase.invoiceNumber
+                        purchase.invoiceNumber ||
+                        "-"
                       }
                     </td>
 
@@ -1431,13 +1686,12 @@ const Purchases = () => {
                         padding:
                           "12px 14px",
                         fontSize: 12,
-                        color:
-                          "#6b7280",
+                        color: "#6b7280",
                       }}
                     >
-                      {
+                      {formatDisplayDate(
                         purchase.purchaseDate
-                      }
+                      )}
                     </td>
 
                     {/* Items */}
@@ -1447,14 +1701,10 @@ const Purchases = () => {
                         padding:
                           "12px 14px",
                         fontSize: 13,
-                        color:
-                          "#374151",
+                        color: "#374151",
                       }}
                     >
-                      {
-                        purchase.items
-                      }{" "}
-                      items
+                      {purchase.items} items
                     </td>
 
                     {/* Total */}
@@ -1465,8 +1715,7 @@ const Purchases = () => {
                           "12px 14px",
                         fontSize: 13,
                         fontWeight: 700,
-                        color:
-                          "#111827",
+                        color: "#111827",
                       }}
                     >
                       {fmt(
@@ -1518,9 +1767,7 @@ const Purchases = () => {
                       >
                         {sc.icon}
                         &nbsp;
-                        {
-                          purchase.status
-                        }
+                        {purchase.status}
                       </span>
                     </td>
 
@@ -1547,16 +1794,12 @@ const Purchases = () => {
                             padding:
                               "5px 9px",
                           }}
-                          onClick={() =>
-                            setModal({
-                              type: "view",
-                              purchase,
-                            })
-                          }
+                         onClick={() =>
+  handleViewPurchase(purchase)
+}
+                          
                         >
-                          <BsEye
-                            size={11}
-                          />
+                          <BsEye size={11} />
                         </button>
 
                         {/* EDIT */}
@@ -1578,28 +1821,33 @@ const Purchases = () => {
                           />
                         </button>
 
+                        <button
+  className="adm-btn-secondary"
+  style={{
+    padding: "5px 9px",
+  }}
+  onClick={() =>
+    handleReceivePurchase(purchase)
+  }
+  disabled={purchase.status === "Received"}
+  title="Receive Purchase"
+>
+  <BsCheckCircleFill size={11} />
+</button>
+
                         {/* DELETE */}
 
                         <button
-                          onClick={() =>
-                            deletePurchase(
-                              purchase.id
-                            )
-                          }
+                          className="adm-btn-secondary"
                           style={{
                             padding:
                               "5px 9px",
-                            borderRadius:
-                              8,
-                            border:
-                              "1px solid #fecaca",
-                            background:
-                              "#fef2f2",
-                            color:
-                              "#ef4444",
-                            cursor:
-                              "pointer",
                           }}
+                          onClick={() =>
+                            alert(
+                              "Delete functionality will be added later."
+                            )
+                          }
                         >
                           <BsTrashFill
                             size={11}
@@ -1612,24 +1860,25 @@ const Purchases = () => {
               }
             )}
 
-            {paginated.length ===
-              0 && (
-              <tr>
-                <td
-                  colSpan={9}
-                  style={{
-                    padding: 40,
-                    textAlign:
-                      "center",
-                    color:
-                      "#9ca3af",
-                    fontSize: 14,
-                  }}
-                >
-                  No purchases found
-                </td>
-              </tr>
-            )}
+            {!loading &&
+              paginated.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={9}
+                    style={{
+                      padding: 30,
+                      textAlign:
+                        "center",
+                      color:
+                        "#9ca3af",
+                      fontSize: 13,
+                    }}
+                  >
+                    No purchase orders
+                    found.
+                  </td>
+                </tr>
+              )}
           </tbody>
         </table>
 
@@ -1667,9 +1916,7 @@ const Purchases = () => {
                 filtered.length
               )}{" "}
               of{" "}
-              {
-                filtered.length
-              }
+              {filtered.length}
             </span>
 
             <div
@@ -1690,8 +1937,7 @@ const Purchases = () => {
                 }
                 onClick={() =>
                   setPage(
-                    (p) =>
-                      p - 1
+                    (p) => p - 1
                   )
                 }
               >
@@ -1707,46 +1953,38 @@ const Purchases = () => {
                 },
                 (_, i) =>
                   i + 1
-              ).map(
-                (p) => (
-                  <button
-                    key={p}
-                    onClick={() =>
-                      setPage(
-                        p
-                      )
-                    }
-                    style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius:
-                        6,
-                      border: `1.5px solid ${
-                        p ===
-                        page
-                          ? "#6366f1"
-                          : "#e5e7eb"
-                      }`,
-                      background:
-                        p ===
-                        page
-                          ? "#eef2ff"
-                          : "#fff",
-                      color:
-                        p ===
-                        page
-                          ? "#6366f1"
-                          : "#6b7280",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor:
-                        "pointer",
-                    }}
-                  >
-                    {p}
-                  </button>
-                )
-              )}
+              ).map((p) => (
+                <button
+                  key={p}
+                  onClick={() =>
+                    setPage(p)
+                  }
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 6,
+                    border: `1.5px solid ${
+                      p === page
+                        ? "#6366f1"
+                        : "#e5e7eb"
+                    }`,
+                    background:
+                      p === page
+                        ? "#eef2ff"
+                        : "#fff",
+                    color:
+                      p === page
+                        ? "#6366f1"
+                        : "#6b7280",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor:
+                      "pointer",
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
 
               <button
                 className="adm-btn-secondary"
@@ -1760,8 +1998,7 @@ const Purchases = () => {
                 }
                 onClick={() =>
                   setPage(
-                    (p) =>
-                      p + 1
+                    (p) => p + 1
                   )
                 }
               >
@@ -1776,49 +2013,33 @@ const Purchases = () => {
 
       {/* ADD / EDIT MODAL */}
 
-      {modal &&
-        modal !== "new" &&
-        modal.type !==
-          "view" && (
-          <PurchaseFormModal
-            purchase={
-              modal
-            }
-            onClose={() =>
-              setModal(null)
-            }
-            onSave={
-              handleSave
-            }
-          />
-        )}
-
-      {modal ===
-        "new" && (
+      {(modal === "new" ||
+        (modal && modal.id)) && (
         <PurchaseFormModal
-          purchase={null}
+          purchase={
+            modal === "new"
+              ? null
+              : modal
+          }
           onClose={() =>
             setModal(null)
           }
-          onSave={
-            handleSave
-          }
+          onSave={handleSave}
+          suppliers={suppliers}
         />
       )}
 
       {/* VIEW MODAL */}
 
-      {modal?.type ===
-        "view" && (
+      {modal?.type === "view" && (
         <PurchaseDetailsModal
-          purchase={
-            modal.purchase
-          }
+          purchase={modal.purchase}
           onClose={() =>
             setModal(null)
           }
         />
       )}
+    </div>
     </div>
   );
 };
