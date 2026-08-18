@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getOrders } from '../../services/orderService';
 import { useNavigate } from 'react-router-dom';
 import {
     AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -6,7 +7,7 @@ import {
 } from 'recharts';
 import {
     BsCartCheck, BsCurrencyRupee, BsBagCheck, BsPeopleFill,
-    BsArrowUpRight, BsArrowDownRight, BsBoxSeam, BsShopWindow,
+    BsArrowUp, BsArrowDown, BsArrowUpRight, BsArrowDownRight, BsBoxSeam, BsShopWindow,
     BsTagFill, BsTruck, BsStarFill, BsArrowRight,
     BsClockHistory, BsCheckCircleFill, BsXCircleFill, BsHourglassSplit,
 } from 'react-icons/bs';
@@ -80,14 +81,57 @@ const CustomTooltip = ({ active, payload, label }) => {
 const ECommerceDashboard = () => {
     const navigate = useNavigate();
     const [period, setPeriod] = useState('This Year');
+    const [realData, setRealData] = useState({
+        revenue: 0,
+        orders: 0,
+        aov: 0,
+        loading: true
+    });
+
+    useEffect(() => {
+        let active = true;
+        const fetchStats = async () => {
+            try {
+                const ordersData = await getOrders({ store_id: 1, page: 1, page_size: 500 });
+                const orders = Array.isArray(ordersData) ? ordersData : (ordersData.items || ordersData.data || []);
+
+                let revenue = 0;
+                let count = 0;
+
+                orders.forEach(o => {
+                    const status = o.status ? o.status.toLowerCase() : 'pending';
+                    if (status !== 'cancelled' && status !== 'returned') {
+                        revenue += parseFloat(o.total_amount || 0);
+                        count++;
+                    }
+                });
+
+                if (active) {
+                    setRealData({
+                        revenue,
+                        orders: count,
+                        aov: count > 0 ? Math.round(revenue / count) : 0,
+                        loading: false
+                    });
+                }
+            } catch (err) {
+                console.error("EC Dashboard fetch error:", err);
+                if (active) {
+                    setRealData(prev => ({ ...prev, loading: false }));
+                }
+            }
+        };
+        fetchStats();
+        return () => { active = false; };
+    }, []);
 
     const kpis = [
-        { label: 'Online Revenue', value: fmt(1863000), change: '+24.3%', up: true, icon: <BsCurrencyRupee size={18} />, color: '#6366f1', bg: '#eef2ff', sub: 'vs last year' },
-        { label: 'Total Online Orders', value: '4,218', change: '+19.8%', up: true, icon: <BsCartCheck size={18} />, color: '#10b981', bg: '#ecfdf5', sub: '3,940 fulfilled' },
+        { label: 'Online Revenue', value: realData.loading ? '...' : fmt(realData.revenue), change: '+24.3%', up: true, icon: <BsCurrencyRupee size={18} />, color: '#6366f1', bg: '#eef2ff', sub: 'vs last year' },
+        { label: 'Total Online Orders', value: realData.loading ? '...' : realData.orders.toLocaleString('en-IN'), change: '+19.8%', up: true, icon: <BsCartCheck size={18} />, color: '#10b981', bg: '#ecfdf5', sub: '3,940 fulfilled' },
         { label: 'Active Products', value: '1,284', change: '+8.2%', up: true, icon: <BsBoxSeam size={18} />, color: '#f59e0b', bg: '#fffbeb', sub: 'Across 24 categories' },
         { label: 'Conversion Rate', value: '3.8%', change: '+0.4%', up: true, icon: <BsShopWindow size={18} />, color: '#22d3ee', bg: '#ecfeff', sub: 'Visits → Orders' },
         { label: 'Cart Abandonment', value: '62.4%', change: '-3.1%', up: true, icon: <BsTagFill size={18} />, color: '#8b5cf6', bg: '#f5f3ff', sub: 'Industry avg: 70%' },
-        { label: 'Avg. Order Value', value: fmt(2840), change: '+12.5%', up: true, icon: <BsBagCheck size={18} />, color: '#ec4899', bg: '#fdf2f8', sub: 'Per online order' },
+        { label: 'Avg. Order Value', value: realData.loading ? '...' : fmt(realData.aov), change: '+12.5%', up: true, icon: <BsBagCheck size={18} />, color: '#ec4899', bg: '#fdf2f8', sub: 'Per online order' },
         { label: 'Online Customers', value: '28,340', change: '+31.2%', up: true, icon: <BsPeopleFill size={18} />, color: '#0ea5e9', bg: '#f0f9ff', sub: '4,210 new this month' },
         { label: 'Pending Deliveries', value: '318', change: '+5.2%', up: false, icon: <BsTruck size={18} />, color: '#f97316', bg: '#fff7ed', sub: 'Awaiting dispatch' },
     ];
@@ -142,7 +186,7 @@ const ECommerceDashboard = () => {
                         <div className="adm-kpi-top">
                             <div className="adm-kpi-icon" style={{ background: k.bg, color: k.color }}>{k.icon}</div>
                             <span className={`adm-kpi-badge ${k.up ? 'adm-kpi-badge--up' : 'adm-kpi-badge--down'}`}>
-                                {k.up ? <BsArrowUpRight size={10} /> : <BsArrowDownRight size={10} />}
+                                {k.change.startsWith('-') ? <BsArrowDown size={11} /> : <BsArrowUp size={11} />}
                                 {k.change}
                             </span>
                         </div>

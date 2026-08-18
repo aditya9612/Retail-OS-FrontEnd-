@@ -11,15 +11,15 @@ import { getGstRates, createGstRate, updateGstRate } from '../../services/billin
 
 /* ── Seed GST data (shown when no real invoices have been created yet) ── */
 const SEED_INVOICES = [
-    { id: 'INV-2024001', customer: 'Rahul Sharma', gstin: '27AAPFU0939F1ZV', date: '2026-06-24', taxable: 3893, cgst: 350.37, sgst: 350.37, igst: 0, total: 4580, rate: 18 },
-    { id: 'INV-2024002', customer: 'Priya Patel', gstin: '—', date: '2026-06-24', taxable: 1919, cgst: 0, sgst: 0, igst: 0, total: 2340, rate: 5 },
-    { id: 'INV-2024003', customer: 'Amit Kumar', gstin: '07BCEPK4283R1ZJ', date: '2026-06-23', taxable: 7315, cgst: 0, sgst: 0, igst: 1605, total: 8920, rate: 18 },
-    { id: 'INV-2024005', customer: 'Vikram Mehta', gstin: '—', date: '2026-06-22', taxable: 5560, cgst: 610, sgst: 610, igst: 0, total: 6780, rate: 18 },
-    { id: 'INV-2024006', customer: 'Anjali Gupta', gstin: '29BCEPK4283R1ZJ', date: '2026-06-22', taxable: 2829, cgst: 310.5, sgst: 310.5, igst: 0, total: 3450, rate: 12 },
-    { id: 'INV-2024007', customer: 'Rohit Verma', gstin: '—', date: '2026-06-21', taxable: 9184, cgst: 1008, sgst: 1008, igst: 0, total: 11200, rate: 18 },
+    { id: 'INV-2024001', customer: 'Rahul Sharma', gstin: '27AAPFU0939F1ZV', date: '2026-06-24', taxable: 3893, cgst: 350.37, sgst: 350.37, igst: 0, total: 4593.74, rate: 18 },
+    { id: 'INV-2024002', customer: 'Priya Patel', gstin: '—', date: '2026-06-24', taxable: 1919, cgst: 47.98, sgst: 47.98, igst: 0, total: 2014.96, rate: 5 },
+    { id: 'INV-2024003', customer: 'Amit Kumar', gstin: '07BCEPK4283R1ZJ', date: '2026-06-23', taxable: 7315, cgst: 0, sgst: 0, igst: 1316.70, total: 8631.70, rate: 18 },
+    { id: 'INV-2024005', customer: 'Vikram Mehta', gstin: '—', date: '2026-06-22', taxable: 5560, cgst: 500.40, sgst: 500.40, igst: 0, total: 6560.80, rate: 18 },
+    { id: 'INV-2024006', customer: 'Anjali Gupta', gstin: '29BCEPK4283R1ZJ', date: '2026-06-22', taxable: 2829, cgst: 169.74, sgst: 169.74, igst: 0, total: 3168.48, rate: 12 },
+    { id: 'INV-2024007', customer: 'Rohit Verma', gstin: '—', date: '2026-06-21', taxable: 9184, cgst: 826.56, sgst: 826.56, igst: 0, total: 10837.12, rate: 18 },
     { id: 'INV-2024008', customer: 'Kavya Nair', gstin: '—', date: '2026-06-21', taxable: 890, cgst: 0, sgst: 0, igst: 0, total: 890, rate: 0 },
-    { id: 'INV-2024009', customer: 'Suresh Reddy', gstin: '36BCEPK4283R1ZJ', date: '2026-06-20', taxable: 4990, cgst: 340, sgst: 340, igst: 0, total: 5670, rate: 12 },
-    { id: 'INV-2024010', customer: 'Meera Joshi', gstin: '—', date: '2026-06-20', taxable: 1722, cgst: 189, sgst: 189, igst: 0, total: 2100, rate: 18 },
+    { id: 'INV-2024009', customer: 'Suresh Reddy', gstin: '36BCEPK4283R1ZJ', date: '2026-06-20', taxable: 4990, cgst: 299.40, sgst: 299.40, igst: 0, total: 5588.80, rate: 12 },
+    { id: 'INV-2024010', customer: 'Meera Joshi', gstin: '—', date: '2026-06-20', taxable: 1722, cgst: 154.98, sgst: 154.98, igst: 0, total: 2031.96, rate: 18 },
 ];
 
 const slabColors = {
@@ -30,14 +30,7 @@ const slabColors = {
     28: '#ef4444',
 };
 
-const monthlyGST = [
-    { month: 'Jan', cgst: 10650, sgst: 10650, igst: 0 },
-    { month: 'Feb', cgst: 12600, sgst: 12600, igst: 0 },
-    { month: 'Mar', cgst: 13500, sgst: 13500, igst: 2250 },
-    { month: 'Apr', cgst: 11250, sgst: 11250, igst: 4200 },
-    { month: 'May', cgst: 15000, sgst: 15000, igst: 3000 },
-    { month: 'Jun', cgst: 14325, sgst: 14325, igst: 2100 },
-];
+// monthlyGST static array completely removed to prevent inconsistencies (now derived dynamically below)
 
 const fmt = (n) => '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -171,16 +164,23 @@ const GSTManagement = () => {
     const slabSummary = useMemo(() => {
         const map = {};
         GST_INVOICES.forEach(inv => {
-            if (!map[inv.rate]) map[inv.rate] = { rate: inv.rate, count: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 };
+            if (!map[inv.rate]) map[inv.rate] = { rate: Number(inv.rate) || 0, count: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, total: 0 };
             map[inv.rate].count++;
-            map[inv.rate].taxable += inv.taxable;
-            map[inv.rate].cgst += inv.cgst;
-            map[inv.rate].sgst += inv.sgst;
-            map[inv.rate].igst += inv.igst;
-            map[inv.rate].total += inv.total;
+            map[inv.rate].taxable += Number(inv.taxable) || 0;
+            map[inv.rate].cgst += Number(inv.cgst) || 0;
+            map[inv.rate].sgst += Number(inv.sgst) || 0;
+            map[inv.rate].igst += Number(inv.igst) || 0;
+            map[inv.rate].total += Number(inv.total) || 0;
         });
         return Object.values(map).sort((a, b) => a.rate - b.rate);
     }, [GST_INVOICES]);
+
+    // Computed totals based on the filtered results for the active view
+    const totalFilteredTaxable = filtered.reduce((s, i) => s + i.taxable, 0);
+    const totalFilteredCGST = filtered.reduce((s, i) => s + i.cgst, 0);
+    const totalFilteredSGST = filtered.reduce((s, i) => s + i.sgst, 0);
+    const totalFilteredIGST = filtered.reduce((s, i) => s + i.igst, 0);
+    const totalFilteredTotal = filtered.reduce((s, i) => s + i.total, 0);
 
     const totalGST = GST_INVOICES.reduce((s, i) => s + i.cgst + i.sgst + i.igst, 0);
     const totalCGST = GST_INVOICES.reduce((s, i) => s + i.cgst, 0);
@@ -188,11 +188,73 @@ const GSTManagement = () => {
     const totalIGST = GST_INVOICES.reduce((s, i) => s + i.igst, 0);
     const totalTaxable = GST_INVOICES.reduce((s, i) => s + i.taxable, 0);
 
+    const gstr3bData = useMemo(() => {
+        let b2b = { desc: 'Outward Taxable Supplies (B2B)', taxable: 0, cgst: 0, sgst: 0, igst: 0 };
+        let b2c = { desc: 'Outward Taxable Supplies (B2C)', taxable: 0, cgst: 0, sgst: 0, igst: 0 };
+        let zero = { desc: 'Zero-Rated Supplies', taxable: 0, cgst: 0, sgst: 0, igst: 0 };
+        let itc = { desc: 'Input Tax Credit (ITC)', taxable: 14200, cgst: 1278, sgst: 1278, igst: 0 };
+
+        GST_INVOICES.forEach(inv => {
+            if (inv.rate === 0) {
+                zero.taxable += inv.taxable;
+            } else if (inv.gstin && inv.gstin !== '—') {
+                b2b.taxable += inv.taxable;
+                b2b.cgst += inv.cgst;
+                b2b.sgst += inv.sgst;
+                b2b.igst += inv.igst;
+            } else {
+                b2c.taxable += inv.taxable;
+                b2c.cgst += inv.cgst;
+                b2c.sgst += inv.sgst;
+                b2c.igst += inv.igst;
+            }
+        });
+
+        return [b2b, b2c, zero, { desc: 'Nil-Rated Supplies', taxable: 0, cgst: 0, sgst: 0, igst: 0 }, itc];
+    }, [GST_INVOICES]);
+
     const pieData = slabSummary.filter(s => s.count > 0).map(s => ({
         name: `${s.rate}%`,
-        value: Math.round(s.cgst + s.sgst + s.igst),
+        value: s.cgst + s.sgst + s.igst,
         color: slabColors[s.rate],
     }));
+
+    const derivedMonthlyGST = useMemo(() => {
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const groups = {};
+
+        for (let i = 0; i < 12; i++) {
+            groups[monthNames[i]] = { month: monthNames[i], cgst: 0, sgst: 0, igst: 0, _sort: i };
+        }
+
+        GST_INVOICES.forEach(inv => {
+            if (!inv.date) return;
+            // Parse date securely to avoid inconsistencies
+            let dt = new Date(inv.date);
+            let monthIndex = -1;
+
+            if (!isNaN(dt)) {
+                monthIndex = dt.getMonth();
+            } else {
+                // Fallback for DD-MM-YYYY or MM-DD-YYYY just in case
+                const parts = typeof inv.date === 'string' ? inv.date.split(/[-/]/) : [];
+                if (parts.length >= 2) {
+                    monthIndex = parseInt(parts[1], 10) - 1;
+                }
+            }
+
+            if (monthIndex >= 0 && monthIndex <= 11) {
+                const mStr = monthNames[monthIndex];
+                if (groups[mStr]) {
+                    groups[mStr].cgst += Number(inv.cgst) || 0;
+                    groups[mStr].sgst += Number(inv.sgst) || 0;
+                    groups[mStr].igst += Number(inv.igst) || 0;
+                }
+            }
+        });
+
+        return Object.values(groups).sort((a, b) => a._sort - b._sort);
+    }, [GST_INVOICES]);
 
     return (
         <div className="dash-page">
@@ -290,9 +352,9 @@ const GSTManagement = () => {
                             {filtered.map((inv, i) => (
                                 <tr key={i}>
                                     <td className="dash-table-id">{inv.id}</td>
-                                    <td style={{ fontWeight: 500 }}>{inv.customer}</td>
-                                    <td style={{ fontFamily: 'monospace', fontSize: 11, color: '#9ca3af' }}>{inv.gstin}</td>
-                                    <td style={{ color: '#9ca3af', fontSize: 12 }}>{inv.date}</td>
+                                    <td>{inv.customer}</td>
+                                    <td>{inv.gstin}</td>
+                                    <td>{inv.date}</td>
                                     <td>{fmt(inv.taxable)}</td>
                                     <td>
                                         <span className="adm-slab-badge" style={{ background: slabColors[inv.rate] + '18', color: slabColors[inv.rate] }}>
@@ -309,12 +371,12 @@ const GSTManagement = () => {
                         <tfoot>
                             <tr className="gst-table-footer">
                                 <td colSpan={4}><strong>Total</strong></td>
-                                <td><strong>{fmt(totalTaxable)}</strong></td>
+                                <td><strong>{fmt(totalFilteredTaxable)}</strong></td>
                                 <td />
-                                <td><strong>{fmt(totalCGST)}</strong></td>
-                                <td><strong>{fmt(totalSGST)}</strong></td>
-                                <td><strong>{fmt(totalIGST)}</strong></td>
-                                <td className="dash-table-amount"><strong>{fmt(GST_INVOICES.reduce((s, i) => s + i.total, 0))}</strong></td>
+                                <td><strong>{fmt(totalFilteredCGST)}</strong></td>
+                                <td><strong>{fmt(totalFilteredSGST)}</strong></td>
+                                <td><strong>{fmt(totalFilteredIGST)}</strong></td>
+                                <td className="dash-table-amount"><strong>{fmt(totalFilteredTotal)}</strong></td>
                             </tr>
                         </tfoot>
                     </table>
@@ -327,7 +389,7 @@ const GSTManagement = () => {
                     <div className="chart-card">
                         <h2 className="chart-title" style={{ marginBottom: 16 }}>Monthly GST Collection</h2>
                         <ResponsiveContainer width="100%" height={240}>
-                            <BarChart data={monthlyGST} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
+                            <BarChart data={derivedMonthlyGST} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                                 <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
@@ -352,13 +414,7 @@ const GSTManagement = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {[
-                                    { desc: 'Outward Taxable Supplies (B2B)', taxable: 21650, cgst: 2797.87, sgst: 2797.87, igst: 1605 },
-                                    { desc: 'Outward Taxable Supplies (B2C)', taxable: 12461, cgst: 1538.00, sgst: 1538.00, igst: 0 },
-                                    { desc: 'Zero-Rated Supplies', taxable: 890, cgst: 0, sgst: 0, igst: 0 },
-                                    { desc: 'Nil-Rated Supplies', taxable: 0, cgst: 0, sgst: 0, igst: 0 },
-                                    { desc: 'Input Tax Credit (ITC)', taxable: 14200, cgst: 1278.00, sgst: 1278.00, igst: 0 },
-                                ].map((r, i) => (
+                                {gstr3bData.map((r, i) => (
                                     <tr key={i}>
                                         <td style={{ fontWeight: 500, fontSize: 12 }}>{r.desc}</td>
                                         <td>{fmt(r.taxable)}</td>
@@ -371,7 +427,7 @@ const GSTManagement = () => {
                         </table>
                         <div className="adm-gstr3b-net">
                             <span>Net Tax Payable</span>
-                            <strong style={{ color: '#6366f1' }}>{fmt(totalGST - 2556)}</strong>
+                            <strong style={{ color: '#6366f1' }}>{fmt(Math.max(0, totalGST - 2556))}</strong>
                         </div>
                     </div>
                 </div>

@@ -161,6 +161,7 @@ const ProductCatalog = () => {
     const kpis = [
         { label: 'Total Products', value: products.length, color: '#6366f1', bg: '#eef2ff', icon: '📦' },
         { label: 'Active Listings', value: products.filter(p => p.status === 'Active').length, color: '#10b981', bg: '#ecfdf5', icon: '✅' },
+        { label: 'Inactive Listings', value: products.filter(p => p.status === 'Inactive').length, color: '#6b7280', bg: '#f3f4f6', icon: '⏸️' },
         { label: 'Out of Stock', value: products.filter(p => p.stock === 0).length, color: '#f59e0b', bg: '#fffbeb', icon: '⚠️' },
         { label: 'Featured Products', value: products.filter(p => p.featured).length, color: '#8b5cf6', bg: '#f5f3ff', icon: '⭐' },
     ];
@@ -182,7 +183,7 @@ const ProductCatalog = () => {
             </div>
 
             {/* KPIs */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
                 {kpis.map((k, i) => (
                     <div key={i} className="adm-kpi-card" style={{ padding: '14px 18px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -277,15 +278,15 @@ const ProductCatalog = () => {
                                     <td style={{ padding: '12px 16px' }}>
                                         <div style={{ display: 'flex', gap: 6 }}>
                                             <button
-    className="adm-btn-secondary"
-    style={{ padding: '5px 10px', fontSize: 11 }}
-    onClick={() => {
-        console.log("Selected Product:", p);
-        setModal(p);
-    }}
->
-    <BsPencilFill size={11} />
-</button>
+                                                className="adm-btn-secondary"
+                                                style={{ padding: '5px 10px', fontSize: 11 }}
+                                                onClick={() => {
+                                                    console.log("Selected Product:", p);
+                                                    setModal(p);
+                                                }}
+                                            >
+                                                <BsPencilFill size={11} />
+                                            </button>
                                             <button onClick={() => toggleStatus(p.id)}
                                                 style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                                                 {p.status === 'Active'

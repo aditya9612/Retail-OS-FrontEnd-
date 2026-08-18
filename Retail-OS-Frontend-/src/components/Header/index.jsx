@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BsSearch, BsBell, BsBoxArrowRight, BsChevronDown } from 'react-icons/bs';
+import { BsSearch, BsBell, BsBoxArrowRight, BsChevronDown, BsList } from 'react-icons/bs';
 import { logoutUser } from '../../services/auth';
 import LogoutConfirmModal from '../LogoutConfirmModal';
 
-const Header = () => {
+const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const navigate = useNavigate();
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -38,8 +38,40 @@ const Header = () => {
 
     return (
         <header className="pos-header">
+            {/* Sidebar toggle button — always visible in header */}
+            <button
+                type="button"
+                id="header-sidebar-toggle"
+                onClick={onToggleSidebar}
+                title={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 36,
+                    height: 36,
+                    border: 'none',
+                    borderRadius: 8,
+                    background: sidebarCollapsed ? '#eef2ff' : 'transparent',
+                    color: sidebarCollapsed ? '#6366f1' : '#6b7280',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    transition: 'background 0.2s ease, color 0.2s ease',
+                }}
+                onMouseEnter={e => {
+                    e.currentTarget.style.background = '#eef2ff';
+                    e.currentTarget.style.color = '#6366f1';
+                }}
+                onMouseLeave={e => {
+                    e.currentTarget.style.background = sidebarCollapsed ? '#eef2ff' : 'transparent';
+                    e.currentTarget.style.color = sidebarCollapsed ? '#6366f1' : '#6b7280';
+                }}
+            >
+                <BsList size={20} />
+            </button>
+
             {/* Search Bar */}
-            <div className="header-search-wrap">
+            <div className="header-search-wrap" style={{ flex: 1 }}>
                 <BsSearch className="header-search-icon" size={14} />
                 <input
                     className="header-search"
@@ -156,4 +188,3 @@ const Header = () => {
 };
 
 export default Header;
-

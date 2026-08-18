@@ -42,7 +42,7 @@ const Billing = () => {
     const [discountType, setDiscountType] = useState('percentage');
     const [billDiscount, setBillDiscount] = useState(0);
     const [paymentMode, setPaymentMode] = useState('Cash');
-    const [invoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
+    const [invoiceNo, setInvoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
     const [showPreview, setShowPreview] = useState(false);
     const [scannerValue, setScannerValue] = useState('');
     const [addingItemId, setAddingItemId] = useState(null);
@@ -56,9 +56,9 @@ const Billing = () => {
 
     const products = [
         { id: 1, name: 'Premium Cotton T-Shirt', price: 899, hsn: '6109', gstRate: 5, category: 'Apparel', barcode: '1001', image: '👕' },
-        { id: 2, name: 'Parle-G Biscuits 800g', price: 10, hsn: '19053100', gstRate: 12, category: 'Groceries', barcode: '1002', image: '🍪', discount: 5 },
+        { id: 2, name: 'Parle-G Biscuits 800g', price: 85, hsn: '19053100', gstRate: 12, category: 'Groceries', barcode: '1002', image: '🍪', discount: 5 },
         { id: 3, name: 'Leather Slim Wallet', price: 1299, hsn: '4202', gstRate: 12, category: 'Accessories', barcode: '1003', image: '👛' },
-        { id: 4, name: 'Organic Green Tea', price: 450, hsn: '0902', gstRate: 0, category: 'Groceries', barcode: '1004', image: '🍵' },
+        { id: 4, name: 'Organic Green Tea', price: 450, hsn: '0902', gstRate: 5, category: 'Groceries', barcode: '1004', image: '🍵' },
         { id: 5, name: 'Smart Fitness Tracker', price: 3999, hsn: '8517', gstRate: 18, category: 'Electronics', barcode: '1005', image: '⌚' },
         { id: 6, name: 'Denim Slim Fit Jeans', price: 1999, hsn: '6203', gstRate: 12, category: 'Apparel', barcode: '1006', image: '👖' },
         { id: 7, name: 'USB-C Fast Charger', price: 799, hsn: '8504', gstRate: 18, category: 'Electronics', barcode: '1007', image: '🔌' },
@@ -141,15 +141,16 @@ const Billing = () => {
         // Optimistic local update first — instant UI feedback regardless of API status
         setCart(prev => {
             const existing = prev.find(i => i.id === product.id);
-            if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
-            return [...prev, { ...product, qty: 1, discountPerItem: product.discount || 0 }];
+            if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1, unsynced: true } : i);
+            return [...prev, { ...product, qty: 1, discountPerItem: product.discount || 0, unsynced: true }];
         });
 
         setAddingItemId(product.id);
 
         // Always try the API — offlineMode doesn't block calls, it's just a display hint
         try {
-            const currentQty = cart.find(i => i.id === product.id)?.qty ?? 0;
+            const existingItem = cart.find(i => i.id === product.id);
+            const currentQty = existingItem?.qty ?? 0;
             const payload = {
                 product_id: product.id,
                 quantity: currentQty + 1,
@@ -157,14 +158,19 @@ const Billing = () => {
                 discount: product.discount || 0,
             };
 
-            const response = await addCartItem(payload);
+            let response;
+            if (existingItem) {
+                response = await updateCartItem(payload);
+            } else {
+                response = await addCartItem(payload);
+            }
             if (response) {
                 setServerCart(response);
                 setOfflineMode(false); // API works — go back online
                 if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] addCartItem API error:', err.message);
+            console.error('[Billing] cart API error:', err.message);
             setOfflineMode(true); // mark offline only for banner display, cart already updated locally
         }
 
@@ -195,7 +201,7 @@ const Billing = () => {
         const newQty = Math.max(1, item.qty + delta);
 
         // Optimistic local update
-        setCart(prev => prev.map(i => i.id === id ? { ...i, qty: newQty } : i));
+        setCart(prev => prev.map(i => i.id === id ? { ...i, qty: newQty, unsynced: true } : i));
 
         // Always try the API
         try {
@@ -278,15 +284,15 @@ const Billing = () => {
                 invoicesList = JSON.parse(stored);
             } else {
                 invoicesList = [
-                    { id: 'INV-2024001', customer: 'Rahul Sharma', gstin: '27AAPFU0939F1ZV', date: '2026-06-24', taxable: 3893, cgst: 350.37, sgst: 350.37, igst: 0, total: 4580, rate: 18 },
-                    { id: 'INV-2024002', customer: 'Priya Patel', gstin: '—', date: '2026-06-24', taxable: 1919, cgst: 0, sgst: 0, igst: 0, total: 2340, rate: 5 },
-                    { id: 'INV-2024003', customer: 'Amit Kumar', gstin: '07BCEPK4283R1ZJ', date: '2026-06-23', taxable: 7315, cgst: 0, sgst: 0, igst: 1605, total: 8920, rate: 18 },
-                    { id: 'INV-2024005', customer: 'Vikram Mehta', gstin: '—', date: '2026-06-22', taxable: 5560, cgst: 610, sgst: 610, igst: 0, total: 6780, rate: 18 },
-                    { id: 'INV-2024006', customer: 'Anjali Gupta', gstin: '29BCEPK4283R1ZJ', date: '2026-06-22', taxable: 2829, cgst: 310.5, sgst: 310.5, igst: 0, total: 3450, rate: 12 },
-                    { id: 'INV-2024007', customer: 'Rohit Verma', gstin: '—', date: '2026-06-21', taxable: 9184, cgst: 1008, sgst: 1008, igst: 0, total: 11200, rate: 18 },
+                    { id: 'INV-2024001', customer: 'Rahul Sharma', gstin: '27AAPFU0939F1ZV', date: '2026-06-24', taxable: 3893, cgst: 350.37, sgst: 350.37, igst: 0, total: 4593.74, rate: 18 },
+                    { id: 'INV-2024002', customer: 'Priya Patel', gstin: '—', date: '2026-06-24', taxable: 1919, cgst: 47.98, sgst: 47.98, igst: 0, total: 2014.96, rate: 5 },
+                    { id: 'INV-2024003', customer: 'Amit Kumar', gstin: '07BCEPK4283R1ZJ', date: '2026-06-23', taxable: 7315, cgst: 0, sgst: 0, igst: 1316.70, total: 8631.70, rate: 18 },
+                    { id: 'INV-2024005', customer: 'Vikram Mehta', gstin: '—', date: '2026-06-22', taxable: 5560, cgst: 500.40, sgst: 500.40, igst: 0, total: 6560.80, rate: 18 },
+                    { id: 'INV-2024006', customer: 'Anjali Gupta', gstin: '29BCEPK4283R1ZJ', date: '2026-06-22', taxable: 2829, cgst: 169.74, sgst: 169.74, igst: 0, total: 3168.48, rate: 12 },
+                    { id: 'INV-2024007', customer: 'Rohit Verma', gstin: '—', date: '2026-06-21', taxable: 9184, cgst: 826.56, sgst: 826.56, igst: 0, total: 10837.12, rate: 18 },
                     { id: 'INV-2024008', customer: 'Kavya Nair', gstin: '—', date: '2026-06-21', taxable: 890, cgst: 0, sgst: 0, igst: 0, total: 890, rate: 0 },
-                    { id: 'INV-2024009', customer: 'Suresh Reddy', gstin: '36BCEPK4283R1ZJ', date: '2026-06-20', taxable: 4990, cgst: 340, sgst: 340, igst: 0, total: 5670, rate: 12 },
-                    { id: 'INV-2024010', customer: 'Meera Joshi', gstin: '—', date: '2026-06-20', taxable: 1722, cgst: 189, sgst: 189, igst: 0, total: 2100, rate: 18 },
+                    { id: 'INV-2024009', customer: 'Suresh Reddy', gstin: '36BCEPK4283R1ZJ', date: '2026-06-20', taxable: 4990, cgst: 299.40, sgst: 299.40, igst: 0, total: 5588.80, rate: 12 },
+                    { id: 'INV-2024010', customer: 'Meera Joshi', gstin: '—', date: '2026-06-20', taxable: 1722, cgst: 154.98, sgst: 154.98, igst: 0, total: 2031.96, rate: 18 },
                 ];
             }
             if (!invoicesList.some(inv => inv.id === newInvoice.id)) {
@@ -301,6 +307,9 @@ const Billing = () => {
     };
 
     const handleReset = () => {
+        cart.forEach(item => {
+            removeCartItem(item.id).catch(() => { });
+        });
         setCart([]);
         setServerCart(null);
         setOfflineMode(false);
@@ -309,6 +318,7 @@ const Billing = () => {
         setCouponCode('');
         setDiscountApplied(false);
         setShowPreview(false);
+        setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
     };
 
     const totalUnits = cart.reduce((s, i) => s + i.qty, 0);
@@ -527,7 +537,12 @@ const Billing = () => {
                             <div key={item.id} className="pos-cart-item" style={{ height: 'auto', padding: '10px 16px' }}>
                                 <div className="pos-cart-item-emoji">{item.image}</div>
                                 <div className="pos-cart-item-info" style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                    <h4 className="pos-cart-item-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 0 }}>{item.name}</h4>
+                                    <h4 className="pos-cart-item-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 0 }}>
+                                        {item.name}
+                                        {item.unsynced && (
+                                            <span style={{ marginLeft: 6, fontSize: 9, color: '#d97706', background: '#fef3c7', padding: '2px 5px', borderRadius: 4 }}>Offline</span>
+                                        )}
+                                    </h4>
                                     <span className="pos-cart-item-price" style={{ fontSize: 11, color: '#6b7280' }}>
                                         ₹{item.price.toLocaleString()} × {item.qty}
                                         {item.discountPerItem > 0 && (

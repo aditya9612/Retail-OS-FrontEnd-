@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
     BsGrid1X2Fill,
@@ -56,12 +56,12 @@ const menuGroups = [
     {
         label: 'Inventory',
         items: [
-           
+
             { name: 'Inventory', icon: <BsBoxSeam />, path: '/inventory', hasArrow: true },
             { name: 'Categories', icon: <BsTag />, path: '/categories', hasArrow: true },
             { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases', hasArrow: true },
             { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/returns', hasArrow: true },
-            
+
         ],
     },
     {
@@ -80,8 +80,7 @@ const menuGroups = [
     },
 ];
 
-const Sidebar = () => {
-    const [collapsed, setCollapsed] = useState(false);
+const Sidebar = ({ collapsed, onToggle }) => {
     const location = useLocation();
 
     return (
@@ -92,7 +91,7 @@ const Sidebar = () => {
                     <BsShopWindow size={17} />
                 </div>
                 {!collapsed && <span className="sidebar-brand">RetailOS</span>}
-                <button className="sidebar-toggle" onClick={() => setCollapsed(!collapsed)} title="Toggle sidebar">
+                <button className="sidebar-toggle" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <line x1="3" y1="6" x2="21" y2="6" />
                         <line x1="3" y1="12" x2="21" y2="12" />
@@ -131,4 +130,3 @@ const Sidebar = () => {
 };
 
 export default Sidebar;
-
