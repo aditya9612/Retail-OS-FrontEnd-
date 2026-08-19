@@ -1,54 +1,33 @@
 import apiClient from "../api/axios";
 
-export const product = {
-
-    getAll: async () => {
-        const response = await apiClient.get("/api/v1/products");
-        return response.data;
+const productService = {
+    getAll: () => {
+        return apiClient.get("/api/v1/products");
     },
 
-    getById: async (id) => {
-        const response = await apiClient.get(`/api/v1/products/${id}`);
-        return response.data;
+    getById: (productId) => {
+        return apiClient.get(`/api/v1/products/${productId}`);
     },
 
-    create: async (data) => {
-        const response = await apiClient.post("/api/v1/products", data);
-        return response.data;
+    getByBarcode: (barcode) => {
+        return apiClient.get(`/api/v1/products/barcode/${barcode}`);
     },
 
-    update: async (id, data) => {
-        const response = await apiClient.patch(
-            `/api/v1/products/${id}`,
-            data
-        );
-        return response.data;
+    create: (data) => {
+        return apiClient.post("/api/v1/products", data);
     },
 
-    remove: async (id) => {
-        const response = await apiClient.delete(`/api/v1/products/${id}`);
-        return response.data;
+    update: (productId, data) => {
+        return apiClient.patch(`/api/v1/products/${productId}`, data);
     },
 
-    getByBarcode: async (barcode) => {
-        const response = await apiClient.get(
-            `/api/v1/products/barcode/${barcode}`
-        );
-        return response.data;
+    delete: (productId) => {
+        return apiClient.delete(`/api/v1/products/${productId}`);
     },
 
-    getCategories: async () => {
-        const response = await apiClient.get(
-            "/api/v1/products/categories/list"
-        );
-        return response.data;
+    createCategory: (data) => {
+        return apiClient.post("/api/v1/products/categories", data);
     },
-
-    createCategory: async (data) => {
-        const response = await apiClient.post(
-            "/api/v1/products/categories",
-            data
-        );
-        return response.data;
-    }
 };
+
+export default productService;
