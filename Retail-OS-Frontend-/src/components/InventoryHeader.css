@@ -3,16 +3,31 @@
 =========================== */
 
 .inventory-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 30px;
+  width: 100%;
   background: #ffffff;
-  border-radius: 14px;
-  padding: 28px 32px;
-  margin-bottom: 28px;
+
   border: 1px solid #e5e7eb;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+  border-radius: 14px;
+
+  padding: 24px 28px;
+
+  margin-bottom: 24px;
+
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
+}
+
+/* ===========================
+   Top Section
+=========================== */
+
+.inventory-header-top {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 24px;
 }
 
 /* ===========================
@@ -21,189 +36,397 @@
 
 .inventory-header-left {
   flex: 1;
+  min-width: 0;
+}
+
+.inventory-header-label {
+  display: block;
+
+  margin-bottom: 6px;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+
+  color: #6366f1;
 }
 
 .inventory-header-left h1 {
   margin: 0;
-  font-size: 32px;
-  font-weight: 700;
-  color: #1f2937;
-}
 
-.inventory-header-left p {
-  margin-top: 10px;
-  max-width: 650px;
-  font-size: 15px;
-  line-height: 1.7;
-  color: #6b7280;
+  font-size: 26px;
+  line-height: 1.2;
+
+  font-weight: 750;
+
+  letter-spacing: -0.025em;
+
+  color: #1e293b;
 }
 
 /* ===========================
-   Right Section
+   Action Buttons
 =========================== */
 
 .inventory-header-right {
   display: flex;
-  flex-wrap: wrap;
+
+  align-items: center;
   justify-content: flex-end;
-  gap: 15px;
+
+  gap: 10px;
+
+  flex-shrink: 0;
+
+  white-space: nowrap;
 }
 
 /* ===========================
-   Common Button Style
+   Common Button
 =========================== */
 
 .header-btn {
-  min-width: 160px;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 10px;
-  font-size: 15px;
-  font-weight: 600;
+  height: 40px;
+
+  min-width: 125px;
+
+  padding: 0 16px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  border-radius: 9px;
+
+  font-size: 13px;
+  font-weight: 700;
+
   cursor: pointer;
-  transition: all 0.3s ease;
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.header-btn:hover {
+  transform: translateY(-1px);
+}
+
+.header-btn:active {
+  transform: translateY(0);
+}
+
+.header-btn:focus-visible {
+  outline: 3px solid rgba(99, 102, 241, 0.15);
+  outline-offset: 2px;
+}
+
+/* ===========================
+   Button Icon
+=========================== */
+
+.btn-icon {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 21px;
+  height: 21px;
+
+  border-radius: 6px;
+
+  font-size: 16px;
+  font-weight: 800;
+
+  line-height: 1;
 }
 
 /* ===========================
    Stock In
+   Soft Green
 =========================== */
 
 .stock-in-btn {
-  background: #16a34a;
-  color: #ffffff;
+  background: #ecfdf5;
+  color: #047857;
+
+  border: 1px solid #a7f3d0;
+
+  box-shadow: none;
 }
 
 .stock-in-btn:hover {
-  background: #15803d;
-  transform: translateY(-2px);
+  background: #d1fae5;
+  border-color: #6ee7b7;
+
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.12);
+}
+
+.stock-in-btn .btn-icon {
+  background: #d1fae5;
+  color: #059669;
 }
 
 /* ===========================
    Stock Out
+   Soft Red
 =========================== */
 
 .stock-out-btn {
-  background: #dc2626;
-  color: #ffffff;
+  background: #fef2f2;
+  color: #b91c1c;
+
+  border: 1px solid #fecaca;
+
+  box-shadow: none;
 }
 
 .stock-out-btn:hover {
-  background: #b91c1c;
-  transform: translateY(-2px);
+  background: #fee2e2;
+  border-color: #fca5a5;
+
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.1);
+}
+
+.stock-out-btn .btn-icon {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 /* ===========================
    Transfer
+   Soft Indigo
 =========================== */
 
 .transfer-btn {
-  background: #2563eb;
-  color: #ffffff;
+  background: #eef2ff;
+  color: #4338ca;
+
+  border: 1px solid #c7d2fe;
+
+  box-shadow: none;
 }
 
 .transfer-btn:hover {
-  background: #1d4ed8;
-  transform: translateY(-2px);
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+
+  box-shadow: 0 4px 10px rgba(99, 102, 241, 0.12);
+}
+
+.transfer-btn .btn-icon {
+  background: #e0e7ff;
+  color: #4f46e5;
 }
 
 /* ===========================
-   Purchase Order
-=========================== */
-
-.purchase-btn {
-  background: #f59e0b;
-  color: #ffffff;
-}
-
-.purchase-btn:hover {
-  background: #d97706;
-  transform: translateY(-2px);
-}
-
-/* ===========================
-   Responsive
-=========================== */
-
-@media (max-width: 992px) {
-
-  .inventory-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .inventory-header-right {
-    width: 100%;
-    justify-content: flex-start;
-  }
-
-}
-
-@media (max-width: 768px) {
-
-  .inventory-header {
-    padding: 24px;
-  }
-
-  .inventory-header-left h1 {
-    font-size: 28px;
-  }
-
-  .inventory-header-left p {
-    font-size: 14px;
-  }
-
-  .header-btn {
-    width: 100%;
-  }
-
-}
-
-@media (max-width: 480px) {
-
-  .inventory-header {
-    padding: 20px;
-  }
-
-  .inventory-header-left h1 {
-    font-size: 24px;
-  }
-
-  .inventory-header-left p {
-    font-size: 13px;
-  }
-  /* ===========================
    Inventory Tabs
 =========================== */
 
 .inventory-tabs {
   width: 100%;
+
   display: flex;
-  gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #e5e7eb;
+  align-items: center;
+
+  gap: 8px;
+
+  margin-top: 20px;
+  padding-top: 17px;
+
+  border-top: 1px solid #eef2f7;
 }
 
+/* ===========================
+   Tab Buttons
+=========================== */
+
 .inventory-tabs button {
-  padding: 10px 18px;
-  border: 1px solid #d1d5db;
+  height: 36px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  padding: 0 14px;
+
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
+
   background: #ffffff;
-  color: #374151;
-  font-size: 14px;
-  font-weight: 600;
+
+  color: #64748b;
+
+  font-size: 12px;
+  font-weight: 700;
+
   cursor: pointer;
-  transition: all 0.3s ease;
+
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .inventory-tabs button:hover {
-  background: #f3f4f6;
+  background: #f8fafc;
+
+  color: #334155;
+
+  border-color: #cbd5e1;
 }
+
+/* ===========================
+   Tab Count
+=========================== */
+
+.tab-count {
+  min-width: 22px;
+  height: 20px;
+
+  padding: 0 6px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 6px;
+
+  background: #f1f5f9;
+
+  color: #64748b;
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ===========================
+   Active Tab
+=========================== */
 
 .inventory-tabs .active-tab {
-  background: #2563eb;
-  color: #ffffff;
-  border-color: #2563eb;
+  background: #f5f3ff;
+
+  color: #4f46e5;
+
+  border-color: #c4b5fd;
 }
 
+.inventory-tabs .active-tab .tab-count {
+  background: #e0e7ff;
+
+  color: #4f46e5;
+}
+
+.inventory-tabs .active-tab:hover {
+  background: #ede9fe;
+
+  border-color: #a5b4fc;
+
+  color: #4338ca;
+}
+
+/* ===========================
+   Tablet
+=========================== */
+
+@media (max-width: 900px) {
+  .inventory-header-top {
+    align-items: flex-start;
+  }
+
+  .inventory-header-right {
+    gap: 8px;
+  }
+
+  .header-btn {
+    min-width: 110px;
+
+    padding: 0 12px;
+  }
+}
+
+/* ===========================
+   Mobile
+=========================== */
+
+@media (max-width: 700px) {
+  .inventory-header {
+    padding: 20px;
+  }
+
+  .inventory-header-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inventory-header-left {
+    width: 100%;
+  }
+
+  .inventory-header-right {
+    width: 100%;
+
+    display: grid;
+
+    grid-template-columns: repeat(3, 1fr);
+
+    gap: 8px;
+  }
+
+  .header-btn {
+    width: 100%;
+    min-width: 0;
+
+    padding: 0 8px;
+
+    font-size: 12px;
+  }
+
+  .inventory-tabs {
+    overflow-x: auto;
+
+    padding-bottom: 2px;
+
+    scrollbar-width: thin;
+  }
+
+  .inventory-tabs button {
+    flex-shrink: 0;
+  }
+}
+
+/* ===========================
+   Small Mobile
+=========================== */
+
+@media (max-width: 480px) {
+  .inventory-header-left h1 {
+    font-size: 23px;
+  }
+
+  .inventory-header-right {
+    grid-template-columns: 1fr;
+  }
+
+  .header-btn {
+    height: 42px;
+  }
+
+  .inventory-tabs {
+    gap: 6px;
+  }
+
+  .inventory-tabs button {
+    padding: 0 11px;
+  }
 }

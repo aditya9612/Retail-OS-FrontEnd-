@@ -12,99 +12,140 @@ const InventoryHeader = ({
   return (
     <div className="inventory-header">
 
-      <div className="inventory-header-left">
-<h1>Inventory Management</h1>
+      {/* =========================
+          HEADER TOP
+      ========================= */}
+      <div className="inventory-header-top">
 
-        <p>
-          Manage stock levels, warehouse operations, suppliers,
-          purchase orders, and inventory movements from one place.
-        </p>
+        {/* LEFT - TITLE */}
+        <div className="inventory-header-left">
+          <span className="inventory-header-label">
+            INVENTORY
+          </span>
+
+          <h1>Inventory Management</h1>
+        </div>
+
+        {/* RIGHT - ACTION BUTTONS */}
+        <div className="inventory-header-right">
+
+          {/* STOCK IN */}
+          <button
+            type="button"
+            className="header-btn stock-in-btn"
+            onClick={() =>
+              setStockModal({
+                name: "Stock In",
+                quantity: 0,
+                unit: "Pcs",
+                action: "add",
+              })
+            }
+          >
+            <span className="btn-icon">+</span>
+            <span>Stock In</span>
+          </button>
+
+          {/* STOCK OUT */}
+          <button
+            type="button"
+            className="header-btn stock-out-btn"
+            onClick={() =>
+              setStockModal({
+                name: "Stock Out",
+                quantity: 0,
+                unit: "Pcs",
+                action: "remove",
+              })
+            }
+          >
+            <span className="btn-icon">−</span>
+            <span>Stock Out</span>
+          </button>
+
+          {/* TRANSFER */}
+          <button
+            type="button"
+            className="header-btn transfer-btn"
+            onClick={() =>
+              setStockModal({
+                name: "Transfer",
+                quantity: 0,
+                unit: "Pcs",
+                action: "transfer",
+              })
+            }
+          >
+            <span className="btn-icon">↔</span>
+            <span>Transfer</span>
+          </button>
+
+        </div>
       </div>
 
-      <div className="inventory-header-right">
-
-        <button
-          className="header-btn stock-in-btn"
-          onClick={() =>
-            setStockModal({
-              name: "Stock In",
-              quantity: 0,
-              unit: "Pcs",
-              action: "add",
-            })
-          }
-        >
-          + Stock In
-        </button>
-
-        <button
-          className="header-btn stock-out-btn"
-          onClick={() =>
-            setStockModal({
-              name: "Stock Out",
-              quantity: 0,
-              unit: "Pcs",
-              action: "remove",
-            })
-          }
-        >
-          + Stock Out
-        </button>
-
-        <button
-          className="header-btn transfer-btn"
-          onClick={() =>
-            setStockModal({
-              name: "Transfer",
-              quantity: 0,
-              unit: "Pcs",
-              action: "transfer",
-            })
-          }
-        >
-          + Transfer
-        </button>
-<button
-  className="header-btn purchase-btn"
-  onClick={() => {
-    console.log("PURCHASE ORDER CLICKED");
-
-    setStockModal({
-      name: "Purchase Order",
-      quantity: 0,
-      unit: "Pcs",
-      action: "purchase",
-    });
-  }}
->
-  + Purchase Order
-</button>
-</div>
+      {/* =========================
+          INVENTORY TABS
+      ========================= */}
       <div className="inventory-tabs">
 
+        {/* ALL ITEMS */}
         <button
-          className={activeTab === "All Items" ? "active-tab" : ""}
-          onClick={() => setActiveTab("All Items")}
+          type="button"
+          className={
+            activeTab === "All Items"
+              ? "active-tab"
+              : ""
+          }
+          onClick={() =>
+            setActiveTab("All Items")
+          }
         >
-          All Items ({totalItems})
+          <span>All Items</span>
+
+          <span className="tab-count">
+            {totalItems}
+          </span>
         </button>
 
-        <button  
-          className={activeTab === "Low Stock" ? "active-tab" : ""}
-          onClick={() => setActiveTab("Low Stock")}
+        {/* LOW STOCK */}
+        <button
+          type="button"
+          className={
+            activeTab === "Low Stock"
+              ? "active-tab"
+              : ""
+          }
+          onClick={() =>
+            setActiveTab("Low Stock")
+          }
         >
-          Low Stock ({lowStockCount})
+          <span>Low Stock</span>
+
+          <span className="tab-count">
+            {lowStockCount}
+          </span>
         </button>
 
+        {/* OUT OF STOCK */}
         <button
-          className={activeTab === "Out of Stock" ? "active-tab" : ""}
-          onClick={() => setActiveTab("Out of Stock")}
+          type="button"
+          className={
+            activeTab === "Out of Stock"
+              ? "active-tab"
+              : ""
+          }
+          onClick={() =>
+            setActiveTab("Out of Stock")
+          }
         >
-          Out of Stock ({outOfStockCount})
+          <span>Out of Stock</span>
+
+          <span className="tab-count">
+            {outOfStockCount}
+          </span>
         </button>
 
       </div>
-
     </div>
   );
 };
