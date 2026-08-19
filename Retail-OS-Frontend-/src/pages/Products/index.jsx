@@ -1,10 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { product as productService } from "../../services/product";
 import { inventoryService } from "../../services/inventoryService";
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
     BsChevronLeft, BsChevronRight, BsToggleOn, BsToggleOff, BsImage,
 } from 'react-icons/bs';
+import productService from "../../services/product";
+
+const removeNumberArrows = `
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    input[type="number"] {
+        -moz-appearance: textfield;
+    }
+`;
 
 const CATEGORIES_LIST = [
     'Electronics', 'Groceries', 'Apparel', 'Accessories',
@@ -75,7 +87,6 @@ const EMPTY_FORM = {
     unit: 'Pcs',
     mrp: '',
     sellingPrice: '',
-    costPrice: '',
     gst: '18%',
     stock: '',
     hsnCode: '',
@@ -94,7 +105,6 @@ const toPayload = (form) => ({
     unit: form.unit,
     mrp: Number(form.mrp) || 0,
     price: Number(form.sellingPrice) || 0,
-    cost_price: Number(form.costPrice) || 0,
     gst_rate: Number(String(form.gst).replace('%', '')) || 0,
     stock: Number(form.stock) || 0,
     hsn_code: form.hsnCode,
@@ -106,12 +116,41 @@ const toPayload = (form) => ({
 });
 
 const ProductFormModal = ({ product, onClose, onSave }) => {
+    console.log("EDIT PRODUCT:", product);
     const isNew = !product;
 
-    const [form, setForm] = useState(
-        product ? { ...EMPTY_FORM, ...product } : { ...EMPTY_FORM }
-    );
+   const [form, setForm] = useState(
+    product
+        ? {
+            ...EMPTY_FORM,
+            ...product,
 
+            sku: product.sku || '',
+            hsnCode: product.hsn_code || '',
+            sellingPrice: product.price ?? '',
+            mrp: product.mrp ?? '',
+            brand: product.brand || '',
+
+            barcode: product.barcode || '',
+            name: product.name || '',
+            description: product.description || '',
+
+            category:
+                CATEGORY_NAMES[product.category_id] ||
+                product.category ||
+                '',
+
+            gst: product.gst_rate != null
+                ? `${product.gst_rate}%`
+                : '',
+
+            status: product.is_active ?? true,
+            featured: product.featured ?? false,
+            unit: product.unit || 'Pcs',
+            minStock: product.min_stock ?? 10,
+        }
+        : { ...EMPTY_FORM }
+);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
@@ -147,13 +186,14 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
             newErrors.barcode = 'Barcode must be exactly 13 digits';
         }
 
-        if (form.hsnCode && !/^\d{4}$/.test(form.hsnCode.trim())) {
-            newErrors.hsnCode = 'HSN Code must be exactly 4 digits';
-        }
+        if (!form.hsnCode.trim()) {
+    newErrors.hsnCode = 'HSN Code is required';
+} else if (!/^\d{4}$/.test(form.hsnCode.trim())) {
+    newErrors.hsnCode = 'HSN Code must be exactly 4 digits';
+}
 
         const mrp = Number(form.mrp);
         const sellingPrice = Number(form.sellingPrice);
-        const costPrice = Number(form.costPrice);
 
         if (form.mrp === '' || mrp <= 0) {
             newErrors.mrp = 'MRP must be greater than 0';
@@ -163,24 +203,12 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
             newErrors.sellingPrice = 'Selling price must be greater than 0';
         }
 
-        if (form.costPrice === '' || costPrice <= 0) {
-            newErrors.costPrice = 'Cost price must be greater than 0';
-        }
-
         if (
             form.mrp !== '' &&
             form.sellingPrice !== '' &&
             mrp <= sellingPrice
         ) {
             newErrors.mrp = 'MRP must be greater than selling price';
-        }
-
-        if (
-            form.sellingPrice !== '' &&
-            form.costPrice !== '' &&
-            sellingPrice <= costPrice
-        ) {
-            newErrors.sellingPrice = 'Selling price must be greater than cost price';
         }
 
         if (!form.gst) {
@@ -241,7 +269,7 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Product Name *
+                                Product Name <span style={{ color: 'red' }}>*</span>
                             </label>
                             <input
                                 className="adm-search"
@@ -251,6 +279,9 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
+                                    padding: '10px 10px',
+                                    borderRadius: 6,
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
@@ -263,7 +294,7 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
 
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                SKU *
+                                SKU <span style={{ color: 'red' }}>*</span>
                             </label>
                             <input
                                 className="adm-search"
@@ -273,6 +304,9 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
+                                    padding: '10px 10px',
+                                    borderRadius: 6,
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
@@ -288,7 +322,7 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Category *
+                                Category <span style={{ color: 'red' }}>*</span>
                             </label>
                             <select
                                 value={form.category}
@@ -325,6 +359,9 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
+                                    padding: '10px 10px',
+                                    borderRadius: 6,
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
@@ -335,7 +372,7 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Barcode *
+                                Barcode <span style={{ color: 'red' }}>*</span>
                             </label>
                             <input
                                 className="adm-search"
@@ -347,6 +384,9 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
+                                    padding: '10px 10px',
+                                    borderRadius: 6,
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
@@ -401,6 +441,9 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
+                                    padding: '10px 10px',
+                                    borderRadius: 6,
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
@@ -436,139 +479,127 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                             )}
                         </div>
                     </div>
+  {/* Selling Price + GST Rate */}
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+    <div>
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+            Selling Price (₹)
+        </label>
 
-                    {/* Selling Price + Cost Price */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Selling Price (₹)
-                            </label>
-                            <input
-                                type="number"
-                                min="0"
-                                value={form.sellingPrice}
-                                onChange={e => set('sellingPrice', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.sellingPrice && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.sellingPrice}
-                                </div>
-                            )}
-                        </div>
+        <input
+            className="ec-input"
+            type="number"
+            value={form.sellingPrice}
+            onChange={e => set('sellingPrice', e.target.value)}
+            placeholder="0"
+            style={{
+    width: '100%',
+    marginTop: 4,
+    padding: '10px 10px',
+    borderRadius: 6,
+    border: '1px solid #e5e7eb',
+    boxSizing: 'border-box',
+    MozAppearance: 'textfield',
+    WebkitAppearance: 'none',
+    appearance: 'textfield'
+}}
+        />
 
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Cost Price (₹)
-                            </label>
-                            <input
-                                type="number"
-                                min="0"
-                                value={form.costPrice}
-                                onChange={e => set('costPrice', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.costPrice && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.costPrice}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+        {errors.sellingPrice && (
+            <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                {errors.sellingPrice}
+            </div>
+        )}
+    </div>
 
-                    {/* GST + Stock + Min Stock */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                GST Rate
-                            </label>
-                            <select
-                                value={form.gst}
-                                onChange={e => set('gst', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            >
-                                {GST_RATES.map(g => (
-                                    <option key={g} value={g}>{g}</option>
-                                ))}
-                            </select>
-                            {errors.gst && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.gst}
-                                </div>
-                            )}
-                        </div>
+    <div>
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+            GST Rate
+        </label>
 
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Stock
-                            </label>
-                            <input
-                                type="number"
-                                min="0"
-                                value={form.stock}
-                                onChange={e => set('stock', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.stock && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.stock}
-                                </div>
-                            )}
-                        </div>
+        <select
+            value={form.gst}
+            onChange={e => set('gst', e.target.value)}
+            style={{
+                width: '100%',
+                marginTop: 4,
+                padding: '8px 10px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                boxSizing: 'border-box'
+            }}
+        >
+            {GST_RATES.map(g => (
+                <option key={g} value={g}>
+                    {g}
+                </option>
+            ))}
+        </select>
 
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Min Stock Alert
-                            </label>
-                            <input
-                                type="number"
-                                min="0"
-                                value={form.minStock}
-                                onChange={e => set('minStock', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.minStock && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.minStock}
-                                </div>
-                            )}
-                        </div>
-                    </div>
+        {errors.gst && (
+            <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                {errors.gst}
+            </div>
+        )}
+    </div>
+</div>
+
+{/* Stock + Min Stock Alert */}
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+    <div>
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+            Stock
+        </label>
+
+        <input
+            type="number"
+            min="0"
+            value={form.stock}
+            onChange={e => set('stock', e.target.value)}
+            style={{
+                width: '100%',
+                marginTop: 4,
+                padding: '8px 10px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                boxSizing: 'border-box'
+            }}
+        />
+
+        {errors.stock && (
+            <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                {errors.stock}
+            </div>
+        )}
+    </div>
+
+    <div>
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+            Min Stock Alert
+        </label>
+
+        <input
+            type="number"
+            min="0"
+            value={form.minStock}
+            onChange={e => set('minStock', e.target.value)}
+            style={{
+                width: '100%',
+                marginTop: 4,
+                padding: '8px 10px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                boxSizing: 'border-box'
+            }}
+        />
+
+        {errors.minStock && (
+            <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                {errors.minStock}
+            </div>
+        )}
+    </div>
+</div>
 
                     {/* Description */}
                     <div>
@@ -824,24 +855,52 @@ const Products = () => {
             minHeight: '100vh'
         }}>
             <style>
+                 {`
+                input[type="number"]::-webkit-inner-spin-button,
+                input[type="number"]::-webkit-outer-spin-button {
+                    -webkit-appearance: none;
+                    margin: 0;
+                }
+
+                input[type="number"] {
+                    -moz-appearance: textfield;
+                }
+            `}
+
                 {`
-                    .table-scroll::-webkit-scrollbar {
-                        height: 4px;
-                    }
+    .table-scroll {
+        width: 100%;
+        overflow-x: auto;
+        overflow-y: hidden;
+        box-sizing: border-box;
+        scrollbar-width: thin;      /* Firefox */
+  scrollbar-color: #c7c7c7;
+    }
 
-                    .table-scroll::-webkit-scrollbar-track {
-                        background: #f1f1f1;
-                    }
+    .table-scroll table {
+        width: 100%;
+        min-width: 900px;
+        border-collapse: collapse;
+    }
 
-                    .table-scroll::-webkit-scrollbar-thumb {
-                        background: #c7c7c7;
-                        border-radius: 10px;
-                    }
+    .table-scroll::-webkit-scrollbar {
+        height: 2px !important;
+    }
 
-                    .table-scroll::-webkit-scrollbar-thumb:hover {
-                        background: #999;
-                    }
-                `}
+    .table-scroll::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 8px;
+    }
+
+    .table-scroll::-webkit-scrollbar-thumb {
+        background: #c7c7c7;
+        border-radius: 8px;
+    }
+
+    .table-scroll::-webkit-scrollbar-thumb:hover {
+        background: #999;
+    }
+`}
             </style>
 
             <div style={{

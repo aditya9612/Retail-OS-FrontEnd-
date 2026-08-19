@@ -1,50 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
     LineChart, Line, CartesianGrid, ComposedChart, Area,
     ReferenceLine, Legend,
 } from 'recharts';
-
+import dashboardService from "../../services/dashboard";
 /* ── Candlestick raw data ── */
-const candleData = [
-    { x: 'Jan', open: 30, close: 45, high: 60, low: 20 },
-    { x: 'Feb', open: 45, close: 38, high: 55, low: 30 },
-    { x: 'Mar', open: 38, close: 55, high: 70, low: 32 },
-    { x: 'Apr', open: 55, close: 42, high: 65, low: 38 },
-    { x: 'May', open: 42, close: 60, high: 75, low: 35 },
-    { x: 'Jun', open: 60, close: 50, high: 80, low: 45 },
-    { x: 'Jul', open: 50, close: 38, high: 65, low: 30 },
-    { x: 'Aug', open: 38, close: 48, high: 60, low: 28 },
-    { x: 'Sep', open: 48, close: 62, high: 72, low: 40 },
-    { x: 'Oct', open: 62, close: 55, high: 78, low: 48 },
-    { x: 'Nov', open: 55, close: 70, high: 85, low: 48 },
-    { x: 'Dec', open: 70, close: 58, high: 88, low: 52 },
-];
-
+const candleData = [];
 /* ── Pareto data ── */
-const paretoRaw = [
-    { name: 'Jan', revenue: 3025, cost: 1500 },
-    { name: 'Feb', revenue: 2200, cost: 1200 },
-    { name: 'Mar', revenue: 2800, cost: 1400 },
-    { name: 'Apr', revenue: 2100, cost: 1100 },
-    { name: 'May', revenue: 3200, cost: 1600 },
-    { name: 'Jun', revenue: 2600, cost: 1300 },
-    { name: 'Jul', revenue: 2400, cost: 1250 },
-    { name: 'Aug', revenue: 3100, cost: 1550 },
-    { name: 'Sep', revenue: 2900, cost: 1450 },
-    { name: 'Oct', revenue: 3400, cost: 1700 },
-    { name: 'Nov', revenue: 3800, cost: 1900 },
-    { name: 'Dec', revenue: 4000, cost: 2000 },
-];
-
-/* Compute cumulative % for Pareto line */
-const total = paretoRaw.reduce((s, d) => s + d.revenue, 0);
-let cum = 0;
-const paretoData = paretoRaw.map(d => {
-    cum += d.revenue;
-    return { ...d, cumPct: Math.round((cum / total) * 100) };
-});
-
+const paretoData = [];
 /* ── Custom Candlestick bar ── */
 const CandleBar = (props) => {
     const { x, y, width, height, open, close, high, low, index } = props;
@@ -75,10 +39,22 @@ const CandleBar = (props) => {
 };
 
 /* ── Stat cards ── */
-const stats = [
+
+/* ── Main Dashboard ── */
+const Dashboard = () => {
+    const [overviewPeriod, setOverviewPeriod] = useState('This Month');
+    const [paretoPeriod, setParetoPeriod] = useState('This Month');
+
+    // Dashboard API states
+    const [loading, setLoading] = useState(false);
+    const [dashboardData, setDashboardData] = useState({});
+    const [overviewData, setOverviewData] = useState([]);
+    const [revenueCostData, setRevenueCostData] = useState({});
+    const [topProducts, setTopProducts] = useState([]);
+    const stats = [
     {
         label: 'Total Sales',
-        value: '31.50',
+        value: `₹${Number(dashboardData.monthly_sales || 0).toLocaleString('en-IN')}`,
         progress: 62,
         color: '#6366f1',
         trackColor: '#e0e7ff',
@@ -87,7 +63,7 @@ const stats = [
     },
     {
         label: 'Total Cost',
-        value: '$ 4598',
+        value: `₹${Number(revenueCostData.cost || 0).toLocaleString('en-IN')}`,
         progress: 45,
         color: '#ec4899',
         trackColor: '#fce7f3',
@@ -96,7 +72,10 @@ const stats = [
     },
     {
         label: 'Product Sold',
-        value: '4589 M',
+        value: `${topProducts.reduce(
+            (sum, product) => sum + Number(product.quantity_sold || 0),
+            0
+        )}`,
         progress: 78,
         color: '#10b981',
         trackColor: '#d1fae5',
@@ -105,27 +84,62 @@ const stats = [
     },
 ];
 
-/* ── Custom Tooltip for pareto ── */
-const ParetoTooltip = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null;
-    return (
-        <div className="dash-tooltip">
-            <p className="dash-tooltip-label">{label}</p>
-            {payload.map((p, i) => (
-                <p key={i} style={{ color: p.color }}>
-                    {p.name}: {p.value}{p.name === 'pareto' ? '%' : ''}
-                </p>
-            ))}
-        </div>
-    );
-};
-
-/* ── Main Dashboard ── */
-const Dashboard = () => {
-    const [overviewPeriod, setOverviewPeriod] = useState('This Month');
-    const [paretoPeriod, setParetoPeriod] = useState('This Month');
-
+const formattedOverviewData = overviewData.map(item => ({
+    x: item.month,
+    sales: Number(item.sales || 0),
+}));
     const user = JSON.parse(localStorage.getItem("user"));
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
+
+    const fetchDashboardData = async () => {
+        try {
+            setLoading(true);
+
+            const [
+                dashboardResponse,
+                overviewResponse,
+                revenueCostResponse,
+                topProductsResponse
+            ] = await Promise.all([
+                dashboardService.getDashboard(),
+                dashboardService.getOverview(),
+                dashboardService.getRevenueVsCost(),
+                dashboardService.getTopProducts()
+            ]);
+
+            console.log("Dashboard API:", dashboardResponse.data);
+            console.log("Overview API:", overviewResponse.data);
+            console.log("Revenue Cost API:", revenueCostResponse.data);
+            console.log("Top Products API:", topProductsResponse.data);
+
+            setDashboardData(
+                dashboardResponse.data || {}
+            );
+
+            setOverviewData(
+                overviewResponse.data?.overview || []
+            );
+
+            setRevenueCostData(
+                revenueCostResponse.data || {}
+            );
+
+            setTopProducts(
+                topProductsResponse.data?.top_products || []
+            );
+
+        } catch (error) {
+            console.error(
+                "Dashboard API Error:",
+                error.response?.data || error.message
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const hour = new Date().getHours();
     const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
@@ -180,10 +194,12 @@ const Dashboard = () => {
                             <option>This Year</option>
                         </select>
                     </div>
-                    <p className="chart-subtitle">$45,78956</p>
+                    <p className="chart-subtitle">
+    ₹{Number(dashboardData.monthly_sales || 0).toLocaleString('en-IN')}
+</p>
 
                     <ResponsiveContainer width="100%" height={240}>
-                        <ComposedChart data={candleData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
+                        <ComposedChart data={formattedOverviewData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                             <XAxis dataKey="x" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
                             <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
@@ -191,10 +207,21 @@ const Dashboard = () => {
                                 contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 12 }}
                             />
                             {/* Bull bars */}
-                            <Bar dataKey="high" fill="#22d3ee" opacity={0.85} radius={[3, 3, 0, 0]} maxBarSize={16} />
-                            {/* Bear bars */}
-                            <Bar dataKey="low" fill="#f97316" opacity={0.85} radius={[3, 3, 0, 0]} maxBarSize={16} />
-                            <Line type="monotone" dataKey="close" stroke="#6366f1" strokeWidth={2} dot={false} />
+                            <Bar
+    dataKey="sales"
+    fill="#22d3ee"
+    opacity={0.85}
+    radius={[3, 3, 0, 0]}
+    maxBarSize={16}
+/>
+
+<Line
+    type="monotone"
+    dataKey="sales"
+    stroke="#6366f1"
+    strokeWidth={2}
+    dot={false}
+/>
                         </ComposedChart>
                     </ResponsiveContainer>
                 </div>
@@ -234,7 +261,7 @@ const Dashboard = () => {
                                 axisLine={false}
                                 tickLine={false}
                             />
-                            <Tooltip content={<ParetoTooltip />} />
+                           <Tooltip />
                             <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#38bdf8" radius={[4, 4, 0, 0]} maxBarSize={28} />
                             <Bar yAxisId="left" dataKey="cost" name="Cost" fill="#bae6fd" radius={[4, 4, 0, 0]} maxBarSize={28} />
                             <Line
