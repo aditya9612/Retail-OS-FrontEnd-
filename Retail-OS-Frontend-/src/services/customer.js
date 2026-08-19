@@ -198,3 +198,18 @@ export const getLoyaltyReport = async (params = {}) => {
     );
     return response.data;
 };
+
+export const exportCustomerDirectory = async ({ status = 'all', format = 'excel' } = {}) => {
+    const response = await apiClient.get(
+        `${CUSTOMER_API_URL}/export-directory`,
+        {
+            params: {
+                status: String(status).toLowerCase(),
+                format: String(format).toLowerCase()
+            },
+            responseType: 'blob'
+        }
+    );
+    return response;
+};
+

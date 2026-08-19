@@ -1151,14 +1151,14 @@ const Customers = () => {
 
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>Status:</span>
+                            <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>Status:</span>
                             <select
                                 className="ec-input"
                                 value={filterStatus}
                                 onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
                                 style={{ height: 38, fontSize: 12, padding: '0 10px' }}
                             >
-                                <option value="All">All Statuses</option>
+                                <option value="All">AllStatus</option>
                                 <option value="Active">Active</option>
                                 <option value="Inactive">Inactive</option>
                                 <option value="Blocked">Blocked</option>
@@ -1166,7 +1166,7 @@ const Customers = () => {
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>Segment:</span>
+                            <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>Segment:</span>
                             <select
                                 className="ec-input"
                                 value={filterType}
@@ -1183,7 +1183,7 @@ const Customers = () => {
 
                         {availableCities.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>City:</span>
+                                <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>City:</span>
                                 <select
                                     className="ec-input"
                                     value={filterCity}
@@ -1196,6 +1196,7 @@ const Customers = () => {
                             </div>
                         )}
                     </div>
+
                 </div>
 
                 {/* Directory Table */}
@@ -1210,7 +1211,7 @@ const Customers = () => {
                                 <th style={{ padding: '12px 16px' }}>Orders</th>
                                 <th style={{ padding: '12px 16px' }}>Total Spent</th>
                                 <th style={{ padding: '12px 16px' }}>Wallet / Points</th>
-                                <th style={{ padding: '12px 16px' }}>Status Switch</th>
+                                <th style={{ padding: '12px 16px' }}>Status </th>
                                 <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
                             </tr>
                         </thead>

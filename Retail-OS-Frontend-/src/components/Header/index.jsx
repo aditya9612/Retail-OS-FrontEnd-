@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import NewOrderForm from '../NewOrderForm';
-import { BsSearch, BsBell, BsPlus, BsBoxArrowRight, BsChevronDown } from 'react-icons/bs';
+import { BsSearch, BsBell, BsBoxArrowRight, BsChevronDown } from 'react-icons/bs';
 import { logoutUser } from '../../services/auth';
+import LogoutConfirmModal from '../LogoutConfirmModal';
 
 const Header = () => {
     const navigate = useNavigate();
-    const [showNewOrder, setShowNewOrder] = useState(false);
     const [showProfileMenu, setShowProfileMenu] = useState(false);
+    const [showLogoutModal, setShowLogoutModal] = useState(false);
+    const [logoutLoading, setLogoutLoading] = useState(false);
 
     const user = JSON.parse(localStorage.getItem('user'));
     const userName = user?.full_name || 'Super User';
@@ -22,9 +23,17 @@ const Header = () => {
         return userName.slice(0, 2).toUpperCase();
     }, [userName]);
 
-    const handleLogout = () => {
-        logoutUser();
-        navigate('/login', { replace: true });
+    const handleLogoutConfirm = async () => {
+        setLogoutLoading(true);
+        try {
+            await logoutUser();
+        } catch (err) {
+            console.error('Logout error:', err);
+        } finally {
+            setLogoutLoading(false);
+            setShowLogoutModal(false);
+            navigate('/login', { replace: true });
+        }
     };
 
     return (
@@ -41,17 +50,8 @@ const Header = () => {
 
             {/* Right side controls */}
             <div className="header-right">
-                {/* [+ New Order] Button */}
-                <button
-                    type="button"
-                    className="header-new-order"
-                    onClick={() => setShowNewOrder(true)}
-                >
-                    <BsPlus size={16} />
-                    New Order
-                </button>
-
                 {/* [Notifications] Bell */}
+
                 <button
                     type="button"
                     className="header-icon-btn header-icon-btn--bell"
@@ -116,7 +116,7 @@ const Header = () => {
 
                                 <button
                                     type="button"
-                                    onClick={() => { setShowProfileMenu(false); handleLogout(); }}
+                                    onClick={() => { setShowProfileMenu(false); setShowLogoutModal(true); }}
                                     style={{
                                         width: '100%',
                                         display: 'flex',
@@ -144,11 +144,16 @@ const Header = () => {
                 </div>
             </div>
 
-            {showNewOrder && (
-                <NewOrderForm onClose={() => setShowNewOrder(false)} />
-            )}
+            {/* Logout Confirmation Modal */}
+            <LogoutConfirmModal
+                isOpen={showLogoutModal}
+                onClose={() => setShowLogoutModal(false)}
+                onConfirm={handleLogoutConfirm}
+                loading={logoutLoading}
+            />
         </header>
     );
 };
 
 export default Header;
+
