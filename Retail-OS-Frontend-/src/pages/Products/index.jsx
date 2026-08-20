@@ -371,7 +371,7 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                     {/* Barcode + Unit */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#01050c' }}>
                                 Barcode <span style={{ color: 'red' }}>*</span>
                             </label>
                             <input
@@ -1083,7 +1083,8 @@ const Products = () => {
 
                                     <td style={{
                                         padding: '12px 16px',
-                                        color: '#6b7280',
+                                        color: '#111827',
+                                        fontWeight: 600,
                                         whiteSpace: 'nowrap'
                                     }}>
                                         {p.barcode}
@@ -1092,6 +1093,7 @@ const Products = () => {
                                     <td style={{
                                         padding: '12px 16px',
                                         color: '#111827',
+                                        fontWeight: 600,
                                         whiteSpace: 'nowrap'
                                     }}>
                                         {fmt(p.mrp)}
@@ -1108,7 +1110,8 @@ const Products = () => {
 
                                     <td style={{
                                         padding: '12px 16px',
-                                        color: '#6b7280',
+                                        color: '#111827',
+                                        fontWeight: 600,
                                         whiteSpace: 'nowrap'
                                     }}>
                                         {p.gst_rate || p.gst}
