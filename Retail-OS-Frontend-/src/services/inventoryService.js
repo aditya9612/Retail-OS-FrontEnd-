@@ -284,3 +284,39 @@ export const listStores = async () => {
         throw error;
     }
 };
+
+// 14. Inventory Dashboard
+export const inventoryDashboard = async () => {
+    try {
+        console.log("Inventory Dashboard API Request");
+
+        const response = await fetch(
+            `${API_BASE}/inventory/dashboard`,
+            {
+                method: "GET",
+                headers: getHeaders(),
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error(
+                `HTTP error! status: ${response.status}`
+            );
+        }
+
+        const data = await response.json();
+
+        console.log(
+            "Inventory Dashboard API Response:",
+            data
+        );
+
+        return data;
+    } catch (error) {
+        console.error(
+            "Inventory Dashboard API Error:",
+            error
+        );
+        throw error;
+    }
+};
