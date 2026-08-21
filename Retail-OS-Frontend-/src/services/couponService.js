@@ -1,7 +1,9 @@
+import { getAccessToken } from '../utils/tokenStorage';
+
 const BASE_URL = 'https://api-testing.myretailos.com/api/v1';
 
 const getAuthHeaders = () => {
-    const token = localStorage.getItem('access_token');
+    const token = getAccessToken();
     return {
         'Content-Type': 'application/json',
         Accept: 'application/json',

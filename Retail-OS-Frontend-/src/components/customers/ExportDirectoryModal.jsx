@@ -3,6 +3,8 @@ import { BsFileEarmarkPdf, BsFileEarmarkExcel, BsDownload, BsX, BsCheckCircle, B
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { exportCustomerDirectory } from '../../services/customer';
+
 
 const overlayStyle = {
     position: 'fixed',
@@ -154,32 +156,90 @@ const ExportDirectoryModal = ({ isOpen, onClose, customers = [] }) => {
         setErrorMessage('');
         setSuccessMessage('');
 
+        const statusParam = status === 'All' ? 'all' : status.toLowerCase();
+        const formatParam = format.toLowerCase();
+
         try {
-            if (filteredCustomers.length === 0) {
-                const statusName = status !== 'All' ? status.toLowerCase() : '';
-                setErrorMessage('No ' + statusName + ' customers found to export.');
-                setExporting(false);
-                return;
+            const response = await exportCustomerDirectory({ status: statusParam, format: formatParam });
+
+            // Extract blob data
+            const blob = new Blob([response.data], {
+                type: formatParam === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+
+            // Check if server returned a JSON error response disguised as a Blob
+            if (response.data?.type === 'application/json') {
+                try {
+                    const text = await response.data.text();
+                    const json = JSON.parse(text);
+                    if (json && json.detail) {
+                        const msg = typeof json.detail === 'string' ? json.detail : (json.detail.message || JSON.stringify(json.detail));
+                        throw new Error(msg);
+                    }
+                } catch (parseErr) {
+                    if (parseErr.message && !parseErr.message.includes('Unexpected token')) {
+                        throw parseErr;
+                    }
+                }
             }
 
-            const timestamp = new Date().toISOString().slice(0, 10);
-            const filename = 'Customer_Directory_' + status + '_' + timestamp;
-
-            if (format === 'pdf') {
-                generatePdfExport(filteredCustomers, filename, status);
-            } else if (format === 'excel') {
-                generateExcelExport(filteredCustomers, filename);
+            // Determine filename from content-disposition header if present
+            let filename = `Customer_Directory_${status}_${new Date().toISOString().slice(0, 10)}.${formatParam === 'excel' ? 'xlsx' : 'pdf'}`;
+            const contentDisposition = response.headers?.['content-disposition'];
+            if (contentDisposition) {
+                const match = contentDisposition.match(/filename=["']?([^"';]+)["']?/);
+                if (match && match[1]) {
+                    filename = match[1];
+                }
             }
 
-            setSuccessMessage('Exported ' + filteredCustomers.length + ' record(s) as ' + format.toUpperCase() + ' successfully!');
+            // Download file
+            const blobUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+
+            setSuccessMessage(`Exported directory as ${format.toUpperCase()} successfully!`);
 
             setTimeout(() => {
                 setSuccessMessage('');
                 onClose();
             }, 1200);
         } catch (err) {
-            console.error('Export Error:', err);
-            setErrorMessage('Failed to generate export file. Please try again.');
+            console.warn('API export directory call failed or returned error, attempting fallback:', err);
+
+            // Client-side fallback if API returns error or is unavailable
+            try {
+                if (filteredCustomers.length === 0) {
+                    const statusName = status !== 'All' ? status.toLowerCase() : '';
+                    setErrorMessage(err.message || `No ${statusName} customers found to export.`);
+                    setExporting(false);
+                    return;
+                }
+
+                const timestamp = new Date().toISOString().slice(0, 10);
+                const filename = 'Customer_Directory_' + status + '_' + timestamp;
+
+                if (format === 'pdf') {
+                    generatePdfExport(filteredCustomers, filename, status);
+                } else if (format === 'excel') {
+                    generateExcelExport(filteredCustomers, filename);
+                }
+
+                setSuccessMessage(`Exported ${filteredCustomers.length} record(s) as ${format.toUpperCase()} successfully!`);
+
+                setTimeout(() => {
+                    setSuccessMessage('');
+                    onClose();
+                }, 1200);
+            } catch (fallbackErr) {
+                console.error('Fallback Export Error:', fallbackErr);
+                setErrorMessage(err.message || 'Failed to generate export file. Please try again.');
+            }
         } finally {
             setExporting(false);
         }

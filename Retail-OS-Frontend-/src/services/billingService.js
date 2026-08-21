@@ -1,14 +1,16 @@
 // Billing Service — Cart & Invoice APIs
+import { getAccessToken } from '../utils/tokenStorage';
+
 const BASE_URL = 'https://api-testing.myretailos.com/api/v1';
 
 // Default store ID. Replace with dynamic value from user profile/context when available.
 const STORE_ID = 1;
 
 /**
- * Returns Authorization headers using the token stored in localStorage after login.
+ * Returns Authorization headers using the token stored in tokenStorage after login.
  */
 const getAuthHeaders = () => {
-    const token = localStorage.getItem('access_token');
+    const token = getAccessToken();
     return {
         'Content-Type': 'application/json',
         Accept: 'application/json',
@@ -89,7 +91,7 @@ export const removeCartItem = (product_id) =>
 
 /**
  * Get the current cart state.
- * GET /api/v1/billing/cart/cart?store_id=<STORE_ID>
+ * GET /api/v1/billing/cart?store_id=<STORE_ID>
  *
  * Response shape:
  *   { store_id, customer_id, items[], subtotal, discount_amount,
@@ -99,7 +101,7 @@ export const removeCartItem = (product_id) =>
  * @returns {Promise<Object>} current cart from server
  */
 export const getCart = () =>
-    request(`${BASE_URL}/billing/cart/cart?store_id=${STORE_ID}`, { method: 'GET' });
+    request(`${BASE_URL}/billing/cart?store_id=${STORE_ID}`, { method: 'GET' });
 
 /**
  * Apply a discount or coupon code to the cart.
@@ -150,7 +152,7 @@ export const getInvoiceByOrderId = (orderId) =>
  */
 export const downloadInvoicePdf = async (invoiceId) => {
     const url = `${BASE_URL}/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`;
-    const token = localStorage.getItem('access_token');
+    const token = getAccessToken();
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 

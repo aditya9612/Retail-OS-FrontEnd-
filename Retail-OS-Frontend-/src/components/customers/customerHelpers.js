@@ -38,11 +38,21 @@ export const extractOrdersInfo = (ordersData) => {
 export const getApiErrorMessage = (error, fallback) => {
     if (!error) return fallback;
     if (typeof error === 'string') return error;
+
+    const detail = error.response?.data?.detail;
+    if (Array.isArray(detail)) {
+        const messages = detail.map(err => {
+            const loc = Array.isArray(err.loc) ? err.loc.filter(l => l !== 'body').join('.') : '';
+            return loc ? `${loc}: ${err.msg}` : err.msg;
+        });
+        return messages.join('; ');
+    }
+
     const backendMsg =
-        error.response?.data?.detail?.[0]?.msg ||
-        error.response?.data?.detail?.message ||
-        error.response?.data?.detail ||
-        error.response?.data?.message;
+        detail?.message ||
+        (typeof detail === 'string' ? detail : null) ||
+        error.response?.data?.message ||
+        error.message;
 
     if (typeof backendMsg === 'string') return backendMsg;
     return fallback;

@@ -1,0 +1,443 @@
+@import "../../components/inventory.css";
+/* =========================================================
+   INVENTORY PAGE
+   ========================================================= */
+
+.dash-page {
+    width: 100%;
+    min-height: 100vh;
+    padding: 24px 28px 40px;
+    background: #f5f7fb;
+    color: #111827;
+    box-sizing: border-box;
+}
+
+/* =========================================================
+   PAGE HEADER
+   ========================================================= */
+
+.adm-page-header {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+}
+
+.adm-page-header h2 {
+    margin: 0;
+    font-size: 24px;
+    line-height: 1.3;
+    font-weight: 700;
+    color: #111827;
+}
+
+/* =========================================================
+   KPI AREA
+   ========================================================= */
+
+.dash-page > div[style*="gridTemplateColumns"] {
+    width: 100%;
+}
+
+.dash-page > div[style*="gridTemplateColumns"] > div {
+    min-height: 100px;
+    border: 1px solid #eef0f4;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.dash-page > div[style*="gridTemplateColumns"] > div:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08) !important;
+}
+
+.dash-page > div[style*="gridTemplateColumns"] h4 {
+    margin: 0 0 8px;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.dash-page > div[style*="gridTemplateColumns"] h2 {
+    margin: 0;
+    color: #111827;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+/* =========================================================
+   LOADING / ERROR
+   ========================================================= */
+
+.dash-page > div[style*="color: #6366f1"] {
+    background: #eef2ff;
+    border: 1px solid #e0e7ff;
+    border-radius: 8px;
+    margin-bottom: 14px;
+}
+
+.dash-page > div[style*="color: #ef4444"] {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    margin-bottom: 14px;
+}
+
+/* =========================================================
+   INVENTORY CARDS
+   ========================================================= */
+
+.dash-page > div[style*="marginTop: \"-20px\""] {
+    width: 100%;
+    margin-bottom: 18px;
+}
+
+/* =========================================================
+   FILTER / HEADER / TABLE COMMON
+   ========================================================= */
+
+.ec-input,
+input,
+select {
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.ec-input {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 11px;
+    border: 1px solid #d1d5db;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ec-input:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.10);
+}
+
+.ec-input::placeholder {
+    color: #9ca3af;
+}
+
+/* =========================================================
+   BUTTONS
+   ========================================================= */
+
+.adm-btn-primary,
+.adm-btn-secondary {
+    min-height: 38px;
+    padding: 8px 15px;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.adm-btn-primary {
+    border: 1px solid #6366f1;
+    background: #6366f1;
+    color: #ffffff;
+}
+
+.adm-btn-primary:hover:not(:disabled) {
+    background: #4f46e5;
+    border-color: #4f46e5;
+    transform: translateY(-1px);
+}
+
+.adm-btn-secondary {
+    border: 1px solid #d1d5db;
+    background: #ffffff;
+    color: #374151;
+}
+
+.adm-btn-secondary:hover:not(:disabled) {
+    background: #f9fafb;
+    border-color: #9ca3af;
+}
+
+.adm-btn-primary:disabled,
+.adm-btn-secondary:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* =========================================================
+   MODAL OVERLAY
+   ========================================================= */
+
+.ec-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 23, 42, 0.48);
+    backdrop-filter: blur(2px);
+    box-sizing: border-box;
+}
+
+/* =========================================================
+   UPDATE STOCK MODAL
+   ========================================================= */
+
+.ec-modal {
+    width: 100%;
+    max-width: 440px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.22);
+    padding: 20px;
+    box-sizing: border-box;
+    animation: inventoryModalIn 0.18s ease-out;
+}
+
+@keyframes inventoryModalIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.ec-modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.ec-modal-header h3 {
+    margin: 0;
+}
+
+.ec-modal-header p {
+    margin-bottom: 0;
+}
+
+.ec-modal-close {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 7px;
+    background: #f3f4f6;
+    color: #6b7280;
+    font-size: 15px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.ec-modal-close:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* =========================================================
+   FORM FIELDS
+   ========================================================= */
+
+.ec-field {
+    width: 100%;
+    margin-bottom: 14px;
+}
+
+.ec-field label,
+.ec-modal > label {
+    display: block;
+    margin-bottom: 6px;
+    color: #374151;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.ec-form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.ec-form-row .ec-field {
+    margin-bottom: 14px;
+}
+
+/* =========================================================
+   MODAL STOCK PREVIEW
+   ========================================================= */
+
+.ec-modal div[style*="background: '#f9fafb'"] {
+    border: 1px solid #f1f5f9;
+}
+
+/* =========================================================
+   TABLE AREA
+   ========================================================= */
+
+.dash-page table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.dash-page th {
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 12px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    white-space: nowrap;
+}
+
+.dash-page td {
+    padding: 12px 14px;
+    color: #374151;
+    font-size: 13px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+
+.dash-page tbody tr {
+    background: #ffffff;
+    transition: background 0.15s ease;
+}
+
+.dash-page tbody tr:hover {
+    background: #f8fafc;
+}
+
+/* =========================================================
+   PAGINATION
+   ========================================================= */
+
+.dash-page > div[style*="borderTop"] {
+    background: #ffffff;
+}
+
+.dash-page > div[style*="borderTop"] button {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 9px;
+    border: 1px solid #e5e7eb;
+    border-radius: 7px;
+    background: #ffffff;
+    color: #374151;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.dash-page > div[style*="borderTop"] button:hover:not(:disabled) {
+    border-color: #6366f1;
+    color: #6366f1;
+    background: #eef2ff;
+}
+
+.dash-page > div[style*="borderTop"] button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+
+.ec-modal::-webkit-scrollbar {
+    width: 6px;
+}
+
+.ec-modal::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.ec-modal::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 10px;
+}
+
+.ec-modal::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+    .dash-page {
+        padding: 20px;
+    }
+
+    .dash-page > div[style*="gridTemplateColumns"] {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+
+@media (max-width: 800px) {
+    .dash-page {
+        padding: 16px;
+    }
+
+    .dash-page > div[style*="gridTemplateColumns"] {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+
+    .ec-form-row {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}
+
+@media (max-width: 550px) {
+    .dash-page {
+        padding: 14px;
+    }
+
+    .adm-page-header h2 {
+        font-size: 20px;
+    }
+
+    .dash-page > div[style*="gridTemplateColumns"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    .ec-modal-overlay {
+        padding: 10px;
+    }
+
+    .ec-modal {
+        max-height: calc(100vh - 20px);
+        padding: 16px;
+        border-radius: 10px;
+    }
+}

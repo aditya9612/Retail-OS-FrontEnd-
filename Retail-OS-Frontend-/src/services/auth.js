@@ -38,12 +38,20 @@ export const auth = {
         return response.data;
     },
 
-    logout: () => {
-        clearTokens();
+    logout: async () => {
+        try {
+            const response = await apiClient.post("/auth/logout");
+            return response.data;
+        } catch (error) {
+            console.warn("Logout API call error:", error);
+        } finally {
+            clearTokens();
+            localStorage.removeItem("user");
+        }
     },
 };
 
 // Keep compatibility with existing imports
-export const logoutUser = () => {
-    clearTokens();
-};
+export const logoutUser = async () => {
+    return await auth.logout();
+};

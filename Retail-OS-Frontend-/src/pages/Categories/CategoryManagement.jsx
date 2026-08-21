@@ -123,6 +123,8 @@ const CategoryManagement = () => {
         active={activeCount}
         inactive={inactiveCount}
         onAdd={handleAdd}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
       />
 
       <CategoryCards

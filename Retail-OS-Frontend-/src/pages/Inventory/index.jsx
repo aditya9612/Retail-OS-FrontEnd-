@@ -5,7 +5,7 @@ import InventoryFilters from "../../components/InventoryFilters";
 import InventoryTable from "../../components/InventoryTable";
 import LowStockAlert from "../../components/LowStockAlert";
 import category from "../../services/categoryService";
-import "../../components/inventory.css";
+import "./Inventory.css";
 
 
 {/*import { getInventory, stockIn, stockOut } from "../../api/inventoryApi"; */}
