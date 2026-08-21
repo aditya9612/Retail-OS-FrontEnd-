@@ -22,7 +22,17 @@ const inputStyle = {
 };
 
 const NewOrderForm = ({ onClose }) => {
-    const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(
+    product
+        ? {
+            ...EMPTY_FORM,
+            ...product,
+            brand: product.brand || '',
+            mrp: product.mrp ?? '',
+            sellingPrice: product.price ?? '',
+        }
+        : { ...EMPTY_FORM }
+);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
