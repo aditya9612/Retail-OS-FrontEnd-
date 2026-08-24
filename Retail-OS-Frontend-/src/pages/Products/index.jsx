@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { product as productService } from "../../services/product";
+import productService from "../../services/product";
 import {
     BsSearch,
     BsPlus,

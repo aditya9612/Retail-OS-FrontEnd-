@@ -667,7 +667,7 @@ const OrderManagement = () => {
             // Fetch dynamically to avoid 404 Entity Not Found errors from hardcoded IDs
             let validProductId = 8;
             try {
-                const { product } = await import('../../services/product.js');
+                const product = (await import('../../services/product.js')).default;
                 const productsResponse = await product.getAll();
                 const products = Array.isArray(productsResponse) ? productsResponse : (productsResponse.data || productsResponse.items || []);
                 if (products.length > 0) {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getOrders } from '../../services/orderService';
-import { product as productService } from '../../services/product';
+import productService from '../../services/product';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
     LineChart, Line, CartesianGrid, ComposedChart, Area,
