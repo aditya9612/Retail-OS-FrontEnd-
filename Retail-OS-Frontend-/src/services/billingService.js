@@ -1,18 +1,10 @@
 // Billing Service — Cart & Invoice APIs
-<<<<<<< HEAD
 import apiClient from './api';
-import { getAccessToken } from '../utils/tokenStorage';
-=======
-import { getAccessToken } from '../utils/tokenStorage';
-
-const BASE_URL = 'https://api-testing.myretailos.com/api/v1';
->>>>>>> 659dee381b237b46c09b2aaf25982fa333da87aa
 
 // Default store ID. Replace with dynamic value from user profile/context when available.
 const STORE_ID = 1;
 
 /**
-<<<<<<< HEAD
  * Unified error parser for axios rejections.
  */
 const handleApiError = (error) => {
@@ -21,38 +13,6 @@ const handleApiError = (error) => {
         msg = error.response.data?.detail?.message || JSON.stringify(error.response.data?.detail) || error.response.data.message || msg;
     } else {
         msg = error.message;
-=======
- * Returns Authorization headers using the token stored in tokenStorage after login.
- */
-const getAuthHeaders = () => {
-    const token = getAccessToken();
-    return {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-};
-
-/**
- * Unified request helper — handles auth + error parsing.
- */
-const request = async (url, options = {}) => {
-    const response = await fetch(url, {
-        ...options,
-        headers: {
-            ...getAuthHeaders(),
-            ...(options.headers || {}),
-        },
-    });
-
-    if (!response.ok) {
-        let errorMsg = `Request failed (${response.status})`;
-        try {
-            const errorData = await response.json();
-            errorMsg = errorData?.detail?.message || JSON.stringify(errorData?.detail) || errorMsg;
-        } catch (_) { }
-        throw new Error(errorMsg);
->>>>>>> 659dee381b237b46c09b2aaf25982fa333da87aa
     }
     throw new Error(msg);
 };
@@ -116,7 +76,6 @@ export const removeCartItem = async (product_id) => {
 /**
  * Get the current cart state.
  * GET /api/v1/billing/cart?store_id=<STORE_ID>
-<<<<<<< HEAD
  *
  * @returns {Promise<Object>} current cart from server
  */
@@ -126,19 +85,6 @@ export const getCart = async () => {
         return response.data;
     } catch (e) { handleApiError(e); }
 };
-=======
- *
- * Response shape:
- *   { store_id, customer_id, items[], subtotal, discount_amount,
- *     gst_amount, cgst_amount, sgst_amount, igst_amount,
- *     grand_total, same_state, coupon_code }
- *
- * @returns {Promise<Object>} current cart from server
- */
-export const getCart = () =>
-    request(`${BASE_URL}/billing/cart?store_id=${STORE_ID}`, { method: 'GET' });
->>>>>>> 659dee381b237b46c09b2aaf25982fa333da87aa
-
 /**
  * Apply a discount or coupon code to the cart.
  * POST /api/v1/billing/cart/apply-discount?store_id=<STORE_ID>
@@ -174,7 +120,6 @@ export const getInvoiceByOrderId = async (orderId) => {
  * @param {string|number} invoiceId — the invoice ID
  */
 export const downloadInvoicePdf = async (invoiceId) => {
-<<<<<<< HEAD
     try {
         const response = await apiClient.get(`/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
             responseType: 'blob'
@@ -197,22 +142,6 @@ export const downloadInvoicePdf = async (invoiceId) => {
             } catch (_) { }
         }
         handleApiError(e);
-=======
-    const url = `${BASE_URL}/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`;
-    const token = getAccessToken();
-    const headers = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const response = await fetch(url, { method: 'GET', headers });
-    if (!response.ok) {
-        let msg = `Failed to download PDF (${response.status})`;
-        try {
-            // Try to parse error as json, just in case
-            const errData = await response.json();
-            msg = errData?.detail?.message || JSON.stringify(errData?.detail) || msg;
-        } catch (_) { }
-        throw new Error(msg);
->>>>>>> 659dee381b237b46c09b2aaf25982fa333da87aa
     }
 };
 

@@ -1,9 +1,6 @@
 import { getAccessToken } from '../utils/tokenStorage';
 
 const BASE_URL = 'https://api-testing.myretailos.com/api/v1';
-
-import { getAccessToken } from '../utils/tokenStorage';
-
 const getAuthHeaders = () => {
     const token = getAccessToken();
     return {
