@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getOrders } from '../../services/orderService';
+import { product as productService } from '../../services/product';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
     LineChart, Line, CartesianGrid, ComposedChart, Area,
-    ReferenceLine, Legend,
+    ReferenceLine, Legend, PieChart, Pie, Cell,
 } from 'recharts';
 
 /* ── Candlestick raw data ── */
@@ -125,6 +127,74 @@ const Dashboard = () => {
     const [overviewPeriod, setOverviewPeriod] = useState('This Month');
     const [paretoPeriod, setParetoPeriod] = useState('This Month');
 
+    const [realStats, setRealStats] = useState({
+        totalSales: 0,
+        totalCost: 0,
+        productSold: 0,
+        loading: true
+    });
+
+    useEffect(() => {
+        let active = true;
+        const fetchDashboardData = async () => {
+            try {
+                // Fetch up to 500 orders (adjust logic if pagination is required)
+                const ordersData = await getOrders({ store_id: 1, page: 1, page_size: 500 });
+                const orders = Array.isArray(ordersData) ? ordersData : (ordersData.items || ordersData.data || []);
+
+                let sales = 0;
+                let sold = 0;
+                let cost = 0;
+
+                // Fetch products to estimate cost (fallback to 60% of price if cost_price is missing)
+                const productsData = await productService.getAll();
+                const products = Array.isArray(productsData) ? productsData : (productsData.items || productsData.data || []);
+                const costMap = {};
+                products.forEach(p => {
+                    costMap[p.id] = parseFloat(p.cost_price || (p.price * 0.6) || 0);
+                });
+
+                orders.forEach(o => {
+                    const status = o.status ? o.status.toLowerCase() : 'pending';
+                    if (status !== 'cancelled' && status !== 'returned') {
+                        sales += parseFloat(o.total_amount || 0);
+                        if (o.items && Array.isArray(o.items)) {
+                            o.items.forEach(i => {
+                                const qty = Number(i.quantity) || 1;
+                                sold += qty;
+                                cost += (costMap[i.product_id] || 0) * qty;
+                            });
+                        }
+                    }
+                });
+
+                if (active) {
+                    setRealStats({ totalSales: sales, totalCost: cost, productSold: sold, loading: false });
+                }
+            } catch (err) {
+                console.error("Dashboard fetch error:", err);
+                if (active) {
+                    setRealStats(prev => ({ ...prev, loading: false }));
+                }
+            }
+        };
+        fetchDashboardData();
+        return () => { active = false; };
+    }, []);
+
+    const displayStats = stats.map(s => {
+        if (s.label === 'Total Sales') {
+            return { ...s, value: realStats.loading ? '...' : `₹${realStats.totalSales.toLocaleString('en-IN')}` };
+        }
+        if (s.label === 'Total Cost') {
+            return { ...s, value: realStats.loading ? '...' : `₹${Math.round(realStats.totalCost).toLocaleString('en-IN')}` };
+        }
+        if (s.label === 'Product Sold') {
+            return { ...s, value: realStats.loading ? '...' : `${realStats.productSold.toLocaleString('en-IN')}` };
+        }
+        return s;
+    });
+
     const user = JSON.parse(localStorage.getItem("user"));
 
     const hour = new Date().getHours();
@@ -143,7 +213,7 @@ const Dashboard = () => {
                 </div>
 
                 <div className="dash-stats">
-                    {stats.map((s, i) => (
+                    {displayStats.map((s, i) => (
                         <div key={i} className="stat-card" style={{ background: s.bg }}>
                             <div className="stat-card-top">
                                 <div>
@@ -199,7 +269,7 @@ const Dashboard = () => {
                     </ResponsiveContainer>
                 </div>
 
-                {/* Revenue vs Cost – Pareto */}
+                {/* Revenue vs Cost – Pie Chart */}
                 <div className="chart-card">
                     <div className="chart-card-header">
                         <h2 className="chart-title">Revenue Vs Cost</h2>
@@ -215,39 +285,25 @@ const Dashboard = () => {
                     </div>
 
                     <ResponsiveContainer width="100%" height={260}>
-                        <ComposedChart data={paretoData} margin={{ top: 10, right: 40, bottom: 0, left: -20 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                            <YAxis
-                                yAxisId="left"
-                                tick={{ fontSize: 11, fill: '#94a3b8' }}
-                                axisLine={false}
-                                tickLine={false}
-                                tickFormatter={v => v.toLocaleString()}
-                            />
-                            <YAxis
-                                yAxisId="right"
-                                orientation="right"
-                                tickFormatter={v => `${v}%`}
-                                domain={[0, 100]}
-                                tick={{ fontSize: 11, fill: '#94a3b8' }}
-                                axisLine={false}
-                                tickLine={false}
-                            />
-                            <Tooltip content={<ParetoTooltip />} />
-                            <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#38bdf8" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                            <Bar yAxisId="left" dataKey="cost" name="Cost" fill="#bae6fd" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                            <Line
-                                yAxisId="right"
-                                type="monotone"
-                                dataKey="cumPct"
-                                name="pareto"
-                                stroke="#6366f1"
-                                strokeWidth={2}
-                                dot={{ fill: '#6366f1', r: 4, strokeWidth: 0 }}
-                                activeDot={{ r: 6 }}
-                            />
-                        </ComposedChart>
+                        <PieChart>
+                            <Pie
+                                data={[
+                                    { name: 'Revenue', value: realStats.totalSales },
+                                    { name: 'Cost', value: realStats.totalCost }
+                                ]}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={90}
+                                paddingAngle={5}
+                                dataKey="value"
+                            >
+                                <Cell fill="#38bdf8" />
+                                <Cell fill="#f43f5e" />
+                            </Pie>
+                            <Tooltip formatter={(value) => `₹${value.toLocaleString('en-IN')}`} />
+                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                        </PieChart>
                     </ResponsiveContainer>
                 </div>
             </div>
