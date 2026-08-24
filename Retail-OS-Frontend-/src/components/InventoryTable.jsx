@@ -8,192 +8,271 @@ const InventoryTable = ({
   fmt,
   setStockModal,
 }) => {
+  console.log("PAGINATED INSIDE TABLE =>", paginated);
+  console.log("PAGINATED LENGTH =>", paginated?.length);
+
   return (
-    <div className="inventory-table-container">
-      <table className="inventory-table">
-        <thead>
-          <tr>
-            <th>Product</th>
-            <th>SKU</th>
-            <th>Category</th>
-            <th>Warehouse</th>
-            <th>Available Qty</th>
-            <th>Reorder Level</th>
-            <th>Cost Price</th>
-            <th>Selling Price</th>
-            <th>Margin</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
+  <div className="inventory-table-container">
+    <table className="inventory-table">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>SKU</th>
+          <th>Category</th>
+          <th>Warehouse</th>
+          <th>Available Qty</th>
+          <th>Reorder Level</th>
+          <th>Cost Price</th>
+          <th>Selling Price</th>
+          <th>Margin</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
 
-        <tbody>
-          {paginated.map((item) => {
-            const st = stockStatus(item);
+      <tbody>
+        {paginated?.map((item, idx) => {
+          console.log("TABLE ITEM =>", item);
+          console.log("Product Name =>", item.name);
+          console.log("SKU =>", item.sku);
 
-            const margin = Math.round(
-              ((item.sellingPrice - item.costPrice) / item.costPrice) * 100
-            );
+          const name =
+            item.name ||
+            item.product_name ||
+            `Product #${item.product_id || item.id}`;
 
-            return (
-              <tr key={item.id}>
-                {/* Product */}
-                <td>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 34,
-                        height: 34,
-                        borderRadius: 8,
-                        background: "#f3f4f6",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <BsBoxSeam size={14} color="#9ca3af" />
-                    </div>
+          const sku =
+            item.sku ||
+            `SKU-00${item.product_id || item.id}`;
 
-                    <div>
-                      <div style={{ fontWeight: 600 }}>
-                        {item.name}
-                      </div>
+          const category =
+            item.category ||
+            item.category_name ||
+            "General";
 
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "#6b7280",
-                        }}
-                      >
-                        {item.brand} • {item.location}
-                      </div>
-                    </div>
-                  </div>
-                </td>
+          const location =
+            item.location ||
+            item.warehouse ||
+            `Store #${item.store_id || 1}`;
 
-                {/* SKU */}
-                <td>{item.sku}</td>
+          const qty =
+            item.quantity !== undefined
+              ? item.quantity
+              : item.stock !== undefined
+              ? item.stock
+              : 0;
 
-                {/* Category */}
-                <td>
-                  <span
-                    style={{
-                      background: "#eef2ff",
-                      color: "#6366f1",
-                      padding: "4px 8px",
-                      borderRadius: 20,
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {item.category}
-                  </span>
-                </td>
+          const minStock =
+            item.low_stock_threshold !== undefined
+              ? item.low_stock_threshold
+              : item.minStock !== undefined
+              ? item.minStock
+              : 0;
 
-                {/* Warehouse */}
-                <td>{item.location}</td>
+          const costPrice =
+            item.costPrice !== undefined
+              ? item.costPrice
+              : item.unit_cost !== undefined
+              ? item.unit_cost
+              : 0;
 
-                {/* Stock */}
-                <td>
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        color: st.color,
-                      }}
-                    >
-                      {item.stock} {item.unit}
-                    </div>
+          const sellingPrice =
+            item.sellingPrice !== undefined
+              ? item.sellingPrice
+              : item.price !== undefined
+              ? item.price
+              : costPrice;
 
-                    {item.stock > 0 &&
-                      item.stock < item.minStock && (
-                        <div
-                          style={{
-                            fontSize: 11,
-                            color: "#f59e0b",
-                          }}
-                        >
-                          Below Min ({item.minStock})
-                        </div>
-                      )}
-                  </div>
-                </td>
+          const unit = item.unit || "Pcs";
+          const brand = item.brand || "Brand";
 
-                {/* Min Stock */}
-                <td>
-                  {item.minStock} {item.unit}
-                </td>
+          const margin =
+            costPrice > 0
+              ? Math.round(
+                  ((sellingPrice - costPrice) / costPrice) * 100
+                )
+              : 0;
 
-                {/* Cost Price */}
-                <td>{fmt(item.costPrice)}</td>
+          const st = stockStatus(item);
 
-                {/* Selling Price */}
-                <td
+          return (
+            <tr key={item.id || item.product_id || idx}>
+              {/* Product */}
+              <td>
+                <div
                   style={{
-                    fontWeight: 700,
-                    color: "#111827",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
                   }}
                 >
-                  {fmt(item.sellingPrice)}
-                </td>
-
-                {/* Margin */}
-                <td>
-                  <span
+                  <div
                     style={{
-                      color:
-                        margin > 40
-                          ? "#10b981"
-                          : margin > 20
-                          ? "#f59e0b"
-                          : "#ef4444",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {margin}%
-                  </span>
-                </td>
-
-                {/* Status */}
-                <td>
-                  <span
-                    style={{
-                      display: "inline-flex",
+                      width: 34,
+                      height: 34,
+                      borderRadius: 8,
+                      background: "#f3f4f6",
+                      display: "flex",
                       alignItems: "center",
-                      padding: "4px 10px",
-                      borderRadius: "20px",
-                      background: st.bg,
-                      color: st.color,
-                      fontSize: 12,
-                      fontWeight: 700,
+                      justifyContent: "center",
                     }}
                   >
-                    {st.label}
-                  </span>
-                </td>
+                    <BsBoxSeam
+                      size={14}
+                      color="#9ca3af"
+                    />
+                  </div>
 
-                {/* Actions */}
-                <td>
-                  <button
-                    className="adm-btn-primary"
-                    onClick={() => setStockModal(item)}
+                  <div>
+                    <div style={{ fontWeight: 600 }}>
+                      {name}
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "#6b7280",
+                      }}
+                    >
+                      {brand} • {location}
+                    </div>
+                  </div>
+                </div>
+              </td>
+
+              {/* SKU */}
+              <td>{sku}</td>
+
+              {/* Category */}
+              <td>
+                <span
+                  style={{
+                    background: "#eef2ff",
+                    color: "#6366f1",
+                    padding: "4px 8px",
+                    borderRadius: 20,
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  {category}
+                </span>
+              </td>
+
+              {/* Warehouse */}
+              <td>{location}</td>
+
+              {/* Stock */}
+              <td>
+                <div>
+                  <div
+                    style={{
+                      fontWeight: 700,
+                      color: st.color,
+                    }}
                   >
-                    Update
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+                    {qty} {unit}
+                  </div>
+
+                  {qty > 0 && qty < minStock && (
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "#f59e0b",
+                      }}
+                    >
+                      Below Min ({minStock})
+                    </div>
+                  )}
+                </div>
+              </td>
+
+              {/* Min Stock */}
+              <td>
+                {minStock} {unit}
+              </td>
+
+              {/* Cost Price */}
+              <td>{fmt(costPrice)}</td>
+
+              {/* Selling Price */}
+              <td
+                style={{
+                  fontWeight: 700,
+                  color: "#111827",
+                }}
+              >
+                {fmt(sellingPrice)}
+              </td>
+
+              {/* Margin */}
+              <td>
+                <span
+                  style={{
+                    color:
+                      margin > 40
+                        ? "#10b981"
+                        : margin > 20
+                        ? "#f59e0b"
+                        : "#ef4444",
+                    fontWeight: 700,
+                  }}
+                >
+                  {margin}%
+                </span>
+              </td>
+
+              {/* Status */}
+              <td>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    padding: "4px 10px",
+                    borderRadius: "20px",
+                    background: st.bg,
+                    color: st.color,
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  {st.label}
+                </span>
+              </td>
+
+              {/* Actions */}
+              <td>
+                <button
+                  type="button"
+                  className="adm-btn-primary"
+                  onClick={() => {
+                    console.log(
+                      "UPDATE BUTTON CLICKED"
+                    );
+                    console.log("ITEM =>", item);
+                    console.log(
+                      "PRODUCT ID =>",
+                      item.product_id
+                    );
+                    console.log(
+                      "STORE ID =>",
+                      item.store_id
+                    );
+
+                    setStockModal(item);
+                  }}
+                >
+                  Update
+                </button>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+          </table>
+  </div>
+);
+ 
 };
 
 export default InventoryTable;

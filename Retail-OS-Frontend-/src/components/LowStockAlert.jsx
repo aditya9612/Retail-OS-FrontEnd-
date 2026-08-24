@@ -1,45 +1,16 @@
 import React from "react";
 import "./LowStockAlert.css";
 
-const lowStockItems = [
-  {
-    id: 1,
-    product: "Coca Cola",
-    sku: "SKU002",
-    warehouse: "Store Warehouse",
-    supplier: "ABC Distributors",
-    quantity: 18,
-    reorderLevel: 30,
-    lastUpdated: "02 Jul 2026",
-  },
-  {
-    id: 2,
-    product: "Laptop Charger",
-    sku: "SKU005",
-    warehouse: "Main Warehouse",
-    supplier: "Global Traders",
-    quantity: 12,
-    reorderLevel: 20,
-    lastUpdated: "03 Jul 2026",
-  },
-  {
-    id: 3,
-    product: "Notebook",
-    sku: "SKU009",
-    warehouse: "Branch Warehouse",
-    supplier: "Office Supplies Ltd",
-    quantity: 5,
-    reorderLevel: 15,
-    lastUpdated: "05 Jul 2026",
-  },
-];
-
-const LowStockAlert = () => {
+const LowStockAlert = ({
+  loading = false,
+  error = "",
+  items = [],
+}) => {
   return (
+     
+   
     <div className="low-stock-alert">
-
       <div className="low-stock-header">
-
         <div>
           <h2>⚠ Low Stock Alerts</h2>
           <p>
@@ -50,13 +21,22 @@ const LowStockAlert = () => {
         <button className="view-all-btn">
           View All
         </button>
-
       </div>
 
+      {loading && (
+        <div style={{ padding: "10px", color: "#f59e0b", fontSize: 13 }}>
+          Loading low stock items...
+        </div>
+      )}
+
+      {error && (
+        <div style={{ padding: "10px", color: "#ef4444", fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
       <table className="low-stock-table">
-
         <thead>
-
           <tr>
             <th>Product</th>
             <th>SKU</th>
@@ -68,67 +48,78 @@ const LowStockAlert = () => {
             <th>Status</th>
             <th>Action</th>
           </tr>
-
         </thead>
 
         <tbody>
 
-          {lowStockItems.map((item) => {
 
-            const isCritical = item.quantity <= 10;
+          {!loading && items.length === 0 ? (
+            <tr>
+              <td colSpan="9" style={{ textAlign: "center", padding: "20px" }}>
+                No Low Stock Items
+              </td>
+            </tr>
+          ) : (
+            items.map((item) => {
+              const qty =
+                item.quantity !== undefined
+                  ? item.quantity
+                  : item.stock !== undefined
+                  ? item.stock
+                  : 0;
+               
+              const reorderLevel =
+                item.low_stock_threshold ??
+                item.reorderLevel ??
+                item.minStock ??
+                0;
 
-            return (
+              const isCritical = qty <= 10;
 
-              <tr key={item.id}>
+              return (
+                
+                <tr key={item.id}>
+                 <td>{item.product_name || item.name || "-"}</td>
 
-                <td>{item.product}</td>
+<td>{item.sku || "-"}</td>
 
-                <td>{item.sku}</td>
+<td>{item.supplier_name || "-"}</td>
 
-                <td>{item.supplier}</td>
+<td>{item.store_name || "-"}</td>
 
-                <td>{item.warehouse}</td>
+<td>{qty}</td>
 
-                <td>{item.quantity}</td>
+<td>{reorderLevel}</td>
 
-                <td>{item.reorderLevel}</td>
+<td>
+  {item.created_at
+    ? item.created_at.split("T")[0]
+    : "-"}
+</td>
+                  <td>
+                    <span
+                      className={
+                        isCritical
+                          ? "critical-stock-badge"
+                          : "low-stock-badge"
+                      }
+                    >
+                      {isCritical ? "Critical" : "Low Stock"}
+                    </span>
+                  </td>
 
-                <td>{item.lastUpdated}</td>
-
-                <td>
-
-                  <span
-                    className={
-                      isCritical
-                        ? "critical-stock-badge"
-                        : "low-stock-badge"
-                    }
-                  >
-                    {isCritical ? "Critical" : "Low Stock"}
-                  </span>
-
-                </td>
-
-                <td>
-
-                  <button className="reorder-btn">
-                    Reorder
-                  </button>
-
-                </td>
-
-              </tr>
-
-            );
-
-          })}
-
+                  <td>
+                    <button className="reorder-btn">
+                      Reorder
+                    </button>
+                  </td>
+                </tr>
+              );
+            })
+          )}
         </tbody>
-
       </table>
-
-    </div>
-  );
+</div>
+);
 };
-
 export default LowStockAlert;

@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { getMovements } from "../api/inventoryApi";
 import "./PendingTransfer.css";
 
-const transferData = [
+const DEFAULT_TRANSFERS = [
   {
     id: 1,
     transferId: "TR001",
@@ -37,11 +38,34 @@ const transferData = [
 ];
 
 const PendingTransfer = () => {
+  const [transferData, setTransferData] = useState(DEFAULT_TRANSFERS);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const fetchMovements = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const response = await getMovements();
+      const data = Array.isArray(response) ? response : (response?.data || response?.content || []);
+      if (data && data.length > 0) {
+        setTransferData(data);
+      }
+    } catch (err) {
+      console.error("Fetch Movements Error:", err);
+      setError("Failed to load inventory movements");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMovements();
+  }, []);
+
   return (
     <div className="pending-transfer">
-
       <div className="pending-transfer-header">
-
         <div>
           <h2>🚚 Pending Transfers</h2>
           <p>
@@ -49,14 +73,24 @@ const PendingTransfer = () => {
           </p>
         </div>
 
-        <button className="view-all-btn">
-          View All
+        <button className="view-all-btn" onClick={fetchMovements}>
+          {loading ? "Refreshing..." : "View All"}
         </button>
-
       </div>
 
-      <table className="pending-transfer-table">
+      {loading && (
+        <div style={{ padding: "10px", color: "#6366f1", fontSize: 13 }}>
+          Loading transfer data...
+        </div>
+      )}
 
+      {error && (
+        <div style={{ padding: "10px", color: "#ef4444", fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
+      <table className="pending-transfer-table">
         <thead>
           <tr>
             <th>Transfer ID</th>
@@ -69,43 +103,30 @@ const PendingTransfer = () => {
         </thead>
 
         <tbody>
-
-          {transferData.map((item) => (
-
-            <tr key={item.id}>
-
-              <td>{item.transferId}</td>
-
-              <td>{item.source}</td>
-
-              <td>{item.destination}</td>
-
-              <td>{item.date}</td>
-
+          {transferData.map((item, idx) => (
+            <tr key={item.id || idx}>
+              <td>{item.transferId || item.id || `TR00${idx + 1}`}</td>
+              <td>{item.source || item.sourceWarehouse || item.fromLocation || "—"}</td>
+              <td>{item.destination || item.destinationWarehouse || item.toLocation || "—"}</td>
+              <td>{item.date || item.createdAt || item.transferDate || "—"}</td>
               <td>
                 <span
-                  className={`transfer-status ${item.status
+                  className={`transfer-status ${(item.status || "Pending")
                     .toLowerCase()
                     .replace(/\s/g, "-")}`}
                 >
-                  {item.status}
+                  {item.status || "Pending"}
                 </span>
               </td>
-
               <td>
                 <button className="transfer-action-btn">
                   View Details
                 </button>
               </td>
-
             </tr>
-
           ))}
-
         </tbody>
-
       </table>
-
     </div>
   );
 };

@@ -22,7 +22,17 @@ const inputStyle = {
 };
 
 const NewOrderForm = ({ onClose }) => {
-    const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(
+    product
+        ? {
+            ...EMPTY_FORM,
+            ...product,
+            brand: product.brand || '',
+            mrp: product.mrp ?? '',
+            sellingPrice: product.price ?? '',
+        }
+        : { ...EMPTY_FORM }
+);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -30,6 +40,7 @@ const NewOrderForm = ({ onClose }) => {
     };
 
     const handleSubmit = () => {
+         console.log("Submit button clicked");
         const { customerName, mobileNumber, productName, quantity, price, paymentMethod } = form;
 
         if (!customerName.trim()) {

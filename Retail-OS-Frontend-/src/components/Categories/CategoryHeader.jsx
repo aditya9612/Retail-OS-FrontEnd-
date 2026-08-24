@@ -6,20 +6,20 @@ const CategoryHeader = ({
   active,
   inactive,
   onAdd,
+  statusFilter,
+  setStatusFilter,
 }) => {
   return (
     <div className="category-header">
 
       {/* Left */}
       <div className="category-header-left">
-
         <h1>Category Management</h1>
 
         <p>
           Manage product categories, organize products efficiently,
           and keep your inventory well structured.
         </p>
-
       </div>
 
       {/* Right */}
@@ -41,20 +41,37 @@ const CategoryHeader = ({
       {/* Bottom Tabs */}
       <div className="category-tabs">
 
-        <div className="category-tab active-tab">
+        {/* All */}
+        <div
+          className={`category-tab ${
+            statusFilter === "All" ? "active-tab" : ""
+          }`}
+          onClick={() => setStatusFilter("All")}
+        >
           All Categories ({total})
         </div>
 
-        <div className="category-tab">
+        {/* Active */}
+        <div
+          className={`category-tab ${
+            statusFilter === "Active" ? "active-tab" : ""
+          }`}
+          onClick={() => setStatusFilter("Active")}
+        >
           Active ({active})
         </div>
 
-        <div className="category-tab">
+        {/* Inactive */}
+        <div
+          className={`category-tab ${
+            statusFilter === "Inactive" ? "active-tab" : ""
+          }`}
+          onClick={() => setStatusFilter("Inactive")}
+        >
           Inactive ({inactive})
         </div>
 
       </div>
-
     </div>
   );
 };

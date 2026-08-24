@@ -3,15 +3,15 @@ import "./CategoryModel.css";
 
 const CategoryModel = ({ category, onClose, onSave }) => {
   const [name, setName] = useState("");
-  const [status, setStatus] = useState("Active");
+  const [description, setDescription] = useState("");
 
   useEffect(() => {
     if (category) {
-      setName(category.name);
-      setStatus(category.status);
+      setName(category.name || "");
+      setDescription(category.description || "");
     } else {
       setName("");
-      setStatus("Active");
+      setDescription("");
     }
   }, [category]);
 
@@ -23,14 +23,15 @@ const CategoryModel = ({ category, onClose, onSave }) => {
 
     const categoryData = {
       name: name.trim(),
-      status: status,
+      description: description.trim(),
+      parent_id: category?.parent_id ?? null,
     };
 
     onSave(categoryData);
   };
 
   return (
-    <div className="category-modal-overlay" onClick={onClose}>
+    <div className="category-modal-overlay">
       <div
         className="category-modal"
         onClick={(e) => e.stopPropagation()}
@@ -52,6 +53,7 @@ const CategoryModel = ({ category, onClose, onSave }) => {
 
         {/* Body */}
         <div className="modal-body">
+          {/* Category Name */}
           <div className="form-group">
             <label>Category Name</label>
 
@@ -63,16 +65,18 @@ const CategoryModel = ({ category, onClose, onSave }) => {
             />
           </div>
 
+          {/* Description */}
           <div className="form-group">
-            <label>Status</label>
+            <label>Description</label>
 
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
+            <textarea
+              placeholder="Enter Category Description"
+              value={description}
+              onChange={(e) =>
+                setDescription(e.target.value)
+              }
+              rows="4"
+            />
           </div>
         </div>
 

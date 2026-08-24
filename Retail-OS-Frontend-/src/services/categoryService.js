@@ -1,27 +1,32 @@
-import axios from "axios";
+import axiosInstance from "../api/axios";
 
-const API_URL = "http://localhost:8000/categories";
+const BASE_URL = "/api/v1/products/categories";
 
+const category = {
+  // Get all categories
+  getAll() {
+    return axiosInstance.get(`${BASE_URL}/list`);
+  },
 
-export const getCategories = async () => {
-    const response = await axios.get(API_URL);
-    return response.data;
+  // Get single category
+  getById(id) {
+    return axiosInstance.get(`${BASE_URL}/${id}`);
+  },
+
+  // Create category
+  create(data) {
+    return axiosInstance.post(BASE_URL, data);
+  },
+
+  // Update category
+  update(id, data) {
+    return axiosInstance.put(`${BASE_URL}/${id}`, data);
+  },
+
+  // Delete category
+  delete(id) {
+    return axiosInstance.delete(`${BASE_URL}/${id}`);
+  },
 };
 
-
-export const createCategory = async (data) => {
-    const response = await axios.post(API_URL, data);
-    return response.data;
-};
-
-
-export const updateCategory = async (id, data) => {
-    const response = await axios.put(`${API_URL}/${id}`, data);
-    return response.data;
-};
-
-
-export const deleteCategory = async (id) => {
-    const response = await axios.delete(`${API_URL}/${id}`);
-    return response.data;
-};
+export default category;

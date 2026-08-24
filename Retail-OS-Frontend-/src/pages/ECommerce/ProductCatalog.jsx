@@ -276,10 +276,16 @@ const ProductCatalog = () => {
                                     </td>
                                     <td style={{ padding: '12px 16px' }}>
                                         <div style={{ display: 'flex', gap: 6 }}>
-                                            <button className="adm-btn-secondary" style={{ padding: '5px 10px', fontSize: 11 }}
-                                                onClick={() => setModal(p)}>
-                                                <BsPencilFill size={11} />
-                                            </button>
+                                            <button
+    className="adm-btn-secondary"
+    style={{ padding: '5px 10px', fontSize: 11 }}
+    onClick={() => {
+        console.log("Selected Product:", p);
+        setModal(p);
+    }}
+>
+    <BsPencilFill size={11} />
+</button>
                                             <button onClick={() => toggleStatus(p.id)}
                                                 style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                                                 {p.status === 'Active'

@@ -45,4 +45,4 @@ Close
 
 
 
-export default BarcodeModal;s
+export default BarcodeModal;

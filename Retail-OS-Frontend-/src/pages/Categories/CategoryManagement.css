@@ -1,1 +1,82 @@
 /* Scrollbar styles are defined globally in src/index.css (.custom-scrollbar) */
+/* =========================================
+   Categories Management Page
+   ========================================= */
+
+.category-management-page {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  padding: 0;
+}
+
+/* Prevent child components from forcing
+   the complete page wider than the viewport */
+.category-management-page * {
+  box-sizing: border-box;
+}
+
+/* =========================================
+   Category Table Horizontal Scroll
+   ========================================= */
+
+.category-management-page .category-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Keep table readable when content is wider */
+.category-management-page .category-table-wrapper table {
+  min-width: 700px;
+  width: 100%;
+}
+
+/* =========================================
+   Filters / Cards
+   ========================================= */
+
+.category-management-page .category-filters,
+.category-management-page .category-cards {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* =========================================
+   Loading / Error
+   ========================================= */
+
+.category-message,
+.category-error {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 12px 0;
+}
+
+.category-error {
+  color: #dc2626;
+}
+
+/* =========================================
+   Responsive
+   ========================================= */
+
+@media (max-width: 768px) {
+  .category-management-page {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .category-management-page .category-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .category-management-page .category-table-wrapper table {
+    min-width: 650px;
+  }
+}
