@@ -7,6 +7,8 @@ import CategoryTable from "../../components/Categories/CategoryTable";
 import CategoryModel from "../../components/Categories/CategoryModel";
 import "./CategoryManagement.css";
 
+const PAGE_SIZE = 8;
+
 const CategoryManagement = () => {
   const [categories, setCategories] = useState([]);
   const [statusFilter, setStatusFilter] = useState("All");
@@ -15,6 +17,9 @@ const CategoryManagement = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
 
   const loadCategories = async () => {
     try {
@@ -36,7 +41,11 @@ const CategoryManagement = () => {
         status: "Active",
 
         created: item.created_at
-          ? new Date(item.created_at).toLocaleDateString("en-GB")
+          ? new Date(item.created_at).toLocaleDateString("en-GB", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })
           : "-",
 
         description: item.description || "",
@@ -68,6 +77,29 @@ const CategoryManagement = () => {
           (item) =>
             item.status?.toLowerCase() === statusFilter.toLowerCase()
         );
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter]);
+
+  // Pagination
+  const totalCategories = filteredCategories.length;
+
+  const totalPages =
+    Math.ceil(totalCategories / PAGE_SIZE) || 1;
+
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+
+  const endIndex = Math.min(
+    startIndex + PAGE_SIZE,
+    totalCategories
+  );
+
+  const paginatedCategories = filteredCategories.slice(
+    startIndex,
+    endIndex
+  );
 
   // ADD
   const handleAdd = () => {
@@ -179,9 +211,63 @@ const CategoryManagement = () => {
       />
 
       <CategoryTable
-        categories={filteredCategories}
+        categories={paginatedCategories}
         onEdit={handleEdit}
       />
+
+      {/* PAGINATION */}
+      {totalCategories > 0 && (
+        <div className="category-pagination">
+          <div className="category-pagination-info">
+            Showing {startIndex + 1}–{endIndex} of{" "}
+            {totalCategories}
+          </div>
+
+          <div className="category-pagination-controls">
+            <button
+              type="button"
+              className="category-pagination-btn"
+              onClick={() =>
+                setCurrentPage((prev) =>
+                  Math.max(prev - 1, 1)
+                )
+              }
+              disabled={currentPage === 1}
+            >
+              ←
+            </button>
+
+            {Array.from(
+              { length: totalPages },
+              (_, index) => index + 1
+            ).map((page) => (
+              <button
+                key={page}
+                type="button"
+                className={`category-pagination-btn ${
+                  currentPage === page ? "active" : ""
+                }`}
+                onClick={() => setCurrentPage(page)}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              className="category-pagination-btn"
+              onClick={() =>
+                setCurrentPage((prev) =>
+                  Math.min(prev + 1, totalPages)
+                )
+              }
+              disabled={currentPage === totalPages}
+            >
+              →
+            </button>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <CategoryModel

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 
 import InventoryHeader from "../../components/InventoryHeader";
 import InventoryFilters from "../../components/InventoryFilters";
@@ -29,28 +29,243 @@ import {
 
 const PAGE_SIZE = 8;
 
+/* =========================================================
+   FORMAT PRICE
+========================================================= */
+
 const fmt = (n) =>
     "₹" + Number(n || 0).toLocaleString("en-IN");
 
-const getItemStock = (item) =>
-    item.quantity !== undefined
-        ? Number(item.quantity)
-        : item.stock !== undefined
-            ? Number(item.stock)
-            : 0;
+/* =========================================================
+   RESPONSE HELPER
+========================================================= */
 
-const getItemMinStock = (item) =>
-    item.low_stock_threshold !== undefined
-        ? Number(item.low_stock_threshold)
-        : item.minStock !== undefined
-            ? Number(item.minStock)
-            : 0;
+const getArrayFromResponse = (response) => {
+    const candidates = [
+        response?.data?.data,
+        response?.data?.items,
+        response?.data?.products,
+        response?.data?.results,
+        response?.data?.content,
+        response?.items,
+        response?.products,
+        response?.results,
+        response?.content,
+        response?.data,
+        response,
+    ];
+
+    return candidates.find(Array.isArray) || [];
+};
+
+/* =========================================================
+   NORMALIZE PRODUCT
+========================================================= */
+
+const normalizeProduct = (product) => {
+    const nestedProduct =
+        product?.product ||
+        product?.product_details ||
+        product?.productDetail ||
+        product?.details ||
+        {};
+
+    const id =
+        product?.id ??
+        product?.product_id ??
+        product?.productId ??
+        nestedProduct?.id ??
+        nestedProduct?.product_id ??
+        nestedProduct?.productId;
+
+    const name =
+        product?.name ??
+        product?.product_name ??
+        product?.productName ??
+        product?.title ??
+        nestedProduct?.name ??
+        nestedProduct?.product_name ??
+        nestedProduct?.productName ??
+        nestedProduct?.title ??
+        "";
+
+    const sku =
+        product?.sku ??
+        product?.SKU ??
+        product?.Sku ??
+        product?.product_sku ??
+        product?.productSku ??
+        product?.sku_code ??
+        product?.skuCode ??
+        product?.code ??
+        nestedProduct?.sku ??
+        nestedProduct?.SKU ??
+        nestedProduct?.Sku ??
+        nestedProduct?.product_sku ??
+        nestedProduct?.productSku ??
+        nestedProduct?.sku_code ??
+        nestedProduct?.skuCode ??
+        nestedProduct?.code ??
+        "";
+
+    return {
+        ...product,
+
+        id:
+            id !== undefined &&
+            id !== null
+                ? Number(id)
+                : null,
+
+        name: String(name || "").trim(),
+
+        sku: String(sku || "").trim(),
+
+        barcode:
+            product?.barcode ??
+            product?.bar_code ??
+            product?.barCode ??
+            nestedProduct?.barcode ??
+            nestedProduct?.bar_code ??
+            nestedProduct?.barCode ??
+            "",
+
+        category:
+            product?.category ??
+            product?.category_name ??
+            product?.categoryName ??
+            nestedProduct?.category ??
+            nestedProduct?.category_name ??
+            nestedProduct?.categoryName ??
+            "",
+
+        category_id:
+            product?.category_id ??
+            product?.categoryId ??
+            nestedProduct?.category_id ??
+            nestedProduct?.categoryId ??
+            null,
+
+        price:
+            product?.price ??
+            product?.selling_price ??
+            product?.sellingPrice ??
+            nestedProduct?.price ??
+            nestedProduct?.selling_price ??
+            nestedProduct?.sellingPrice ??
+            0,
+
+        cost_price:
+            product?.cost_price ??
+            product?.costPrice ??
+            product?.purchase_price ??
+            product?.purchasePrice ??
+            nestedProduct?.cost_price ??
+            nestedProduct?.costPrice ??
+            nestedProduct?.purchase_price ??
+            nestedProduct?.purchasePrice ??
+            0,
+
+        brand:
+            product?.brand ??
+            nestedProduct?.brand ??
+            "",
+
+        image_url:
+            product?.image_url ??
+            product?.imageUrl ??
+            product?.image ??
+            nestedProduct?.image_url ??
+            nestedProduct?.imageUrl ??
+            nestedProduct?.image ??
+            "",
+
+        supplier_name:
+            product?.supplier_name ??
+            product?.supplierName ??
+            product?.supplier ??
+            nestedProduct?.supplier_name ??
+            nestedProduct?.supplierName ??
+            nestedProduct?.supplier ??
+            "",
+    };
+};
+
+/* =========================================================
+   STOCK HELPERS
+========================================================= */
+
+const getItemStock = (item) => {
+    if (
+        item?.quantity !== undefined &&
+        item?.quantity !== null
+    ) {
+        return Number(item.quantity);
+    }
+
+    if (
+        item?.stock !== undefined &&
+        item?.stock !== null
+    ) {
+        return Number(item.stock);
+    }
+
+    return 0;
+};
+
+const getItemMinStock = (item) => {
+    if (
+        item?.low_stock_threshold !== undefined &&
+        item?.low_stock_threshold !== null
+    ) {
+        return Number(item.low_stock_threshold);
+    }
+
+    if (
+        item?.minStock !== undefined &&
+        item?.minStock !== null
+    ) {
+        return Number(item.minStock);
+    }
+
+    if (
+        item?.minimum_stock !== undefined &&
+        item?.minimum_stock !== null
+    ) {
+        return Number(item.minimum_stock);
+    }
+
+    return 0;
+};
+
+/* =========================================================
+   GET SELLING PRICE
+========================================================= */
+
+const getItemSellingPrice = (item) => {
+    const price =
+        item?.price ??
+        item?.selling_price ??
+        item?.sellingPrice ??
+        0;
+
+    const numericPrice = Number(price);
+
+    return Number.isFinite(numericPrice)
+        ? numericPrice
+        : 0;
+};
+
+/* =========================================================
+   STOCK STATUS
+========================================================= */
 
 const stockStatus = (item) => {
     const stock = getItemStock(item);
     const minStock = getItemMinStock(item);
+    const sellingPrice = getItemSellingPrice(item);
 
-    if (stock === 0) {
+    if (sellingPrice <= 0) {
         return {
             label: "Out of Stock",
             color: "#dc2626",
@@ -58,7 +273,18 @@ const stockStatus = (item) => {
         };
     }
 
-    if (stock < minStock) {
+    if (stock <= 0) {
+        return {
+            label: "Out of Stock",
+            color: "#dc2626",
+            bg: "#fef2f2",
+        };
+    }
+
+    if (
+        minStock > 0 &&
+        stock < minStock
+    ) {
         return {
             label: "Low Stock",
             color: "#d97706",
@@ -87,8 +313,10 @@ const StockUpdateModal = ({
     const [qty, setQty] = useState("");
     const [action, setAction] = useState("add");
     const [reason, setReason] = useState("Purchase");
+
     const [modalLoading, setModalLoading] = useState(false);
     const [modalError, setModalError] = useState("");
+
     const [selectedProduct, setSelectedProduct] = useState(0);
 
     const currentStock = getItemStock(item);
@@ -111,18 +339,7 @@ const StockUpdateModal = ({
     }, [item]);
 
     const handleSave = async () => {
-        console.log(
-            "========== HANDLE SAVE STARTED =========="
-        );
-
-        const delta = parseInt(qty) || 0;
-
-        console.log("QTY =>", delta);
-        console.log("SELECTED PRODUCT =>", selectedProduct);
-        console.log("FROM STORE =>", fromStore);
-        console.log("TO STORE =>", toStore);
-        console.log("ACTION =>", action);
-        console.log("REASON =>", reason);
+        const delta = parseInt(qty, 10) || 0;
 
         if (delta <= 0) {
             setModalError("Please enter a valid quantity");
@@ -177,23 +394,22 @@ const StockUpdateModal = ({
             console.error("HANDLE SAVE ERROR =>", err);
 
             setModalError(
-                err.response?.data?.detail?.[0]?.msg ||
-                err.response?.data?.message ||
-                err.message ||
-                "Failed to update stock"
+                err?.response?.data?.detail?.[0]?.msg ||
+                    err?.response?.data?.message ||
+                    err?.message ||
+                    "Failed to update stock"
             );
         } finally {
             setModalLoading(false);
         }
     };
 
+    const enteredQty = parseInt(qty, 10) || 0;
+
     const newStock =
         action === "add"
-            ? currentStock + (parseInt(qty) || 0)
-            : Math.max(
-                0,
-                currentStock - (parseInt(qty) || 0)
-            );
+            ? currentStock + enteredQty
+            : Math.max(0, currentStock - enteredQty);
 
     return (
         <div
@@ -212,6 +428,7 @@ const StockUpdateModal = ({
 
                         <p className="ec-modal-subtitle">
                             {item?.name ||
+                                item?.product_name ||
                                 `Product #${
                                     item?.product_id ||
                                     item?.id
@@ -261,7 +478,13 @@ const StockUpdateModal = ({
                                     key={product.id}
                                     value={product.id}
                                 >
-                                    {`${product.id} - ${product.name}`}
+                                    {`${product.id} - ${
+                                        product.name
+                                    }${
+                                        product.sku
+                                            ? ` (${product.sku})`
+                                            : ""
+                                    }`}
                                 </option>
                             ))}
                         </select>
@@ -317,8 +540,12 @@ const StockUpdateModal = ({
                                 {stores
                                     .filter(
                                         (store) =>
-                                            store.id !==
-                                            fromStore
+                                            Number(
+                                                store.id
+                                            ) !==
+                                            Number(
+                                                fromStore
+                                            )
                                     )
                                     .map((store) => (
                                         <option
@@ -425,105 +652,71 @@ const StockUpdateModal = ({
 };
 
 /* =========================================================
-   MAIN INVENTORY COMPONENT
+   MAIN INVENTORY
 ========================================================= */
 
 const Inventory = () => {
     const [inventory, setInventory] = useState([]);
+
     const [search, setSearch] = useState("");
     const [filterCat, setFilterCat] =
         useState("All Categories");
-    const [filterStatus, setFilterStatus] =
-        useState("All");
+    const [filterStatus, setFilterStatus] = useState("All");
+
     const [filterWarehouse, setFilterWarehouse] =
         useState("All Warehouses");
+
     const [filterSupplier, setFilterSupplier] =
         useState("All Suppliers");
+
     const [filterDate, setFilterDate] = useState("");
+
     const [page, setPage] = useState(1);
+
     const [stockModal, setStockModal] = useState(null);
+
     const [products, setProducts] = useState([]);
     const [stores, setStores] = useState([]);
-    const [activeTab, setActiveTab] =
-        useState("All Items");
+
+    const [activeTab, setActiveTab] = useState("All Items");
+
     const [categories, setCategories] = useState([]);
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const [lowStockItems, setLowStockItems] =
-        useState([]);
+
+    const [lowStockItems, setLowStockItems] = useState([]);
     const [lowStockLoading, setLowStockLoading] =
         useState(false);
-    const [lowStockError, setLowStockError] =
-        useState("");
+    const [lowStockError, setLowStockError] = useState("");
 
     /* =====================================================
-       FETCH INVENTORY
+       PRODUCT MAP
     ===================================================== */
 
-    const fetchInventory = async () => {
-        try {
-            setLoading(true);
-            setError("");
+    const productMap = useMemo(() => {
+        const map = new Map();
 
-            const response = await listInventory();
+        products.forEach((product) => {
+            const productId =
+                product?.id ??
+                product?.product_id ??
+                product?.productId;
 
-            const data =
-                response?.data ??
-                response?.items ??
-                response?.content ??
-                response;
-
-            if (!Array.isArray(data)) {
-                setInventory([]);
-                return;
+            if (
+                productId !== undefined &&
+                productId !== null &&
+                Number.isFinite(Number(productId))
+            ) {
+                map.set(Number(productId), {
+                    ...product,
+                    id: Number(productId),
+                });
             }
+        });
 
-            console.log(
-                "Inventory API Data =>",
-                data
-            );
-
-            const mergedInventory = data.map((item) => {
-                const product = products.find(
-                    (p) =>
-                        Number(p.id) ===
-                        Number(item.product_id)
-                );
-
-                return {
-                    ...item,
-                    name: product?.name || "",
-                    sku: product?.sku || "",
-                    barcode: product?.barcode || "",
-                    category:
-                        product?.category ||
-                        product?.category_name ||
-                        "",
-                    category_id:
-                        product?.category_id || null,
-                    price: product?.price || 0,
-                    costPrice:
-                        product?.cost_price || 0,
-                    brand: product?.brand || "",
-                    image_url:
-                        product?.image_url || "",
-                };
-            });
-
-            setInventory(mergedInventory);
-        } catch (err) {
-            console.error(
-                "Inventory API Error:",
-                err
-            );
-
-            setError(
-                "Failed to load inventory from server"
-            );
-        } finally {
-            setLoading(false);
-        }
-    };
+        return map;
+    }, [products]);
 
     /* =====================================================
        FETCH PRODUCTS
@@ -538,23 +731,52 @@ const Inventory = () => {
                 response
             );
 
-            const data =
-                response?.data ??
-                response?.items ??
-                response?.content ??
-                response;
+            const data = getArrayFromResponse(response);
 
             console.log("PRODUCTS DATA =>", data);
+
+            const normalizedProducts = data
+                .map(normalizeProduct)
+                .filter(
+                    (product) =>
+                        product.id !== null &&
+                        product.id !== undefined &&
+                        Number.isFinite(Number(product.id))
+                );
+
+            const uniqueProducts = [];
+            const seenProductIds = new Set();
+
+            normalizedProducts.forEach((product) => {
+                const id = Number(product.id);
+
+                if (seenProductIds.has(id)) {
+                    console.warn(
+                        "Duplicate product skipped:",
+                        id
+                    );
+                    return;
+                }
+
+                seenProductIds.add(id);
+                uniqueProducts.push(product);
+            });
+
             console.log(
-                "PRODUCTS LENGTH =>",
-                data?.length
+                "UNIQUE PRODUCTS =>",
+                uniqueProducts
             );
 
-            if (Array.isArray(data)) {
-                setProducts(data);
-            } else {
-                setProducts([]);
-            }
+            console.log(
+                "PRODUCT ID + SKU =>",
+                uniqueProducts.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                    sku: p.sku,
+                }))
+            );
+
+            setProducts(uniqueProducts);
         } catch (err) {
             console.error(
                 "Products API Error =>",
@@ -566,18 +788,315 @@ const Inventory = () => {
     };
 
     /* =====================================================
+       FETCH INVENTORY
+       
+       IMPORTANT:
+       ONLY VALID PRODUCTS WITH BOTH
+       NAME + SKU ARE ALLOWED INTO TABLE.
+    ===================================================== */
+
+    const fetchInventory = async () => {
+        try {
+            setLoading(true);
+            setError("");
+
+            const response = await listInventory();
+
+            const data = getArrayFromResponse(response);
+
+            if (!Array.isArray(data)) {
+                setInventory([]);
+                return;
+            }
+
+            console.log(
+                "RAW Inventory API Data =>",
+                data
+            );
+
+            /*
+             * STEP 1:
+             * Remove duplicate PRODUCT + STORE records.
+             */
+            const seenProductStore = new Set();
+
+            const uniqueInventory = data.filter((item) => {
+                const productId = Number(item?.product_id);
+                const storeId = Number(item?.store_id);
+
+                /*
+                 * Invalid product/store IDs are rejected.
+                 */
+                if (
+                    !Number.isFinite(productId) ||
+                    !Number.isFinite(storeId)
+                ) {
+                    console.warn(
+                        "Inventory row rejected - invalid product/store ID:",
+                        item
+                    );
+
+                    return false;
+                }
+
+                const key = `${productId}-${storeId}`;
+
+                if (seenProductStore.has(key)) {
+                    console.warn(
+                        "Duplicate inventory record skipped:",
+                        {
+                            product_id: productId,
+                            store_id: storeId,
+                            inventory_id: item?.id,
+                        }
+                    );
+
+                    return false;
+                }
+
+                seenProductStore.add(key);
+
+                return true;
+            });
+
+            /*
+             * STEP 2:
+             * Merge inventory with actual product.
+             *
+             * IMPORTANT:
+             * Do NOT create fallback product names/SKUs.
+             */
+            const mergedInventory = uniqueInventory
+                .map((item) => {
+                    const productId = Number(
+                        item?.product_id
+                    );
+
+                    const product =
+                        productMap.get(productId);
+
+                    /*
+                     * PRODUCT MUST EXIST
+                     */
+                    if (!product) {
+                        console.warn(
+                            "Inventory row rejected - product does not exist:",
+                            {
+                                inventory_id: item?.id,
+                                product_id: productId,
+                                store_id: item?.store_id,
+                            }
+                        );
+
+                        return null;
+                    }
+
+                    /*
+                     * PRODUCT NAME MUST EXIST
+                     *
+                     * Use actual product only.
+                     * Do not trust inventory fallback
+                     * for product identity.
+                     */
+                    const productName = String(
+                        product?.name || ""
+                    ).trim();
+
+                    if (!productName) {
+                        console.warn(
+                            "Inventory row rejected - product name missing:",
+                            {
+                                inventory_id: item?.id,
+                                product_id: productId,
+                            }
+                        );
+
+                        return null;
+                    }
+
+                    /*
+                     * SKU MUST EXIST
+                     *
+                     * SKU belongs to the matching
+                     * product_id.
+                     */
+                    const productSku = String(
+                        product?.sku || ""
+                    ).trim();
+
+                    if (!productSku) {
+                        console.warn(
+                            "Inventory row rejected - product SKU missing:",
+                            {
+                                inventory_id: item?.id,
+                                product_id: productId,
+                                product_name:
+                                    productName,
+                            }
+                        );
+
+                        return null;
+                    }
+
+                    /*
+                     * PRICE
+                     */
+                    const price = Number(
+                        product?.price ??
+                            product?.selling_price ??
+                            product?.sellingPrice ??
+                            item?.price ??
+                            item?.selling_price ??
+                            item?.sellingPrice ??
+                            0
+                    );
+
+                    /*
+                     * COST
+                     */
+                    const costPrice = Number(
+                        product?.cost_price ??
+                            product?.costPrice ??
+                            product?.purchase_price ??
+                            product?.purchasePrice ??
+                            item?.cost_price ??
+                            item?.costPrice ??
+                            item?.unit_cost ??
+                            0
+                    );
+
+                    return {
+                        ...item,
+
+                        /*
+                         * PRODUCT
+                         */
+                        name: productName,
+                        product_name: productName,
+
+                        /*
+                         * ACTUAL PRODUCT SKU
+                         */
+                        sku: productSku,
+
+                        /*
+                         * PRODUCT ID
+                         */
+                        product_id: productId,
+
+                        /*
+                         * PRICE
+                         */
+                        price: Number.isFinite(price)
+                            ? price
+                            : 0,
+
+                        /*
+                         * COST
+                         */
+                        costPrice:
+                            Number.isFinite(costPrice)
+                                ? costPrice
+                                : 0,
+
+                        /*
+                         * BARCODE
+                         */
+                        barcode:
+                            product?.barcode ||
+                            item?.barcode ||
+                            item?.bar_code ||
+                            item?.barCode ||
+                            "",
+
+                        /*
+                         * CATEGORY
+                         */
+                        category:
+                            product?.category ||
+                            product?.category_name ||
+                            item?.category ||
+                            item?.category_name ||
+                            "",
+
+                        category_id:
+                            product?.category_id ??
+                            item?.category_id ??
+                            null,
+
+                        /*
+                         * BRAND
+                         */
+                        brand:
+                            product?.brand ||
+                            item?.brand ||
+                            "",
+
+                        /*
+                         * IMAGE
+                         */
+                        image_url:
+                            product?.image_url ||
+                            item?.image_url ||
+                            "",
+
+                        /*
+                         * SUPPLIER
+                         */
+                        supplier_name:
+                            product?.supplier_name ||
+                            product?.supplier ||
+                            item?.supplier_name ||
+                            "",
+                    };
+                })
+                /*
+                 * STEP 3:
+                 * Remove all invalid rows.
+                 */
+                .filter(Boolean);
+
+            console.log(
+                "FINAL VALID INVENTORY =>",
+                mergedInventory
+            );
+
+            console.log(
+                "FINAL PRODUCT ID + SKU =>",
+                mergedInventory.map((item) => ({
+                    inventory_id: item.id,
+                    product_id: item.product_id,
+                    store_id: item.store_id,
+                    name: item.name,
+                    sku: item.sku,
+                    price: item.price,
+                }))
+            );
+
+            setInventory(mergedInventory);
+        } catch (err) {
+            console.error(
+                "Inventory API Error:",
+                err
+            );
+
+            setInventory([]);
+
+            setError(
+                "Failed to load inventory from server"
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    /* =====================================================
        FETCH CATEGORIES
     ===================================================== */
 
     const fetchCategories = async () => {
         try {
-            const response =
-                await category.getAll();
-
-            console.log(
-                "FULL CATEGORIES RESPONSE =>",
-                response
-            );
+            const response = await category.getAll();
 
             const data =
                 response?.data?.data ??
@@ -585,11 +1104,6 @@ const Inventory = () => {
                 response?.items ??
                 response?.content ??
                 response;
-
-            console.log(
-                "CATEGORIES DATA =>",
-                data
-            );
 
             if (Array.isArray(data)) {
                 setCategories(data);
@@ -612,15 +1126,10 @@ const Inventory = () => {
 
     const fetchStores = async () => {
         try {
-            const response =
-                await listStores();
-
-            console.log(
-                "FULL STORES RESPONSE =>",
-                response
-            );
+            const response = await listStores();
 
             const data =
+                response?.data?.data ??
                 response?.data ??
                 response?.items ??
                 response?.content ??
@@ -633,17 +1142,24 @@ const Inventory = () => {
                     "Stores API Data =>",
                     data
                 );
+            } else {
+                setStores([]);
             }
         } catch (err) {
             console.error(
-                "Stores API Error:",
+                "Stores API Error =>",
                 err
             );
+
+            setStores([]);
         }
     };
 
     /* =====================================================
        FETCH LOW STOCK
+       
+       IMPORTANT:
+       Invalid products are NOT shown here either.
     ===================================================== */
 
     const fetchLowStock = async () => {
@@ -653,31 +1169,61 @@ const Inventory = () => {
 
             const response = await lowStock();
 
-            const data =
-                Array.isArray(response)
-                    ? response
-                    : response?.data ||
-                      response?.content ||
-                      response?.items ||
-                      [];
+            const data = getArrayFromResponse(response);
 
-            const mergedLowStock = data.map(
-                (item) => {
+            const mergedLowStock = data
+                .map((item) => {
                     const product =
-                        products.find(
-                            (p) =>
-                                Number(p.id) ===
-                                Number(
-                                    item.product_id
-                                )
+                        productMap.get(
+                            Number(item?.product_id)
                         );
+
+                    /*
+                     * Product must exist.
+                     */
+                    if (!product) {
+                        console.warn(
+                            "Low stock row rejected - product not found:",
+                            item
+                        );
+
+                        return null;
+                    }
+
+                    const productName = String(
+                        product?.name || ""
+                    ).trim();
+
+                    const productSku = String(
+                        product?.sku || ""
+                    ).trim();
+
+                    /*
+                     * Product name + SKU both required.
+                     */
+                    if (
+                        !productName ||
+                        !productSku
+                    ) {
+                        console.warn(
+                            "Low stock row rejected - product name/SKU missing:",
+                            {
+                                product_id:
+                                    item?.product_id,
+                                productName,
+                                productSku,
+                            }
+                        );
+
+                        return null;
+                    }
 
                     const store =
                         stores.find(
                             (s) =>
-                                Number(s.id) ===
+                                Number(s?.id) ===
                                 Number(
-                                    item.store_id
+                                    item?.store_id
                                 )
                         );
 
@@ -685,31 +1231,30 @@ const Inventory = () => {
                         ...item,
 
                         product_name:
-                            product?.name ||
-                            `Product #${item.product_id}`,
+                            productName,
 
                         sku:
-                            product?.sku || "",
+                            productSku,
 
                         category:
-                            product?.category || "",
+                            product?.category ||
+                            product?.category_name ||
+                            item?.category ||
+                            item?.category_name ||
+                            "",
 
                         supplier_name:
                             product?.supplier_name ||
                             product?.supplier ||
+                            item?.supplier_name ||
                             "",
 
                         store_name:
                             store?.name ||
-                            `Store #${item.store_id}`,
+                            `Store #${item?.store_id}`,
                     };
-                }
-            );
-
-            console.log(
-                "MERGED LOW STOCK =>",
-                mergedLowStock
-            );
+                })
+                .filter(Boolean);
 
             setLowStockItems(
                 mergedLowStock
@@ -729,17 +1274,6 @@ const Inventory = () => {
     };
 
     /* =====================================================
-       SEARCH
-    ===================================================== */
-
-    const handleSearch = () => {
-        console.log("Searching...");
-
-        setPage(1);
-        fetchInventory();
-    };
-
-    /* =====================================================
        INITIAL LOAD
     ===================================================== */
 
@@ -749,78 +1283,100 @@ const Inventory = () => {
         fetchCategories();
     }, []);
 
+    /* =====================================================
+       FETCH INVENTORY AFTER PRODUCTS
+    ===================================================== */
+
+    useEffect(() => {
+        /*
+         * Inventory depends on product master data.
+         */
+        if (products.length > 0) {
+            fetchInventory();
+        } else {
+            setInventory([]);
+        }
+    }, [products]);
+
+    /* =====================================================
+       LOW STOCK AFTER PRODUCTS + STORES
+    ===================================================== */
+
     useEffect(() => {
         if (
             products.length > 0 &&
             stores.length > 0
         ) {
             fetchLowStock();
+        } else {
+            setLowStockItems([]);
         }
     }, [products, stores]);
 
-    useEffect(() => {
-        if (products.length > 0) {
-            fetchInventory();
-        }
-    }, [products]);
+    /* =====================================================
+       SEARCH
+    ===================================================== */
+
+    const handleSearch = () => {
+        setPage(1);
+        fetchInventory();
+    };
 
     /* =====================================================
-       FILTER INVENTORY
+       FILTER
     ===================================================== */
 
     const filtered = inventory.filter(
         (item) => {
-            const name =
-                item.name ||
-                item.product_name ||
-                `Product #${
-                    item.product_id ||
-                    item.id
-                }`;
-
-            const sku = item.sku || "";
+            /*
+             * Since invalid rows are already
+             * removed in fetchInventory(),
+             * these values are guaranteed valid.
+             */
+            const name = item?.name || "";
+            const sku = item?.sku || "";
 
             const searchValue =
                 search.toLowerCase().trim();
 
             const matchSearch =
                 !searchValue ||
-                name
+                String(name)
                     .toLowerCase()
                     .includes(searchValue) ||
-                sku
+                String(sku)
                     .toLowerCase()
                     .includes(searchValue);
 
             const warehouse =
                 `Store #${
-                    item.store_id || ""
+                    item?.store_id || ""
                 }`;
 
             const matchWarehouse =
                 filterWarehouse ===
                     "All Warehouses" ||
-                warehouse === filterWarehouse;
+                warehouse ===
+                    filterWarehouse;
 
             const matchCat =
                 filterCat ===
                     "All Categories" ||
-                String(item.category_id) ===
+                String(item?.category_id) ===
                     String(filterCat);
 
             const supplier =
-                item.supplier_name || "";
+                item?.supplier_name || "";
 
             const matchSupplier =
                 filterSupplier ===
                     "All Suppliers" ||
-                supplier === filterSupplier;
+                supplier ===
+                    filterSupplier;
 
             const createdDate =
-                item.created_at
-                    ? item.created_at.split(
-                          "T"
-                      )[0]
+                item?.created_at
+                    ? item.created_at.split("T")[0]
                     : "";
 
             const matchDate =
@@ -848,6 +1404,10 @@ const Inventory = () => {
             );
         }
     );
+
+    /* =====================================================
+       PAGINATION
+    ===================================================== */
 
     const totalPages =
         Math.ceil(
@@ -888,85 +1448,35 @@ const Inventory = () => {
         delta,
         reason
     ) => {
-        console.log(
-            "================================"
-        );
-
-        console.log("🔥 STOCK UPDATE CALLED");
-        console.log("ITEM =>", item);
-        console.log(
-            "SELECTED PRODUCT =>",
-            selectedProduct
-        );
-        console.log("FROM STORE =>", fromStore);
-        console.log("TO STORE =>", toStore);
-        console.log("ACTION =>", action);
-        console.log("DELTA =>", delta);
-        console.log("REASON =>", reason);
-
         let payload;
 
         if (action === "transfer") {
             payload = {
-                from_store_id:
-                    Number(fromStore),
-
-                to_store_id:
-                    Number(toStore),
-
-                product_id:
-                    Number(selectedProduct),
-
-                quantity:
-                    Number(delta),
-
+                from_store_id: Number(fromStore),
+                to_store_id: Number(toStore),
+                product_id: Number(selectedProduct),
+                quantity: Number(delta),
                 notes: reason,
             };
         } else {
             payload = {
-                store_id:
-                    Number(fromStore),
-
-                product_id:
-                    Number(selectedProduct),
-
-                quantity:
-                    Number(delta),
-
+                store_id: Number(fromStore),
+                product_id: Number(selectedProduct),
+                quantity: Number(delta),
                 notes: reason,
             };
         }
 
         console.log(
-            "FINAL PAYLOAD =>",
+            "FINAL STOCK PAYLOAD =>",
             payload
         );
 
         try {
             if (action === "add") {
-                console.log(
-                    "CALLING STOCK IN API"
-                );
-
-                const response =
-                    await stockIn(payload);
-
-                console.log(
-                    "STOCK IN RESPONSE =>",
-                    response
-                );
+                await stockIn(payload);
             } else if (action === "remove") {
-                console.log(
-                    "CALLING STOCK OUT API"
-                );
-
-                const response =
-                    await stockOut(payload);
-
-                console.log(
-                    "STOCK OUT RESPONSE =>",
-                    response
-                );
+                await stockOut(payload);
             } else if (action === "purchase") {
                 alert(
                     "Purchase Order feature is under development"
@@ -974,27 +1484,17 @@ const Inventory = () => {
 
                 return;
             } else if (action === "transfer") {
-                console.log(
-                    "CALLING TRANSFER API"
-                );
-
-                const response =
-                    await transferStock(
-                        payload
-                    );
-
-                console.log(
-                    "TRANSFER RESPONSE =>",
-                    response
-                );
+                await transferStock(payload);
             }
 
             await fetchInventory();
-            await fetchLowStock();
 
-            console.log(
-                "INVENTORY REFRESHED"
-            );
+            if (
+                products.length > 0 &&
+                stores.length > 0
+            ) {
+                await fetchLowStock();
+            }
         } catch (err) {
             console.error(
                 "FULL STOCK UPDATE ERROR =>",
@@ -1003,17 +1503,17 @@ const Inventory = () => {
 
             console.error(
                 "ERROR RESPONSE =>",
-                err.response
+                err?.response
             );
 
             console.error(
                 "ERROR STATUS =>",
-                err.response?.status
+                err?.response?.status
             );
 
             console.error(
                 "ERROR DATA =>",
-                err.response?.data
+                err?.response?.data
             );
 
             throw err;
@@ -1021,29 +1521,48 @@ const Inventory = () => {
     };
 
     /* =====================================================
-       KPI CALCULATIONS
+       KPI
     ===================================================== */
 
     const totalItems =
         inventory.reduce(
-            (sum, i) =>
-                sum + getItemStock(i),
+            (sum, item) =>
+                sum + getItemStock(item),
             0
         );
 
     const lowStockCount =
-        inventory.filter(
-            (i) =>
-                getItemStock(i) > 0 &&
-                getItemStock(i) <
-                    getItemMinStock(i)
-        ).length;
+        inventory.filter((item) => {
+            const price =
+                getItemSellingPrice(item);
+
+            const stock =
+                getItemStock(item);
+
+            const minStock =
+                getItemMinStock(item);
+
+            return (
+                price > 0 &&
+                stock > 0 &&
+                minStock > 0 &&
+                stock < minStock
+            );
+        }).length;
 
     const outOfStockCount =
-        inventory.filter(
-            (i) =>
-                getItemStock(i) === 0
-        ).length;
+        inventory.filter((item) => {
+            const price =
+                getItemSellingPrice(item);
+
+            const stock =
+                getItemStock(item);
+
+            return (
+                price <= 0 ||
+                stock <= 0
+            );
+        }).length;
 
     const kpis = [
         {
@@ -1055,9 +1574,7 @@ const Inventory = () => {
         },
         {
             label: "Total Stock Units",
-            value: totalItems.toLocaleString(
-                "en-IN"
-            ),
+            value: totalItems.toLocaleString("en-IN"),
             icon: <BsBoxes />,
             color: "#059669",
             bg: "#ecfdf5",
@@ -1086,20 +1603,23 @@ const Inventory = () => {
         try {
             setLoading(true);
 
-            await fetchInventory();
-            await fetchLowStock();
+            await fetchProducts();
+            await fetchStores();
+            await fetchCategories();
         } finally {
             setLoading(false);
         }
     };
 
+    /* =====================================================
+       UI
+    ===================================================== */
+
     return (
         <div className="inv-page">
             <div className="inv-container">
 
-                {/* =================================================
-                    TOP BAR
-                ================================================= */}
+                {/* TOP BAR */}
 
                 <div className="inv-topbar">
                     <div>
@@ -1132,9 +1652,7 @@ const Inventory = () => {
                     </div>
                 </div>
 
-                {/* =================================================
-                    LOADING
-                ================================================= */}
+                {/* LOADING */}
 
                 {loading && (
                     <div className="inv-message loading">
@@ -1143,9 +1661,7 @@ const Inventory = () => {
                     </div>
                 )}
 
-                {/* =================================================
-                    ERROR
-                ================================================= */}
+                {/* ERROR */}
 
                 {error && (
                     <div className="inv-message error">
@@ -1153,9 +1669,7 @@ const Inventory = () => {
                     </div>
                 )}
 
-                {/* =================================================
-                    KPI CARDS
-                ================================================= */}
+                {/* KPI */}
 
                 <div
                     style={{
@@ -1176,10 +1690,10 @@ const Inventory = () => {
                                 minWidth: 0,
                                 height: "110px",
                                 background: "#ffffff",
-                                border: "1px solid #e5e7eb",
+                                border:
+                                    "1px solid #e5e7eb",
                                 borderRadius: "10px",
-                                padding:
-                                    "16px 18px",
+                                padding: "16px 18px",
                                 boxSizing:
                                     "border-box",
                                 boxShadow:
@@ -1203,14 +1717,11 @@ const Inventory = () => {
                             >
                                 <span
                                     style={{
-                                        fontSize:
-                                            "12px",
+                                        fontSize: "12px",
                                         lineHeight:
                                             "18px",
-                                        fontWeight:
-                                            600,
-                                        color:
-                                            "#6b7280",
+                                        fontWeight: 600,
+                                        color: "#6b7280",
                                     }}
                                 >
                                     {item.label}
@@ -1218,10 +1729,8 @@ const Inventory = () => {
 
                                 <span
                                     style={{
-                                        width:
-                                            "30px",
-                                        height:
-                                            "30px",
+                                        width: "30px",
+                                        height: "30px",
                                         display:
                                             "flex",
                                         alignItems:
@@ -1234,8 +1743,7 @@ const Inventory = () => {
                                             item.color,
                                         background:
                                             item.bg,
-                                        fontSize:
-                                            "15px",
+                                        fontSize: "15px",
                                     }}
                                 >
                                     {item.icon}
@@ -1244,14 +1752,11 @@ const Inventory = () => {
 
                             <div
                                 style={{
-                                    fontSize:
-                                        "28px",
+                                    fontSize: "28px",
                                     lineHeight:
                                         "34px",
-                                    fontWeight:
-                                        700,
-                                    color:
-                                        "#111827",
+                                    fontWeight: 700,
+                                    color: "#111827",
                                 }}
                             >
                                 {item.value}
@@ -1260,9 +1765,7 @@ const Inventory = () => {
                     ))}
                 </div>
 
-                {/* =================================================
-                    LOW STOCK ALERTS
-                ================================================= */}
+                {/* LOW STOCK */}
 
                 <section className="inv-card">
                     <div className="inv-card-heading">
@@ -1280,19 +1783,13 @@ const Inventory = () => {
                     </div>
 
                     <LowStockAlert
-                        loading={
-                            lowStockLoading
-                        }
+                        loading={lowStockLoading}
                         error={lowStockError}
-                        items={
-                            lowStockItems
-                        }
+                        items={lowStockItems}
                     />
                 </section>
 
-                {/* =================================================
-                    FILTERS
-                ================================================= */}
+                {/* FILTERS */}
 
                 <section className="inv-card inv-filter-card">
                     <div className="inv-filter-inner">
@@ -1320,21 +1817,15 @@ const Inventory = () => {
                             inventory={inventory}
                             products={products}
                             stores={stores}
-                            categories={
-                                categories
-                            }
+                            categories={categories}
                             filterWarehouse={
                                 filterWarehouse
                             }
                             setFilterWarehouse={
                                 setFilterWarehouse
                             }
-                            filterCat={
-                                filterCat
-                            }
-                            setFilterCat={
-                                setFilterCat
-                            }
+                            filterCat={filterCat}
+                            setFilterCat={setFilterCat}
                             filterSupplier={
                                 filterSupplier
                             }
@@ -1347,40 +1838,26 @@ const Inventory = () => {
                             setFilterStatus={
                                 setFilterStatus
                             }
-                            filterDate={
-                                filterDate
-                            }
+                            filterDate={filterDate}
                             setFilterDate={
                                 setFilterDate
                             }
-                            onSearch={
-                                handleSearch
-                            }
+                            onSearch={handleSearch}
                         />
                     </div>
                 </section>
 
-                {/* =================================================
-                    INVENTORY TABLE
-                ================================================= */}
+                {/* TABLE */}
 
                 <section className="inv-card">
                     <InventoryHeader
-                        totalItems={
-                            inventory.length
-                        }
-                        lowStockCount={
-                            lowStockCount
-                        }
+                        totalItems={inventory.length}
+                        lowStockCount={lowStockCount}
                         outOfStockCount={
                             outOfStockCount
                         }
-                        activeTab={
-                            activeTab
-                        }
-                        setActiveTab={
-                            setActiveTab
-                        }
+                        activeTab={activeTab}
+                        setActiveTab={setActiveTab}
                         setStockModal={
                             setStockModal
                         }
@@ -1388,12 +1865,8 @@ const Inventory = () => {
 
                     <div className="inv-table-wrap">
                         <InventoryTable
-                            paginated={
-                                paginated
-                            }
-                            stockStatus={
-                                stockStatus
-                            }
+                            paginated={paginated}
+                            stockStatus={stockStatus}
                             fmt={fmt}
                             setStockModal={
                                 setStockModal
@@ -1401,9 +1874,7 @@ const Inventory = () => {
                         />
                     </div>
 
-                    {/* =================================================
-                        PAGINATION
-                    ================================================= */}
+                    {/* PAGINATION */}
 
                     {totalPages > 1 && (
                         <div className="inv-pagination">
@@ -1422,9 +1893,7 @@ const Inventory = () => {
                                 </strong>{" "}
                                 of{" "}
                                 <strong>
-                                    {
-                                        filtered.length
-                                    }
+                                    {filtered.length}
                                 </strong>{" "}
                                 items
                             </span>
@@ -1434,13 +1903,11 @@ const Inventory = () => {
                                     type="button"
                                     className="inv-page-btn"
                                     disabled={
-                                        page ===
-                                        1
+                                        page === 1
                                     }
                                     onClick={() =>
                                         setPage(
-                                            page -
-                                                1
+                                            page - 1
                                         )
                                     }
                                     aria-label="Previous page"
@@ -1460,15 +1927,12 @@ const Inventory = () => {
                                         type="button"
                                         key={p}
                                         className={`inv-page-btn ${
-                                            p ===
-                                            page
+                                            p === page
                                                 ? "active"
                                                 : ""
                                         }`}
                                         onClick={() =>
-                                            setPage(
-                                                p
-                                            )
+                                            setPage(p)
                                         }
                                     >
                                         {p}
@@ -1484,8 +1948,7 @@ const Inventory = () => {
                                     }
                                     onClick={() =>
                                         setPage(
-                                            page +
-                                                1
+                                            page + 1
                                         )
                                     }
                                     aria-label="Next page"
@@ -1497,23 +1960,15 @@ const Inventory = () => {
                     )}
                 </section>
 
-                {/* =================================================
-                    STOCK MODAL
-                ================================================= */}
+                {/* STOCK MODAL */}
 
                 {stockModal && (
                     <StockUpdateModal
-                        item={
-                            stockModal
-                        }
-                        products={
-                            products
-                        }
+                        item={stockModal}
+                        products={products}
                         stores={stores}
                         onClose={() =>
-                            setStockModal(
-                                null
-                            )
+                            setStockModal(null)
                         }
                         onSave={
                             handleStockUpdate

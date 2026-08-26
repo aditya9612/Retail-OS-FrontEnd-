@@ -33,7 +33,7 @@ const CategoryHeader = ({
           className="category-btn primary-btn"
           onClick={onAdd}
         >
-          + Add Category
+          + New Category
         </button>
 
       </div>
