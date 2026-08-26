@@ -38,6 +38,11 @@ export const auth = {
         return response.data;
     },
 
+    forgotPassword: async (email) => {
+        const response = await apiClient.post("/auth/forgot-password", { email });
+        return response.data;
+    },
+
     logout: async () => {
         try {
             const response = await apiClient.post("/auth/logout");
