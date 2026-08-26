@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { BsBoxArrowRight, BsX } from 'react-icons/bs';
 
 const overlayStyle = {
@@ -7,9 +8,10 @@ const overlayStyle = {
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 1200,
+    zIndex: 9999,
     background: 'rgba(15, 23, 42, 0.55)',
     backdropFilter: 'blur(5px)',
+    WebkitBackdropFilter: 'blur(5px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -31,7 +33,7 @@ const modalBoxStyle = {
 const LogoutConfirmModal = ({ isOpen, onClose, onConfirm, loading = false }) => {
     if (!isOpen) return null;
 
-    return (
+    return createPortal(
         <div style={overlayStyle} onClick={onClose}>
             <div style={modalBoxStyle} onClick={(e) => e.stopPropagation()}>
                 {/* Close Button */}
@@ -130,7 +132,8 @@ const LogoutConfirmModal = ({ isOpen, onClose, onConfirm, loading = false }) => 
                     </button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 };
 

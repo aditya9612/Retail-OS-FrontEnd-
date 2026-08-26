@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
     BsEnvelope,
@@ -18,6 +19,7 @@ import {
     BsPercent,
     BsShop,
     BsPieChart,
+    BsX,
 } from "react-icons/bs";
 import { auth } from "../../services/auth";
 import { getCurrentUser } from "../../services/user";
@@ -31,6 +33,64 @@ const Login = () => {
     });
 
     const [showPassword, setShowPassword] = useState(false);
+
+    const [showForgotPassword, setShowForgotPassword] = useState(false);
+    const [forgotEmail, setForgotEmail] = useState("");
+    const [forgotLoading, setForgotLoading] = useState(false);
+    const [forgotError, setForgotError] = useState("");
+    const [forgotSuccess, setForgotSuccess] = useState("");
+
+    const handleForgotPasswordSubmit = async (e) => {
+        e.preventDefault();
+        setForgotError("");
+        setForgotSuccess("");
+
+        const trimmedEmail = forgotEmail.trim();
+
+        if (!trimmedEmail) {
+            setForgotError("Email address is required.");
+            return;
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(trimmedEmail)) {
+            setForgotError("Please enter a valid email address.");
+            return;
+        }
+
+        setForgotLoading(true);
+
+        try {
+            const data = await auth.forgotPassword(trimmedEmail);
+            const message =
+                data?.detail?.message ||
+                data?.message ||
+                "Password reset link has been sent to your email address.";
+            setForgotSuccess(message);
+        } catch (error) {
+            const errorMsg =
+                error.response?.data?.detail?.message ||
+                error.response?.data?.message ||
+                error.response?.data?.detail ||
+                "Failed to send reset link. Please verify your email and try again.";
+
+            setForgotError(
+                typeof errorMsg === "string"
+                    ? errorMsg
+                    : "An error occurred while requesting password reset."
+            );
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleCloseForgotPassword = () => {
+        setShowForgotPassword(false);
+        setForgotEmail("");
+        setForgotError("");
+        setForgotSuccess("");
+        setForgotLoading(false);
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -667,52 +727,58 @@ const Login = () => {
                     }
                 }
 
+                /* Mobile View: Hide complete left/promotional/image section, show ONLY centered Login form */
                 @media (max-width: 920px) {
                     .login-page-container {
-                        padding: 20px 16px;
-                        height: auto;
-                        min-height: 100vh;
+                        padding: clamp(12px, 3vh, 24px) clamp(12px, 3vw, 20px);
+                        height: 100vh;
+                        min-height: 100dvh;
                         max-height: none;
                         overflow-y: auto;
+                        overflow-x: hidden;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
                     }
                     .split-screen-layout {
                         flex-direction: column;
                         align-items: center;
+                        justify-content: center;
                         max-height: none;
-                        gap: 20px;
+                        width: 100%;
+                        gap: 0;
                     }
                     .left-section-wrapper {
-                        width: 100%;
-                        flex: 1 1 auto;
-                        height: auto;
+                        display: none !important;
                     }
                     .right-login-section {
                         width: 100%;
-                        flex: 1 1 auto;
+                        flex: 1 1 100%;
                         height: auto;
-                        margin-top: 10px;
+                        margin: 0;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
                     }
                     .login-card {
-                        max-width: 460px;
-                    }
-                    .bottom-feature-row {
-                        grid-template-columns: repeat(3, 1fr);
+                        width: 100%;
+                        max-width: 440px;
+                        padding: 24px 20px;
+                        border-radius: 20px;
+                        margin: 0 auto;
                     }
                     .connectors-svg-overlay {
                         display: none;
                     }
                 }
 
-                @media (max-width: 576px) {
-                    .bottom-feature-row {
-                        grid-template-columns: repeat(2, 1fr);
-                    }
-                    .floating-feature-card {
-                        display: none;
+                @media (max-width: 480px) {
+                    .login-page-container {
+                        padding: 12px 10px;
                     }
                     .login-card {
-                        padding: 20px 16px;
-                        border-radius: 20px;
+                        padding: 20px 14px;
+                        border-radius: 18px;
                     }
                 }
             `}</style>
@@ -1002,7 +1068,11 @@ const Login = () => {
                                     />
                                     Remember Me
                                 </label>
-                                <button type="button" className="forgot-password-link">
+                                <button
+                                    type="button"
+                                    className="forgot-password-link"
+                                    onClick={() => setShowForgotPassword(true)}
+                                >
                                     Forgot Password?
                                 </button>
                             </div>
@@ -1054,6 +1124,184 @@ const Login = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Forgot Password Modal */}
+            {showForgotPassword &&
+                createPortal(
+                    <div
+                        style={{
+                            position: "fixed",
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            zIndex: 9999,
+                            background: "rgba(15, 23, 42, 0.55)",
+                            backdropFilter: "blur(5px)",
+                            WebkitBackdropFilter: "blur(5px)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            padding: "16px",
+                            boxSizing: "border-box",
+                        }}
+                        onClick={handleCloseForgotPassword}
+                    >
+                        <div
+                            style={{
+                                background: "#FFFFFF",
+                                width: "100%",
+                                maxWidth: "440px",
+                                borderRadius: "24px",
+                                padding: "32px 28px",
+                                boxShadow: "0 20px 50px -10px rgba(15, 23, 42, 0.25), 0 0 1px rgba(15, 23, 42, 0.15)",
+                                border: "1px solid #E2E8F0",
+                                position: "relative",
+                                boxSizing: "border-box",
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Close Button */}
+                            <button
+                                type="button"
+                                onClick={handleCloseForgotPassword}
+                                disabled={forgotLoading}
+                                aria-label="Close modal"
+                                style={{
+                                    position: "absolute",
+                                    top: 18,
+                                    right: 18,
+                                    border: "none",
+                                    background: "#F1F5F9",
+                                    width: "32px",
+                                    height: "32px",
+                                    borderRadius: "50%",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    cursor: forgotLoading ? "not-allowed" : "pointer",
+                                    color: "#64748B",
+                                    transition: "all 0.15s ease",
+                                }}
+                            >
+                                <BsX size={20} />
+                            </button>
+
+                            {/* Logo */}
+                            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
+                                <img
+                                    src="/retailos-logo-transparent.png"
+                                    alt="Retail OS Logo"
+                                    style={{ height: 50, width: "auto", objectFit: "contain" }}
+                                />
+                            </div>
+
+                            {/* Header */}
+                            <div style={{ textAlign: "center", marginBottom: 20 }}>
+                                <h3 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0", letterSpacing: "-0.02em" }}>
+                                    Forgot Password?
+                                </h3>
+                                <p style={{ fontSize: 13, color: "#64748B", margin: 0, lineHeight: 1.5, fontWeight: 500 }}>
+                                    Enter your registered email address and we'll send you instructions to reset your password.
+                                </p>
+                            </div>
+
+                            {/* Alert Messages */}
+                            {forgotError && (
+                                <div style={{
+                                    background: "#FEF2F2",
+                                    border: "1px solid #FECACA",
+                                    color: "#DC2626",
+                                    padding: "10px 14px",
+                                    borderRadius: "10px",
+                                    fontSize: "12.5px",
+                                    fontWeight: 600,
+                                    marginBottom: 16,
+                                    lineHeight: 1.4,
+                                }}>
+                                    {forgotError}
+                                </div>
+                            )}
+
+                            {forgotSuccess && (
+                                <div style={{
+                                    background: "#F0FDF4",
+                                    border: "1px solid #BBF7D0",
+                                    color: "#16A34A",
+                                    padding: "10px 14px",
+                                    borderRadius: "10px",
+                                    fontSize: "12.5px",
+                                    fontWeight: 600,
+                                    marginBottom: 16,
+                                    lineHeight: 1.4,
+                                }}>
+                                    {forgotSuccess}
+                                </div>
+                            )}
+
+                            {/* Form */}
+                            <form onSubmit={handleForgotPasswordSubmit}>
+                                <div className="form-field-group">
+                                    <label className="form-field-label">Email Address</label>
+                                    <div className="input-field-relative">
+                                        <BsEnvelope size={16} className="input-prefix-icon" />
+                                        <input
+                                            type="email"
+                                            placeholder="Enter your email address"
+                                            value={forgotEmail}
+                                            onChange={(e) => {
+                                                setForgotEmail(e.target.value);
+                                                if (forgotError) setForgotError("");
+                                            }}
+                                            disabled={forgotLoading}
+                                            required
+                                            className="form-control-input"
+                                        />
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={forgotLoading}
+                                    className="btn-submit-primary"
+                                    style={{
+                                        marginTop: 18,
+                                        opacity: forgotLoading ? 0.75 : 1,
+                                        cursor: forgotLoading ? "not-allowed" : "pointer",
+                                    }}
+                                >
+                                    {forgotLoading ? (
+                                        "Sending..."
+                                    ) : (
+                                        <>
+                                            Send Reset Link <BsArrowRight size={16} />
+                                        </>
+                                    )}
+                                </button>
+                            </form>
+
+                            {/* Back to login */}
+                            <div style={{ textAlign: "center", marginTop: 18 }}>
+                                <button
+                                    type="button"
+                                    onClick={handleCloseForgotPassword}
+                                    disabled={forgotLoading}
+                                    style={{
+                                        border: "none",
+                                        background: "transparent",
+                                        color: "#2563EB",
+                                        fontSize: "13px",
+                                        fontWeight: 600,
+                                        cursor: forgotLoading ? "not-allowed" : "pointer",
+                                    }}
+                                >
+                                    Back to Login
+                                </button>
+                            </div>
+                        </div>
+                    </div>,
+                    document.body
+                )}
         </div>
     );
 };
