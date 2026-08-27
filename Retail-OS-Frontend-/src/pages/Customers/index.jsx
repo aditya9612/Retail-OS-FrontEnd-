@@ -61,7 +61,7 @@ const typeCfg = {
 };
 
 // Professional Active / Inactive Toggle Switch Component
-const CustomerStatusToggle = ({ isActive, onToggle }) => {
+const CustomerStatusToggle = ({ isActive, onToggle, loading = false }) => {
     const activeColor = '#10b981';
     const inactiveColor = '#ef4444';
 
@@ -71,6 +71,7 @@ const CustomerStatusToggle = ({ isActive, onToggle }) => {
             role="switch"
             aria-checked={isActive}
             aria-label={isActive ? 'Active' : 'Inactive'}
+            disabled={loading}
             onClick={onToggle}
             style={{
                 display: 'inline-flex',
@@ -80,7 +81,8 @@ const CustomerStatusToggle = ({ isActive, onToggle }) => {
                 borderRadius: 999,
                 border: `1px solid ${isActive ? '#a7f3d0' : '#fecaca'}`,
                 background: isActive ? '#ecfdf5' : '#fef2f2',
-                cursor: 'pointer',
+                cursor: loading ? 'wait' : 'pointer',
+                opacity: loading ? 0.65 : 1,
                 transition: 'all 0.25s ease',
                 boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
             }}
@@ -395,8 +397,8 @@ const EditCustomerModal = ({ customer, onClose, onSaved }) => {
 };
 
 // Send Marketing Campaign Modal
-const SendCampaignModal = ({ customers = [], onClose }) => {
-    const [selectedCustomerIds, setSelectedCustomerIds] = useState([]);
+const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose }) => {
+    const [selectedCustomerIds, setSelectedCustomerIds] = useState(preSelectedIds || []);
     const [communicationType, setCommunicationType] = useState('sms');
     const [message, setMessage] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -625,6 +627,8 @@ const Customers = () => {
     const [page, setPage] = useState(1);
 
     // Modals & Detail States
+    const [selectedIds, setSelectedIds] = useState([]);
+    const [updatingStatusId, setUpdatingStatusId] = useState(null);
     const [showAddModal, setShowAddModal] = useState(false);
     const [showExportModal, setShowExportModal] = useState(false);
     const [showCampaignModal, setShowCampaignModal] = useState(false);
@@ -683,12 +687,11 @@ const Customers = () => {
         }
     };
 
-
-
     // Handler for ACTIVE / INACTIVE Toggle Switch (Calls PATCH /api/v1/customers/{customer_id}/status)
     const handleStatusToggle = async (id, currentStatus) => {
         const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
 
+        setUpdatingStatusId(id);
         // Optimistic UI update
         setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: newStatus } : c));
         if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
@@ -707,6 +710,8 @@ const Customers = () => {
                 setSelectedCustomer(prev => prev ? { ...prev, status: currentStatus } : prev);
             }
             alert(getApiErrorMessage(err, 'Failed to update customer status.'));
+        } finally {
+            setUpdatingStatusId(null);
         }
     };
 
@@ -735,6 +740,38 @@ const Customers = () => {
         const start = (page - 1) * PAGE_SIZE;
         return filteredCustomers.slice(start, start + PAGE_SIZE);
     }, [filteredCustomers, page]);
+
+    const hasActiveFilters = Boolean(search.trim() || filterStatus !== 'All' || filterType !== 'All' || filterCity !== 'All');
+
+    const handleClearFilters = () => {
+        setSearch('');
+        setFilterStatus('All');
+        setFilterType('All');
+        setFilterCity('All');
+        setPage(1);
+    };
+
+    const isAllPageSelected = useMemo(() => {
+        if (paginatedCustomers.length === 0) return false;
+        return paginatedCustomers.every(c => selectedIds.includes(c.backendId || c.id));
+    }, [paginatedCustomers, selectedIds]);
+
+    const handleToggleSelectAllPage = () => {
+        const pageIds = paginatedCustomers.map(c => c.backendId || c.id);
+        if (isAllPageSelected) {
+            setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)));
+        } else {
+            setSelectedIds(prev => Array.from(new Set([...prev, ...pageIds])));
+        }
+    };
+
+    const handleToggleSelectRow = (id) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    };
+
+    const selectedCustomersList = useMemo(() => {
+        return customers.filter(c => selectedIds.includes(c.backendId || c.id));
+    }, [customers, selectedIds]);
 
     const totalCustomers = customerStats?.total ?? customers.length;
     const activeCustomers = customerStats?.active ?? customers.filter(c => c.status === 'Active').length;
@@ -1135,69 +1172,108 @@ const Customers = () => {
             {/* Main Customer Table Card */}
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                 {/* Search & Filter Bar */}
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6', display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
-                        <div style={{ position: 'relative', flex: 1 }}>
-                            <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14 }} />
-                            <input
-                                type="text"
-                                className="ec-input"
-                                placeholder="Search by customer name, email, phone or city..."
-                                value={search}
-                                onChange={e => { setSearch(e.target.value); setPage(1); }}
-                                style={{ paddingLeft: 34, width: '100%', height: 38 }}
-                            />
-                        </div>
-                    </div>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>Status:</span>
-                            <select
-                                className="ec-input"
-                                value={filterStatus}
-                                onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
-                                style={{ height: 38, fontSize: 12, padding: '0 10px' }}
-                            >
-                                <option value="All">AllStatus</option>
-                                <option value="Active">Active</option>
-                                <option value="Inactive">Inactive</option>
-                                <option value="Blocked">Blocked</option>
-                            </select>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
+                            <div style={{ position: 'relative', flex: 1 }}>
+                                <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14 }} />
+                                <input
+                                    type="text"
+                                    className="ec-input"
+                                    placeholder="Search by customer name, email, phone or city..."
+                                    value={search}
+                                    onChange={e => { setSearch(e.target.value); setPage(1); }}
+                                    style={{ paddingLeft: 34, width: '100%', height: 38 }}
+                                />
+                            </div>
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>Segment:</span>
-                            <select
-                                className="ec-input"
-                                value={filterType}
-                                onChange={e => { setFilterType(e.target.value); setPage(1); }}
-                                style={{ height: 38, fontSize: 12, padding: '0 10px' }}
-                            >
-                                <option value="All">All Types</option>
-                                <option value="Regular">Regular</option>
-                                <option value="VIP">VIP</option>
-                                <option value="Wholesale">Wholesale</option>
-                                <option value="New">New</option>
-                            </select>
-                        </div>
-
-                        {availableCities.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>City:</span>
+                                <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>Status:</span>
                                 <select
                                     className="ec-input"
-                                    value={filterCity}
-                                    onChange={e => { setFilterCity(e.target.value); setPage(1); }}
+                                    value={filterStatus}
+                                    onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
                                     style={{ height: 38, fontSize: 12, padding: '0 10px' }}
                                 >
-                                    <option value="All">All Cities</option>
-                                    {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
+                                    <option value="All">All Status</option>
+                                    <option value="Active">Active</option>
+                                    <option value="Inactive">Inactive</option>
+                                    <option value="Blocked">Blocked</option>
                                 </select>
                             </div>
-                        )}
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>Segment:</span>
+                                <select
+                                    className="ec-input"
+                                    value={filterType}
+                                    onChange={e => { setFilterType(e.target.value); setPage(1); }}
+                                    style={{ height: 38, fontSize: 12, padding: '0 10px' }}
+                                >
+                                    <option value="All">All Types</option>
+                                    <option value="Regular">Regular</option>
+                                    <option value="VIP">VIP</option>
+                                    <option value="Wholesale">Wholesale</option>
+                                    <option value="New">New</option>
+                                </select>
+                            </div>
+
+                            {availableCities.length > 0 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>City:</span>
+                                    <select
+                                        className="ec-input"
+                                        value={filterCity}
+                                        onChange={e => { setFilterCity(e.target.value); setPage(1); }}
+                                        style={{ height: 38, fontSize: 12, padding: '0 10px' }}
+                                    >
+                                        <option value="All">All Cities</option>
+                                        {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
+                    {/* Active Filter Chips & Reset Button */}
+                    {hasActiveFilters && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12, pt: 8 }}>
+                            <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Active Filters:</span>
+                            {search && (
+                                <span style={{ fontSize: 11, background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                    Search: "{search}"
+                                    <button type="button" onClick={() => setSearch('')} style={{ border: 'none', background: 'transparent', color: '#6366f1', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
+                                </span>
+                            )}
+                            {filterStatus !== 'All' && (
+                                <span style={{ fontSize: 11, background: '#ecfdf5', color: '#10b981', border: '1px solid #a7f3d0', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                    Status: {filterStatus}
+                                    <button type="button" onClick={() => setFilterStatus('All')} style={{ border: 'none', background: 'transparent', color: '#10b981', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
+                                </span>
+                            )}
+                            {filterType !== 'All' && (
+                                <span style={{ fontSize: 11, background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                    Segment: {filterType}
+                                    <button type="button" onClick={() => setFilterType('All')} style={{ border: 'none', background: 'transparent', color: '#d97706', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
+                                </span>
+                            )}
+                            {filterCity !== 'All' && (
+                                <span style={{ fontSize: 11, background: '#f0f9ff', color: '#0ea5e9', border: '1px solid #bae6fd', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                    City: {filterCity}
+                                    <button type="button" onClick={() => setFilterCity('All')} style={{ border: 'none', background: 'transparent', color: '#0ea5e9', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
+                                </span>
+                            )}
+                            <button
+                                type="button"
+                                onClick={handleClearFilters}
+                                style={{ border: 'none', background: 'transparent', color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '2px 6px' }}
+                            >
+                                Clear All ✕
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Directory Table */}
@@ -1205,6 +1281,15 @@ const Customers = () => {
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                         <thead>
                             <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <th style={{ padding: '12px 14px', width: 38 }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={isAllPageSelected}
+                                        onChange={handleToggleSelectAllPage}
+                                        title="Select all on this page"
+                                        style={{ cursor: 'pointer', accentColor: '#6366f1' }}
+                                    />
+                                </th>
                                 <th style={{ padding: '12px 16px' }}>Customer Name</th>
                                 <th style={{ padding: '12px 16px' }}>ID & Segment</th>
                                 <th style={{ padding: '12px 16px' }}>Phone</th>
@@ -1227,90 +1312,102 @@ const Customers = () => {
                                 </>
                             ) : paginatedCustomers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={9} style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
+                                    <td colSpan={10} style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
                                         <p style={{ fontSize: 15, fontWeight: 700, color: '#374151', margin: 0 }}>No Customers Found</p>
                                         <p style={{ fontSize: 12, marginTop: 4 }}>Try adjusting your search filter or add a new customer.</p>
                                     </td>
                                 </tr>
                             ) : (
-                                paginatedCustomers.map((cust) => (
-                                    <tr key={cust.id} style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.15s ease' }} className="table-row-hover">
-                                        <td style={{ padding: '14px 16px' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff', fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                    {cust.name?.[0]?.toUpperCase() || '?'}
+                                paginatedCustomers.map((cust) => {
+                                    const custId = cust.backendId || cust.id;
+                                    const isRowSelected = selectedIds.includes(custId);
+                                    return (
+                                        <tr key={cust.id} style={{ borderBottom: '1px solid #f3f4f6', background: isRowSelected ? '#f5f3ff' : 'transparent', transition: 'background 0.15s ease' }} className="table-row-hover">
+                                            <td style={{ padding: '14px 14px', width: 38 }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isRowSelected}
+                                                    onChange={() => handleToggleSelectRow(custId)}
+                                                    style={{ cursor: 'pointer', accentColor: '#6366f1' }}
+                                                />
+                                            </td>
+
+                                            <td style={{ padding: '14px 16px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff', fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                        {cust.name?.[0]?.toUpperCase() || '?'}
+                                                    </div>
+                                                    <div>
+                                                        <p style={{ fontWeight: 700, color: '#111827', margin: 0, fontSize: 13 }}>{cust.name}</p>
+                                                        <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0 0' }}>{cust.email}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p style={{ fontWeight: 700, color: '#111827', margin: 0, fontSize: 13 }}>{cust.name}</p>
-                                                    <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0 0' }}>{cust.email}</p>
+                                            </td>
+
+                                            <td style={{ padding: '14px 16px' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>{cust.id}</span>
+                                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1' }}>
+                                                        {cust.type}
+                                                    </span>
                                                 </div>
-                                            </div>
-                                        </td>
+                                            </td>
 
-                                        <td style={{ padding: '14px 16px' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                                                <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>{cust.id}</span>
-                                                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1' }}>
-                                                    {cust.type}
-                                                </span>
-                                            </div>
-                                        </td>
+                                            <td style={{ padding: '14px 16px', color: '#374151', fontWeight: 500 }}>
+                                                {cust.phone || '—'}
+                                            </td>
 
-                                        <td style={{ padding: '14px 16px', color: '#374151', fontWeight: 500 }}>
-                                            {cust.phone || '—'}
-                                        </td>
+                                            <td style={{ padding: '14px 16px', color: '#374151' }}>
+                                                {cust.city || '—'}
+                                            </td>
 
-                                        <td style={{ padding: '14px 16px', color: '#374151' }}>
-                                            {cust.city || '—'}
-                                        </td>
+                                            <td style={{ padding: '14px 16px', fontWeight: 700, color: '#111827' }}>
+                                                {cust.orders} orders
+                                            </td>
 
-                                        <td style={{ padding: '14px 16px', fontWeight: 700, color: '#111827' }}>
-                                            {cust.orders} orders
-                                        </td>
+                                            <td style={{ padding: '14px 16px', fontWeight: 800, color: '#10b981' }}>
+                                                {fmt(cust.totalSpent)}
+                                            </td>
 
-                                        <td style={{ padding: '14px 16px', fontWeight: 800, color: '#10b981' }}>
-                                            {fmt(cust.totalSpent)}
-                                        </td>
+                                            <td style={{ padding: '14px 16px' }}>
+                                                <div style={{ fontSize: 11 }}>
+                                                    <span style={{ color: '#6366f1', fontWeight: 700, display: 'block' }}>Wallet: {fmt(cust.credit || 0)}</span>
+                                                    <span style={{ color: '#d97706', fontWeight: 600 }}>Points: {cust.loyaltyPoints || 0} pts</span>
+                                                </div>
+                                            </td>
 
-                                        <td style={{ padding: '14px 16px' }}>
-                                            <div style={{ fontSize: 11 }}>
-                                                <span style={{ color: '#6366f1', fontWeight: 700, display: 'block' }}>Wallet: {fmt(cust.credit || 0)}</span>
-                                                <span style={{ color: '#d97706', fontWeight: 600 }}>Points: {cust.loyaltyPoints || 0} pts</span>
-                                            </div>
-                                        </td>
+                                            <td style={{ padding: '14px 16px' }}>
+                                                <CustomerStatusToggle
+                                                    isActive={cust.status === 'Active'}
+                                                    loading={updatingStatusId === custId}
+                                                    onToggle={() => handleStatusToggle(custId, cust.status)}
+                                                />
+                                            </td>
 
-                                        <td style={{ padding: '14px 16px' }}>
-                                            <CustomerStatusToggle
-                                                isActive={cust.status === 'Active'}
-                                                onToggle={() => handleStatusToggle(cust.backendId || cust.id, cust.status)}
-                                            />
-                                        </td>
+                                            <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                                                <div style={{ display: 'inline-flex', gap: 6 }}>
+                                                    <button
+                                                        type="button"
+                                                        title="View Profile Details"
+                                                        onClick={() => handleViewCustomerProfile(custId)}
+                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#6366f1', cursor: 'pointer' }}
+                                                    >
+                                                        <BsEye size={14} />
+                                                    </button>
 
-                                        <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                                            <div style={{ display: 'inline-flex', gap: 6 }}>
-                                                <button
-                                                    type="button"
-                                                    title="View Profile Details"
-                                                    onClick={() => handleViewCustomerProfile(cust.backendId || cust.id)}
-                                                    style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#6366f1', cursor: 'pointer' }}
-                                                >
-                                                    <BsEye size={14} />
-                                                </button>
-
-                                                <button
-                                                    type="button"
-                                                    title="Edit Customer"
-                                                    onClick={() => setEditingCustomer(cust)}
-                                                    style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer' }}
-                                                >
-                                                    <BsPencilSquare size={14} />
-                                                </button>
-
-
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))
+                                                    <button
+                                                        type="button"
+                                                        title="Edit Customer"
+                                                        onClick={() => setEditingCustomer(cust)}
+                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer' }}
+                                                    >
+                                                        <BsPencilSquare size={14} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
                             )}
                         </tbody>
                     </table>
@@ -1350,6 +1447,51 @@ const Customers = () => {
                 </div>
             </div>
 
+            {/* Floating Bulk Action Bar */}
+            {selectedIds.length > 0 && (
+                <div style={{
+                    position: 'fixed',
+                    bottom: 24,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 1000,
+                    background: '#1e293b',
+                    color: '#ffffff',
+                    padding: '10px 20px',
+                    borderRadius: 14,
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 14,
+                    fontSize: 13,
+                    fontWeight: 600,
+                }}>
+                    <span style={{ color: '#e2e8f0' }}>{selectedIds.length} {selectedIds.length === 1 ? 'customer' : 'customers'} selected</span>
+                    <div style={{ height: 16, width: 1, background: '#475569' }} />
+                    <button
+                        type="button"
+                        onClick={() => setShowCampaignModal(true)}
+                        style={{ background: '#6366f1', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                        🚀 Bulk Campaign
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setShowExportModal(true)}
+                        style={{ background: '#334155', color: '#f8fafc', border: '1px solid #475569', padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                        📥 Export Selected
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setSelectedIds([])}
+                        style={{ background: 'transparent', color: '#94a3b8', border: 'none', padding: '4px 8px', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}
+                    >
+                        Clear ✕
+                    </button>
+                </div>
+            )}
+
             {/* Modals & Slide-over Detail Panel */}
             {showAddModal && (
                 <AddCustomerModal
@@ -1369,6 +1511,7 @@ const Customers = () => {
             {showCampaignModal && (
                 <SendCampaignModal
                     customers={customers}
+                    preSelectedIds={selectedIds}
                     onClose={() => setShowCampaignModal(false)}
                 />
             )}
