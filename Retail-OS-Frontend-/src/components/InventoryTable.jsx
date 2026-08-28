@@ -11,6 +11,144 @@ const InventoryTable = ({
   console.log("PAGINATED INSIDE TABLE =>", paginated);
   console.log("PAGINATED LENGTH =>", paginated?.length);
 
+  /* =========================================================
+     EXPIRY STATUS
+  ========================================================= */
+
+  const getExpiryStatus = (expiryDate) => {
+    if (!expiryDate) {
+      return {
+        label: "No Expiry",
+        color: "#6b7280",
+        bg: "#f3f4f6",
+      };
+    }
+
+    /*
+     * API date format:
+     * YYYY-MM-DD
+     *
+     * Example:
+     * 2026-08-31
+     */
+
+    const today = new Date();
+
+    /*
+     * Remove time part from today's date.
+     */
+    today.setHours(0, 0, 0, 0);
+
+    /*
+     * Create expiry date safely.
+     *
+     * Using YYYY-MM-DD manually avoids
+     * timezone issues.
+     */
+    const parts = String(expiryDate).split("-");
+
+    let expiry;
+
+    if (parts.length === 3) {
+      expiry = new Date(
+        Number(parts[0]),
+        Number(parts[1]) - 1,
+        Number(parts[2])
+      );
+    } else {
+      expiry = new Date(expiryDate);
+    }
+
+    /*
+     * Invalid date
+     */
+    if (Number.isNaN(expiry.getTime())) {
+      return {
+        label: "Invalid Date",
+        color: "#6b7280",
+        bg: "#f3f4f6",
+      };
+    }
+
+    expiry.setHours(0, 0, 0, 0);
+
+    /*
+     * EXPIRED
+     *
+     * Expiry date is before today.
+     */
+    if (expiry < today) {
+      return {
+        label: "Expired",
+        color: "#dc2626",
+        bg: "#fef2f2",
+      };
+    }
+
+    /*
+     * DAYS UNTIL EXPIRY
+     */
+    const diffMs =
+      expiry.getTime() - today.getTime();
+
+    const diffDays = Math.ceil(
+      diffMs / (1000 * 60 * 60 * 24)
+    );
+
+    /*
+     * EXPIRING SOON
+     *
+     * Today -> 30 days
+     */
+    if (diffDays <= 30) {
+      return {
+        label: "Expiring Soon",
+        color: "#d97706",
+        bg: "#fffbeb",
+      };
+    }
+
+    /*
+     * VALID
+     */
+    return {
+      label: "Valid",
+      color: "#059669",
+      bg: "#ecfdf5",
+    };
+  };
+
+  /* =========================================================
+     FORMAT EXPIRY DATE
+  ========================================================= */
+
+  const formatExpiryDate = (expiryDate) => {
+    if (!expiryDate) {
+      return "—";
+    }
+
+    const parts = String(expiryDate).split("-");
+
+    /*
+     * API format:
+     * YYYY-MM-DD
+     */
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+
+    /*
+     * Fallback
+     */
+    const date = new Date(expiryDate);
+
+    if (Number.isNaN(date.getTime())) {
+      return "Invalid Date";
+    }
+
+    return date.toLocaleDateString("en-IN");
+  };
+
   return (
     <div className="inventory-table-container">
       <table className="inventory-table">
@@ -22,6 +160,13 @@ const InventoryTable = ({
             <th>Warehouse</th>
             <th>Available Qty</th>
             <th>Reorder Level</th>
+
+            {/* =================================================
+               NEW EXPIRY COLUMN
+            ================================================= */}
+
+            <th>Expiry Date</th>
+
             <th>Cost Price</th>
             <th>Selling Price</th>
             <th>Margin</th>
@@ -44,7 +189,9 @@ const InventoryTable = ({
               item.name ||
               item.product_name ||
               item.productName ||
-              `Product #${item.product_id || item.id}`;
+              `Product #${
+                item.product_id || item.id
+              }`;
 
             /* =====================================================
                SKU
@@ -55,7 +202,9 @@ const InventoryTable = ({
               item.SKU ||
               item.product_sku ||
               item.productSku ||
-              `SKU-00${item.product_id || item.id}`;
+              `SKU-00${
+                item.product_id || item.id
+              }`;
 
             /* =====================================================
                CATEGORY
@@ -95,14 +244,19 @@ const InventoryTable = ({
             ===================================================== */
 
             const minStock =
-              item.low_stock_threshold !== undefined &&
+              item.low_stock_threshold !==
+                undefined &&
               item.low_stock_threshold !== null
-                ? Number(item.low_stock_threshold)
-                : item.minStock !== undefined &&
-                  item.minStock !== null
+                ? Number(
+                    item.low_stock_threshold
+                  )
+                : item.minStock !==
+                      undefined &&
+                    item.minStock !== null
                 ? Number(item.minStock)
-                : item.minimum_stock !== undefined &&
-                  item.minimum_stock !== null
+                : item.minimum_stock !==
+                      undefined &&
+                    item.minimum_stock !== null
                 ? Number(item.minimum_stock)
                 : 0;
 
@@ -114,10 +268,12 @@ const InventoryTable = ({
               item.costPrice !== undefined &&
               item.costPrice !== null
                 ? Number(item.costPrice)
-                : item.cost_price !== undefined &&
+                : item.cost_price !==
+                      undefined &&
                   item.cost_price !== null
                 ? Number(item.cost_price)
-                : item.unit_cost !== undefined &&
+                : item.unit_cost !==
+                      undefined &&
                   item.unit_cost !== null
                 ? Number(item.unit_cost)
                 : 0;
@@ -130,7 +286,8 @@ const InventoryTable = ({
               item.sellingPrice !== undefined &&
               item.sellingPrice !== null
                 ? Number(item.sellingPrice)
-                : item.selling_price !== undefined &&
+                : item.selling_price !==
+                      undefined &&
                   item.selling_price !== null
                 ? Number(item.selling_price)
                 : item.price !== undefined &&
@@ -151,13 +308,42 @@ const InventoryTable = ({
             const brand = item.brand || "Brand";
 
             /* =====================================================
+               EXPIRY DATE
+            ===================================================== */
+
+            const expiryDate =
+              item.expiry_date ||
+              item.expiryDate ||
+              item.expiration_date ||
+              item.expirationDate ||
+              null;
+
+            /* =====================================================
+               BATCH NUMBER
+            ===================================================== */
+
+            const batchNumber =
+              item.batch_number ||
+              item.batchNumber ||
+              item.batch ||
+              null;
+
+            /* =====================================================
+               EXPIRY STATUS
+            ===================================================== */
+
+            const expiryStatus =
+              getExpiryStatus(expiryDate);
+
+            /* =====================================================
                PRICE = 0 LOGIC
 
                If selling price is 0, product MUST show
                Out of Stock even if quantity is greater than 0.
             ===================================================== */
 
-            const isZeroPrice = sellingPrice <= 0;
+            const isZeroPrice =
+              sellingPrice <= 0;
 
             /* =====================================================
                STOCK STATUS
@@ -199,44 +385,18 @@ const InventoryTable = ({
 
             /* =====================================================
                MARGIN
-
-               IMPORTANT:
-               Margin is calculated using SELLING PRICE as
-               the denominator.
-
-               Formula:
-
-               Margin =
-               ((Selling Price - Cost Price) / Selling Price) * 100
-
-               Example:
-
-               Cost Price    = 4200
-               Selling Price = 4999
-
-               Profit = 4999 - 4200
-                      = 799
-
-               Margin = (799 / 4999) * 100
-                      = 15.98%
             ===================================================== */
 
             const margin =
               sellingPrice > 0
-                ? ((sellingPrice - costPrice) /
+                ? ((sellingPrice -
+                    costPrice) /
                     sellingPrice) *
                   100
                 : 0;
 
             /* =====================================================
                FORMAT MARGIN
-
-               Always show 2 decimal places.
-
-               Example:
-               15.98%
-               20.00%
-               50.25%
             ===================================================== */
 
             const formattedMargin =
@@ -271,8 +431,10 @@ const InventoryTable = ({
                         borderRadius: 8,
                         background: "#f3f4f6",
                         display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        alignItems:
+                          "center",
+                        justifyContent:
+                          "center",
                       }}
                     >
                       <BsBoxSeam
@@ -384,10 +546,88 @@ const InventoryTable = ({
                 </td>
 
                 {/* =================================================
+                   EXPIRY DATE
+                ================================================= */}
+
+                <td>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      minWidth: 120,
+                    }}
+                  >
+                    {/* DATE */}
+
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        color:
+                          expiryStatus.color,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {formatExpiryDate(
+                        expiryDate
+                      )}
+                    </span>
+
+                    {/* EXPIRY STATUS */}
+
+                    <span
+                      style={{
+                        display:
+                          "inline-flex",
+                        alignItems:
+                          "center",
+                        width: "fit-content",
+                        padding:
+                          "3px 8px",
+                        borderRadius: 20,
+                        background:
+                          expiryStatus.bg,
+                        color:
+                          expiryStatus.color,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        whiteSpace:
+                          "nowrap",
+                      }}
+                    >
+                      {expiryStatus.label}
+                    </span>
+
+                    {/* BATCH NUMBER */}
+
+                    {batchNumber && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: "#6b7280",
+                          maxWidth: 150,
+                          overflow:
+                            "hidden",
+                          textOverflow:
+                            "ellipsis",
+                          whiteSpace:
+                            "nowrap",
+                        }}
+                        title={batchNumber}
+                      >
+                        Batch: {batchNumber}
+                      </span>
+                    )}
+                  </div>
+                </td>
+
+                {/* =================================================
                    COST PRICE
                 ================================================= */}
 
-                <td>{fmt(costPrice)}</td>
+                <td>
+                  {fmt(costPrice)}
+                </td>
 
                 {/* =================================================
                    SELLING PRICE
@@ -426,15 +666,18 @@ const InventoryTable = ({
                 </td>
 
                 {/* =================================================
-                   STATUS
+                   STOCK STATUS
                 ================================================= */}
 
                 <td>
                   <span
                     style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      padding: "4px 10px",
+                      display:
+                        "inline-flex",
+                      alignItems:
+                        "center",
+                      padding:
+                        "4px 10px",
                       borderRadius: "20px",
                       background: st.bg,
                       color: st.color,
@@ -472,6 +715,16 @@ const InventoryTable = ({
                       console.log(
                         "STORE ID =>",
                         item.store_id
+                      );
+
+                      console.log(
+                        "EXPIRY DATE =>",
+                        item.expiry_date
+                      );
+
+                      console.log(
+                        "BATCH NUMBER =>",
+                        item.batch_number
                       );
 
                       setStockModal(item);

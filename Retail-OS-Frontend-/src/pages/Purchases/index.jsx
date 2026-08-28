@@ -7,7 +7,6 @@ import {
 
 import { getSuppliers } from "../../api/supplierApi";
 
-
 import {
   BsSearch,
   BsPlus,
@@ -294,9 +293,19 @@ const PurchaseFormModal = ({
             <select
               className="ec-input"
               value={form.status}
-              onChange={(e) =>
-                set("status", e.target.value)
-              }
+              onChange={(e) => {
+                const status = e.target.value;
+
+                set("status", status);
+
+                // Received purchase should be Paid
+                if (status === "Received") {
+                  set(
+                    "paymentStatus",
+                    "Paid"
+                  );
+                }
+              }}
             >
               <option value="Pending">
                 Pending
@@ -407,8 +416,7 @@ const PurchaseDetailsModal = ({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns:
-              "1fr 1fr",
+            gridTemplateColumns: "1fr 1fr",
             gap: 12,
           }}
         >
@@ -572,13 +580,24 @@ const Purchases = () => {
 
           const mappedPurchases =
             data.map((po) => ({
+              /*
+               * PURCHASE ID
+               */
               id: po.po_number,
 
               supplier:
                 `Supplier #${po.supplier_id}`,
 
+              /*
+               * INVOICE NUMBER
+               *
+               * Keep Invoice Number separate
+               * from Purchase ID.
+               */
               invoiceNumber:
-                po.po_number,
+                po.invoice_number ||
+                po.invoice_no ||
+                `INV-${po.id}`,
 
               purchaseDate:
                 po.created_at
@@ -618,8 +637,22 @@ const Purchases = () => {
                   po.total_amount || 0
                 ),
 
+              /*
+               * IMPORTANT PAYMENT FIX
+               *
+               * Backend payment status is used
+               * if available.
+               *
+               * If payment status is missing:
+               * Received -> Paid
+               * Other statuses -> Pending
+               */
               paymentStatus:
-                "Pending",
+                po.payment_status ||
+                po.paymentStatus ||
+                (po.status === "received"
+                  ? "Paid"
+                  : "Pending"),
 
               status:
                 po.status === "draft"
@@ -677,7 +710,11 @@ const Purchases = () => {
           supplier_id:
             Number(form.supplier),
 
-          po_number:
+          /*
+           * Invoice number is separate.
+           * Do not use invoice number as PO number.
+           */
+          invoice_number:
             form.invoiceNumber,
 
           total_amount:
@@ -721,9 +758,12 @@ const Purchases = () => {
         );
 
         const newPurchase = {
+          /*
+           * Purchase ID
+           */
           id:
             created.po_number ||
-            form.invoiceNumber,
+            `PO-${created.id}`,
 
           supplier:
             `Supplier #${
@@ -731,9 +771,14 @@ const Purchases = () => {
               form.supplier
             }`,
 
+          /*
+           * Invoice number stays separate.
+           */
           invoiceNumber:
-            created.po_number ||
-            form.invoiceNumber,
+            created.invoice_number ||
+            created.invoice_no ||
+            form.invoiceNumber ||
+            `INV-${created.id}`,
 
           purchaseDate:
             created.created_at
@@ -774,8 +819,13 @@ const Purchases = () => {
                 form.total
             ) || 0,
 
+          /*
+           * IMPORTANT PAYMENT FIX
+           */
           paymentStatus:
-            form.paymentStatus,
+            form.status === "Received"
+              ? "Paid"
+              : form.paymentStatus,
 
           status:
             form.status,
@@ -805,9 +855,18 @@ const Purchases = () => {
         const updatedPurchase = {
           ...modal,
 
+          /*
+           * Purchase ID must remain unchanged.
+           */
+          id: modal.id,
+
           supplier:
             form.supplier,
 
+          /*
+           * Invoice can be changed
+           * independently.
+           */
           invoiceNumber:
             form.invoiceNumber,
 
@@ -830,8 +889,13 @@ const Purchases = () => {
           total:
             Number(form.total) || 0,
 
+          /*
+           * IMPORTANT PAYMENT FIX
+           */
           paymentStatus:
-            form.paymentStatus,
+            form.status === "Received"
+              ? "Paid"
+              : form.paymentStatus,
 
           status:
             form.status,
@@ -1352,8 +1416,7 @@ const Purchases = () => {
               (purchase) => {
                 const sc =
                   STATUS_CONFIG[
-                    purchase
-                      .status
+                    purchase.status
                   ] ||
                   STATUS_CONFIG.Pending;
 
