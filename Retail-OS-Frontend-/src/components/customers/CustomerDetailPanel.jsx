@@ -228,9 +228,12 @@ const CustomerDetailPanel = ({
     const runAction = async (action, successMessage, onSuccess) => {
         try {
             setActionLoading(true);
-            await action();
+            const res = await action();
             alert(successMessage);
-            if (onSuccess) onSuccess();
+            if (onSuccess) onSuccess(res);
+            if (activeTab !== 'Overview') {
+                await fetchTabData(activeTab);
+            }
             if (onRefresh) await onRefresh(customer.backendId);
         } catch (error) {
             alert(getApiErrorMessage(error, 'Action failed. Please try again.'));
@@ -613,7 +616,20 @@ const CustomerDetailPanel = ({
                                                         text: noteText.trim(),
                                                     }),
                                                     'Customer note saved successfully.',
-                                                    () => setNoteText('')
+                                                    (res) => {
+                                                        const newObj = {
+                                                            id: res?.id || Date.now(),
+                                                            content: noteText.trim(),
+                                                            note: noteText.trim(),
+                                                            text: noteText.trim(),
+                                                            created_at: new Date().toISOString(),
+                                                        };
+                                                        setTabData(prev => ({
+                                                            ...prev,
+                                                            notes: Array.isArray(prev.notes) ? [newObj, ...prev.notes] : [newObj],
+                                                        }));
+                                                        setNoteText('');
+                                                    }
                                                 )}
                                             >
                                                 Save Note
@@ -657,7 +673,21 @@ const CustomerDetailPanel = ({
                                                             text: smsMessage.trim(),
                                                         }),
                                                         'SMS notification sent successfully.',
-                                                        () => setSmsMessage('')
+                                                        (res) => {
+                                                            const newObj = {
+                                                                id: res?.id || Date.now(),
+                                                                channel: 'SMS',
+                                                                type: 'SMS',
+                                                                message: smsMessage.trim(),
+                                                                content: smsMessage.trim(),
+                                                                sent_at: new Date().toISOString(),
+                                                            };
+                                                            setTabData(prev => ({
+                                                                ...prev,
+                                                                communications: Array.isArray(prev.communications) ? [newObj, ...prev.communications] : [newObj],
+                                                            }));
+                                                            setSmsMessage('');
+                                                        }
                                                     )}
                                                 >
                                                     Send SMS
@@ -681,7 +711,21 @@ const CustomerDetailPanel = ({
                                                             text: whatsappMessage.trim(),
                                                         }),
                                                         'WhatsApp message sent successfully.',
-                                                        () => setWhatsappMessage('')
+                                                        (res) => {
+                                                            const newObj = {
+                                                                id: res?.id || Date.now(),
+                                                                channel: 'WhatsApp',
+                                                                type: 'WhatsApp',
+                                                                message: whatsappMessage.trim(),
+                                                                content: whatsappMessage.trim(),
+                                                                sent_at: new Date().toISOString(),
+                                                            };
+                                                            setTabData(prev => ({
+                                                                ...prev,
+                                                                communications: Array.isArray(prev.communications) ? [newObj, ...prev.communications] : [newObj],
+                                                            }));
+                                                            setWhatsappMessage('');
+                                                        }
                                                     )}
                                                 >
                                                     Send WhatsApp

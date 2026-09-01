@@ -397,7 +397,7 @@ const EditCustomerModal = ({ customer, onClose, onSaved }) => {
 };
 
 // Send Marketing Campaign Modal
-const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose }) => {
+const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCampaignSent }) => {
     const [selectedCustomerIds, setSelectedCustomerIds] = useState(preSelectedIds || []);
     const [communicationType, setCommunicationType] = useState('sms');
     const [message, setMessage] = useState('');
@@ -472,12 +472,19 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose }) => 
 
         setSubmitting(true);
         try {
-            await sendCampaign({
+            const res = await sendCampaign({
                 customer_ids: selectedCustomerIds,
                 communication_type: communicationType,
                 message: message.trim(),
             });
             alert('Marketing campaign sent successfully!');
+            if (onCampaignSent) {
+                onCampaignSent(res, {
+                    selectedCustomerIds,
+                    communicationType,
+                    message: message.trim(),
+                });
+            }
             onClose();
         } catch (err) {
             console.error('Send campaign error:', err);
