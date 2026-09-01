@@ -138,35 +138,65 @@ const Dashboard = () => {
         let active = true;
         const fetchDashboardData = async () => {
             try {
-                // Fetch up to 500 orders (adjust logic if pagination is required)
-                const ordersData = await getOrders({ store_id: 1, page: 1, page_size: 500 });
-                const orders = Array.isArray(ordersData) ? ordersData : (ordersData.items || ordersData.data || []);
+                const savedUser = JSON.parse(localStorage.getItem("user") || "{}");
+                const storeId = savedUser?.store_id || savedUser?.storeId || 1;
+
+                let orders = [];
+                try {
+                    const ordersData = await getOrders({ store_id: storeId, page: 1, page_size: 500 });
+                    orders = Array.isArray(ordersData)
+                        ? ordersData
+                        : (Array.isArray(ordersData?.items)
+                            ? ordersData.items
+                            : (Array.isArray(ordersData?.data)
+                                ? ordersData.data
+                                : (Array.isArray(ordersData?.orders) ? ordersData.orders : [])));
+                } catch (e) {
+                    console.warn("Orders fetch fallback in Dashboard:", e);
+                }
+
+                let products = [];
+                try {
+                    const productsData = await productService.getAll();
+                    const rawProducts = productsData?.data ?? productsData;
+                    products = Array.isArray(rawProducts)
+                        ? rawProducts
+                        : (Array.isArray(rawProducts?.items)
+                            ? rawProducts.items
+                            : (Array.isArray(rawProducts?.data) ? rawProducts.data : []));
+                } catch (e) {
+                    console.warn("Products fetch fallback in Dashboard:", e);
+                }
 
                 let sales = 0;
                 let sold = 0;
                 let cost = 0;
 
-                // Fetch products to estimate cost (fallback to 60% of price if cost_price is missing)
-                const productsData = await productService.getAll();
-                const products = Array.isArray(productsData) ? productsData : (productsData.items || productsData.data || []);
                 const costMap = {};
-                products.forEach(p => {
-                    costMap[p.id] = parseFloat(p.cost_price || (p.price * 0.6) || 0);
-                });
-
-                orders.forEach(o => {
-                    const status = o.status ? o.status.toLowerCase() : 'pending';
-                    if (status !== 'cancelled' && status !== 'returned') {
-                        sales += parseFloat(o.total_amount || 0);
-                        if (o.items && Array.isArray(o.items)) {
-                            o.items.forEach(i => {
-                                const qty = Number(i.quantity) || 1;
-                                sold += qty;
-                                cost += (costMap[i.product_id] || 0) * qty;
-                            });
+                if (Array.isArray(products)) {
+                    products.forEach(p => {
+                        if (p && p.id) {
+                            costMap[p.id] = parseFloat(p.cost_price || (p.price * 0.6) || 0);
                         }
-                    }
-                });
+                    });
+                }
+
+                if (Array.isArray(orders)) {
+                    orders.forEach(o => {
+                        if (!o) return;
+                        const status = o.status ? String(o.status).toLowerCase() : 'pending';
+                        if (status !== 'cancelled' && status !== 'returned') {
+                            sales += parseFloat(o.total_amount || 0);
+                            if (o.items && Array.isArray(o.items)) {
+                                o.items.forEach(i => {
+                                    const qty = Number(i.quantity) || 1;
+                                    sold += qty;
+                                    cost += (costMap[i.product_id] || 0) * qty;
+                                });
+                            }
+                        }
+                    });
+                }
 
                 if (active) {
                     setRealStats({ totalSales: sales, totalCost: cost, productSold: sold, loading: false });
@@ -178,6 +208,7 @@ const Dashboard = () => {
                 }
             }
         };
+
         fetchDashboardData();
         return () => { active = false; };
     }, []);

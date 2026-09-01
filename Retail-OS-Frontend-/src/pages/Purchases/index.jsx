@@ -422,9 +422,19 @@ const PurchaseFormModal = ({
             <select
               className="ec-input"
               value={form.status}
-              onChange={(e) =>
-                set("status", e.target.value)
-              }
+              onChange={(e) => {
+                const status = e.target.value;
+
+                set("status", status);
+
+                // Received purchase should be Paid
+                if (status === "Received") {
+                  set(
+                    "paymentStatus",
+                    "Paid"
+                  );
+                }
+              }}
             >
               <option value="Pending">
                 Pending
@@ -825,7 +835,10 @@ const handleUpdatePurchaseStatus = async (
               po.store_id ?? "",
 
             invoiceNumber:
-              po.po_number || "",
+              po.invoice_number ||
+              po.invoice_no ||
+              po.po_number ||
+              `INV-${po.id}`,
 
             purchaseDate:
               po.created_at || "",
@@ -854,7 +867,11 @@ const handleUpdatePurchaseStatus = async (
               ),
 
             paymentStatus:
-              "Pending",
+              po.payment_status ||
+              po.paymentStatus ||
+              (po.status === "received"
+                ? "Paid"
+                : "Pending"),
 
             status:
               po.status === "draft"
@@ -921,10 +938,11 @@ const handleUpdatePurchaseStatus = async (
           supplier_id:
             Number(form.supplier),
 
-          // IMPORTANT:
-          // Previously store_id was hardcoded to 8.
           store_id:
             Number(form.storeId),
+
+          invoice_number:
+            form.invoiceNumber,
 
           remarks:
             form.remarks ||
@@ -990,9 +1008,10 @@ const handleUpdatePurchaseStatus = async (
             Number(form.storeId),
 
           invoiceNumber:
-            created?.po_number ||
+            created?.invoice_number ||
+            created?.invoice_no ||
             form.invoiceNumber ||
-            `PO-${created?.id}`,
+            `INV-${created?.id}`,
 
           purchaseDate:
             created?.created_at ||
@@ -1015,8 +1034,9 @@ const handleUpdatePurchaseStatus = async (
             totalAmount,
 
           paymentStatus:
-            form.paymentStatus ||
-            "Pending",
+            form.status === "Received"
+              ? "Paid"
+              : form.paymentStatus || "Pending",
 
           status:
             created?.status === "received"
@@ -1038,7 +1058,7 @@ const handleUpdatePurchaseStatus = async (
         
         setError("");
         setModal(null);
-
+        alert("Purchase created successfully!");
         return;
       }
 
@@ -1049,15 +1069,16 @@ const handleUpdatePurchaseStatus = async (
       if (modal?.id) {
         const purchaseOrderId =
           modal.backendId;
-          
 
         const totalAmount =
           Number(form.total) || 0;
-const payload = {
-  supplier_id: Number(form.supplier),
-  store_id: Number(form.storeId),
-  remarks: form.remarks || "Updated purchase order",
-};
+
+        const payload = {
+          supplier_id: Number(form.supplier),
+          store_id: Number(form.storeId),
+          invoice_number: form.invoiceNumber,
+          remarks: form.remarks || "Updated purchase order",
+        };
 
         console.log(
           "========== UPDATE PURCHASE =========="
@@ -1073,30 +1094,32 @@ const payload = {
           payload
         );
 
-        const updated =
-          await updatePurchaseOrder(
-            purchaseOrderId,
-            payload
-          );
+        let updated;
+        if (purchaseOrderId) {
+          updated =
+            await updatePurchaseOrder(
+              purchaseOrderId,
+              payload
+            );
+        }
 
-          
-
-if (form.status) {
-  updatedStatus =
-    await updatePurchaseOrderStatus(
-      purchaseOrderId,
-      {
-        status:
-          form.status === "Pending"
-            ? "draft"
-            : form.status === "Received"
-            ? "received"
-            : form.status === "Cancelled"
-            ? "cancelled"
-            : form.status,
-      }
-    );
-}
+        let updatedStatus;
+        if (form.status && purchaseOrderId) {
+          updatedStatus =
+            await updatePurchaseOrderStatus(
+              purchaseOrderId,
+              {
+                status:
+                  form.status === "Pending"
+                    ? "draft"
+                    : form.status === "Received"
+                    ? "received"
+                    : form.status === "Cancelled"
+                    ? "cancelled"
+                    : form.status,
+              }
+            );
+        }
 
         const updatedPurchase = {
           ...modal,
@@ -1107,7 +1130,6 @@ if (form.status) {
 
           id:
             updated?.po_number ??
-            form.invoiceNumber ??
             modal.id,
 
           supplierId:
@@ -1126,8 +1148,9 @@ if (form.status) {
             modal.storeId,
 
           invoiceNumber:
-            updated?.po_number ??
-            form.invoiceNumber,
+            form.invoiceNumber ||
+            updated?.invoice_number ||
+            modal.invoiceNumber,
 
           purchaseDate:
             updated?.created_at ??
@@ -1166,16 +1189,16 @@ if (form.status) {
             ),
 
           paymentStatus:
-            form.paymentStatus ||
-            modal.paymentStatus ||
-            "Pending",
+            form.status === "Received"
+              ? "Paid"
+              : form.paymentStatus || modal.paymentStatus || "Pending",
 
-         status:
-  updatedStatus?.status === "received"
-    ? "Received"
-    : updatedStatus?.status === "cancelled"
-    ? "Cancelled"
-    : "Pending",
+          status:
+            updatedStatus?.status === "received"
+              ? "Received"
+              : updatedStatus?.status === "cancelled"
+              ? "Cancelled"
+              : form.status || "Pending",
 
           remarks:
             updated?.remarks ??
@@ -1186,14 +1209,14 @@ if (form.status) {
 
         setPurchases((prev) =>
           prev.map((p) =>
-            p.backendId ===
-            purchaseOrderId
+            (purchaseOrderId && p.backendId === purchaseOrderId) || p.id === modal.id
               ? updatedPurchase
               : p
           )
         );
 
         setModal(null);
+        alert("Purchase updated successfully!");
       }
     } catch (err) {
       console.error(
