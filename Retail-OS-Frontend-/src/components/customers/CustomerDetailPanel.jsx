@@ -609,19 +609,15 @@ const CustomerDetailPanel = ({
                                                 disabled={actionLoading || !noteText.trim()}
                                                 onClick={() => runAction(
                                                     () => createNote({
-                                                        customer_id: Number(customer.backendId),
-                                                        id: Number(customer.backendId),
-                                                        content: noteText.trim(),
+                                                        customer_id: Number(customer.backendId || customer.id),
                                                         note: noteText.trim(),
-                                                        text: noteText.trim(),
                                                     }),
                                                     'Customer note saved successfully.',
-                                                    (res) => {
+                                                    async (res) => {
                                                         const newObj = {
                                                             id: res?.id || Date.now(),
-                                                            content: noteText.trim(),
                                                             note: noteText.trim(),
-                                                            text: noteText.trim(),
+                                                            content: noteText.trim(),
                                                             created_at: new Date().toISOString(),
                                                         };
                                                         setTabData(prev => ({
@@ -629,6 +625,7 @@ const CustomerDetailPanel = ({
                                                             notes: Array.isArray(prev.notes) ? [newObj, ...prev.notes] : [newObj],
                                                         }));
                                                         setNoteText('');
+                                                        await fetchTabData('Notes', true);
                                                     }
                                                 )}
                                             >
@@ -648,9 +645,15 @@ const CustomerDetailPanel = ({
                                             emptyDesc="SMS and WhatsApp messages sent to customer will appear here."
                                             renderItem={(msg) => (
                                                 <div>
-                                                    <strong style={{ textTransform: 'uppercase', color: '#6366f1' }}>{msg.channel || msg.type || 'Message'}</strong>
+                                                    <strong style={{ textTransform: 'uppercase', color: '#6366f1' }}>
+                                                        {msg.communication_type || msg.channel || msg.type || 'Message'}
+                                                    </strong>
                                                     <p style={{ margin: '2px 0 0 0' }}>{msg.message || msg.content || msg.body || '—'}</p>
-                                                    {msg.sent_at && <span style={{ color: '#9ca3af', fontSize: 10, display: 'block', marginTop: 2 }}>{new Date(msg.sent_at).toLocaleString('en-GB')}</span>}
+                                                    {(msg.created_at || msg.sent_at) && (
+                                                        <span style={{ color: '#9ca3af', fontSize: 10, display: 'block', marginTop: 2 }}>
+                                                            {new Date(msg.created_at || msg.sent_at).toLocaleString('en-GB')}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             )}
                                         />
@@ -666,27 +669,26 @@ const CustomerDetailPanel = ({
                                                     disabled={actionLoading || !smsMessage.trim()}
                                                     onClick={() => runAction(
                                                         () => sendCustomerSms({
-                                                            customer_id: Number(customer.backendId),
-                                                            id: Number(customer.backendId),
+                                                            customer_id: Number(customer.backendId || customer.id),
+                                                            communication_type: 'SMS',
                                                             message: smsMessage.trim(),
-                                                            content: smsMessage.trim(),
-                                                            text: smsMessage.trim(),
                                                         }),
                                                         'SMS notification sent successfully.',
-                                                        (res) => {
+                                                        async (res) => {
                                                             const newObj = {
                                                                 id: res?.id || Date.now(),
+                                                                communication_type: 'SMS',
                                                                 channel: 'SMS',
                                                                 type: 'SMS',
                                                                 message: smsMessage.trim(),
-                                                                content: smsMessage.trim(),
-                                                                sent_at: new Date().toISOString(),
+                                                                created_at: new Date().toISOString(),
                                                             };
                                                             setTabData(prev => ({
                                                                 ...prev,
                                                                 communications: Array.isArray(prev.communications) ? [newObj, ...prev.communications] : [newObj],
                                                             }));
                                                             setSmsMessage('');
+                                                            await fetchTabData('Messages', true);
                                                         }
                                                     )}
                                                 >
@@ -704,27 +706,26 @@ const CustomerDetailPanel = ({
                                                     disabled={actionLoading || !whatsappMessage.trim()}
                                                     onClick={() => runAction(
                                                         () => sendCustomerWhatsapp({
-                                                            customer_id: Number(customer.backendId),
-                                                            id: Number(customer.backendId),
+                                                            customer_id: Number(customer.backendId || customer.id),
+                                                            communication_type: 'WHATSAPP',
                                                             message: whatsappMessage.trim(),
-                                                            content: whatsappMessage.trim(),
-                                                            text: whatsappMessage.trim(),
                                                         }),
                                                         'WhatsApp message sent successfully.',
-                                                        (res) => {
+                                                        async (res) => {
                                                             const newObj = {
                                                                 id: res?.id || Date.now(),
+                                                                communication_type: 'WHATSAPP',
                                                                 channel: 'WhatsApp',
                                                                 type: 'WhatsApp',
                                                                 message: whatsappMessage.trim(),
-                                                                content: whatsappMessage.trim(),
-                                                                sent_at: new Date().toISOString(),
+                                                                created_at: new Date().toISOString(),
                                                             };
                                                             setTabData(prev => ({
                                                                 ...prev,
                                                                 communications: Array.isArray(prev.communications) ? [newObj, ...prev.communications] : [newObj],
                                                             }));
                                                             setWhatsappMessage('');
+                                                            await fetchTabData('Messages', true);
                                                         }
                                                     )}
                                                 >
