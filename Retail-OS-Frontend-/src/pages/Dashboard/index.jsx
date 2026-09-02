@@ -4,7 +4,7 @@ import productService from '../../services/product';
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
     LineChart, Line, CartesianGrid, ComposedChart, Area,
-    ReferenceLine, Legend,
+    ReferenceLine, Legend, PieChart, Pie, Cell,
 } from 'recharts';
 
 /* ── Candlestick raw data ── */
@@ -244,7 +244,7 @@ const Dashboard = () => {
                 </div>
 
                 <div className="dash-stats">
-                    {stats.map((s, i) => (
+                    {displayStats.map((s, i) => (
                         <div key={i} className="stat-card" style={{ background: s.bg }}>
                             <div className="stat-card-top">
                                 <div>
@@ -300,7 +300,7 @@ const Dashboard = () => {
                     </ResponsiveContainer>
                 </div>
 
-                {/* Revenue vs Cost – Pareto */}
+                {/* Revenue vs Cost – Pie Chart */}
                 <div className="chart-card">
                     <div className="chart-card-header">
                         <h2 className="chart-title">Revenue Vs Cost</h2>
@@ -316,39 +316,25 @@ const Dashboard = () => {
                     </div>
 
                     <ResponsiveContainer width="100%" height={260}>
-                        <ComposedChart data={paretoData} margin={{ top: 10, right: 40, bottom: 0, left: -20 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                            <YAxis
-                                yAxisId="left"
-                                tick={{ fontSize: 11, fill: '#94a3b8' }}
-                                axisLine={false}
-                                tickLine={false}
-                                tickFormatter={v => v.toLocaleString()}
-                            />
-                            <YAxis
-                                yAxisId="right"
-                                orientation="right"
-                                tickFormatter={v => `${v}%`}
-                                domain={[0, 100]}
-                                tick={{ fontSize: 11, fill: '#94a3b8' }}
-                                axisLine={false}
-                                tickLine={false}
-                            />
-                            <Tooltip content={<ParetoTooltip />} />
-                            <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#38bdf8" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                            <Bar yAxisId="left" dataKey="cost" name="Cost" fill="#bae6fd" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                            <Line
-                                yAxisId="right"
-                                type="monotone"
-                                dataKey="cumPct"
-                                name="pareto"
-                                stroke="#6366f1"
-                                strokeWidth={2}
-                                dot={{ fill: '#6366f1', r: 4, strokeWidth: 0 }}
-                                activeDot={{ r: 6 }}
-                            />
-                        </ComposedChart>
+                        <PieChart>
+                            <Pie
+                                data={[
+                                    { name: 'Revenue', value: realStats.totalSales },
+                                    { name: 'Cost', value: realStats.totalCost }
+                                ]}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={90}
+                                paddingAngle={5}
+                                dataKey="value"
+                            >
+                                <Cell fill="#38bdf8" />
+                                <Cell fill="#f43f5e" />
+                            </Pie>
+                            <Tooltip formatter={(value) => `₹${value.toLocaleString('en-IN')}`} />
+                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                        </PieChart>
                     </ResponsiveContainer>
                 </div>
             </div>
