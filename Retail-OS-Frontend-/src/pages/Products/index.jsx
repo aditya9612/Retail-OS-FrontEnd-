@@ -141,19 +141,51 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
         setForm(f => ({ ...f, [k]: v }));
         setErrors(prev => ({ ...prev, [k]: '' }));
     };
+    const SKU_REGEX = /^SKU-\d{3,6}$/;
 
+const validateSKUFormat = (sku) => {
+    const value = sku.trim().toUpperCase();
+
+    if (!value) {
+        return 'SKU is required';
+    }
+
+    if (!SKU_REGEX.test(value)) {
+        return 'SKU must be in format SKU-001 with 3 to 6 digits';
+    }
+
+    if (/^SKU-0+$/.test(value)) {
+        return 'SKU cannot be all zeros';
+    }
+
+    return '';
+};
     const validateForm = () => {
         const newErrors = {};
 
         if (!form.name.trim()) {
             newErrors.name = 'Product name is required';
         }
+        const normalizedSKU = form.sku.trim().toUpperCase();
 
-        if (!form.sku.trim()) {
-            newErrors.sku = 'SKU is required';
-        } else if (!/^SKU-\d{3}$/.test(form.sku.trim())) {
-            newErrors.sku = 'SKU must be in format SKU-000';
-        }
+const skuError = validateSKUFormat(normalizedSKU);
+
+if (skuError) {
+    newErrors.sku = skuError;
+} else {
+    const duplicateSKU = products.some(p => {
+        const existingSKU = (p.sku || '').trim().toUpperCase();
+
+        return (
+            existingSKU === normalizedSKU &&
+            p.id !== product?.id
+        );
+    });
+
+    if (duplicateSKU) {
+        newErrors.sku = 'SKU already exists. Please use a unique SKU.';
+    }
+}
 
         if (!form.category) {
             newErrors.category = 'Category is required';
@@ -281,7 +313,20 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
                             <input
                                 className="adm-search"
                                 value={form.sku}
-                                onChange={e => set('sku', e.target.value)}
+                               onChange={e => {
+    let value = e.target.value.toUpperCase();
+
+    if (!value.startsWith('SKU-')) {
+        value = 'SKU-' + value.replace(/^SKU-?/i, '');
+    }
+
+    const digits = value
+        .slice(4)
+        .replace(/\D/g, '')
+        .slice(0, 6);
+
+    set('sku', 'SKU-' + digits);
+}}
                                 placeholder="e.g. SKU-001"
                                 style={{
                                     width: '100%',
