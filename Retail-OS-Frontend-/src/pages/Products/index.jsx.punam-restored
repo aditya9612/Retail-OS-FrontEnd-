@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { inventoryService } from "../../services/inventoryService";
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
@@ -33,7 +33,7 @@ const CATEGORY_NAMES = Object.fromEntries(
 
 const PAGE_SIZE = 10;
 
-const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
+const fmt = (n) => 'Γé╣' + Number(n || 0).toLocaleString('en-IN');
 
 const getProductStock = (p) => {
     if (p.stock !== undefined && p.stock !== null) {
@@ -275,7 +275,7 @@ if (skuError) {
                             Fill in all required product details
                         </p>
                     </div>
-                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+                    <button className="ec-modal-close" onClick={onClose}>Γ£ò</button>
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ padding: 20, display: 'grid', gap: 14 }}>
@@ -483,7 +483,7 @@ if (skuError) {
 
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                MRP (₹)
+                                MRP (Γé╣)
                             </label>
                             <input
                                 type="number"
@@ -511,7 +511,7 @@ if (skuError) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Selling Price (₹)
+                                Selling Price (Γé╣)
                             </label>
                             <input
                                 className="ec-input"
@@ -719,9 +719,7 @@ const Products = () => {
 
             const list = Array.isArray(res)
                 ? res
-                : (Array.isArray(res?.data)
-                    ? res.data
-                    : (res?.data?.items || res?.data?.products || res?.data?.data || res?.data?.results || res?.items || []));
+                : (res?.data || res?.items || []);
 
             setProducts(
                 list.map(p => {
@@ -733,7 +731,7 @@ const Products = () => {
                         category:
                             CATEGORY_NAMES[p.category_id] ||
                             p.category ||
-                            '—',
+                            'ΓÇö',
                         status:
                             stock > 0 &&
                             (p.is_active ?? p.status ?? true),
@@ -1200,7 +1198,7 @@ const Products = () => {
                             padding: '0 4px'
                         }}
                     >
-                        ✕
+                        Γ£ò
                     </button>
                 )}
             </div>
@@ -1303,7 +1301,7 @@ const Products = () => {
                                         fontWeight: 500,
                                         whiteSpace: 'nowrap'
                                     }}>
-                                        {p.barcode || '—'}
+                                        {p.barcode || 'ΓÇö'}
                                     </td>
 
                                     <td style={{
@@ -1330,7 +1328,7 @@ const Products = () => {
                                         fontWeight: 500,
                                         whiteSpace: 'nowrap'
                                     }}>
-                                        {p.gst_rate ? `${p.gst_rate}%` : p.gst || '—'}
+                                        {p.gst_rate ? `${p.gst_rate}%` : p.gst || 'ΓÇö'}
                                     </td>
 
                                     <td style={{

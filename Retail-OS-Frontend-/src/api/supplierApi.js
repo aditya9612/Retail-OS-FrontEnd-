@@ -1,36 +1,27 @@
 import axiosInstance from "./axios";
 
-// Get All Suppliers
-export const getSuppliers = async () => {
-  const response = await axiosInstance.get("/api/v1/suppliers");
+export const listSuppliers = async () => {
+  const response = await axiosInstance.get("/api/v1/suppliers/");
   return response.data;
 };
 
-// Get Supplier By ID
-export const getSupplierById = async (id) => {
+export const getSuppliers = listSuppliers;
+
+export const getSupplier = async (id) => {
   const response = await axiosInstance.get(`/api/v1/suppliers/${id}`);
   return response.data;
 };
 
-// Create Supplier
-export const createSupplier = async (supplierData) => {
-  const response = await axiosInstance.post(
-    "/api/v1/suppliers",
-    supplierData
-  );
+export const createSupplier = async (body) => {
+  const response = await axiosInstance.post("/api/v1/suppliers/", body);
   return response.data;
 };
 
-// Update Supplier
-export const updateSupplier = async (id, supplierData) => {
-  const response = await axiosInstance.patch(
-    `/api/v1/suppliers/${id}`,
-    supplierData
-  );
+export const updateSupplier = async (id, body) => {
+  const response = await axiosInstance.patch(`/api/v1/suppliers/${id}`, body);
   return response.data;
 };
 
-// Delete Supplier
 export const deleteSupplier = async (id) => {
   const response = await axiosInstance.delete(`/api/v1/suppliers/${id}`);
   return response.data;

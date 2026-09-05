@@ -1,0 +1,418 @@
+﻿/* =========================================================
+   LOW STOCK ALERTS PAGE
+========================================================= */
+
+.low-stock-page {
+  width: 100%;
+  min-height: 100vh;
+
+  padding: 24px 28px 40px;
+
+  box-sizing: border-box;
+
+  background: #f5f7fb;
+  color: #0f172a;
+}
+
+.low-stock-container {
+  width: 100%;
+  max-width: 1600px;
+
+  margin: 0 auto;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.low-stock-header {
+  width: 100%;
+
+  background: #ffffff;
+
+  padding: 22px 24px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+
+  box-sizing: border-box;
+
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+
+  margin-bottom: 18px;
+}
+
+.low-stock-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  margin-bottom: 5px;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  color: #64748b;
+
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.low-stock-dot {
+  width: 7px;
+  height: 7px;
+
+  flex-shrink: 0;
+
+  background: #4f46e5;
+
+  border-radius: 50%;
+}
+
+
+/* =========================================================
+   MAIN TITLE
+========================================================= */
+
+.low-stock-header h1 {
+  margin: 0;
+
+  font-size: 27px;
+  line-height: 36px;
+
+  font-weight: 750;
+
+  color: #dc2626;
+
+  letter-spacing: -0.02em;
+}
+
+.low-stock-header p {
+  margin: 5px 0 0;
+
+  font-size: 12px;
+  line-height: 18px;
+
+  color: #64748b;
+}
+
+
+/* =========================================================
+   SUMMARY CARDS
+========================================================= */
+
+.low-stock-summary {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 14px;
+
+  margin-bottom: 18px;
+}
+
+.low-stock-summary-card {
+  min-width: 0;
+
+  background: #ffffff;
+
+  padding: 18px 20px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+
+  box-sizing: border-box;
+
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.low-stock-summary-card:hover {
+  border-color: #d8dee8;
+
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+
+  transform: translateY(-1px);
+}
+
+.low-stock-summary-card span {
+  font-size: 12px;
+  font-weight: 600;
+
+  color: #64748b;
+}
+
+.low-stock-summary-card strong {
+  font-size: 26px;
+  line-height: 32px;
+
+  font-weight: 750;
+
+  color: #dc2626;
+}
+
+
+/* =========================================================
+   ERROR
+========================================================= */
+
+.low-stock-error {
+  width: 100%;
+
+  margin-bottom: 18px;
+
+  padding: 11px 14px;
+
+  box-sizing: border-box;
+
+  background: #fef2f2;
+
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+
+  color: #b91c1c;
+
+  font-size: 12px;
+  font-weight: 600;
+
+  line-height: 18px;
+}
+
+
+/* =========================================================
+   LOW STOCK CARD
+========================================================= */
+
+.low-stock-card {
+  width: 100%;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+
+  box-sizing: border-box;
+
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+
+  overflow: hidden;
+}
+
+.low-stock-card-heading {
+  width: 100%;
+
+  padding: 18px 20px 16px;
+
+  box-sizing: border-box;
+
+  border-bottom: 1px solid #eef2f7;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.low-stock-card-heading h2 {
+  margin: 0;
+
+  font-size: 16px;
+  line-height: 24px;
+
+  font-weight: 700;
+
+  color: #111827;
+
+  letter-spacing: -0.01em;
+}
+
+.low-stock-card-heading p {
+  margin: 4px 0 0;
+
+  font-size: 12px;
+  line-height: 18px;
+
+  color: #64748b;
+}
+
+
+/* =========================================================
+   LOW STOCK COMPONENT AREA
+========================================================= */
+
+.low-stock-card > *:last-child {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 992px) {
+  .low-stock-page {
+    padding: 20px;
+  }
+
+  .low-stock-header {
+    padding: 20px;
+  }
+
+  .low-stock-header h1 {
+    font-size: 25px;
+  }
+
+  .low-stock-summary {
+    gap: 12px;
+  }
+}
+
+
+/* =========================================================
+   SMALL TABLET
+========================================================= */
+
+@media (max-width: 768px) {
+  .low-stock-page {
+    padding: 18px;
+  }
+
+  .low-stock-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .low-stock-header {
+    padding: 18px;
+  }
+
+  .low-stock-header h1 {
+    font-size: 24px;
+    line-height: 32px;
+  }
+
+  .low-stock-card-heading {
+    padding: 16px 18px 14px;
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 576px) {
+  .low-stock-page {
+    padding: 14px 12px 28px;
+  }
+
+  .low-stock-header {
+    padding: 16px;
+
+    border-radius: 9px;
+
+    margin-bottom: 14px;
+  }
+
+  .low-stock-eyebrow {
+    font-size: 10px;
+  }
+
+  .low-stock-header h1 {
+    font-size: 22px;
+    line-height: 29px;
+  }
+
+  .low-stock-header p {
+    font-size: 11.5px;
+  }
+
+  .low-stock-summary {
+    gap: 10px;
+
+    margin-bottom: 14px;
+  }
+
+  .low-stock-summary-card {
+    padding: 15px 16px;
+
+    border-radius: 9px;
+  }
+
+  .low-stock-summary-card strong {
+    font-size: 23px;
+    line-height: 29px;
+  }
+
+  .low-stock-card {
+    border-radius: 9px;
+  }
+
+  .low-stock-card-heading {
+    padding: 15px 16px 13px;
+  }
+
+  .low-stock-card-heading h2 {
+    font-size: 15px;
+  }
+
+  .low-stock-card-heading p {
+    font-size: 11.5px;
+  }
+}
+
+
+/* =========================================================
+   VERY SMALL MOBILE
+========================================================= */
+
+@media (max-width: 420px) {
+  .low-stock-page {
+    padding: 12px 10px 24px;
+  }
+
+  .low-stock-header h1 {
+    font-size: 20px;
+  }
+
+  .low-stock-summary-card {
+    padding: 14px;
+  }
+}
+
+
+/* =========================================================
+   ACCESSIBILITY
+========================================================= */
+
+.low-stock-summary-card:focus-within {
+  border-color: #fecaca;
+
+  box-shadow:
+    0 0 0 3px rgba(220, 38, 38, 0.08);
+}
+
+
+/* =========================================================
+   OVERFLOW SAFETY
+========================================================= */
+
+.low-stock-page,
+.low-stock-container,
+.low-stock-header,
+.low-stock-summary,
+.low-stock-card {
+  max-width: 100%;
+}

@@ -1,4 +1,3 @@
-import { getAccessToken } from "../utils/tokenStorage";
 // Billing Service — Cart & Invoice APIs
 const BASE_URL = 'https://api-testing.myretailos.com/api/v1';
 
@@ -9,7 +8,7 @@ const STORE_ID = 1;
  * Returns Authorization headers using the token stored in localStorage after login.
  */
 const getAuthHeaders = () => {
-    const token = getAccessToken();
+    const token = localStorage.getItem('access_token');
     return {
         'Content-Type': 'application/json',
         Accept: 'application/json',
@@ -151,7 +150,7 @@ export const getInvoiceByOrderId = (orderId) =>
  */
 export const downloadInvoicePdf = async (invoiceId) => {
     const url = `${BASE_URL}/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`;
-    const token = getAccessToken();
+    const token = localStorage.getItem('access_token');
     const headers = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -216,7 +215,7 @@ export const returnInvoiceItem = ({ invoice_id, product_id, return_quantity, rea
  * @returns {Promise<Array>} list of GST rate objects
  */
 export const getGstRates = () =>
-    request(`${BASE_URL}/gst-rates/`, { method: 'GET' });
+    request(`${BASE_URL}/gst-rates`, { method: 'GET' });
 
 /**
  * Create a new GST Rate.

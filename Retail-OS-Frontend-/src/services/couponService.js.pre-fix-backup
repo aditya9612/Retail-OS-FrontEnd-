@@ -1,8 +1,7 @@
-import { getAccessToken } from "../utils/tokenStorage";
 const BASE_URL = 'https://api-testing.myretailos.com/api/v1';
 
 const getAuthHeaders = () => {
-    const token = getAccessToken();
+    const token = localStorage.getItem('access_token');
     return {
         'Content-Type': 'application/json',
         Accept: 'application/json',
@@ -37,7 +36,7 @@ const request = async (url, options = {}) => {
  * @returns {Promise<Array>} list of coupons
  */
 export const getCoupons = () =>
-    request(`${BASE_URL}/coupons/`, { method: 'GET' });
+    request(`${BASE_URL}/coupons`, { method: 'GET' });
 
 /**
  * Fetch a single coupon by ID.
