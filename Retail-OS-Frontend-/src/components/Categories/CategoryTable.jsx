@@ -1,4 +1,10 @@
 ﻿import React from "react";
+import {
+  BsPencil,
+  BsTrash,
+  BsFolder,
+  BsInbox,
+} from "react-icons/bs";
 import "./CategoryTable.css";
 
 const CategoryTable = ({
@@ -24,7 +30,9 @@ const CategoryTable = ({
             <tr>
               <td colSpan="5" className="empty-row">
                 <div className="empty-state">
-                  <div className="empty-icon">≡ƒôé</div>
+                  <div className="empty-icon">
+                    <BsInbox />
+                  </div>
                   <span>No Categories Found</span>
                 </div>
               </td>
@@ -39,7 +47,7 @@ const CategoryTable = ({
                       className="category-icon"
                       aria-hidden="true"
                     >
-                      ≡ƒôü
+                      <BsFolder />
                     </div>
 
                     <span className="category-name-text">
@@ -83,7 +91,6 @@ const CategoryTable = ({
                 {/* ACTIONS */}
                 <td>
                   <div className="table-actions">
-
                     {/* EDIT BUTTON */}
                     <button
                       type="button"
@@ -101,15 +108,9 @@ const CategoryTable = ({
                       aria-label={`Edit ${
                         item.name || "category"
                       }`}
+                      title="Edit"
                     >
-                      <span
-                        className="edit-icon"
-                        aria-hidden="true"
-                      >
-                        Γ£Ä
-                      </span>
-
-                      <span>Edit</span>
+                      <BsPencil />
                     </button>
 
                     {/* DELETE BUTTON */}
@@ -129,17 +130,10 @@ const CategoryTable = ({
                       aria-label={`Delete ${
                         item.name || "category"
                       }`}
+                      title="Delete"
                     >
-                      <span
-                        className="delete-icon"
-                        aria-hidden="true"
-                      >
-                        ≡ƒùæ
-                      </span>
-
-                      <span>Delete</span>
+                      <BsTrash />
                     </button>
-
                   </div>
                 </td>
               </tr>

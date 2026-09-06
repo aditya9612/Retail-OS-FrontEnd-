@@ -1,6 +1,6 @@
 import axiosInstance from "../api/axios";
 
-const BASE_URL = "/api/v1/products/categories/";
+const BASE_URL = "/api/v1/categories";
 
 const category = {
   // Get all categories
@@ -10,7 +10,7 @@ const category = {
 
   // Get single category
   getById(id) {
-    return axiosInstance.get(`${BASE_URL}${id}`);
+    return axiosInstance.get(`${BASE_URL}/${id}`);
   },
 
   // Create category
@@ -20,12 +20,12 @@ const category = {
 
   // Update category
   update(id, data) {
-    return axiosInstance.put(`${BASE_URL}${id}`, data);
+    return axiosInstance.put(`${BASE_URL}/${id}`, data);
   },
 
   // Delete category
   delete(id) {
-    return axiosInstance.delete(`${BASE_URL}${id}`);
+    return axiosInstance.delete(`${BASE_URL}/${id}`);
   },
 };
 

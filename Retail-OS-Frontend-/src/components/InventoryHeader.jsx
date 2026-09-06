@@ -1,4 +1,11 @@
 import React from "react";
+import {
+  BsBoxArrowInDown,
+  BsBoxArrowUp,
+  BsArrowLeftRight,
+  BsBagCheck,
+} from "react-icons/bs";
+
 import "./InventoryHeader.css";
 
 const InventoryHeader = ({
@@ -13,7 +20,7 @@ const InventoryHeader = ({
     <div className="inventory-header">
 
       <div className="inventory-header-left">
-<h1>Inventory Management</h1>
+        <h1>Inventory Management</h1>
 
         <p>
           Manage stock levels, warehouse operations, suppliers,
@@ -24,7 +31,10 @@ const InventoryHeader = ({
       <div className="inventory-header-right">
 
         <button
-          className="header-btn stock-in-btn"
+          type="button"
+          className="header-icon-btn"
+          title="Stock In"
+          aria-label="Stock In"
           onClick={() =>
             setStockModal({
               name: "Stock In",
@@ -34,11 +44,14 @@ const InventoryHeader = ({
             })
           }
         >
-          + Stock In
+          <BsBoxArrowInDown />
         </button>
 
         <button
-          className="header-btn stock-out-btn"
+          type="button"
+          className="header-icon-btn"
+          title="Stock Out"
+          aria-label="Stock Out"
           onClick={() =>
             setStockModal({
               name: "Stock Out",
@@ -48,11 +61,14 @@ const InventoryHeader = ({
             })
           }
         >
-          + Stock Out
+          <BsBoxArrowUp />
         </button>
 
         <button
-          className="header-btn transfer-btn"
+          type="button"
+          className="header-icon-btn"
+          title="Transfer"
+          aria-label="Transfer"
           onClick={() =>
             setStockModal({
               name: "Transfer",
@@ -62,34 +78,40 @@ const InventoryHeader = ({
             })
           }
         >
-          + Transfer
+          <BsArrowLeftRight />
         </button>
-<button
-  className="header-btn purchase-btn"
-  onClick={() => {
-    console.log("PURCHASE ORDER CLICKED");
 
-    setStockModal({
-      name: "Purchase Order",
-      quantity: 0,
-      unit: "Pcs",
-      action: "purchase",
-    });
-  }}
->
-  + Purchase Order
-</button>
-</div>
+        <button
+          type="button"
+          className="header-icon-btn"
+          title="Purchase Order"
+          aria-label="Purchase Order"
+          onClick={() =>
+            setStockModal({
+              name: "Purchase Order",
+              quantity: 0,
+              unit: "Pcs",
+              action: "purchase",
+            })
+          }
+        >
+          <BsBagCheck />
+        </button>
+
+      </div>
+
       <div className="inventory-tabs">
 
         <button
+          type="button"
           className={activeTab === "All Items" ? "active-tab" : ""}
           onClick={() => setActiveTab("All Items")}
         >
           All Items ({totalItems})
         </button>
 
-        <button  
+        <button
+          type="button"
           className={activeTab === "Low Stock" ? "active-tab" : ""}
           onClick={() => setActiveTab("Low Stock")}
         >
@@ -97,6 +119,7 @@ const InventoryHeader = ({
         </button>
 
         <button
+          type="button"
           className={activeTab === "Out of Stock" ? "active-tab" : ""}
           onClick={() => setActiveTab("Out of Stock")}
         >

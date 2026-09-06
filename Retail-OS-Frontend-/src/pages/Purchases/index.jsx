@@ -23,6 +23,7 @@ import {
   BsClockHistory,
   BsXCircleFill,
   BsTrashFill,
+  BsCart3,
 } from "react-icons/bs";
 
 /* =====================================================
@@ -88,7 +89,7 @@ const fmt = (n) => {
   }
 
   return (
-    "Γé╣" +
+    "₹" +
     value.toLocaleString("en-IN", {
       maximumFractionDigits: 2,
     })
@@ -561,7 +562,7 @@ const PurchaseFormModal = ({
             className="ec-modal-close"
             onClick={onClose}
           >
-            Γ£ò
+            <BsXCircleFill size={16} />
           </button>
         </div>
 
@@ -869,7 +870,7 @@ const PurchaseFormModal = ({
                                 .value
                             )
                           }
-                          placeholder="Γé╣ Price"
+                          placeholder="₹ Price"
                         />
                       </div>
 
@@ -1204,7 +1205,7 @@ const PurchaseDetailsModal = ({
             className="ec-modal-close"
             onClick={onClose}
           >
-            Γ£ò
+            <BsXCircleFill size={16} />
           </button>
         </div>
 
@@ -2507,7 +2508,7 @@ const Purchases = () => {
       value:
         purchases.length,
       color: "#6366f1",
-      icon: "≡ƒ¢Æ",
+      icon: <BsCart3 size={20} />,
     },
 
     {
@@ -2515,7 +2516,7 @@ const Purchases = () => {
       value:
         receivedCount,
       color: "#10b981",
-      icon: "Γ£à",
+      icon: <BsCheckCircleFill size={20} />,
     },
 
     {
@@ -2523,7 +2524,7 @@ const Purchases = () => {
       value:
         pendingCount,
       color: "#f59e0b",
-      icon: "ΓÅ│",
+      icon: <BsClockHistory size={20} />,
     },
 
     {
@@ -2533,7 +2534,7 @@ const Purchases = () => {
         totalPurchaseAmount
       ),
       color: "#0ea5e9",
-      icon: "≡ƒÆ░",
+      icon: <span style={{ fontWeight: 800 }}>₹</span>,
     },
   ];
 
@@ -2549,7 +2550,8 @@ const Purchases = () => {
       <div className="adm-page-header">
         <div>
           <h1 className="adm-page-title">
-            ≡ƒ¢Æ Purchases
+            <BsCart3 size={20} style={{ marginRight: 8, verticalAlign: "middle" }} />
+            Purchases
           </h1>
 
           <p className="adm-page-sub">
@@ -3190,7 +3192,7 @@ const Purchases = () => {
               {(page - 1) *
                 PAGE_SIZE +
                 1}
-              ΓÇô
+              –
               {Math.min(
                 page *
                   PAGE_SIZE,

@@ -54,17 +54,19 @@ const menuGroups = [
             { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/ecommerce/returns' },
         ],
     },
+
     {
-        label: 'Inventory',
-        items: [
-           
-            { name: 'Inventory', icon: <BsBoxSeam />, path: '/inventory', hasArrow: true },
-            { name: 'Categories', icon: <BsTag />, path: '/categories', hasArrow: true },
-            { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases', hasArrow: true },
-            { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/returns', hasArrow: true },
-            
-        ],
-    },
+    label: 'Inventory',
+    items: [
+        { name: 'Inventory', icon: <BsBoxSeam />, path: '/inventory', hasArrow: true },
+
+        { name: 'Low Stock Alerts', icon: <BsActivity />, path: '/low-stock-alerts', hasArrow: true },
+
+        { name: 'Categories', icon: <BsTag />, path: '/categories', hasArrow: true },
+        { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases', hasArrow: true },
+        { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/returns', hasArrow: true },
+    ],
+},
     {
         label: 'People',
         items: [

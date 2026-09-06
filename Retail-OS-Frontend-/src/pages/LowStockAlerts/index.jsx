@@ -460,53 +460,17 @@ const LowStockAlerts = () => {
     return (
         <div className="low-stock-page">
             <div className="low-stock-container">
-
-                {/* HEADER */}
-
                 <section className="low-stock-header">
                     <div>
-                        <div className="low-stock-eyebrow">
-                            <span className="low-stock-dot" />
-                            INVENTORY MANAGEMENT
-                        </div>
-
-                        <h1>
-                            Low Stock Alerts
+                        <h1 style={{ marginBottom: 6 }}>
+                            Low Stock Alert
                         </h1>
 
                         <p>
-                            Monitor products that have
-                            reached or fallen below their
-                            reorder level.
+                            Monitor products that have reached or fallen below their reorder level.
                         </p>
                     </div>
                 </section>
-
-                {/* SUMMARY */}
-
-                <section className="low-stock-summary">
-                    <div className="low-stock-summary-card">
-                        <span>
-                            Total Low Stock Items
-                        </span>
-
-                        <strong>
-                            {lowStockItems.length}
-                        </strong>
-                    </div>
-
-                    <div className="low-stock-summary-card">
-                        <span>
-                            Products Need Attention
-                        </span>
-
-                        <strong>
-                            {lowStockItems.length}
-                        </strong>
-                    </div>
-                </section>
-
-                {/* ERROR */}
 
                 {error && (
                     <div className="low-stock-error">
@@ -514,23 +478,7 @@ const LowStockAlerts = () => {
                     </div>
                 )}
 
-                {/* LOW STOCK TABLE */}
-
                 <section className="low-stock-card">
-                    <div className="low-stock-card-heading">
-                        <div>
-                            <h2>
-                                Low Stock Products
-                            </h2>
-
-                            <p>
-                                Review products and
-                                replenish stock before
-                                they run out.
-                            </p>
-                        </div>
-                    </div>
-
                     <LowStockAlert
                         loading={loading}
                         error={error}

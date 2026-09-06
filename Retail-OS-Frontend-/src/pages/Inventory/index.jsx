@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from "react";
 import InventoryHeader from "../../components/InventoryHeader";
 import InventoryCards from "../../components/InventoryCards";
-import InventoryFilters from "../../components/InventoryFilters";
 import InventoryTable from "../../components/InventoryTable";
-import LowStockAlert from "../../components/LowStockAlert";
 import category from "../../services/categoryService";
 
 
@@ -19,6 +17,12 @@ import {
   stockOut,
   transferStock,
   lowStock,
+  inventoryDashboard,
+  getInventoryValuation,
+  getInventoryExpiry,
+   listMovements,
+  adjustInventory,
+  getInventoryByProductId,
 } from "../../services/inventoryService";
  
 const PAGE_SIZE = 8;
@@ -302,6 +306,11 @@ console.log("PRODUCTS LENGTH =>", products.length);
     const [lowStockItems, setLowStockItems] = useState([]);
     const [lowStockLoading, setLowStockLoading] = useState(false);
     const [lowStockError, setLowStockError] = useState("");
+
+    // Additional Inventory API data
+    const [dashboardData, setDashboardData] = useState(null);
+    const [valuationData, setValuationData] = useState(null);
+    const [expiryData, setExpiryData] = useState(null);
   
 const fetchInventory = async () => {
     try {
@@ -541,13 +550,54 @@ const fetchStores = async () => {
 
 };
 useEffect(() => {
-    
     fetchProducts();
     fetchStores();
-     fetchCategories();
+    fetchCategories();
+
+    // Inventory and Low Stock should load independently.
+    // Do not wait for Products API to succeed.
+    fetchInventory();
+    fetchLowStock();
+}, []);
+
+// Additional Inventory APIs: keep independent from Inventory and Low Stock calls.
+useEffect(() => {
+    const fetchAdditionalInventoryApis = async () => {
+        const results = await Promise.allSettled([
+            inventoryDashboard(),
+            getInventoryValuation(),
+            getInventoryExpiry(),
+        ]);
+
+        if (results[0].status === "fulfilled") {
+            setDashboardData(results[0].value);
+        } else {
+            console.error("INVENTORY DASHBOARD FAILED =>", results[0].reason);
+        }
+
+        if (results[1].status === "fulfilled") {
+            setValuationData(results[1].value);
+        } else {
+            console.error("INVENTORY VALUATION FAILED =>", results[1].reason);
+        }
+
+        if (results[2].status === "fulfilled") {
+            setExpiryData(results[2].value);
+        } else {
+            console.error("INVENTORY EXPIRY FAILED =>", results[2].reason);
+        }
+
+        console.log("INVENTORY DASHBOARD RESULT =>", results[0]);
+        console.log("INVENTORY VALUATION RESULT =>", results[1]);
+        console.log("INVENTORY EXPIRY RESULT =>", results[2]);
+    };
+
+    fetchAdditionalInventoryApis();
 }, []);
 
 useEffect(() => {
+    // Re-fetch Low Stock after Products + Stores are available
+    // so product/store names can be enriched in the alert table.
     if (products.length > 0 && stores.length > 0) {
         fetchLowStock();
     }
@@ -569,11 +619,8 @@ useEffect(() => {
     });
 }, [stores]);
 
-useEffect(() => {
-    if (products.length > 0) {
-        fetchInventory();
-    }
-}, [products]);
+// Inventory is already fetched on initial page load above.
+// It is intentionally independent of the Products API.
   console.log("Inventory State =>", inventory);
 console.log("Search Value =>", search);
 
@@ -802,17 +849,75 @@ catch (err) {
 
 };
     
-    const totalValue = inventory.reduce((sum, i) => sum + getItemStock(i) * (i.costPrice || i.unit_cost || 0), 0);
-    const lowStockCount = inventory.filter(i => getItemStock(i) > 0 && getItemStock(i) < getItemMinStock(i)).length;
-    const outOfStockCount = inventory.filter(i => getItemStock(i) === 0).length;
+    // Local fallback values from the working inventory response
+    const totalValue = inventory.reduce(
+        (sum, i) => sum + getItemStock(i) * (i.costPrice || i.unit_cost || 0),
+        0
+    );
+    const lowStockCount = inventory.filter(
+        (i) => getItemStock(i) > 0 && getItemStock(i) < getItemMinStock(i)
+    ).length;
+    const outOfStockCount = inventory.filter((i) => getItemStock(i) === 0).length;
     const totalItems = inventory.reduce((sum, i) => sum + getItemStock(i), 0);
 
+    // Normalize backend responses. If a field is absent, keep the current working
+    // inventory-derived value as a safe fallback instead of showing dummy data.
+    const dashboardPayload = dashboardData?.data ?? dashboardData ?? {};
+    const valuationPayload = valuationData?.data ?? valuationData ?? {};
+    const expiryPayload = expiryData?.data ?? expiryData ?? null;
+
+    const dashboardTotalSkus =
+        dashboardPayload?.total_skus ??
+        dashboardPayload?.total_products ??
+        dashboardPayload?.sku_count ??
+        inventory.length;
+
+    const dashboardTotalUnits =
+        dashboardPayload?.total_stock_units ??
+        dashboardPayload?.total_units ??
+        dashboardPayload?.stock_units ??
+        totalItems;
+
+    const dashboardLowStock =
+        dashboardPayload?.low_stock_count ??
+        dashboardPayload?.low_stock ??
+        lowStockCount;
+
+    const dashboardOutOfStock =
+        dashboardPayload?.out_of_stock_count ??
+        dashboardPayload?.out_of_stock ??
+        outOfStockCount;
+
+    const valuationValue = Number(
+        valuationPayload?.total_value ??
+        valuationPayload?.inventory_value ??
+        valuationPayload?.valuation ??
+        valuationPayload?.total_valuation ??
+        totalValue
+    );
+
+    const expiryList = Array.isArray(expiryPayload)
+        ? expiryPayload
+        : Array.isArray(expiryPayload?.items)
+            ? expiryPayload.items
+            : Array.isArray(expiryPayload?.content)
+                ? expiryPayload.content
+                : [];
+
+    const expiredCount = Number(
+        expiryPayload?.expired_count ??
+        expiryPayload?.total_expired ??
+        expiryPayload?.count ??
+        expiryList.length
+    );
+
     const kpis = [
-        { label: 'Total SKUs', value: inventory.length, color: '#6366f1', bg: '#eef2ff', icon: '📦' },
-        { label: 'Total Stock Units', value: totalItems.toLocaleString(), color: '#10b981', bg: '#ecfdf5', icon: '🗃️' },
-        { label: 'Low Stock Alerts', value: lowStockCount, color: '#f59e0b', bg: '#fffbeb', icon: '⚠️' },
-        { label: 'Out of Stock', value: outOfStockCount, color: '#ef4444', bg: '#fef2f2', icon: '🚫' },
-        { label: 'Inventory Value', value: fmt(totalValue), color: '#8b5cf6', bg: '#f5f3ff', icon: '💰' },
+        { label: 'Total SKUs', value: dashboardTotalSkus, color: '#6366f1', bg: '#eef2ff', icon: '📦' },
+        { label: 'Total Stock Units', value: Number(dashboardTotalUnits || 0).toLocaleString(), color: '#10b981', bg: '#ecfdf5', icon: '🗃️' },
+        { label: 'Low Stock Alerts', value: dashboardLowStock, color: '#f59e0b', bg: '#fffbeb', icon: '⚠️' },
+        { label: 'Out of Stock', value: dashboardOutOfStock, color: '#ef4444', bg: '#fef2f2', icon: '🚫' },
+        { label: 'Inventory Value', value: fmt(Number.isFinite(valuationValue) ? valuationValue : totalValue), color: '#8b5cf6', bg: '#f5f3ff', icon: '💰' },
+        { label: 'Expired Inventory', value: Number.isFinite(expiredCount) ? expiredCount : expiryList.length, color: '#dc2626', bg: '#fef2f2', icon: '⏰' },
     ];
      console.log("InventoryTable Props =>", {
     paginated,
@@ -822,10 +927,6 @@ catch (err) {
 
     return (
         <div className="dash-page">
-            <div className="adm-page-header">
-                <h2>Inventory Dashboard</h2>
-            </div>
-
             {loading && (
                 <div style={{ padding: "10px", color: "#6366f1", fontWeight: 600 }}>
                     Loading inventory data...
@@ -838,82 +939,29 @@ catch (err) {
                 </div>
             )}
 
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(5,1fr)",
-                    gap: 14,
-                    marginBottom: "20px",
-                }}
-            >
-                {kpis.map((item) => (
-                    <div
-                        key={item.label}
-                        style={{
-                            background: "#fff",
-                            padding: "16px",
-                            borderRadius: "10px",
-                            boxShadow: "0 2px 8px rgba(0,0,0,.08)",
-                        }}
-                    >
-                        <h4>{item.label}</h4>
-                        Baseline: <h2>{item.value}</h2>
-                    </div>
-                ))}
+            <div style={{ marginBottom: 16 }}>
+                <InventoryCards />
             </div>
 
-    <div style={{ marginTop: "-20px" }}>
-    <InventoryCards />
-</div>
+            <div style={{ marginBottom: 16 }}>
+                <InventoryHeader
+                    totalItems={inventory.length}
+                    lowStockCount={lowStockCount}
+                    outOfStockCount={outOfStockCount}
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                    setStockModal={setStockModal}
+                />
+            </div>
 
-
-
-<LowStockAlert
-    loading={lowStockLoading}
-    error={lowStockError}
-    items={lowStockItems}
-/>
-<InventoryFilters
-  search={search}
-  setSearch={setSearch}
-
-  inventory={inventory}
-  products={products}
-  stores={stores}
-  categories={categories}
-
-  filterWarehouse={filterWarehouse}
-  setFilterWarehouse={setFilterWarehouse}
-
-  filterCat={filterCat}
-  setFilterCat={setFilterCat}
-
-  filterSupplier={filterSupplier}
-  setFilterSupplier={setFilterSupplier}
-
-  filterStatus={filterStatus}
-  setFilterStatus={setFilterStatus}
-
-  filterDate={filterDate}
-  setFilterDate={setFilterDate}
-
-  onSearch={handleSearch}
-/>
-
-              <InventoryHeader
-                totalItems={inventory.length}
-                lowStockCount={lowStockCount}
-                outOfStockCount={outOfStockCount}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                setStockModal={setStockModal}
-            />
-<InventoryTable
-    paginated={paginated}
-    stockStatus={stockStatus}
-    fmt={fmt}
-    setStockModal={setStockModal}
-/>
+            <div style={{ marginBottom: 16 }}>
+                <InventoryTable
+                    paginated={paginated}
+                    stockStatus={stockStatus}
+                    fmt={fmt}
+                    setStockModal={setStockModal}
+                />
+            </div>
 
             {totalPages > 1 && (
                 <div
@@ -922,7 +970,7 @@ catch (err) {
                         alignItems: "center",
                         justifyContent: "space-between",
                         padding: "12px 16px",
-                        borderTop: "1px solid #f3f4f6",
+                        marginBottom: 34,
                     }}
                 >
                     <span style={{ fontSize: 12, color: "#6b7280" }}>
@@ -942,7 +990,13 @@ catch (err) {
                         {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                             <button
                                 key={p}
+                                type="button"
+                                className="adm-btn-secondary"
                                 onClick={() => setPage(p)}
+                                style={{
+                                    minWidth: 34,
+                                    fontWeight: page === p ? 700 : 500,
+                                }}
                             >
                                 {p}
                             </button>
@@ -960,13 +1014,13 @@ catch (err) {
             )}
 
             {stockModal && (
-              <StockUpdateModal
-    item={stockModal}
-    products={products}
-    stores={stores}
-    onClose={() => setStockModal(null)}
-    onSave={handleStockUpdate}
-/>
+                <StockUpdateModal
+                    item={stockModal}
+                    products={products}
+                    stores={stores}
+                    onClose={() => setStockModal(null)}
+                    onSave={handleStockUpdate}
+                />
             )}
         </div>
     );
