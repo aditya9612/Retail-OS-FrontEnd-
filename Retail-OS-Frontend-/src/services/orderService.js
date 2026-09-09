@@ -1,4 +1,5 @@
-import apiClient from './api';
+import apiClient from './api.js';
+import { validateOrderCoupon } from './couponService.js';
 
 export const getOrders = async (params = {}) => {
     try {
@@ -17,6 +18,10 @@ export const getOrderStats = async () => {
 
 export const createOrder = async (orderData) => {
     try {
+        // Enforce coupon validation before creating the order
+        if (orderData && orderData.coupon_code) {
+            await validateOrderCoupon(orderData);
+        }
         const response = await apiClient.post('/orders', orderData);
         return response.data;
     } catch (error) {
@@ -35,6 +40,10 @@ export const getOrderById = async (orderId) => {
 
 export const updateOrder = async (orderId, orderData) => {
     try {
+        // Enforce coupon validation before updating the order
+        if (orderData && orderData.coupon_code) {
+            await validateOrderCoupon(orderData);
+        }
         const response = await apiClient.patch(`/orders/${orderId}`, orderData);
         return response.data;
     } catch (error) {

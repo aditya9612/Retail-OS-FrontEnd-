@@ -211,3 +211,17 @@ export const updateGstRate = async (rateId, { gst_rate, status }) => {
         return response.data;
     } catch (e) { handleApiError(e); }
 };
+
+/**
+ * Fetch all invoices with optional query filters.
+ * GET /api/v1/invoices
+ *
+ * @param {Object} params
+ * @returns {Promise<Array>} list of invoice objects
+ */
+export const getInvoices = async (params = {}) => {
+    try {
+        const response = await apiClient.get('/invoices', { params });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
