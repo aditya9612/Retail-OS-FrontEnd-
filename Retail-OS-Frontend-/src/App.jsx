@@ -28,7 +28,6 @@ import OrderManagement from './pages/ECommerce/OrderManagement';
 import CouponManagement from './pages/ECommerce/CouponManagement';
 import DeliveryManagement from './pages/ECommerce/DeliveryManagement';
 import ProductCatalog from './pages/ECommerce/ProductCatalog';
-import CustomerManagement from './pages/ECommerce/CustomerManagement';
 import ReviewManagement from './pages/ECommerce/ReviewManagement';
 import ReturnManagement from './pages/ECommerce/ReturnManagement';
 
@@ -117,11 +116,6 @@ function App() {
                         />
 
                         <Route
-                            path="/ecommerce/customers"
-                            element={<CustomerManagement />}
-                        />
-
-                        <Route
                             path="/ecommerce/reviews"
                             element={<ReviewManagement />}
                         />
@@ -155,11 +149,11 @@ function App() {
                             element={<CategoryManagement />}
                         />
 
-                       {/* Purchases */}
-<Route
-    path="/purchases"
-    element={<Purchases />}
-/>
+                        {/* Purchases */}
+                        <Route
+                            path="/purchases"
+                            element={<Purchases />}
+                        />
 
                         {/* Returns */}
                         <Route

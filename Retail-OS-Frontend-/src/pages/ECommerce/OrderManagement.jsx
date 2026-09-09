@@ -81,9 +81,10 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
         setSaving(true);
         setSaveMsg(null);
         try {
+            const rawCoupon = form.coupon_code ? form.coupon_code.trim() : '';
             const payload = {
                 customer_id: parseInt(form.customer_id, 10) || 1,
-                coupon_code: form.coupon_code,
+                coupon_code: rawCoupon || null,
                 discount_amount: parseFloat(form.discount_amount) || 0,
                 delivery_address: form.delivery_address,
                 notes: form.notes,
@@ -95,7 +96,19 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
             if (onOrderUpdated) onOrderUpdated();
         } catch (err) {
             console.error('Error updating order:', err);
-            setSaveMsg({ type: 'error', text: 'Failed to update order. Please try again.' });
+            let msg = 'Failed to update order. Please try again.';
+            if (err.response?.data?.detail) {
+                if (Array.isArray(err.response.data.detail)) {
+                    msg = err.response.data.detail.map(d => d.msg || JSON.stringify(d)).join('; ');
+                } else if (typeof err.response.data.detail === 'string') {
+                    msg = err.response.data.detail;
+                } else {
+                    msg = JSON.stringify(err.response.data.detail);
+                }
+            } else if (err.message) {
+                msg = err.message;
+            }
+            setSaveMsg({ type: 'error', text: msg });
         } finally {
             setSaving(false);
         }
@@ -241,6 +254,9 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
                             <div>
                                 <label style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Coupon Code</label>
                                 <input style={inpStyle} name="coupon_code" value={form.coupon_code} onChange={handleFormChange} placeholder="e.g. FLAT100" />
+                                <span style={{ fontSize: 10, color: '#6b7280', marginTop: 2, display: 'block' }}>
+                                    Active: FLAT100, WELCOME10, SAVE20, FESTIVE50
+                                </span>
                             </div>
                             <div>
                                 <label style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Discount Amount (₹)</label>

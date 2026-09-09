@@ -11,18 +11,33 @@ import {
 } from 'react-icons/bs';
 import { getCart, getInvoiceByOrderId, downloadInvoicePdf, returnOrder, returnInvoiceItem } from '../../services/billingService';
 
-/* ── Mock invoice data ─────────────────── */
+/* ── Helper to calculate standard Indian GST slabs (0%, 5%, 12%, 18%, 28%) ── */
+const calculateGST = (taxable, rate, isInterState = false) => {
+    const gst = Math.round((taxable * rate) / 100 * 100) / 100;
+    const cgst = isInterState ? 0 : Math.round((gst / 2) * 100) / 100;
+    const sgst = isInterState ? 0 : Math.round((gst - cgst) * 100) / 100;
+    const igst = isInterState ? gst : 0;
+    const amount = Math.round((taxable + gst) * 100) / 100;
+    return { gst, cgst, sgst, igst, amount };
+};
+
+const createMockInvoice = ({ id, customer, date, taxable, gstRate, hsn, status, mode, isInterState = false }) => {
+    const calc = calculateGST(taxable, gstRate, isInterState);
+    return { id, customer, date, taxable, gstRate, ...calc, hsn, status, mode };
+};
+
+/* ── Mock invoice data with standard Indian GST rates (0%, 5%, 12%, 18%) ── */
 const ALL_INVOICES = [
-    { id: 'INV-2024001', customer: 'Rahul Sharma', date: '2026-06-24', amount: 4580, gst: 687, cgst: 343.5, sgst: 343.5, igst: 0, taxable: 3893, gstRate: 18, hsn: '8518', status: 'Paid', mode: 'UPI' },
-    { id: 'INV-2024002', customer: 'Priya Patel', date: '2026-06-24', amount: 2340, gst: 421, cgst: 210.5, sgst: 210.5, igst: 0, taxable: 1919, gstRate: 22, hsn: '6109', status: 'Paid', mode: 'Cash' },
-    { id: 'INV-2024003', customer: 'Amit Kumar', date: '2026-06-23', amount: 8920, gst: 1605, cgst: 0, sgst: 0, igst: 1605, taxable: 7315, gstRate: 22, hsn: '8517', status: 'Pending', mode: 'Card' },
-    { id: 'INV-2024004', customer: 'Sneha Singh', date: '2026-06-23', amount: 1250, gst: 225, cgst: 112.5, sgst: 112.5, igst: 0, taxable: 1025, gstRate: 22, hsn: '4202', status: 'Cancelled', mode: 'UPI' },
-    { id: 'INV-2024005', customer: 'Vikram Mehta', date: '2026-06-22', amount: 6780, gst: 1220, cgst: 610, sgst: 610, igst: 0, taxable: 5560, gstRate: 22, hsn: '8517', status: 'Paid', mode: 'Cash' },
-    { id: 'INV-2024006', customer: 'Anjali Gupta', date: '2026-06-22', amount: 3450, gst: 621, cgst: 310.5, sgst: 310.5, igst: 0, taxable: 2829, gstRate: 22, hsn: '6203', status: 'Paid', mode: 'UPI' },
-    { id: 'INV-2024007', customer: 'Rohit Verma', date: '2026-06-21', amount: 11200, gst: 2016, cgst: 1008, sgst: 1008, igst: 0, taxable: 9184, gstRate: 22, hsn: '8518', status: 'Paid', mode: 'Card' },
-    { id: 'INV-2024008', customer: 'Kavya Nair', date: '2026-06-21', amount: 890, gst: 0, cgst: 0, sgst: 0, igst: 0, taxable: 890, gstRate: 0, hsn: '0902', status: 'Paid', mode: 'Cash' },
-    { id: 'INV-2024009', customer: 'Suresh Reddy', date: '2026-06-20', amount: 5670, gst: 680, cgst: 340, sgst: 340, igst: 0, taxable: 4990, gstRate: 12, hsn: '7323', status: 'Pending', mode: 'UPI' },
-    { id: 'INV-2024010', customer: 'Meera Joshi', date: '2026-06-20', amount: 2100, gst: 378, cgst: 189, sgst: 189, igst: 0, taxable: 1722, gstRate: 22, hsn: '8504', status: 'Paid', mode: 'Card' },
+    createMockInvoice({ id: 'INV-2026001', customer: 'Rahul Sharma', date: '2026-06-24', taxable: 3900, gstRate: 18, hsn: '8518', status: 'Paid', mode: 'UPI' }),
+    createMockInvoice({ id: 'INV-2026002', customer: 'Priya Patel', date: '2026-06-24', taxable: 1920, gstRate: 5, hsn: '6109', status: 'Paid', mode: 'Cash' }),
+    createMockInvoice({ id: 'INV-2026003', customer: 'Amit Kumar', date: '2026-06-23', taxable: 7300, gstRate: 18, hsn: '8517', status: 'Pending', mode: 'Card', isInterState: true }),
+    createMockInvoice({ id: 'INV-2026004', customer: 'Sneha Singh', date: '2026-06-23', taxable: 1050, gstRate: 12, hsn: '4202', status: 'Cancelled', mode: 'UPI' }),
+    createMockInvoice({ id: 'INV-2026005', customer: 'Vikram Mehta', date: '2026-06-22', taxable: 5500, gstRate: 18, hsn: '8517', status: 'Paid', mode: 'Cash' }),
+    createMockInvoice({ id: 'INV-2026006', customer: 'Anjali Gupta', date: '2026-06-22', taxable: 2850, gstRate: 12, hsn: '6203', status: 'Paid', mode: 'UPI' }),
+    createMockInvoice({ id: 'INV-2026007', customer: 'Rohit Verma', date: '2026-06-21', taxable: 9200, gstRate: 18, hsn: '8518', status: 'Paid', mode: 'Card' }),
+    createMockInvoice({ id: 'INV-2026008', customer: 'Kavya Nair', date: '2026-06-21', taxable: 890, gstRate: 12, hsn: '6109', status: 'Paid', mode: 'Cash' }),
+    createMockInvoice({ id: 'INV-2026009', customer: 'Suresh Reddy', date: '2026-06-20', taxable: 5000, gstRate: 12, hsn: '7323', status: 'Pending', mode: 'UPI' }),
+    createMockInvoice({ id: 'INV-2026010', customer: 'Meera Joshi', date: '2026-06-20', taxable: 1800, gstRate: 18, hsn: '8504', status: 'Paid', mode: 'Card' }),
 ];
 
 const statusConfig = {
@@ -34,13 +49,17 @@ const statusConfig = {
 
 const fmt = (n) => '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+/* ── Derive June totals directly from ALL_INVOICES so chart matches table ── */
+const junInvoices = ALL_INVOICES.filter(inv => inv.date.startsWith('2026-06'));
+const junGst = Math.round(junInvoices.reduce((s, inv) => s + (inv.gst || 0), 0) * 100) / 100;
+
 const monthlyTrend = [
     { month: 'Jan', invoices: 240, gst: 36000 },
     { month: 'Feb', invoices: 285, gst: 42750 },
     { month: 'Mar', invoices: 310, gst: 46500 },
     { month: 'Apr', invoices: 275, gst: 41250 },
     { month: 'May', invoices: 340, gst: 51000 },
-    { month: 'Jun', invoices: 298, gst: 44700 },
+    { month: 'Jun', invoices: junInvoices.length, gst: junGst },
 ];
 
 const BillingManagement = () => {
@@ -200,7 +219,7 @@ const BillingManagement = () => {
         paid: ALL_INVOICES.filter(i => i.status === 'Paid').length,
         pending: ALL_INVOICES.filter(i => i.status === 'Pending').length,
         cancelled: ALL_INVOICES.filter(i => i.status === 'Cancelled').length,
-        revenue: ALL_INVOICES.filter(i => i.status === 'Paid').reduce((s, i) => s + i.amount, 0),
+        revenue: ALL_INVOICES.reduce((s, i) => s + i.amount, 0),
         gstTotal: ALL_INVOICES.reduce((s, i) => s + i.gst, 0),
     }), []);
 
@@ -676,7 +695,21 @@ const BillingManagement = () => {
                                     <td style={{ fontWeight: 500 }}>{inv.customer}</td>
                                     <td style={{ color: '#9ca3af', fontSize: 12 }}>{inv.date}</td>
                                     <td>{fmt(inv.taxable)}</td>
-                                    <td style={{ color: '#22d3ee', fontWeight: 600 }}>{fmt(inv.gst)}</td>
+                                    <td>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <span style={{ color: '#22d3ee', fontWeight: 600 }}>{fmt(inv.gst)}</span>
+                                            <span style={{
+                                                fontSize: 10,
+                                                fontWeight: 700,
+                                                padding: '1px 5px',
+                                                borderRadius: 4,
+                                                background: inv.gstRate === 0 ? '#f1f5f9' : inv.gstRate === 5 ? '#ecfdf5' : inv.gstRate === 12 ? '#fffbeb' : inv.gstRate === 18 ? '#eef2ff' : '#fef2f2',
+                                                color: inv.gstRate === 0 ? '#64748b' : inv.gstRate === 5 ? '#059669' : inv.gstRate === 12 ? '#d97706' : inv.gstRate === 18 ? '#4f46e5' : '#dc2626',
+                                            }}>
+                                                {inv.gstRate}%
+                                            </span>
+                                        </div>
+                                    </td>
                                     <td className="dash-table-amount">{fmt(inv.amount)}</td>
                                     <td><span className="adm-mode-tag">{inv.mode}</span></td>
                                     <td>

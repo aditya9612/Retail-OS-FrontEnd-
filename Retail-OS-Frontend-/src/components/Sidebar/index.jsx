@@ -48,7 +48,6 @@ const menuGroups = [
             { name: 'Online Orders', icon: <BsBagCheck />, path: '/ecommerce/orders' },
             { name: 'Coupons', icon: <BsTagFill />, path: '/ecommerce/coupons' },
             { name: 'Delivery', icon: <BsTruck />, path: '/ecommerce/delivery' },
-            { name: 'Customers', icon: <BsPeopleFill />, path: '/ecommerce/customers' },
             { name: 'Reviews', icon: <BsStarHalf />, path: '/ecommerce/reviews' },
             { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/ecommerce/returns' },
         ],
@@ -91,13 +90,6 @@ const Sidebar = ({ collapsed, onToggle }) => {
                     <BsShopWindow size={17} />
                 </div>
                 {!collapsed && <span className="sidebar-brand">RetailOS</span>}
-                <button className="sidebar-toggle" onClick={onToggle} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <line x1="3" y1="6" x2="21" y2="6" />
-                        <line x1="3" y1="12" x2="21" y2="12" />
-                        <line x1="3" y1="18" x2="21" y2="18" />
-                    </svg>
-                </button>
             </div>
 
             {/* Nav */}
