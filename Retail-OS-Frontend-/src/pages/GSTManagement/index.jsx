@@ -16,6 +16,7 @@ const SEED_INVOICES = [
     { id: 'INV-2024001', customer: 'Rahul Sharma', gstin: '27AAPFU0939F1ZV', date: '2026-06-24', taxable: 3893, cgst: 350.37, sgst: 350.37, igst: 0, total: 4593.74, rate: 18 },
     { id: 'INV-2024002', customer: 'Priya Patel', gstin: '—', date: '2026-06-24', taxable: 1919, cgst: 47.98, sgst: 47.98, igst: 0, total: 2014.96, rate: 5 },
     { id: 'INV-2024003', customer: 'Amit Kumar', gstin: '07BCEPK4283R1ZJ', date: '2026-06-23', taxable: 7315, cgst: 0, sgst: 0, igst: 1316.70, total: 8631.70, rate: 18 },
+    { id: 'INV-2024004', customer: 'Sneha Singh', gstin: '—', date: '2026-06-23', taxable: 1050, cgst: 63.00, sgst: 63.00, igst: 0, total: 1176.00, rate: 12 },
     { id: 'INV-2024005', customer: 'Vikram Mehta', gstin: '—', date: '2026-06-22', taxable: 5560, cgst: 500.40, sgst: 500.40, igst: 0, total: 6560.80, rate: 18 },
     { id: 'INV-2024006', customer: 'Anjali Gupta', gstin: '29BCEPK4283R1ZJ', date: '2026-06-22', taxable: 2829, cgst: 169.74, sgst: 169.74, igst: 0, total: 3168.48, rate: 12 },
     { id: 'INV-2024007', customer: 'Rohit Verma', gstin: '—', date: '2026-06-21', taxable: 9184, cgst: 826.56, sgst: 826.56, igst: 0, total: 10837.12, rate: 18 },
@@ -40,13 +41,25 @@ const slabColors = {
 
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/** Load invoices from localStorage (saved by Billing module on sale complete) */
+/** Validate invoice ID format — must be INV-YYYYNNN (e.g. INV-2024001, INV-2026011) */
+const isValidInvoiceId = (id) => /^INV-\d{7,}$/.test(id);
+
+/** Load invoices: merge real localStorage entries (valid IDs only) on top of SEED_INVOICES */
 const loadInvoices = () => {
     try {
         const stored = localStorage.getItem('gst_invoices');
         if (stored) {
             const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                // Keep only entries with proper INV-YYYYNNN format
+                const valid = parsed.filter(inv => isValidInvoiceId(inv.id));
+                // Merge: seed entries + new valid entries not already in seed
+                const seedIds = new Set(SEED_INVOICES.map(s => s.id));
+                const newEntries = valid.filter(inv => !seedIds.has(inv.id));
+                // Return seed + new real invoices, sorted by ID descending
+                return [...newEntries, ...SEED_INVOICES]
+                    .sort((a, b) => b.id.localeCompare(a.id, undefined, { numeric: true }));
+            }
         }
     } catch (_) { }
     return SEED_INVOICES;

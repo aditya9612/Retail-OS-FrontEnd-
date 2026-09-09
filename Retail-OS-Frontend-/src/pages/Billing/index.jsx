@@ -31,6 +31,29 @@ const PAYMENT_MODES = [
     { id: 'Card', label: 'Card', icon: <BsCreditCard2Front size={15} /> },
 ];
 
+/** Generate sequential invoice numbers like INV-2024011, INV-2024012, … */
+const nextInvoiceNo = () => {
+    const year = new Date().getFullYear();
+    const prefix = `INV-${year}`;
+    try {
+        const stored = localStorage.getItem('gst_invoices');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                // Find the highest sequential number across all stored invoices
+                let max = 0;
+                parsed.forEach(inv => {
+                    const m = inv.id && inv.id.match(/^INV-\d{4}(\d{3,})$/);
+                    if (m) max = Math.max(max, parseInt(m[1], 10));
+                });
+                return `${prefix}${String(max + 1).padStart(3, '0')}`;
+            }
+        }
+    } catch (_) { }
+    // Fallback: start from 001 in current year
+    return `${prefix}001`;
+};
+
 const Billing = () => {
     const [customer, setCustomer] = useState({ name: '', phone: '', gstin: '' });
     const [cart, setCart] = useState([]);
@@ -42,7 +65,7 @@ const Billing = () => {
     const [discountType, setDiscountType] = useState('percentage');
     const [billDiscount, setBillDiscount] = useState(0);
     const [paymentMode, setPaymentMode] = useState('Cash');
-    const [invoiceNo, setInvoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
+    const [invoiceNo, setInvoiceNo] = useState(() => nextInvoiceNo());
     const [showPreview, setShowPreview] = useState(false);
     const [scannerValue, setScannerValue] = useState('');
     const [addingItemId, setAddingItemId] = useState(null);
@@ -351,7 +374,7 @@ const Billing = () => {
         setCouponCode('');
         setDiscountApplied(false);
         setShowPreview(false);
-        setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
+        setInvoiceNo(nextInvoiceNo());
     };
 
     const totalUnits = cart.reduce((s, i) => s + i.qty, 0);
@@ -395,19 +418,7 @@ const Billing = () => {
 
     return (
         <div className="pos-shell">
-            {/* ── Offline mode banner — shows when API is unavailable ── */}
-            {offlineMode && (
-                <div style={{
-                    position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)',
-                    background: '#fff3cd', color: '#856404', borderRadius: 8,
-                    padding: '6px 16px', fontSize: 12, zIndex: 9999,
-                    border: '1px solid #ffc107', boxShadow: '0 4px 12px rgba(0,0,0,.1)',
-                    display: 'flex', alignItems: 'center', gap: 8,
-                }}>
-                    <span>📡</span>
-                    <span><strong>Offline mode</strong> — server unavailable, cart is saved locally.</span>
-                </div>
-            )}
+
             {/* ── LEFT: Product Catalog ── */}
             <div className="pos-left">
 
@@ -654,9 +665,6 @@ const Billing = () => {
                                 <div className="pos-cart-item-info" style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                     <h4 className="pos-cart-item-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 0 }}>
                                         {item.name}
-                                        {item.unsynced && (
-                                            <span style={{ marginLeft: 6, fontSize: 9, color: '#d97706', background: '#fef3c7', padding: '2px 5px', borderRadius: 4 }}>Offline</span>
-                                        )}
                                     </h4>
                                     <span className="pos-cart-item-price" style={{ fontSize: 11, color: '#6b7280' }}>
                                         ₹{item.price.toLocaleString()} × {item.qty}
