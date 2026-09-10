@@ -92,9 +92,9 @@ const toPayload = (form) => ({
     category_id: CATEGORY_IDS[form.category] || 1,
     brand: form.brand,
     unit: form.unit,
-    mrp: Number(form.mrp) || 0,
-    price: Number(form.sellingPrice) || 0,
-    gst_rate: Number(String(form.gst).replace('%', '')) || 0,
+    mrp: String(Number(form.mrp) || 0),
+price: String(Number(form.sellingPrice) || 0),
+gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
     stock: Number(form.stock) || 0,
     hsn_code: form.hsnCode,
     is_active: Boolean(form.status),
@@ -104,29 +104,30 @@ const toPayload = (form) => ({
     variants: null,
 });
 
-const ProductFormModal = ({ product, onClose, onSave }) => {
+const ProductFormModal = ({ product, onClose, onSave, existingProducts = [] }) => {
     const isNew = !product;
 
-    const [form, setForm] = useState(
+        const [form, setForm] = useState(
         product
             ? {
                 ...EMPTY_FORM,
                 ...product,
-                sku: product.sku || '',
-                hsnCode: product.hsn_code || '',
-                sellingPrice: product.price ?? '',
-                mrp: product.mrp ?? '',
-                brand: product.brand || '',
-                barcode: product.barcode || '',
-                name: product.name || '',
-                description: product.description || '',
+                sku: String(product.sku ?? ''),
+                hsnCode: String(product.hsn_code ?? product.hsnCode ?? ''),
+                sellingPrice: product.price ?? product.sellingPrice ?? '',
+                mrp: product.mrp ?? product.mrp_price ?? '',
+                brand: String(product.brand ?? ''),
+                barcode: String(product.barcode ?? ''),
+                name: String(product.name ?? ''),
+                description: String(product.description ?? ''),
                 category:
                     CATEGORY_NAMES[product.category_id] ||
                     product.category ||
                     '',
                 gst: product.gst_rate != null
-                    ? `${product.gst_rate}%`
-                    : '',
+                    ? `${Number(product.gst_rate)}%`
+                    : (product.gst || ''),
+                stock: product.stock ?? product.quantity ?? 0,
                 status: product.is_active ?? true,
                 featured: product.featured ?? false,
                 unit: product.unit || 'Pcs',
@@ -134,6 +135,7 @@ const ProductFormModal = ({ product, onClose, onSave }) => {
             }
             : { ...EMPTY_FORM }
     );
+
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
@@ -173,7 +175,7 @@ const skuError = validateSKUFormat(normalizedSKU);
 if (skuError) {
     newErrors.sku = skuError;
 } else {
-    const duplicateSKU = products.some(p => {
+   const duplicateSKU = existingProducts.some(p => {
         const existingSKU = (p.sku || '').trim().toUpperCase();
 
         return (
@@ -240,7 +242,7 @@ if (skuError) {
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    };
+    }; 
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -252,11 +254,20 @@ if (skuError) {
         setSaving(true);
 
         try {
-            await onSave(toPayload(form), product?.id);
-            onClose();
-        } finally {
-            setSaving(false);
-        }
+    await onSave(toPayload(form), product?.id);
+    onClose();
+} catch (err) {
+    const detail = err?.response?.data?.detail;
+
+    alert(
+        'Could not save product: ' +
+        (typeof detail === 'string'
+            ? detail
+            : JSON.stringify(detail || err?.message || err))
+    );
+} finally {
+    setSaving(false);
+}
     };
 
     return (
@@ -1502,16 +1513,17 @@ const Products = () => {
                     </div>
                 )}
             </div>
-
-            {modal && (
-                <ProductFormModal
-                    product={modal === 'new' ? null : modal}
-                    onClose={() => setModal(null)}
-                    onSave={handleSave}
-                />
-            )}
+{modal && (
+    <ProductFormModal
+        product={modal === 'new' ? null : modal}
+        existingProducts={products}
+        onClose={() => setModal(null)}
+        onSave={handleSave}
+    />
+)}
         </div>
     );
 };
+
 
 export default Products;
