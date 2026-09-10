@@ -107,7 +107,7 @@ gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
 const ProductFormModal = ({ product, onClose, onSave, existingProducts = [] }) => {
     const isNew = !product;
 
-       const [form, setForm] = useState(
+        const [form, setForm] = useState(
         product
             ? {
                 ...EMPTY_FORM,
