@@ -30,6 +30,7 @@ import DeliveryManagement from './pages/ECommerce/DeliveryManagement';
 import ProductCatalog from './pages/ECommerce/ProductCatalog';
 import ReviewManagement from './pages/ECommerce/ReviewManagement';
 import ReturnManagement from './pages/ECommerce/ReturnManagement';
+import Profile from './pages/Profile';
 
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -71,6 +72,12 @@ function App() {
                         {/* Main */}
                         <Route path="/dashboard" element={<Dashboard />} />
 
+                        <Route
+                            path="/admin-dashboard"
+                            element={<AdminDashboard />}
+                        />
+
+                        <Route path="/profile" element={<Profile />} />
                         {/* Billing and GST */}
                         <Route path="/billing" element={<Billing />} />
 

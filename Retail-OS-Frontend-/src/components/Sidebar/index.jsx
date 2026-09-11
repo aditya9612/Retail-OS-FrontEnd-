@@ -117,6 +117,67 @@ const Sidebar = ({ collapsed, onToggle }) => {
                     </div>
                 ))}
             </nav>
+
+            {/* Bottom User Profile Link Box */}
+            <div style={{ padding: '12px 10px', borderTop: '1px solid #e5e7eb', marginTop: 'auto' }}>
+                <NavLink
+                    to="/profile"
+                    style={({ isActive }) => ({
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '8px 10px',
+                        borderRadius: 12,
+                        background: isActive ? '#eef2ff' : '#f9fafb',
+                        border: `1px solid ${isActive ? '#c7d2fe' : '#e5e7eb'}`,
+                        textDecoration: 'none',
+                        transition: 'all 0.15s ease',
+                    })}
+                    title="View Profile"
+                >
+                    <div
+                        style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '50%',
+                            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                            color: '#ffffff',
+                            fontWeight: 800,
+                            fontSize: 12,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                        }}
+                    >
+                        {(() => {
+                            const u = JSON.parse(localStorage.getItem('user')) || {};
+                            const name = u.full_name || u.name || 'Akshay Chavan';
+                            const parts = name.trim().split(/\s+/).filter(Boolean);
+                            if (parts.length >= 2) {
+                                return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+                            }
+                            return parts[0] ? parts[0][0].toUpperCase() : 'S';
+                        })()}
+                    </div>
+                    {!collapsed && (
+                        <div style={{ overflow: 'hidden' }}>
+                            <p style={{ fontSize: 11, fontWeight: 800, color: '#111827', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>
+                                {(() => {
+                                    const u = JSON.parse(localStorage.getItem('user')) || {};
+                                    return u.full_name || u.name || 'Akshay Chavan';
+                                })()}
+                            </p>
+                            <p style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', margin: '1px 0 0 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                {(() => {
+                                    const u = JSON.parse(localStorage.getItem('user')) || {};
+                                    return u.role?.name || u.role || 'Super Admin';
+                                })()}
+                            </p>
+                        </div>
+                    )}
+                </NavLink>
+            </div>
         </aside>
     );
 };
