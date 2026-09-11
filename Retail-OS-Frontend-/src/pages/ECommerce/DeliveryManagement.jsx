@@ -544,12 +544,52 @@ const DeliveryManagement = () => {
         }
     };
 
-    // KPI Metrics calculation
+    // KPI Metrics calculation (dynamic based on deliveries dataset)
     const totalCount = deliveries.length;
-    const outForDeliveryCount = deliveries.filter(d => d.status === 'Out for Delivery').length;
-    const deliveredCount = deliveries.filter(d => d.status === 'Delivered').length;
-    const pendingCount = deliveries.filter(d => ['Confirmed', 'Packed'].includes(d.status)).length;
-    const topPartner = 'Delhivery';
+    const outForDeliveryCount = useMemo(() => deliveries.filter(d => d.status === 'Out for Delivery').length, [deliveries]);
+    const deliveredCount = useMemo(() => deliveries.filter(d => d.status === 'Delivered').length, [deliveries]);
+    const shippedCount = useMemo(() => deliveries.filter(d => d.status === 'Shipped').length, [deliveries]);
+    const pendingCount = useMemo(() => deliveries.filter(d => ['Confirmed', 'Packed'].includes(d.status)).length, [deliveries]);
+    const failedCount = useMemo(() => deliveries.filter(d => d.status === 'Failed').length, [deliveries]);
+
+    // Partner Order Counts & Rankings
+    const courierRankings = useMemo(() => {
+        if (!deliveries.length) return [];
+        const partnerMap = {};
+        deliveries.forEach(d => {
+            const partner = d.partner || 'Self';
+            partnerMap[partner] = (partnerMap[partner] || 0) + 1;
+        });
+
+        return Object.entries(partnerMap)
+            .map(([partner, count]) => ({
+                partner,
+                count,
+                percentage: Math.round((count / deliveries.length) * 100),
+            }))
+            .sort((a, b) => b.count - a.count);
+    }, [deliveries]);
+
+    const topPartner = courierRankings[0]?.partner || 'N/A';
+
+    // Dynamic Success Rate Calculation
+    const successRate = useMemo(() => {
+        if (totalCount === 0) return '0.0%';
+        const finishedCount = deliveredCount + failedCount;
+        if (finishedCount > 0) {
+            return ((deliveredCount / finishedCount) * 100).toFixed(1) + '%';
+        }
+        return ((deliveredCount / totalCount) * 100).toFixed(1) + '%';
+    }, [deliveredCount, failedCount, totalCount]);
+
+    // Dynamic Metro vs Tier 2 & Tier 3 Zone breakdown
+    const zoneCoverage = useMemo(() => {
+        if (!totalCount) return { metro: 0, nonMetro: 0 };
+        const metroCities = ['Bangalore', 'Mumbai', 'Delhi', 'Chennai', 'Kolkata', 'Hyderabad'];
+        const metroCount = deliveries.filter(d => metroCities.includes(d.city)).length;
+        const metro = Math.round((metroCount / totalCount) * 100);
+        return { metro, nonMetro: 100 - metro };
+    }, [deliveries, totalCount]);
 
     const analyticsCardStyle = {
         background: '#ffffff',
@@ -641,15 +681,15 @@ const DeliveryManagement = () => {
                 </div>
 
                 <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                    <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Pending Dispatch</p>
-                    <p style={{ fontSize: 24, fontWeight: 800, color: '#f59e0b', marginTop: 6, margin: 0 }}>{pendingCount}</p>
-                    <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>Confirmed / Packing</span>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Pending / In Transit</p>
+                    <p style={{ fontSize: 24, fontWeight: 800, color: '#f59e0b', marginTop: 6, margin: 0 }}>{pendingCount + shippedCount}</p>
+                    <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>{pendingCount} packing, {shippedCount} shipped</span>
                 </div>
 
                 <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                     <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Top Logistics Partner</p>
                     <p style={{ fontSize: 20, fontWeight: 800, color: '#8b5cf6', marginTop: 6, margin: 0 }}>{topPartner}</p>
-                    <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>Primary shipping courier</span>
+                    <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>Primary shipping courier ({courierRankings[0]?.count || 0} orders)</span>
                 </div>
             </div>
 
@@ -669,21 +709,24 @@ const DeliveryManagement = () => {
                             <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Fulfillment</span>
                         </div>
                         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                            {[
-                                { partner: 'Delhivery', speed: '98% on-time', count: '45%' },
-                                { partner: 'Dunzo', speed: '96% on-time', count: '30%' },
-                                { partner: 'Swiggy Genie', speed: '99% on-time', count: '25%' },
-                            ].map((p, idx) => (
-                                <div key={p.partner} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, padding: '4px 8px', background: '#f9fafb', borderRadius: 8 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ fontSize: 10, fontWeight: 800, color: idx === 0 ? '#d97706' : '#6b7280', background: idx === 0 ? '#fffbeb' : '#e5e7eb', width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                            {idx + 1}
-                                        </span>
-                                        <span style={{ fontWeight: 600, color: '#111827' }}>{p.partner}</span>
+                            {courierRankings.length === 0 ? (
+                                <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>No partner data available</p>
+                            ) : (
+                                courierRankings.map((p, idx) => (
+                                    <div key={p.partner} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, padding: '4px 8px', background: '#f9fafb', borderRadius: 8 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ fontSize: 10, fontWeight: 800, color: idx === 0 ? '#d97706' : '#6b7280', background: idx === 0 ? '#fffbeb' : '#e5e7eb', width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                {idx + 1}
+                                            </span>
+                                            <span style={{ fontWeight: 600, color: '#111827' }}>{p.partner}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <span style={{ fontSize: 10, color: '#6b7280' }}>{p.count} orders</span>
+                                            <span style={{ fontWeight: 700, color: '#10b981' }}>{p.percentage}%</span>
+                                        </div>
                                     </div>
-                                    <span style={{ fontWeight: 700, color: '#10b981' }}>{p.speed}</span>
-                                </div>
-                            ))}
+                                ))
+                            )}
                         </div>
                     </div>
 
@@ -694,7 +737,7 @@ const DeliveryManagement = () => {
                                 📈 Success Rate
                             </span>
                             <span style={{ fontSize: 10, fontWeight: 800, color: '#10b981', background: '#ecfdf5', padding: '2px 8px', borderRadius: 10 }}>
-                                97.4%
+                                {successRate}
                             </span>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
@@ -704,7 +747,7 @@ const DeliveryManagement = () => {
                             </div>
                             <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
                                 <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Failed / Return</span>
-                                <p style={{ fontSize: 16, fontWeight: 800, color: '#ef4444', margin: '2px 0 0 0' }}>0</p>
+                                <p style={{ fontSize: 16, fontWeight: 800, color: '#ef4444', margin: '2px 0 0 0' }}>{failedCount}</p>
                             </div>
                         </div>
                         <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
@@ -748,11 +791,11 @@ const DeliveryManagement = () => {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
                             <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
                                 <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Metro Cities</span>
-                                <p style={{ fontSize: 15, fontWeight: 800, color: '#f59e0b', margin: '2px 0 0 0' }}>65%</p>
+                                <p style={{ fontSize: 15, fontWeight: 800, color: '#f59e0b', margin: '2px 0 0 0' }}>{zoneCoverage.metro}%</p>
                             </div>
                             <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
                                 <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Tier 2 & 3</span>
-                                <p style={{ fontSize: 15, fontWeight: 800, color: '#6366f1', margin: '2px 0 0 0' }}>35%</p>
+                                <p style={{ fontSize: 15, fontWeight: 800, color: '#6366f1', margin: '2px 0 0 0' }}>{zoneCoverage.nonMetro}%</p>
                             </div>
                         </div>
                         <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
@@ -861,6 +904,9 @@ const DeliveryManagement = () => {
                         {/* Active Filter Chips */}
                         {hasActiveFilters && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                                <span style={{ fontSize: 11, color: '#374151', fontWeight: 700, background: '#f3f4f6', padding: '2px 8px', borderRadius: 12 }}>
+                                    Showing {filteredDeliveries.length} of {totalCount} deliveries
+                                </span>
                                 <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Active Filters:</span>
                                 {search && (
                                     <span style={{ fontSize: 11, background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
