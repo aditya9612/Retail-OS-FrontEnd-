@@ -74,7 +74,9 @@ function App() {
 
                         <Route
                             path="/admin-dashboard"
-                            element={<AdminDashboard />}
+                            element={
+                                <Placeholder title="Admin Panel" />
+                            }
                         />
 
                         <Route path="/profile" element={<Profile />} />
