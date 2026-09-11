@@ -51,6 +51,7 @@ const STATUS_CONFIG = {
 };
 
 const PAGE_SIZE = 8;
+const PURCHASE_FETCH_SIZE = 100;
 
 /* =====================================================
    EMPTY ITEM
@@ -1603,7 +1604,7 @@ const Purchases = () => {
       const data =
         await getPurchaseOrders(
           1,
-          20
+          PURCHASE_FETCH_SIZE
         );
 
       console.log(
@@ -1679,7 +1680,7 @@ const Purchases = () => {
             await Promise.allSettled([
               getPurchaseOrders(
                 1,
-                20
+                PURCHASE_FETCH_SIZE
               ),
 
               getSuppliers(),

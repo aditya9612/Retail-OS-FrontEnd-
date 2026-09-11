@@ -1,22 +1,47 @@
 import React from "react";
 import "./CategoryCards.css";
 
-const CategoryCards = ({ categories }) => {
-
+const CategoryCards = ({ categories = [] }) => {
   const totalCategories = categories.length;
 
-  const activeCategories = categories.filter(
-    (item) => item.status === "Active"
-  ).length;
-
-  const inactiveCategories = categories.filter(
-    (item) => item.status === "Inactive"
-  ).length;
-
-  const totalProducts = categories.reduce(
-    (sum, item) => sum + item.products,
-    0
+  const hasStatusData = categories.some(
+    (item) =>
+      item.status !== null &&
+      item.status !== undefined &&
+      String(item.status).trim() !== ""
   );
+
+  const activeCategories = hasStatusData
+    ? categories.filter((item) => {
+        const status =
+          typeof item.status === "boolean"
+            ? item.status
+              ? "active"
+              : "inactive"
+            : String(item.status).trim().toLowerCase();
+
+        return status === "active";
+      }).length
+    : "-";
+
+  const inactiveCategories = hasStatusData
+    ? categories.filter((item) => {
+        const status =
+          typeof item.status === "boolean"
+            ? item.status
+              ? "active"
+              : "inactive"
+            : String(item.status).trim().toLowerCase();
+
+        return status === "inactive";
+      }).length
+    : "-";
+
+  const totalProducts = categories.reduce((sum, item) => {
+    const count = Number(item.products);
+
+    return sum + (Number.isFinite(count) ? count : 0);
+  }, 0);
 
   const cards = [
     {
@@ -39,7 +64,6 @@ const CategoryCards = ({ categories }) => {
 
   return (
     <div className="category-cards">
-
       {cards.map((card, index) => (
         <div
           className="category-card"
@@ -50,7 +74,6 @@ const CategoryCards = ({ categories }) => {
           <h2>{card.value}</h2>
         </div>
       ))}
-
     </div>
   );
 };

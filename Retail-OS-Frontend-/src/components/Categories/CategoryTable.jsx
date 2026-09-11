@@ -7,6 +7,70 @@ import {
 } from "react-icons/bs";
 import "./CategoryTable.css";
 
+const formatCategoryDate = (value) => {
+  if (!value) return "-";
+
+  const rawValue = String(value).trim();
+
+  const isoDateMatch = rawValue.match(
+    /^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/
+  );
+
+  if (isoDateMatch) {
+    const [, year, month, day] = isoDateMatch;
+
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    const monthIndex = Number(month) - 1;
+    const numericDay = Number(day);
+
+    if (
+      monthIndex >= 0 &&
+      monthIndex <= 11 &&
+      numericDay >= 1 &&
+      numericDay <= 31
+    ) {
+      return `${numericDay} ${monthNames[monthIndex]} ${year}`;
+    }
+  }
+
+  const alreadyFormatted = rawValue.match(
+    /^0?(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/
+  );
+
+  if (alreadyFormatted) {
+    const [, day, month, year] = alreadyFormatted;
+    return `${Number(day)} ${month} ${year}`;
+  }
+
+  const date = new Date(rawValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  const day = date.getDate();
+  const month = date.toLocaleString("en-GB", {
+    month: "short",
+  });
+  const year = date.getFullYear();
+
+  return `${day} ${month} ${year}`;
+};
+
 const CategoryTable = ({
   categories = [],
   onEdit,
@@ -38,106 +102,123 @@ const CategoryTable = ({
               </td>
             </tr>
           ) : (
-            categories.map((item) => (
-              <tr key={item.id}>
-                {/* CATEGORY NAME */}
-                <td>
-                  <div className="category-name">
-                    <div
-                      className="category-icon"
-                      aria-hidden="true"
-                    >
-                      <BsFolder />
+            categories.map((item) => {
+              const rawStatus = item.status;
+
+              const normalizedStatus =
+                typeof rawStatus === "boolean"
+                  ? rawStatus
+                    ? "active"
+                    : "inactive"
+                  : String(rawStatus ?? "")
+                      .trim()
+                      .toLowerCase();
+
+              const status =
+                normalizedStatus === "active"
+                  ? "Active"
+                  : normalizedStatus === "inactive"
+                  ? "Inactive"
+                  : "-";
+
+              const displayProductCount =
+                item.products !== null &&
+                item.products !== undefined &&
+                Number.isFinite(Number(item.products))
+                  ? Number(item.products)
+                  : "-";
+
+              const createdDate = formatCategoryDate(
+                item.created || item.created_at
+              );
+
+              return (
+                <tr key={item.id}>
+                  <td>
+                    <div className="category-name">
+                      <div
+                        className="category-icon"
+                        aria-hidden="true"
+                      >
+                        <BsFolder />
+                      </div>
+
+                      <span className="category-name-text">
+                        {item.name || "Unnamed Category"}
+                      </span>
                     </div>
+                  </td>
 
-                    <span className="category-name-text">
-                      {item.name || "Unnamed Category"}
+                  <td>
+                    <span className="product-count">
+                      {displayProductCount}
                     </span>
-                  </div>
-                </td>
+                  </td>
 
-                {/* TOTAL PRODUCTS */}
-                <td>
-                  <span className="product-count">
-                    {item.products ?? 0}
-                  </span>
-                </td>
-
-                {/* STATUS */}
-                <td>
-                  <span
-                    className={
-                      item.status === "Active"
-                        ? "status active"
-                        : "status inactive"
-                    }
-                  >
-                    <span
-                      className="status-dot"
-                      aria-hidden="true"
-                    />
-
-                    {item.status || "Inactive"}
-                  </span>
-                </td>
-
-                {/* CREATED DATE */}
-                <td>
-                  <span className="created-date">
-                    {item.created || "-"}
-                  </span>
-                </td>
-
-                {/* ACTIONS */}
-                <td>
-                  <div className="table-actions">
-                    {/* EDIT BUTTON */}
-                    <button
-                      type="button"
-                      className="edit-btn"
-                      onClick={() => {
-                        console.log(
-                          "EDIT BUTTON CLICKED:",
-                          item
-                        );
-
-                        if (onEdit) {
-                          onEdit(item);
+                  <td>
+                    {status === "-" ? (
+                      <span className="created-date">-</span>
+                    ) : (
+                      <span
+                        className={
+                          status === "Active"
+                            ? "status active"
+                            : "status inactive"
                         }
-                      }}
-                      aria-label={`Edit ${
-                        item.name || "category"
-                      }`}
-                      title="Edit"
-                    >
-                      <BsPencil />
-                    </button>
+                      >
+                        <span
+                          className="status-dot"
+                          aria-hidden="true"
+                        />
+                        {status}
+                      </span>
+                    )}
+                  </td>
 
-                    {/* DELETE BUTTON */}
-                    <button
-                      type="button"
-                      className="delete-btn"
-                      onClick={() => {
-                        console.log(
-                          "DELETE BUTTON CLICKED:",
-                          item
-                        );
+                  <td>
+                    <span className="created-date">
+                      {createdDate}
+                    </span>
+                  </td>
 
-                        if (onDelete) {
-                          onDelete(item);
-                        }
-                      }}
-                      aria-label={`Delete ${
-                        item.name || "category"
-                      }`}
-                      title="Delete"
-                    >
-                      <BsTrash />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))
+                  <td>
+                    <div className="table-actions">
+                      <button
+                        type="button"
+                        className="edit-btn"
+                        onClick={() => {
+                          if (onEdit) {
+                            onEdit(item);
+                          }
+                        }}
+                        aria-label={`Edit ${
+                          item.name || "category"
+                        }`}
+                        title="Edit"
+                      >
+                        <BsPencil />
+                      </button>
+
+                      <button
+                        type="button"
+                        className="delete-btn"
+                        onClick={() => {
+                          if (onDelete) {
+                            onDelete(item);
+                          }
+                        }}
+                        aria-label={`Delete ${
+                          item.name || "category"
+                        }`}
+                        title="Delete"
+                      >
+                        <BsTrash />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>

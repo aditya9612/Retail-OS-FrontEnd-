@@ -1,10 +1,9 @@
 ﻿import React, { useEffect, useState } from "react";
+import { BsSearch, BsDownload, BsArrowCounterclockwise, BsPlus } from "react-icons/bs";
 import category from "../../services/categoryService";
 import axiosInstance from "../../api/axios";
 
-import CategoryHeader from "../../components/Categories/CategoryHeader";
 import CategoryCards from "../../components/Categories/CategoryCards";
-import CategoryFilters from "../../components/Categories/CategoryFilters";
 import CategoryTable from "../../components/Categories/CategoryTable";
 import CategoryModel from "../../components/Categories/CategoryModel";
 
@@ -12,9 +11,26 @@ import "./CategoryManagement.css";
 
 const PAGE_SIZE = 8;
 
+const formatCategoryDate = (value) => {
+  if (!value) return "-";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  const day = date.getDate();
+  const month = date.toLocaleString("en-GB", { month: "short" });
+  const year = date.getFullYear();
+
+  return `${day} ${month} ${year}`;
+};
+
 const CategoryManagement = () => {
   const [categories, setCategories] = useState([]);
   const [statusFilter, setStatusFilter] = useState("All");
+  const [search, setSearch] = useState("");
 
   const [showModal, setShowModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -111,11 +127,14 @@ const CategoryManagement = () => {
       ===================================================== */
 
       const apiCategories = categoryList.map((item) => {
-        const productCount = products.filter(
+        const matchingProducts = products.filter(
           (product) =>
-            Number(product.category_id) ===
-            Number(item.id)
-        ).length;
+            product?.category_id !== null &&
+            product?.category_id !== undefined &&
+            Number(product.category_id) === Number(item.id)
+        );
+
+        const productCount = matchingProducts.length;
 
         return {
           id: item.id,
@@ -129,31 +148,26 @@ const CategoryManagement = () => {
           parent_id: item.parent_id ?? null,
 
           /*
-            Backend αñ«αñºαÑìαñ»αÑç status αñ¿αñ╛αñ╣αÑÇ.
-            αññαÑìαñ»αñ╛αñ«αÑüαñ│αÑç UI compatibility αñ╕αñ╛αñáαÑÇ Active.
+            Use backend status only when the Categories API provides it.
+            Do not invent a status value.
           */
-          status: "Active",
+          status:
+            item.status ??
+            item.is_active ??
+            null,
 
           /*
-            Products API available αñàαñ╕αÑçαñ▓ αññαñ░
-            real product count.
-
-            Products API fail αñ¥αñ╛αñ▓αñ╛ αññαñ░ 0.
+            Real count only:
+            count products whose category_id actually matches this category id.
           */
           products: productCount,
 
           /*
-            Backend Categories API αñ«αñºαÑìαñ»αÑç created_at
-            αñ¿αñ╕αñ▓αÑìαñ»αñ╛αñ╕ "-"
+            Real category creation date only.
+            If the Categories API does not provide created_at, keep it unavailable.
           */
           created: item.created_at
-            ? new Date(
-                item.created_at
-              ).toLocaleDateString("en-GB", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })
+            ? formatCategoryDate(item.created_at)
             : "-",
         };
       });
@@ -211,14 +225,26 @@ const CategoryManagement = () => {
      FILTER
   ========================================================= */
 
-  const filteredCategories =
-    statusFilter === "All"
-      ? categories
-      : categories.filter(
-          (item) =>
-            item.status?.toLowerCase() ===
-            statusFilter.toLowerCase()
-        );
+  const filteredCategories = categories.filter((item) => {
+    const query = search.trim().toLowerCase();
+
+    const matchesSearch =
+      !query ||
+      String(item.name || "").toLowerCase().includes(query) ||
+      String(item.description || "").toLowerCase().includes(query) ||
+      String(item.id ?? "").toLowerCase().includes(query);
+
+    const normalizedStatus =
+      typeof item.status === "boolean"
+        ? (item.status ? "active" : "inactive")
+        : String(item.status ?? "").toLowerCase();
+
+    const matchesStatus =
+      statusFilter === "All" ||
+      normalizedStatus === statusFilter.toLowerCase();
+
+    return matchesSearch && matchesStatus;
+  });
 
   /* =========================================================
      RESET PAGE WHEN FILTER CHANGES
@@ -226,7 +252,7 @@ const CategoryManagement = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter]);
+  }, [statusFilter, search]);
 
   /* =========================================================
      PAGINATION
@@ -312,7 +338,11 @@ const CategoryManagement = () => {
         parent_id:
           categoryData.parent_id ?? null,
 
-        status: "Active",
+        status:
+          categoryData.status ??
+          categoryData.is_active ??
+          item.status ??
+          null,
 
         products:
           productsCount,
@@ -540,6 +570,64 @@ const CategoryManagement = () => {
   };
 
   /* =========================================================
+     FILTER ACTIONS
+  ========================================================= */
+
+  const handleResetFilters = () => {
+    setSearch("");
+    setStatusFilter("All");
+    setCurrentPage(1);
+  };
+
+  const handleExport = () => {
+    const rows = filteredCategories.map((item) => ({
+      ID: item.id ?? "",
+      Name: item.name ?? "",
+      Description: item.description ?? "",
+      Status: item.status ?? "",
+      Products: item.products ?? 0,
+      Created: item.created ?? "",
+    }));
+
+    const headers = [
+      "ID",
+      "Name",
+      "Description",
+      "Status",
+      "Products",
+      "Created",
+    ];
+
+    const escapeCsv = (value) => {
+      const stringValue = String(value ?? "");
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    };
+
+    const csv = [
+      headers.join(","),
+      ...rows.map((row) =>
+        headers.map((header) => escapeCsv(row[header])).join(",")
+      ),
+    ].join("\n");
+
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8;",
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.setAttribute("download", "categories.csv");
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+  };
+
+  /* =========================================================
      CATEGORY COUNTS
   ========================================================= */
 
@@ -562,13 +650,41 @@ const CategoryManagement = () => {
   ========================================================= */
 
   return (
-    <div>
-      <CategoryHeader
-        total={categories.length}
-        active={activeCount}
-        inactive={inactiveCount}
-        onAdd={handleAdd}
-      />
+    <div className="category-management-page">
+      <div
+        className="adm-page-header"
+        style={{
+          marginBottom: 16,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <div>
+          <h1 className="adm-page-title" style={{ marginBottom: 4 }}>
+            Category Management
+          </h1>
+          <p className="adm-page-sub" style={{ margin: 0 }}>
+            Manage product categories and category hierarchy.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="adm-btn-primary"
+          onClick={handleAdd}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <BsPlus size={18} />
+          New Categories
+        </button>
+      </div>
 
       <CategoryCards
         categories={categories}
@@ -586,10 +702,108 @@ const CategoryManagement = () => {
         </div>
       )}
 
-      <CategoryFilters
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
-      />
+      <div
+        style={{
+          background: "#ffffff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 16,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            flex: "1 1 280px",
+            minWidth: 220,
+          }}
+        >
+          <BsSearch
+            size={15}
+            style={{
+              position: "absolute",
+              left: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              color: "#9ca3af",
+              pointerEvents: "none",
+            }}
+          />
+
+          <input
+            type="text"
+            className="ec-input"
+            placeholder="Search categories..."
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setCurrentPage(1);
+            }}
+            style={{
+              width: "100%",
+              paddingLeft: 36,
+              height: 40,
+            }}
+          />
+        </div>
+
+        <select
+          className="ec-input"
+          value={statusFilter}
+          onChange={(event) => {
+            setStatusFilter(event.target.value);
+            setCurrentPage(1);
+          }}
+          style={{
+            minWidth: 150,
+            height: 40,
+          }}
+        >
+          <option value="All">All Status</option>
+          <option value="Active">Active</option>
+          <option value="Inactive">Inactive</option>
+        </select>
+
+        <button
+          type="button"
+          className="adm-btn-secondary"
+          onClick={handleResetFilters}
+          title="Reset filters"
+          aria-label="Reset filters"
+          style={{
+            width: 40,
+            height: 40,
+            padding: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <BsArrowCounterclockwise size={16} />
+        </button>
+
+        <button
+          type="button"
+          className="adm-btn-secondary"
+          onClick={handleExport}
+          title="Export categories"
+          aria-label="Export categories"
+          style={{
+            width: 40,
+            height: 40,
+            padding: 0,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <BsDownload size={16} />
+        </button>
+      </div>
 
       <CategoryTable
         categories={paginatedCategories}
@@ -601,7 +815,7 @@ const CategoryManagement = () => {
         <div className="category-pagination">
           <div className="category-pagination-info">
             Showing {startIndex + 1}
-            {" ΓÇô "}
+            {" – "}
             {endIndex}
             {" of "}
             {totalCategories}
@@ -624,7 +838,7 @@ const CategoryManagement = () => {
                 currentPage === 1
               }
             >
-              ΓåÉ
+              ←
             </button>
 
             {Array.from(
@@ -668,7 +882,7 @@ const CategoryManagement = () => {
                 totalPages
               }
             >
-              ΓåÆ
+              →
             </button>
           </div>
         </div>

@@ -125,6 +125,42 @@ const getCleanStoreName = (store) => {
 };
 
 /* =========================================================
+   STOCK STATUS
+   Same rule as Inventory Management:
+   0 qty                  -> Out of Stock
+   positive qty <= min    -> Critical
+   qty > min              -> In Stock
+========================================================= */
+
+const getStockStatus = (item) => {
+    const stock = Number(
+        item?.quantity ??
+        item?.available_quantity ??
+        item?.stock ??
+        item?.current_stock ??
+        0
+    ) || 0;
+
+    const minStock = Number(
+        item?.low_stock_threshold ??
+        item?.minimum_stock ??
+        item?.reorder_level ??
+        item?.min_stock ??
+        0
+    ) || 0;
+
+    if (stock === 0) {
+        return "Out of Stock";
+    }
+
+    if (minStock > 0 && stock <= minStock) {
+        return "Critical";
+    }
+
+    return "In Stock";
+};
+
+/* =========================================================
    LOW STOCK ALERTS PAGE
 ========================================================= */
 
@@ -141,6 +177,10 @@ const LowStockAlerts = () => {
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+
+    const [search, setSearch] = useState("");
+    const [storeFilter, setStoreFilter] = useState("All Stores");
+    const [statusFilter, setStatusFilter] = useState("All Status");
 
     /* =====================================================
        PRODUCT MAP
@@ -265,6 +305,8 @@ const LowStockAlerts = () => {
                             item?.min_stock ??
                             0
                     ),
+
+                    stock_status: getStockStatus(item),
                 };
             })
             .filter(Boolean);
@@ -453,6 +495,56 @@ const LowStockAlerts = () => {
         }
     };
 
+    const storeOptions = useMemo(() => {
+        return Array.from(
+            new Set(
+                lowStockItems
+                    .map((item) => item?.store_name)
+                    .filter(Boolean)
+            )
+        ).sort();
+    }, [lowStockItems]);
+
+
+
+    const filteredLowStockItems = useMemo(() => {
+        const q = search.trim().toLowerCase();
+
+        return lowStockItems.filter((item) => {
+            const productName = String(
+                item?.product_name || item?.name || ""
+            ).toLowerCase();
+
+            const sku = String(
+                item?.sku || ""
+            ).toLowerCase();
+
+            const matchSearch =
+                !q ||
+                productName.includes(q) ||
+                sku.includes(q);
+
+            const matchStore =
+                storeFilter === "All Stores" ||
+                item?.store_name === storeFilter;
+
+            const itemStatus =
+                item?.stock_status ||
+                getStockStatus(item);
+
+            const matchStatus =
+                statusFilter === "All Status" ||
+                itemStatus === statusFilter;
+
+            return matchSearch && matchStore && matchStatus;
+        });
+    }, [
+        lowStockItems,
+        search,
+        storeFilter,
+        statusFilter,
+    ]);
+
     /* =====================================================
        UI
     ===================================================== */
@@ -478,11 +570,93 @@ const LowStockAlerts = () => {
                     </div>
                 )}
 
+                <section
+                    style={{
+                        marginBottom: 16,
+                        display: "grid",
+                        gridTemplateColumns: "minmax(280px, 2fr) minmax(220px, 1fr) minmax(180px, 1fr) auto",
+                        gap: 10,
+                        alignItems: "center",
+                        background: "#ffffff",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: 12,
+                        padding: 12,
+                    }}
+                >
+                    <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Search product or SKU..."
+                        style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 8,
+                            outline: "none",
+                        }}
+                    />
+
+                    <select
+                        value={storeFilter}
+                        onChange={(e) => setStoreFilter(e.target.value)}
+                        style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 8,
+                            background: "#ffffff",
+                        }}
+                    >
+                        <option value="All Stores">All Stores</option>
+                        {storeOptions.map((store) => (
+                            <option key={store} value={store}>
+                                {store}
+                            </option>
+                        ))}
+                    </select>
+
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        style={{
+                            width: "100%",
+                            padding: "10px 12px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 8,
+                            background: "#ffffff",
+                        }}
+                    >
+                        <option value="All Status">All Status</option>
+                        <option value="Critical">Critical</option>
+                        <option value="Out of Stock">Out of Stock</option>
+                    </select>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setSearch("");
+                            setStoreFilter("All Stores");
+                            setStatusFilter("All Status");
+                        }}
+                        style={{
+                            padding: "10px 14px",
+                            border: "1px solid #d1d5db",
+                            borderRadius: 8,
+                            background: "#ffffff",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Clear
+                    </button>
+                </section>
+
                 <section className="low-stock-card">
                     <LowStockAlert
                         loading={loading}
                         error={error}
-                        items={lowStockItems}
+                        items={filteredLowStockItems}
+                        stockStatus={getStockStatus}
                     />
                 </section>
             </div>

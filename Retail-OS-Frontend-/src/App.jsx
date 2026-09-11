@@ -22,7 +22,7 @@ import CategoryManagement from './pages/Categories/CategoryManagement';
 import Orders from './pages/Orders';
 import Purchases from './pages/Purchases';
 import Customers from './pages/Customers';
-import Returns from './pages/Reports';
+import Returns from "./pages/Reports";
 
 import ECommerceDashboard from './pages/ECommerce/ECommerceDashboard';
 import StoreManagement from './pages/ECommerce/StoreManagement';

@@ -1,6 +1,55 @@
 ﻿import React from "react";
 import "./LowStockAlert.css";
 
+/* =========================================================
+   DATE FORMATTER
+========================================================= */
+
+const formatDisplayDate = (value) => {
+  if (!value) return "-";
+
+  const raw = String(value).trim();
+
+  const match = raw.match(
+    /^(\d{4})-(\d{2})-(\d{2})/
+  );
+
+  if (!match) {
+    return "-";
+  }
+
+  const [, year, month, day] = match;
+
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+
+  const monthIndex = Number(month) - 1;
+  const numericDay = Number(day);
+
+  if (
+    monthIndex < 0 ||
+    monthIndex > 11 ||
+    numericDay < 1 ||
+    numericDay > 31
+  ) {
+    return "-";
+  }
+
+  return `${numericDay} ${months[monthIndex]} ${year}`;
+};
+
 const LowStockAlert = ({
   loading = false,
   error = "",
@@ -8,8 +57,6 @@ const LowStockAlert = ({
 }) => {
   return (
     <div className="low-stock-alert">
-      <div className="low-stock-header"></div>
-
       {loading && (
         <div
           style={{
@@ -64,9 +111,9 @@ const LowStockAlert = ({
             </tr>
           ) : (
             items.map((item) => {
-              /* =====================================================
+              /* =========================
                  AVAILABLE QUANTITY
-              ===================================================== */
+              ========================= */
 
               const qty = Number(
                 item?.quantity ??
@@ -75,9 +122,9 @@ const LowStockAlert = ({
                   0
               );
 
-              /* =====================================================
-                 REORDER / MINIMUM STOCK LEVEL
-              ===================================================== */
+              /* =========================
+                 REORDER LEVEL
+              ========================= */
 
               const reorderLevel = Number(
                 item?.low_stock_threshold ??
@@ -89,21 +136,9 @@ const LowStockAlert = ({
                   0
               );
 
-              /* =====================================================
-                 CORRECT STOCK STATUS
-
-                 Qty = 0
-                    -> Out of Stock
-
-                 Qty < Reorder Level
-                    -> Critical
-
-                 Qty = Reorder Level
-                    -> Low Stock
-
-                 Qty > Reorder Level
-                    -> In Stock
-              ===================================================== */
+              /* =========================
+                 STOCK STATUS
+              ========================= */
 
               const isOutOfStock = qty <= 0;
 
@@ -116,14 +151,9 @@ const LowStockAlert = ({
               const isInStock =
                 qty > reorderLevel;
 
-              /* =====================================================
+              /* =========================
                  CLEAN STORE NAME
-
-                 Example:
-                 "Swapnapurti Mega Mart 1753959001"
-                 ->
-                 "Swapnapurti Mega Mart"
-              ===================================================== */
+              ========================= */
 
               const rawStoreName =
                 item?.store_name ||
@@ -143,41 +173,55 @@ const LowStockAlert = ({
                 )
                 .trim();
 
-              /* =====================================================
-                 STATUS CLASS
-              ===================================================== */
+              /* =========================
+                 STATUS
+              ========================= */
 
               let statusClass =
                 "low-stock-badge";
 
-              let statusText = "Low Stock";
+              let statusText =
+                "Low Stock";
 
               if (isOutOfStock) {
                 statusClass =
                   "out-of-stock-badge";
 
-                statusText = "Out of Stock";
+                statusText =
+                  "Out of Stock";
               } else if (isCritical) {
                 statusClass =
                   "critical-stock-badge";
 
-                statusText = "Critical";
+                statusText =
+                  "Critical";
               } else if (isLowStock) {
                 statusClass =
                   "low-stock-badge";
 
-                statusText = "Low Stock";
+                statusText =
+                  "Low Stock";
               } else if (isInStock) {
                 statusClass =
                   "in-stock-badge";
 
-                statusText = "In Stock";
+                statusText =
+                  "In Stock";
               }
+
+              /* =========================
+                 LAST UPDATED
+              ========================= */
+
+              const lastUpdated =
+                formatDisplayDate(
+                  item?.created_at ||
+                    item?.updated_at
+                );
 
               return (
                 <tr key={item?.id}>
                   {/* PRODUCT */}
-
                   <td>
                     {item?.product_name ||
                       item?.name ||
@@ -185,49 +229,32 @@ const LowStockAlert = ({
                   </td>
 
                   {/* SKU */}
-
                   <td>
                     {item?.sku || "-"}
                   </td>
 
                   {/* SUPPLIER */}
-
                   <td>
                     {item?.supplier_name ||
                       item?.supplierName ||
                       "-"}
                   </td>
 
-                  {/* WAREHOUSE / STORE */}
-
+                  {/* WAREHOUSE */}
                   <td>
                     {cleanStoreName || "-"}
                   </td>
 
                   {/* AVAILABLE QUANTITY */}
-
                   <td>{qty}</td>
 
                   {/* REORDER LEVEL */}
-
                   <td>{reorderLevel}</td>
 
                   {/* LAST UPDATED */}
-
-                  <td>
-                    {item?.created_at
-                      ? item.created_at.split(
-                          "T"
-                        )[0]
-                      : item?.updated_at
-                      ? item.updated_at.split(
-                          "T"
-                        )[0]
-                      : "-"}
-                  </td>
+                  <td>{lastUpdated}</td>
 
                   {/* STATUS */}
-
                   <td>
                     <span
                       className={statusClass}
@@ -237,7 +264,6 @@ const LowStockAlert = ({
                   </td>
 
                   {/* ACTION */}
-
                   <td>
                     <button
                       type="button"
