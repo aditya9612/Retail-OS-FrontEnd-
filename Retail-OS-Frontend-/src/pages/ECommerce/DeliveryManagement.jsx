@@ -519,10 +519,22 @@ const DeliveryManagement = () => {
     };
 
     const handleSaveMethod = () => {
+        let minDays = Math.max(0, Number(methodForm.minDays || 0));
+        let maxDays = Math.max(0, Number(methodForm.maxDays || 0));
+
+        // Ensure minDays <= maxDays (prevent invalid range like 5-2 days)
+        if (minDays > maxDays) {
+            const temp = minDays;
+            minDays = maxDays;
+            maxDays = temp;
+        }
+
+        const normalizedForm = { ...methodForm, minDays, maxDays };
+
         if (editMethod) {
-            setMethods(prev => prev.map(m => m.id === editMethod.id ? { ...methodForm, id: m.id } : m));
+            setMethods(prev => prev.map(m => m.id === editMethod.id ? { ...normalizedForm, id: m.id } : m));
         } else {
-            setMethods(prev => [...prev, { ...methodForm, id: Date.now(), icon: '🚚' }]);
+            setMethods(prev => [...prev, { ...normalizedForm, id: Date.now(), icon: '🚚' }]);
         }
         setShowMethodModal(false);
     };
@@ -1125,7 +1137,16 @@ const DeliveryManagement = () => {
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
                                 {[
-                                    { label: 'Delivery Time', value: m.minDays === 0 && m.maxDays === 0 ? 'Same Day' : `${m.minDays}–${m.maxDays} days` },
+                                     { 
+                                         label: 'Delivery Time', 
+                                         value: (() => {
+                                             const min = Math.min(m.minDays ?? 0, m.maxDays ?? 0);
+                                             const max = Math.max(m.minDays ?? 0, m.maxDays ?? 0);
+                                             if (min === 0 && max === 0) return 'Same Day';
+                                             if (min === max) return `${min} day${min === 1 ? '' : 's'}`;
+                                             return `${min}–${max} days`;
+                                         })() 
+                                     },
                                     { label: 'Shipping Charge', value: m.charge === 0 ? 'Free' : fmt(m.charge) },
                                     { label: 'Free Above', value: m.freeAbove === 0 ? 'N/A' : fmt(m.freeAbove) },
                                     { label: 'Zones', value: m.zones.length > 1 ? `${m.zones.length} zones` : m.zones[0] },
