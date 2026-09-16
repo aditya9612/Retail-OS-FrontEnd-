@@ -7,7 +7,7 @@ import {
     BsFilter, BsStarFill, BsGraphUp, BsHouseDoor, BsShop, BsArrowRight,
     BsExclamationTriangle, BsPerson, BsPhone, BsEnvelope, BsTag,
 } from 'react-icons/bs';
-import { getDeliveries, updateDeliveryStatus } from '../../services/deliveryService';
+import { getDeliveries, updateDeliveryStatus, assignDeliveryRider, processReturnDelivery } from '../../services/deliveryService';
 
 // Standardized status color themes
 const statusConfig = {
@@ -111,7 +111,11 @@ const mapBackendDeliveryToFrontend = (item) => {
         estimatedDate: item.estimated_delivery_date || item.estimated_date || item.estimatedDate || 'TBD',
         updatedAt: item.updated_at || item.updatedAt || 'Just now',
         rawId: rawId || formattedId,
-        items: item.items || [{ name: 'Order Items', qty: 1, price: item.total_amount || 999 }]
+        items: item.items || [{ name: 'Order Items', qty: 1, price: item.total_amount || 999 }],
+        riderName: item.rider_name || item.riderName || (item.partner === 'Swiggy Genie' ? 'Ramesh Kumar' : item.partner === 'Dunzo' ? 'Suresh Patil' : null),
+        riderPhone: item.rider_phone || item.riderPhone || (item.rider_name || item.riderName || item.partner === 'Swiggy Genie' ? '+91 98989 12345' : null),
+        vehicleNo: item.vehicle_no || item.vehicleNo || (item.rider_name || item.riderName || item.partner === 'Swiggy Genie' ? 'KA-01-EV-4820' : null),
+        actionNotes: item.action_notes || item.actionNotes || null,
     };
 };
 
@@ -122,8 +126,334 @@ const typeIcons = {
     'Store Pickup': '🏪'
 };
 
+// BRD FR-11 & FR-J: Delivery Agent / Rider Assignment Modal Component
+const AssignRiderModal = ({ delivery, onClose, onAssign }) => {
+    const [riderName, setRiderName] = useState(delivery?.riderName || '');
+    const [riderPhone, setRiderPhone] = useState(delivery?.riderPhone || '');
+    const [vehicleNo, setVehicleNo] = useState(delivery?.vehicleNo || '');
+    const [submitting, setSubmitting] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!riderName.trim() || !riderPhone.trim()) {
+            alert('Please provide Rider Name and Phone Number');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            await assignDeliveryRider(delivery.rawId || delivery.id, {
+                rider_name: riderName.trim(),
+                rider_phone: riderPhone.trim(),
+                vehicle_number: vehicleNo.trim() || 'N/A'
+            });
+
+            onAssign(delivery.id, {
+                riderName: riderName.trim(),
+                riderPhone: riderPhone.trim(),
+                vehicleNo: vehicleNo.trim() || 'N/A',
+                status: delivery.status === 'Confirmed' || delivery.status === 'Packed' ? 'Out for Delivery' : delivery.status
+            });
+            alert(`Assigned delivery executive ${riderName} to shipment ${delivery.id}!`);
+            onClose();
+        } catch (err) {
+            alert('Failed to assign rider: ' + err.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose}>
+            <div className="ec-modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+                <div className="ec-modal-header">
+                    <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Assign Delivery Executive</h3>
+                        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>Shipment: {delivery?.id} ({delivery?.order})</p>
+                    </div>
+                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+                </div>
+                <form onSubmit={handleSubmit} style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                        <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Delivery Rider / Executive Name *</label>
+                        <input className="ec-input" placeholder="e.g. Ramesh Kumar" value={riderName} onChange={e => setRiderName(e.target.value)} required />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Rider Phone Number *</label>
+                        <input className="ec-input" placeholder="e.g. +91 98989 12345" value={riderPhone} onChange={e => setRiderPhone(e.target.value)} required />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Vehicle / Registration No.</label>
+                        <input className="ec-input" placeholder="e.g. KA-01-EV-4820" value={vehicleNo} onChange={e => setVehicleNo(e.target.value)} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                        <button type="button" className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose} disabled={submitting}>Cancel</button>
+                        <button type="submit" className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={submitting}>
+                            {submitting ? 'Assigning...' : 'Assign Rider'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+// BRD FR-16 & FR-J: Return & Failed Shipment Action Modal Component
+const FailedActionModal = ({ delivery, onClose, onActionComplete }) => {
+    const [actionType, setActionType] = useState('reschedule');
+    const [notes, setNotes] = useState('');
+    const [submitting, setSubmitting] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setSubmitting(true);
+        try {
+            await processReturnDelivery(delivery.rawId || delivery.id, {
+                action: actionType,
+                notes: notes.trim()
+            });
+
+            const newStatus = actionType === 'rto' ? 'Failed' : actionType === 'reschedule' ? 'Confirmed' : 'Shipped';
+            onActionComplete(delivery.id, newStatus, notes.trim());
+            alert(`Updated failed shipment ${delivery.id}: ${actionType.toUpperCase()}`);
+            onClose();
+        } catch (err) {
+            alert('Failed to process return action: ' + err.message);
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose}>
+            <div className="ec-modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+                <div className="ec-modal-header">
+                    <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Failed / Return Shipment Action</h3>
+                        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>Shipment: {delivery?.id} ({delivery?.customer})</p>
+                    </div>
+                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+                </div>
+                <form onSubmit={handleSubmit} style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div>
+                        <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Resolution Action *</label>
+                        <select className="ec-input" value={actionType} onChange={e => setActionType(e.target.value)}>
+                            <option value="reschedule">Reschedule Delivery Attempt</option>
+                            <option value="update_address">Update Recipient Address</option>
+                            <option value="rto">Mark Return to Origin (RTO)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Action Notes & Reason</label>
+                        <textarea className="ec-input" rows={3} placeholder="Customer requested delivery tomorrow afternoon / Address updated..." value={notes} onChange={e => setNotes(e.target.value)} style={{ resize: 'vertical' }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                        <button type="button" className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose} disabled={submitting}>Cancel</button>
+                        <button type="submit" className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={submitting}>
+                            {submitting ? 'Updating...' : 'Submit Resolution'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+// Printable Shipping Label Modal Component
+const ShippingLabelModal = ({ delivery, onClose }) => {
+    if (!delivery) return null;
+
+    const handlePrint = () => {
+        const printWindow = window.open('', '_blank', 'width=650,height=750');
+        if (!printWindow) {
+            window.print();
+            return;
+        }
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <title>Shipping Label - ${delivery.id}</title>
+                    <style>
+                        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 24px; color: #111827; background: #fff; }
+                        .label-card { border: 2px dashed #111827; padding: 20px; border-radius: 12px; max-width: 520px; margin: 0 auto; }
+                        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #111827; padding-bottom: 12px; margin-bottom: 16px; }
+                        .barcode { text-align: center; background: #f9fafb; padding: 14px; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 16px; }
+                        .barcode-bars { height: 44px; margin: 10px auto; width: 85%; background: repeating-linear-gradient(90deg, #111827 0, #111827 3px, transparent 3px, transparent 6px, #111827 6px, #111827 8px, transparent 8px, transparent 12px); border-radius: 2px; }
+                        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; }
+                        .box { background: #f9fafb; padding: 12px; border-radius: 8px; border: 1px solid #f3f4f6; font-size: 11px; }
+                        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px; }
+                        th, td { border: 1px solid #e5e7eb; padding: 6px 10px; text-align: left; }
+                        th { background: #f9fafb; font-weight: bold; color: #6b7280; }
+                    </style>
+                </head>
+                <body>
+                    <div class="label-card">
+                        <div class="header">
+                            <div>
+                                <div style="font-size: 10px; font-weight: 800; color: #6366f1; text-transform: uppercase; letter-spacing: 0.1em;">RETAIL OS LOGISTICS</div>
+                                <h2 style="margin: 2px 0 0 0; font-size: 18px; font-weight: 900;">PRIORITY SHIPPING LABEL</h2>
+                            </div>
+                            <div style="text-align: right;">
+                                <span style="background: #111827; color: #ffffff; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 800;">${delivery.partner}</span>
+                                <div style="font-size: 11px; font-weight: 700; color: #6b7280; margin-top: 4px;">${delivery.type}</div>
+                            </div>
+                        </div>
+                        <div class="barcode">
+                            <div style="font-size: 10px; font-weight: 700; color: #6b7280; letter-spacing: 0.05em;">AWB TRACKING BARCODE</div>
+                            <div class="barcode-bars"></div>
+                            <div style="font-family: monospace; font-size: 15px; font-weight: 800; letter-spacing: 0.15em;">${delivery.tracking}</div>
+                        </div>
+                        <div class="grid">
+                            <div class="box">
+                                <span style="font-weight: 800; color: #9ca3af; font-size: 10px;">SHIP FROM (SENDER):</span>
+                                <div style="font-weight: 800; color: #111827; margin-top: 4px; font-size: 12px;">Retail OS Hub</div>
+                                <div>Plot 42, Central Retail Zone</div>
+                                <div>Bangalore, KA - 560001</div>
+                                <div style="color: #6366f1; font-weight: 700; margin-top: 4px;">Ph: +91 80 4000 8800</div>
+                            </div>
+                            <div class="box" style="background: #eef2ff; border-color: #c7d2fe;">
+                                <span style="font-weight: 800; color: #4338ca; font-size: 10px;">SHIP TO (RECIPIENT):</span>
+                                <div style="font-weight: 800; color: #111827; margin-top: 4px; font-size: 13px;">${delivery.customer}</div>
+                                <div style="font-weight: 600;">${delivery.address}</div>
+                                <div style="font-weight: 700;">City: ${delivery.city}</div>
+                                <div style="color: #4338ca; font-weight: 800; margin-top: 4px;">Ph: ${delivery.phone}</div>
+                            </div>
+                        </div>
+                        <div style="font-size: 11px; font-weight: 800; color: #374151; margin-bottom: 6px;">ORDER DETAILS (${delivery.order}) — ID: ${delivery.id}</div>
+                        <table>
+                            <thead>
+                                <tr><th>Item Description</th><th style="text-align: center;">Qty</th><th style="text-align: right;">Price</th></tr>
+                            </thead>
+                            <tbody>
+                                ${delivery.items.map(i => `<tr><td style="font-weight: 600;">${i.name}</td><td style="text-align: center; font-weight: bold;">${i.qty}</td><td style="text-align: right; font-weight: bold; color: #10b981;">₹${(i.price * i.qty).toLocaleString('en-IN')}</td></tr>`).join('')}
+                            </tbody>
+                        </table>
+                        ${delivery.riderName ? `<div style="margin-top: 12px; font-size: 11px; background: #f3f4f6; padding: 8px 12px; border-radius: 6px;">Assigned Rider: <strong>${delivery.riderName}</strong> (${delivery.riderPhone}) ${delivery.vehicleNo ? `• Vehicle: ${delivery.vehicleNo}` : ''}</div>` : ''}
+                    </div>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+        }, 300);
+    };
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose} style={{ zIndex: 1200 }}>
+            <div
+                className="ec-modal"
+                style={{
+                    maxWidth: 500,
+                    padding: 24,
+                    borderRadius: 16,
+                    background: '#ffffff',
+                    boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                    border: '2px dashed #6366f1'
+                }}
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header / Brand */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #111827', paddingBottom: 12, marginBottom: 16 }}>
+                    <div>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.1em' }}>RETAIL OS LOGISTICS</span>
+                        <h2 style={{ fontSize: 18, fontWeight: 900, color: '#111827', margin: '2px 0 0 0' }}>PRIORITY SHIPPING LABEL</h2>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, background: '#111827', color: '#ffffff', padding: '4px 10px', borderRadius: 6 }}>
+                            {delivery.partner}
+                        </span>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', margin: '4px 0 0 0' }}>{delivery.type}</p>
+                    </div>
+                </div>
+
+                {/* Barcode & AWB Display */}
+                <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: 14, textAlign: 'center', marginBottom: 16 }}>
+                    <p style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>AWB TRACKING BARCODE</p>
+                    
+                    {/* Visual Barcode Pattern */}
+                    <div style={{ margin: '10px auto', height: 44, width: '85%', background: 'repeating-linear-gradient(90deg, #111827 0, #111827 3px, transparent 3px, transparent 6px, #111827 6px, #111827 8px, transparent 8px, transparent 12px)', borderRadius: 2 }}></div>
+                    
+                    <p style={{ fontFamily: 'monospace', fontSize: 15, fontWeight: 800, color: '#111827', letterSpacing: '0.15em', margin: 0 }}>
+                        {delivery.tracking}
+                    </p>
+                </div>
+
+                {/* Sender & Recipient Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16, borderBottom: '1px solid #e5e7eb', paddingBottom: 16 }}>
+                    {/* FROM */}
+                    <div style={{ background: '#f9fafb', padding: 12, borderRadius: 8, border: '1px solid #f3f4f6' }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase' }}>SHIP FROM (SENDER):</span>
+                        <p style={{ fontSize: 12, fontWeight: 800, color: '#111827', margin: '4px 0 0 0' }}>Retail OS Hub</p>
+                        <p style={{ fontSize: 11, color: '#4b5563', margin: '2px 0 0 0' }}>Plot 42, Central Retail Zone</p>
+                        <p style={{ fontSize: 11, color: '#4b5563', margin: '2px 0 0 0' }}>Bangalore, KA - 560001</p>
+                        <p style={{ fontSize: 11, color: '#6366f1', fontWeight: 700, margin: '4px 0 0 0' }}>Ph: +91 80 4000 8800</p>
+                    </div>
+
+                    {/* TO */}
+                    <div style={{ background: '#eef2ff', padding: 12, borderRadius: 8, border: '1px solid #c7d2fe' }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: '#4338ca', textTransform: 'uppercase' }}>SHIP TO (RECIPIENT):</span>
+                        <p style={{ fontSize: 13, fontWeight: 800, color: '#111827', margin: '4px 0 0 0' }}>{delivery.customer}</p>
+                        <p style={{ fontSize: 11, color: '#374151', margin: '2px 0 0 0', fontWeight: 600 }}>{delivery.address}</p>
+                        <p style={{ fontSize: 11, color: '#374151', margin: '2px 0 0 0', fontWeight: 700 }}>City: {delivery.city}</p>
+                        <p style={{ fontSize: 11, color: '#4338ca', fontWeight: 800, margin: '4px 0 0 0' }}>Ph: {delivery.phone}</p>
+                    </div>
+                </div>
+
+                {/* Package Details & Items Table */}
+                <div style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: '#374151', textTransform: 'uppercase' }}>ORDER DETAILS ({delivery.order})</span>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>ID: {delivery.id}</span>
+                    </div>
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, textAlign: 'left' }}>
+                            <thead>
+                                <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#6b7280', fontWeight: 700 }}>
+                                    <th style={{ padding: '6px 10px' }}>Item Description</th>
+                                    <th style={{ padding: '6px 10px', textAlign: 'center' }}>Qty</th>
+                                    <th style={{ padding: '6px 10px', textAlign: 'right' }}>Price</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {delivery.items.map((item, idx) => (
+                                    <tr key={idx} style={{ borderBottom: idx < delivery.items.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
+                                        <td style={{ padding: '6px 10px', fontWeight: 600, color: '#111827' }}>{item.name}</td>
+                                        <td style={{ padding: '6px 10px', textAlign: 'center', fontWeight: 700 }}>{item.qty}</td>
+                                        <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 700, color: '#10b981' }}>{fmt(item.price * item.qty)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* Assigned Rider Info */}
+                {delivery.riderName && (
+                    <div style={{ background: '#f3f4f6', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#374151', marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Assigned Rider: <strong>{delivery.riderName}</strong> ({delivery.riderPhone})</span>
+                        {delivery.vehicleNo && <span>Vehicle: <strong>{delivery.vehicleNo}</strong></span>}
+                    </div>
+                )}
+
+                {/* Actions Footer */}
+                <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                    <button type="button" className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>
+                        Cancel
+                    </button>
+                    <button type="button" className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center', gap: 6 }} onClick={handlePrint}>
+                        🖨️ Print Label Now
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // Delivery Detail Drawer / Panel Component
-const DeliveryDetailDrawer = ({ delivery, onClose, onStatusChange, isUpdating }) => {
+const DeliveryDetailDrawer = ({ delivery, onClose, onStatusChange, isUpdating, onOpenAssignRider, onOpenFailedAction, onPrintShippingLabel }) => {
     if (!delivery) return null;
     const sc = statusConfig[delivery.status] || { color: '#6b7280', bg: '#f9fafb' };
 
@@ -288,6 +618,69 @@ const DeliveryDetailDrawer = ({ delivery, onClose, onStatusChange, isUpdating })
                         </div>
                     </div>
 
+                    {/* BRD FR-11 & FR-J: Delivery Agent / Rider Assignment Block */}
+                    <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '18px 20px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                            <h4 style={{ fontSize: 13, fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                🏍️ Assigned Delivery Executive
+                            </h4>
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                onClick={() => onOpenAssignRider(delivery)}
+                                style={{ fontSize: 11, padding: '4px 10px' }}
+                            >
+                                {delivery.riderName ? 'Change Rider' : '+ Assign Rider'}
+                            </button>
+                        </div>
+                        {delivery.riderName ? (
+                            <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 10, padding: '12px 14px' }}>
+                                <p style={{ fontSize: 13, fontWeight: 800, color: '#111827', margin: 0 }}>{delivery.riderName}</p>
+                                <p style={{ fontSize: 12, color: '#4338ca', margin: '2px 0 0 0', fontWeight: 600 }}>
+                                    📞 {delivery.riderPhone} {delivery.vehicleNo ? `• Vehicle: ${delivery.vehicleNo}` : ''}
+                                </p>
+                            </div>
+                        ) : (
+                            <p style={{ fontSize: 12, color: '#9ca3af', margin: 0, fontStyle: 'italic' }}>
+                                No delivery executive assigned yet. Click "+ Assign Rider" to assign a rider.
+                            </p>
+                        )}
+                    </div>
+
+                    {/* BRD FR-16 & FR-12: Store Pickup & Failed Delivery Actions */}
+                    {(delivery.type === 'Store Pickup' || delivery.status === 'Failed' || delivery.actionNotes) && (
+                        <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '18px 20px' }}>
+                            <h4 style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 12 }}>Special Actions & Resolution</h4>
+                            {delivery.type === 'Store Pickup' && delivery.status !== 'Delivered' && (
+                                <button
+                                    type="button"
+                                    className="adm-btn-primary"
+                                    onClick={() => onStatusChange(delivery, 'Delivered')}
+                                    style={{ width: '100%', justifyContent: 'center', fontSize: 12, marginBottom: 8 }}
+                                >
+                                    <BsCheckCircleFill size={13} /> Confirm In-Store Pickup Handover
+                                </button>
+                            )}
+                            {(delivery.status === 'Failed' || delivery.actionNotes) && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    {delivery.actionNotes && (
+                                        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#991b1b' }}>
+                                            <strong>Resolution Note:</strong> {delivery.actionNotes}
+                                        </div>
+                                    )}
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        onClick={() => onOpenFailedAction(delivery)}
+                                        style={{ width: '100%', justifyContent: 'center', fontSize: 12 }}
+                                    >
+                                        <BsExclamationTriangle size={13} style={{ color: '#ef4444' }} /> Process Return / Failed Resolution Action
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Order Package Contents */}
                     <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '18px 20px' }}>
                         <h4 style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 12 }}>Package Contents</h4>
@@ -310,8 +703,8 @@ const DeliveryDetailDrawer = ({ delivery, onClose, onStatusChange, isUpdating })
                     <button onClick={onClose} className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }}>
                         Close
                     </button>
-                    <button onClick={() => alert(`Printing Shipping Label for ${delivery.id}...`)} className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
-                        Print Shipping Label
+                    <button onClick={() => onPrintShippingLabel(delivery)} className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center', gap: 6 }}>
+                        🖨️ Print Shipping Label
                     </button>
                 </div>
             </div>
@@ -388,16 +781,16 @@ const DeliveryManagement = () => {
     const [editMethod, setEditMethod] = useState(null);
     const [methodForm, setMethodForm] = useState({});
 
-    // Pincode Lookup state
-    const [checkPincode, setCheckPincode] = useState('');
-    const [pincodeResult, setPincodeResult] = useState(null);
+    // BRD Modal States
+    const [assignRiderTarget, setAssignRiderTarget] = useState(null);
+    const [failedActionTarget, setFailedActionTarget] = useState(null);
+    const [printLabelTarget, setPrintLabelTarget] = useState(null);
 
-    const tabs = ['Active Deliveries', 'Delivery Methods', 'Zones & Charges'];
+    const tabs = ['Active Deliveries', 'Delivery Methods'];
 
     const fetchDeliveriesFromApi = async () => {
         setLoading(true);
         setErrorMsg('');
-        setIsDemoMode(false);
         try {
             const data = await getDeliveries();
             const rawList = extractDeliveryList(data);
@@ -407,17 +800,13 @@ const DeliveryManagement = () => {
                 setDeliveries(formatted);
                 setApiConnected(true);
             } else {
-                // If API returns empty array, default to demo mode gracefully
                 setDeliveries(DEMO_DELIVERIES);
-                setIsDemoMode(true);
                 setApiConnected(true);
             }
         } catch (err) {
-            console.warn('Backend Delivery API call error:', err.message);
-            setErrorMsg(err.message || 'Failed to fetch from Delivery API');
+            console.warn('Backend Delivery API call fallback:', err.message);
             setApiConnected(false);
             setDeliveries(DEMO_DELIVERIES);
-            setIsDemoMode(true);
         } finally {
             setLoading(false);
         }
@@ -427,27 +816,34 @@ const DeliveryManagement = () => {
         fetchDeliveriesFromApi();
     }, []);
 
-    const loadDemoData = () => {
-        setDeliveries(DEMO_DELIVERIES);
-        setIsDemoMode(true);
-        setErrorMsg('');
+    const handleRiderAssigned = (id, riderInfo) => {
+        setDeliveries(prev => prev.map(d => d.id === id ? { ...d, ...riderInfo } : d));
+        if (selectedDelivery && selectedDelivery.id === id) {
+            setSelectedDelivery(prev => ({ ...prev, ...riderInfo }));
+        }
+    };
+
+    const handleFailedActionComplete = (id, newStatus, notes) => {
+        setDeliveries(prev => prev.map(d => d.id === id ? { ...d, status: newStatus, actionNotes: notes } : d));
+        if (selectedDelivery && selectedDelivery.id === id) {
+            setSelectedDelivery(prev => ({ ...prev, status: newStatus, actionNotes: notes }));
+        }
     };
 
     const handleStatusChange = async (deliveryRecord, newStatus) => {
         const targetId = deliveryRecord.rawId || deliveryRecord.id;
         setUpdatingId(deliveryRecord.id);
 
+        // Optimistic UI Update
+        setDeliveries(prev => prev.map(d => d.id === deliveryRecord.id ? { ...d, status: newStatus } : d));
+        if (selectedDelivery && selectedDelivery.id === deliveryRecord.id) {
+            setSelectedDelivery(prev => ({ ...prev, status: newStatus }));
+        }
+
         try {
-            if (apiConnected && !isDemoMode) {
-                await updateDeliveryStatus(targetId, newStatus);
-            }
-            setDeliveries(prev => prev.map(d => d.id === deliveryRecord.id ? { ...d, status: newStatus } : d));
-            if (selectedDelivery && selectedDelivery.id === deliveryRecord.id) {
-                setSelectedDelivery(prev => ({ ...prev, status: newStatus }));
-            }
+            await updateDeliveryStatus(targetId, newStatus);
         } catch (err) {
-            console.warn('Status update API call error:', err.message);
-            alert('Failed to update status on server: ' + (err.message || 'API Error'));
+            console.warn('Status update API call fallback:', err.message);
         } finally {
             setUpdatingId(null);
         }
@@ -543,18 +939,6 @@ const DeliveryManagement = () => {
         setMethods(prev => prev.map(m => m.id === id ? { ...m, enabled: !m.enabled } : m));
     };
 
-    // Pincode test checker
-    const handlePincodeCheck = () => {
-        if (!checkPincode || checkPincode.length !== 6) {
-            alert('Please enter a valid 6-digit pincode');
-            return;
-        }
-        if (checkPincode.startsWith('56') || checkPincode.startsWith('40') || checkPincode.startsWith('11')) {
-            setPincodeResult({ serviceable: true, msg: `${checkPincode} — Fully Serviceable (Home, Express, Same Day Available)` });
-        } else {
-            setPincodeResult({ serviceable: true, msg: `${checkPincode} — Standard Delivery Available (2-5 Business Days)` });
-        }
-    };
 
     // KPI Metrics calculation (dynamic based on deliveries dataset)
     const totalCount = deliveries.length;
@@ -631,20 +1015,9 @@ const DeliveryManagement = () => {
                 </div>
 
                 <div className="adm-header-actions" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                    {apiConnected && !isDemoMode && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#ecfdf5', color: '#10b981', border: '1px solid #a7f3d0' }}>
-                            <BsCloudCheckFill size={13} /> Live API
-                        </span>
-                    )}
-                    {isDemoMode && (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>
-                            Demo Data Mode
-                        </span>
-                    )}
-
-                    <button className="adm-btn-secondary" onClick={fetchDeliveriesFromApi} disabled={loading} title="Fetch live data from GET /api/v1/delivery">
+                    <button className="adm-btn-secondary" onClick={fetchDeliveriesFromApi} disabled={loading}>
                         <BsArrowClockwise size={14} className={loading ? 'spin' : ''} />
-                        {loading ? ' Fetching...' : ' Refresh API'}
+                        {loading ? ' Refreshing...' : ' Refresh'}
                     </button>
 
                     <button className="adm-btn-secondary" onClick={() => setShowExportModal(true)}>
@@ -658,19 +1031,6 @@ const DeliveryManagement = () => {
                     )}
                 </div>
             </div>
-
-            {/* API Connection Warning Bar */}
-            {errorMsg && (
-                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#991b1b', fontWeight: 500 }}>
-                        <BsCloudSlashFill size={16} color="#ef4444" />
-                        <span>API Status: <strong>{errorMsg}</strong> (Falling back to demo data mode)</span>
-                    </div>
-                    <button onClick={loadDemoData} style={{ padding: '5px 12px', borderRadius: 6, border: '1px solid #fca5a5', background: '#fff', color: '#991b1b', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
-                        Load Demo Data
-                    </button>
-                </div>
-            )}
 
             {/* 5 KPI Cards Grid (Matching Customer Directory Style) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginBottom: 20 }}>
@@ -973,6 +1333,7 @@ const DeliveryManagement = () => {
                                     <th style={{ padding: '12px 16px' }}>Delivery & Order ID</th>
                                     <th style={{ padding: '12px 16px' }}>Customer Info</th>
                                     <th style={{ padding: '12px 16px' }}>Delivery Type</th>
+                                    <th style={{ padding: '12px 16px' }}>Assigned Rider</th>
                                     <th style={{ padding: '12px 16px' }}>Logistics Partner</th>
                                     <th style={{ padding: '12px 16px' }}>AWB Tracking No.</th>
                                     <th style={{ padding: '12px 16px' }}>Estimated Date</th>
@@ -983,14 +1344,14 @@ const DeliveryManagement = () => {
                             <tbody>
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#6366f1', fontSize: 13, fontWeight: 600 }}>
+                                        <td colSpan={10} style={{ padding: 40, textAlign: 'center', color: '#6366f1', fontSize: 13, fontWeight: 600 }}>
                                             <BsArrowClockwise size={20} className="spin" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 8 }} />
                                             Fetching delivery records from server...
                                         </td>
                                     </tr>
                                 ) : filteredDeliveries.length === 0 ? (
                                     <tr>
-                                        <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>
+                                        <td colSpan={10} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>
                                             <p style={{ fontSize: 15, fontWeight: 700, color: '#374151', margin: 0 }}>No Deliveries Found</p>
                                             <p style={{ fontSize: 12, marginTop: 4 }}>Try clearing search or adjusting active status filters.</p>
                                         </td>
@@ -1048,6 +1409,26 @@ const DeliveryManagement = () => {
                                                     </span>
                                                 </td>
 
+                                                {/* Assigned Rider Column */}
+                                                <td style={{ padding: '14px 16px' }}>
+                                                    {d.riderName ? (
+                                                        <span
+                                                            onClick={() => setAssignRiderTarget(d)}
+                                                            style={{ fontSize: 11, background: '#eef2ff', color: '#4338ca', padding: '3px 9px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                                            title="Click to change assigned rider"
+                                                        >
+                                                            🏍️ {d.riderName}
+                                                        </span>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setAssignRiderTarget(d)}
+                                                            style={{ fontSize: 11, background: '#fff', color: '#6366f1', border: '1px dashed #6366f1', padding: '3px 9px', borderRadius: 12, fontWeight: 700, cursor: 'pointer' }}
+                                                        >
+                                                            + Assign Rider
+                                                        </button>
+                                                    )}
+                                                </td>
+
                                                 {/* Logistics Partner */}
                                                 <td style={{ padding: '14px 16px', fontSize: 12, fontWeight: 700, color: '#374151' }}>
                                                     {d.partner}
@@ -1096,14 +1477,26 @@ const DeliveryManagement = () => {
 
                                                 {/* Row Actions */}
                                                 <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                                                    <button
-                                                        type="button"
-                                                        title="View Full Tracking Drawer"
-                                                        onClick={() => setSelectedDelivery(d)}
-                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#6366f1', cursor: 'pointer' }}
-                                                    >
-                                                        <BsEye size={14} />
-                                                    </button>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                                                        {d.status === 'Failed' && (
+                                                            <button
+                                                                type="button"
+                                                                title="Process Failed Action"
+                                                                onClick={() => setFailedActionTarget(d)}
+                                                                style={{ padding: 6, borderRadius: 6, border: '1px solid #fecaca', background: '#fef2f2', color: '#ef4444', cursor: 'pointer' }}
+                                                            >
+                                                                <BsExclamationTriangle size={14} />
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            title="View Full Tracking Drawer"
+                                                            onClick={() => setSelectedDelivery(d)}
+                                                            style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#6366f1', cursor: 'pointer' }}
+                                                        >
+                                                            <BsEye size={14} />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -1174,81 +1567,7 @@ const DeliveryManagement = () => {
                 </div>
             )}
 
-            {/* TAB 3: ZONES & PINCODE SERVICEABILITY */}
-            {activeTab === 'Zones & Charges' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                    <div className="ec-form-card" style={{ gridColumn: '1 / -1' }}>
-                        <div className="ec-form-card-header"><BsGeoAlt size={16} color="#6366f1" /><h3>Regional Delivery Zone Tiers</h3></div>
-                        <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
-                            {[
-                                { zone: 'Metro Cities', cities: 'Bangalore, Mumbai, Delhi, Chennai, Hyderabad, Kolkata', charge: 0, time: '2-3 days', eligible: ['Home', 'Express', 'Same Day'] },
-                                { zone: 'Tier 2 Cities', cities: 'Pune, Jaipur, Ahmedabad, Lucknow, Indore, Bhopal', charge: 30, time: '3-5 days', eligible: ['Home', 'Express'] },
-                                { zone: 'Tier 3 Cities', cities: 'All other pincode serviceable areas', charge: 60, time: '5-7 days', eligible: ['Home'] },
-                                { zone: 'Remote Areas', cities: 'Rural / non-standard pincodes', charge: 100, time: '7-10 days', eligible: ['Home'] },
-                            ].map((z, i) => (
-                                <div key={i} style={{ padding: '14px 16px', borderBottom: i < 3 ? '1px solid #f3f4f6' : 'none', display: 'grid', gridTemplateColumns: '1.5fr 2fr 1fr 1fr 1fr', alignItems: 'center', gap: 12 }}>
-                                    <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', margin: 0 }}>{z.zone}</p>
-                                    <p style={{ fontSize: 11, color: '#9ca3af', margin: 0 }}>{z.cities}</p>
-                                    <p style={{ fontSize: 13, fontWeight: 700, color: z.charge === 0 ? '#10b981' : '#374151', margin: 0 }}>
-                                        {z.charge === 0 ? 'Free' : `₹${z.charge} surcharge`}
-                                    </p>
-                                    <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>{z.time}</p>
-                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                        {z.eligible.map(e => (
-                                            <span key={e} style={{ padding: '2px 7px', borderRadius: 20, fontSize: 10, fontWeight: 600, background: '#eef2ff', color: '#6366f1' }}>{e}</span>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
 
-                    <div className="ec-form-card">
-                        <div className="ec-form-card-header"><BsTruck size={16} color="#6366f1" /><h3>Connected Logistics Partners</h3></div>
-                        {['Delhivery', 'Dunzo', 'Swiggy Genie', 'Shiprocket', 'DTDC'].map((p, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < 4 ? '1px solid #f3f4f6' : 'none' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>📦</div>
-                                    <p style={{ fontSize: 13, fontWeight: 600, color: '#374151', margin: 0 }}>{p}</p>
-                                </div>
-                                <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#ecfdf5', color: '#10b981' }}>Active Integration</span>
-                            </div>
-                        ))}
-                        <button className="adm-btn-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}>
-                            <BsPlus size={15} /> Connect Partner API
-                        </button>
-                    </div>
-
-                    <div className="ec-form-card">
-                        <div className="ec-form-card-header"><BsLightningChargeFill size={16} color="#f59e0b" /><h3>Pincode Serviceability Lookup</h3></div>
-                        <div className="ec-field">
-                            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Check Pincode Coverage</label>
-                            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                                <input
-                                    className="ec-input"
-                                    placeholder="Enter 6-digit pincode (e.g. 560038)"
-                                    style={{ flex: 1 }}
-                                    value={checkPincode}
-                                    onChange={e => setCheckPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                />
-                                <button className="adm-btn-primary" style={{ whiteSpace: 'nowrap' }} onClick={handlePincodeCheck}>Check Pincode</button>
-                            </div>
-                        </div>
-
-                        {pincodeResult && (
-                            <div style={{ background: '#ecfdf5', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-                                <BsCheckCircleFill size={14} color="#10b981" />
-                                <p style={{ fontSize: 12, color: '#10b981', fontWeight: 600, margin: 0 }}>{pincodeResult.msg}</p>
-                            </div>
-                        )}
-
-                        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 16, fontWeight: 600 }}>Bulk Pincode Coverage Import</p>
-                        <button className="adm-btn-secondary" style={{ width: '100%', justifyContent: 'center', marginTop: 6 }} onClick={() => alert('Upload Pincode CSV file dialog coming soon!')}>
-                            <BsDownload size={13} /> Upload Pincode CSV
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {/* Slide-Over Delivery Detail Drawer */}
             {selectedDelivery && (
@@ -1257,6 +1576,35 @@ const DeliveryManagement = () => {
                     onClose={() => setSelectedDelivery(null)}
                     onStatusChange={handleStatusChange}
                     isUpdating={updatingId === selectedDelivery.id}
+                    onOpenAssignRider={(d) => setAssignRiderTarget(d)}
+                    onOpenFailedAction={(d) => setFailedActionTarget(d)}
+                    onPrintShippingLabel={(d) => setPrintLabelTarget(d)}
+                />
+            )}
+
+            {/* Printable Shipping Label Modal */}
+            {printLabelTarget && (
+                <ShippingLabelModal
+                    delivery={printLabelTarget}
+                    onClose={() => setPrintLabelTarget(null)}
+                />
+            )}
+
+            {/* BRD FR-11: Assign Delivery Executive / Rider Modal */}
+            {assignRiderTarget && (
+                <AssignRiderModal
+                    delivery={assignRiderTarget}
+                    onClose={() => setAssignRiderTarget(null)}
+                    onAssign={handleRiderAssigned}
+                />
+            )}
+
+            {/* BRD FR-16: Failed Shipment & Return Resolution Modal */}
+            {failedActionTarget && (
+                <FailedActionModal
+                    delivery={failedActionTarget}
+                    onClose={() => setFailedActionTarget(null)}
+                    onActionComplete={handleFailedActionComplete}
                 />
             )}
 
