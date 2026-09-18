@@ -64,7 +64,7 @@ const menuGroups = [
 
         { name: 'Categories', icon: <BsTag />, path: '/categories', hasArrow: true },
         { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases', hasArrow: true },
-        { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/returns', hasArrow: true },
+        { name: 'Purchase Order Returns', icon: <BsArrowReturnLeft />, path: '/returns', hasArrow: true },
     ],
 },
     {
