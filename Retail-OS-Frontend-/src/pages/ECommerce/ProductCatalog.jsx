@@ -9,27 +9,24 @@ import {
 
 /* ── Mock Data ─────────────────────────── */
 const CATEGORIES = ['All Categories', 'Electronics', 'Groceries', 'Apparel', 'Accessories', 'Home & Kitchen', 'Beauty'];
-const BRANDS = ['All Brands', 'Apple', 'Samsung', 'Organic Valley', 'Levi\'s', 'Nike', 'Lakme'];
+const BRANDS = ['All Brands', 'Parle', 'Amul', 'Britannia', 'Apple', 'Samsung', 'Organic Valley', 'Levi\'s', 'Nike', 'Lakme'];
 
 const PRODUCTS = [
-    { id: 'PRD-001', name: 'Wireless Earbuds Pro', sku: 'ELEC-WEP-001', category: 'Electronics', brand: 'Samsung', price: 2499, mrp: 3499, stock: 145, sold: 218, rating: 4.7, reviews: 84, status: 'Active', featured: true, image: null },
-    { id: 'PRD-002', name: 'Organic Green Tea (100g)', sku: 'GRO-OGT-002', category: 'Groceries', brand: 'Organic Valley', price: 449, mrp: 599, stock: 320, sold: 410, rating: 4.5, reviews: 156, status: 'Active', featured: false, image: null },
-    { id: 'PRD-003', name: 'Leather Crossbody Bag', sku: 'ACC-LCB-003', category: 'Accessories', brand: 'Nike', price: 2079, mrp: 2999, stock: 42, sold: 175, rating: 4.8, reviews: 62, status: 'Active', featured: true, image: null },
-    { id: 'PRD-004', name: 'Smart Fitness Band X2', sku: 'ELEC-SFB-004', category: 'Electronics', brand: 'Samsung', price: 1999, mrp: 2799, stock: 78, sold: 195, rating: 4.6, reviews: 98, status: 'Active', featured: false, image: null },
-    { id: 'PRD-005', name: "Men's Cotton Kurta", sku: 'APP-MCK-005', category: 'Apparel', brand: "Levi's", price: 699, mrp: 999, stock: 210, sold: 340, rating: 4.3, reviews: 210, status: 'Active', featured: false, image: null },
-    { id: 'PRD-006', name: 'iPhone 15 Pro Case', sku: 'ACC-IPC-006', category: 'Accessories', brand: 'Apple', price: 999, mrp: 1499, stock: 0, sold: 88, rating: 4.2, reviews: 34, status: 'Out of Stock', featured: false, image: null },
-    { id: 'PRD-007', name: 'Matte Lipstick Set', sku: 'BEA-MLS-007', category: 'Beauty', brand: 'Lakme', price: 599, mrp: 799, stock: 180, sold: 265, rating: 4.4, reviews: 122, status: 'Active', featured: true, image: null },
-    { id: 'PRD-008', name: 'Non-Stick Cookware Set', sku: 'HOM-NCS-008', category: 'Home & Kitchen', brand: 'Samsung', price: 3499, mrp: 4999, stock: 25, sold: 67, rating: 4.6, reviews: 43, status: 'Inactive', featured: false, image: null },
-    { id: 'PRD-009', name: 'Running Shoes Pro', sku: 'APP-RSP-009', category: 'Apparel', brand: 'Nike', price: 4499, mrp: 6499, stock: 60, sold: 142, rating: 4.7, reviews: 78, status: 'Active', featured: false, image: null },
-    { id: 'PRD-010', name: 'Bluetooth Speaker Mini', sku: 'ELEC-BSM-010', category: 'Electronics', brand: 'Samsung', price: 1299, mrp: 1999, stock: 95, sold: 188, rating: 4.3, reviews: 67, status: 'Active', featured: false, image: null },
-    { id: 'PRD-011', name: 'Vintage Denim Jacket', sku: 'APP-VDJ-011', category: 'Apparel', brand: "Levi's", price: 3299, mrp: 4999, stock: 0, sold: 54, rating: 4.1, reviews: 29, status: 'Out of Stock', featured: false, image: null },
-    { id: 'PRD-012', name: 'Rose Face Serum', sku: 'BEA-RFS-012', category: 'Beauty', brand: 'Lakme', price: 899, mrp: 1199, stock: 0, sold: 310, rating: 4.6, reviews: 201, status: 'Out of Stock', featured: false, image: null },
-    { id: 'PRD-013', name: 'Bamboo Cutting Board', sku: 'HOM-BCB-013', category: 'Home & Kitchen', brand: 'Samsung', price: 549, mrp: 799, stock: 0, sold: 22, rating: 3.9, reviews: 11, status: 'Inactive', featured: false, image: null },
-    { id: 'PRD-014', name: 'Protein Shaker Bottle', sku: 'HOM-PSB-014', category: 'Home & Kitchen', brand: 'Nike', price: 399, mrp: 599, stock: 50, sold: 98, rating: 4.0, reviews: 45, status: 'Inactive', featured: false, image: null },
-    { id: 'PRD-015', name: 'Stainless Steel Watch', sku: 'ACC-SSW-015', category: 'Accessories', brand: 'Apple', price: 8999, mrp: 12999, stock: 12, sold: 38, rating: 4.5, reviews: 19, status: 'Inactive', featured: false, image: null },
-    { id: 'PRD-016', name: 'Aloe Vera Gel (200ml)', sku: 'BEA-AVG-016', category: 'Beauty', brand: 'Lakme', price: 149, mrp: 199, stock: 500, sold: 720, rating: 4.8, reviews: 340, status: 'Active', featured: false, image: null },
-    { id: 'PRD-017', name: '4K Action Camera', sku: 'ELEC-ACA-017', category: 'Electronics', brand: 'Samsung', price: 12499, mrp: 17999, stock: 8, sold: 30, rating: 4.5, reviews: 17, status: 'Active', featured: true, image: null },
-    { id: 'PRD-018', name: 'Yoga Mat Premium', sku: 'APP-YMP-018', category: 'Apparel', brand: 'Nike', price: 1299, mrp: 1799, stock: 75, sold: 112, rating: 4.4, reviews: 66, status: 'Active', featured: false, image: null },
+    { id: 'PRD-001', name: 'Parle-G Original Biscuits (800g)', sku: 'GRO-PGB-001', category: 'Groceries', brand: 'Parle', price: 85, mrp: 90, stock: 450, sold: 1240, rating: 4.9, reviews: 342, status: 'Active', featured: true, image: '/images/products/parle-g.jpg' },
+    { id: 'PRD-002', name: 'Fresh Pure Milk Bottle (1L)', sku: 'GRO-FMB-002', category: 'Groceries', brand: 'Amul', price: 68, mrp: 72, stock: 85, sold: 610, rating: 4.8, reviews: 184, status: 'Active', featured: true, image: '/images/products/milk-bottle.jpg' },
+    { id: 'PRD-003', name: 'Britannia Marie Gold Biscuits (300g)', sku: 'GRO-BMG-003', category: 'Groceries', brand: 'Britannia', price: 40, mrp: 45, stock: 220, sold: 540, rating: 4.6, reviews: 92, status: 'Active', featured: false, image: '/images/products/marie-biscuits.jpg' },
+    { id: 'PRD-004', name: 'Oreo Chocolate Sandwich Cookies (300g)', sku: 'GRO-OCS-004', category: 'Groceries', brand: 'Britannia', price: 90, mrp: 100, stock: 160, sold: 490, rating: 4.7, reviews: 145, status: 'Active', featured: true, image: '/images/products/oreo.jpg' },
+    { id: 'PRD-005', name: 'Good Day Butter Cookies (250g)', sku: 'GRO-GDB-005', category: 'Groceries', brand: 'Britannia', price: 50, mrp: 55, stock: 190, sold: 380, rating: 4.7, reviews: 110, status: 'Active', featured: false, image: '/images/products/butter-cookies.jpg' },
+    { id: 'PRD-006', name: 'Organic Green Tea (100g)', sku: 'GRO-OGT-006', category: 'Groceries', brand: 'Organic Valley', price: 449, mrp: 599, stock: 320, sold: 410, rating: 4.5, reviews: 156, status: 'Active', featured: false, image: '/images/products/green-tea.jpg' },
+    { id: 'PRD-007', name: 'Premium Cotton T-Shirt', sku: 'APP-PCT-007', category: 'Apparel', brand: "Levi's", price: 899, mrp: 1299, stock: 110, sold: 340, rating: 4.5, reviews: 210, status: 'Active', featured: false, image: '/images/products/tshirt.jpg' },
+    { id: 'PRD-008', name: 'Denim Slim Fit Jeans', sku: 'APP-DSF-008', category: 'Apparel', brand: "Levi's", price: 1999, mrp: 2799, stock: 54, sold: 280, rating: 4.6, reviews: 88, status: 'Active', featured: false, image: '/images/products/jeans.jpg' },
+    { id: 'PRD-009', name: 'Leather Slim Wallet', sku: 'ACC-LSW-009', category: 'Accessories', brand: 'Nike', price: 1299, mrp: 1899, stock: 42, sold: 175, rating: 4.8, reviews: 62, status: 'Active', featured: true, image: '/images/products/wallet.jpg' },
+    { id: 'PRD-010', name: 'Smart Fitness Band X2', sku: 'ELEC-SFB-010', category: 'Electronics', brand: 'Samsung', price: 1999, mrp: 2799, stock: 78, sold: 195, rating: 4.6, reviews: 98, status: 'Active', featured: false, image: '/images/products/fitness-tracker.jpg' },
+    { id: 'PRD-011', name: 'USB-C Fast Charger (65W)', sku: 'ELEC-UFC-011', category: 'Electronics', brand: 'Samsung', price: 799, mrp: 1299, stock: 95, sold: 188, rating: 4.5, reviews: 67, status: 'Active', featured: false, image: '/images/products/usb-charger.jpg' },
+    { id: 'PRD-012', name: 'Stainless Steel Water Bottle (1L)', sku: 'HOM-SSB-012', category: 'Home & Kitchen', brand: 'Nike', price: 550, mrp: 799, stock: 50, sold: 98, rating: 4.4, reviews: 45, status: 'Active', featured: false, image: '/images/products/steel-bottle.jpg' },
+    { id: 'PRD-013', name: 'Matte Lipstick Set', sku: 'BEA-MLS-013', category: 'Beauty', brand: 'Lakme', price: 599, mrp: 799, stock: 180, sold: 265, rating: 4.4, reviews: 122, status: 'Active', featured: true, image: null },
+    { id: 'PRD-014', name: 'Non-Stick Cookware Set', sku: 'HOM-NCS-014', category: 'Home & Kitchen', brand: 'Samsung', price: 3499, mrp: 4999, stock: 25, sold: 67, rating: 4.6, reviews: 43, status: 'Inactive', featured: false, image: null },
+    { id: 'PRD-015', name: 'Aloe Vera Gel (200ml)', sku: 'BEA-AVG-015', category: 'Beauty', brand: 'Lakme', price: 149, mrp: 199, stock: 500, sold: 720, rating: 4.8, reviews: 340, status: 'Active', featured: false, image: null },
 ];
 
 const PAGE_SIZE = 10;
@@ -379,7 +376,16 @@ const ProductCatalog = () => {
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                                 position: 'relative',
                                             }}>
-                                                <BsImage size={16} color={p.status === 'Inactive' ? '#9ca3af' : '#d1d5db'} />
+                                                {p.image ? (
+                                                    <img
+                                                        src={p.image}
+                                                        alt={p.name}
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
+                                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                                    />
+                                                ) : (
+                                                    <BsImage size={16} color={p.status === 'Inactive' ? '#9ca3af' : '#d1d5db'} />
+                                                )}
                                                 {p.status === 'Inactive' && (
                                                     <div style={{
                                                         position: 'absolute', top: -4, right: -4,

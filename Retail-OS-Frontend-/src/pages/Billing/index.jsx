@@ -25,6 +25,8 @@ import {
 
 const CATEGORIES = ['All', 'Apparel', 'Electronics', 'Accessories', 'Groceries'];
 
+const MAX_QTY = 50; // Maximum quantity allowed per item in cart
+
 const PAYMENT_MODES = [
     { id: 'Cash', label: 'Cash', icon: <BsCashCoin size={15} /> },
     { id: 'UPI', label: 'UPI', icon: <BsQrCode size={15} /> },
@@ -55,18 +57,24 @@ const Billing = () => {
     const [showBarcodeModal, setShowBarcodeModal] = useState(false);
     const [lastScanned, setLastScanned] = useState(null);
     const [manualBarcodeInput, setManualBarcodeInput] = useState('');
+    // ── Quantity limit warning ─────────────────────────────────────────────
+    const [qtyLimitWarning, setQtyLimitWarning] = useState('');
     // ─────────────────────────────────────────────────────────────────────
     const scanInputRef = useRef(null);
 
     const products = [
-        { id: 1, name: 'Premium Cotton T-Shirt', price: 899, hsn: '6109', gstRate: 5, category: 'Apparel', barcode: '1001', image: '👕' },
-        { id: 2, name: 'Parle-G Biscuits 800g', price: 85, hsn: '19053100', gstRate: 12, category: 'Groceries', barcode: '1002', image: '🍪', discount: 5 },
-        { id: 3, name: 'Leather Slim Wallet', price: 1299, hsn: '4202', gstRate: 12, category: 'Accessories', barcode: '1003', image: '👛' },
-        { id: 4, name: 'Organic Green Tea', price: 450, hsn: '0902', gstRate: 5, category: 'Groceries', barcode: '1004', image: '🍵' },
-        { id: 5, name: 'Smart Fitness Tracker', price: 3999, hsn: '8517', gstRate: 18, category: 'Electronics', barcode: '1005', image: '⌚' },
-        { id: 6, name: 'Denim Slim Fit Jeans', price: 1999, hsn: '6203', gstRate: 12, category: 'Apparel', barcode: '1006', image: '👖' },
-        { id: 7, name: 'USB-C Fast Charger', price: 799, hsn: '8504', gstRate: 18, category: 'Electronics', barcode: '1007', image: '🔌' },
-        { id: 8, name: 'Stainless Steel Bottle', price: 550, hsn: '7323', gstRate: 12, category: 'Accessories', barcode: '1008', image: '🍼' },
+        { id: 1, name: 'Premium Cotton T-Shirt', price: 899, hsn: '6109', gstRate: 5, category: 'Apparel', barcode: '1001', image: '/images/products/tshirt.jpg' },
+        { id: 2, name: 'Parle-G Original Biscuits 800g', price: 85, hsn: '19053100', gstRate: 12, category: 'Groceries', barcode: '1002', image: '/images/products/parle-g.jpg', discount: 5 },
+        { id: 3, name: 'Leather Slim Wallet', price: 1299, hsn: '4202', gstRate: 12, category: 'Accessories', barcode: '1003', image: '/images/products/wallet.jpg' },
+        { id: 4, name: 'Organic Green Tea (100g Box)', price: 450, hsn: '0902', gstRate: 5, category: 'Groceries', barcode: '1004', image: '/images/products/green-tea.jpg' },
+        { id: 5, name: 'Smart Fitness Tracker Band', price: 3999, hsn: '8517', gstRate: 18, category: 'Electronics', barcode: '1005', image: '/images/products/fitness-tracker.jpg' },
+        { id: 6, name: 'Denim Slim Fit Jeans', price: 1999, hsn: '6203', gstRate: 12, category: 'Apparel', barcode: '1006', image: '/images/products/jeans.jpg' },
+        { id: 7, name: 'USB-C Fast Charger 65W', price: 799, hsn: '8504', gstRate: 18, category: 'Electronics', barcode: '1007', image: '/images/products/usb-charger.jpg' },
+        { id: 8, name: 'Fresh Pure Milk Bottle 1L', price: 68, hsn: '0401', gstRate: 5, category: 'Groceries', barcode: '1008', image: '/images/products/milk-bottle.jpg' },
+        { id: 9, name: 'Britannia Marie Gold Biscuits 300g', price: 40, hsn: '19053100', gstRate: 12, category: 'Groceries', barcode: '1009', image: '/images/products/marie-biscuits.jpg', discount: 3 },
+        { id: 10, name: 'Oreo Chocolate Sandwich Biscuits 300g', price: 90, hsn: '19053100', gstRate: 18, category: 'Groceries', barcode: '1010', image: '/images/products/oreo.jpg', discount: 8 },
+        { id: 11, name: 'Good Day Butter Cookies 250g', price: 50, hsn: '19053100', gstRate: 12, category: 'Groceries', barcode: '1011', image: '/images/products/butter-cookies.jpg', discount: 5 },
+        { id: 12, name: 'Stainless Steel Insulated Bottle 1L', price: 550, hsn: '7323', gstRate: 12, category: 'Accessories', barcode: '1012', image: '/images/products/steel-bottle.jpg' },
     ];
 
     const filteredProducts = products.filter(p =>
@@ -160,14 +168,28 @@ const Billing = () => {
                     sgstAmount: parseFloat(serverItem.sgst_amount || 0),
                     igstAmount: parseFloat(serverItem.igst_amount || 0),
                     totalAmount: parseFloat(serverItem.total_amount || 0),
-                    image: existing?.image || '🍪',
+                    image: existing?.image || '/images/products/parle-g.jpg',
                     category: existing?.category || 'Groceries',
                 };
             });
         });
     }, [products]);
 
+    // Auto-dismiss quantity limit warning after 3 seconds
+    const showQtyLimitWarning = useCallback((productName) => {
+        setQtyLimitWarning(`"${productName}" has reached the maximum limit of ${MAX_QTY} units per item.`);
+        setTimeout(() => setQtyLimitWarning(''), 3000);
+    }, []);
+
     const addToCart = useCallback(async (product) => {
+        // ── Enforce per-item quantity limit ───────────────────────────────────
+        const existingItem = cart.find(i => i.id === product.id);
+        if (existingItem && existingItem.qty >= MAX_QTY) {
+            showQtyLimitWarning(product.name);
+            return; // Block add — already at limit
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         // Optimistic local update first — instant UI feedback regardless of API status
         setCart(prev => {
             const existing = prev.find(i => i.id === product.id);
@@ -179,7 +201,6 @@ const Billing = () => {
 
         // Always try the API — offlineMode doesn't block calls, it's just a display hint
         try {
-            const existingItem = cart.find(i => i.id === product.id);
             const currentQty = existingItem?.qty ?? 0;
             const payload = {
                 product_id: product.id,
@@ -205,7 +226,7 @@ const Billing = () => {
         }
 
         setAddingItemId(null);
-    }, [cart, syncCartWithServer]);
+    }, [cart, syncCartWithServer, showQtyLimitWarning]);
 
     const removeFromCart = useCallback(async (id) => {
         // Optimistic local removal — instant UI feedback
@@ -233,6 +254,13 @@ const Billing = () => {
             return removeFromCart(id);
         }
 
+        // ── Enforce per-item quantity limit on increment ──────────────────────
+        if (delta > 0 && newQty > MAX_QTY) {
+            showQtyLimitWarning(item.name);
+            return; // Block increment — already at limit
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         // Optimistic local update
         setCart(prev => prev.map(i => i.id === id ? { ...i, qty: newQty, unsynced: true } : i));
 
@@ -255,12 +283,17 @@ const Billing = () => {
             console.error('[Billing] updateCartItem API error:', err.message);
             setOfflineMode(true);
         }
-    }, [cart, removeFromCart, syncCartWithServer]);
+    }, [cart, removeFromCart, syncCartWithServer, showQtyLimitWarning]);
 
     const totals = useMemo(() => {
-        if (serverCart) {
+        // When offline, ALWAYS use local calculation — server cart values are unreliable.
+        // When online, use serverCart only if it has a non-zero subtotal that matches actual items.
+        const serverSubtotal = parseFloat(serverCart?.subtotal || 0);
+        const useServerCart = !offlineMode && serverCart && (serverSubtotal > 0 || cart.length === 0);
+
+        if (useServerCart) {
             return {
-                subtotal: parseFloat(serverCart.subtotal || 0),
+                subtotal: serverSubtotal,
                 totalGST: parseFloat(serverCart.gst_amount || 0),
                 cgstAmount: parseFloat(serverCart.cgst_amount || 0),
                 sgstAmount: parseFloat(serverCart.sgst_amount || 0),
@@ -269,28 +302,47 @@ const Billing = () => {
                 grandTotal: parseFloat(serverCart.grand_total || 0),
             };
         }
-        let subtotal = 0, totalGST = 0;
+        // Local fallback — compute from cart items directly
+        let subtotal = 0;
         cart.forEach(item => {
             const base = (item.price - (item.discountPerItem || 0)) * item.qty;
             subtotal += base;
-            totalGST += (base * (item.gstRate || 0)) / 100;
         });
+
         let discountAmount = 0;
         if (billDiscount > 0) {
             discountAmount = discountType === 'percentage'
                 ? (subtotal * billDiscount) / 100
                 : Number(billDiscount);
+            discountAmount = Math.min(discountAmount, subtotal);
         }
+
+        const discountedTaxable = Math.max(0, subtotal - discountAmount);
+        const discountRatio = subtotal > 0 ? (discountAmount / subtotal) : 0;
+
+        // Statutory GST calculation: GST is calculated ON post-discount taxable amount
+        let totalGST = 0;
+        cart.forEach(item => {
+            const itemBase = (item.price - (item.discountPerItem || 0)) * item.qty;
+            const itemTaxable = itemBase * (1 - discountRatio);
+            totalGST += (itemTaxable * (item.gstRate || 0)) / 100;
+        });
+
+        totalGST = Math.round(totalGST * 100) / 100;
+        const cgstAmount = Math.round((totalGST / 2) * 100) / 100;
+        const sgstAmount = Math.round((totalGST - cgstAmount) * 100) / 100;
+
         return {
             subtotal,
+            taxable: discountedTaxable,
             totalGST,
-            cgstAmount: totalGST / 2,
-            sgstAmount: totalGST / 2,
+            cgstAmount,
+            sgstAmount,
             igstAmount: 0,
             discountAmount,
-            grandTotal: Math.round(subtotal + totalGST - discountAmount)
+            grandTotal: Math.round((discountedTaxable + totalGST) * 100) / 100
         };
-    }, [cart, billDiscount, discountType, serverCart]);
+    }, [cart, billDiscount, discountType, serverCart, offlineMode]);
 
     const handleFinishSale = () => {
         if (cart.length === 0) return;
@@ -302,7 +354,7 @@ const Billing = () => {
             customer: customer.name.trim() || 'Walk-in Customer',
             gstin: customer.gstin.trim() || '—',
             date: new Date().toISOString().split('T')[0],
-            taxable: totals.subtotal,
+            taxable: totals.taxable != null ? totals.taxable : (totals.subtotal - (totals.discountAmount || 0)),
             cgst: totals.cgstAmount,
             sgst: totals.sgstAmount,
             igst: totals.igstAmount,
@@ -395,19 +447,43 @@ const Billing = () => {
 
     return (
         <div className="pos-shell">
-            {/* ── Offline mode banner — shows when API is unavailable ── */}
+
+            {/* ── Offline Mode Banner ── */}
             {offlineMode && (
                 <div style={{
-                    position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)',
-                    background: '#fff3cd', color: '#856404', borderRadius: 8,
-                    padding: '6px 16px', fontSize: 12, zIndex: 9999,
-                    border: '1px solid #ffc107', boxShadow: '0 4px 12px rgba(0,0,0,.1)',
-                    display: 'flex', alignItems: 'center', gap: 8,
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    zIndex: 2000,
+                    background: 'linear-gradient(90deg, #fef3c7 0%, #fde68a 100%)',
+                    borderBottom: '1px solid #f59e0b',
+                    padding: '7px 20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: '#92400e',
+                    boxShadow: '0 2px 8px rgba(245,158,11,0.15)',
                 }}>
-                    <span>📡</span>
-                    <span><strong>Offline mode</strong> — server unavailable, cart is saved locally.</span>
+                    <span style={{ fontSize: 15 }}>⚠️</span>
+                    <span>
+                        <strong>Offline mode</strong> — server unavailable, cart is saved locally.
+                    </span>
+                    <span style={{
+                        marginLeft: 12,
+                        fontSize: 11,
+                        background: '#fcd34d',
+                        borderRadius: 6,
+                        padding: '2px 8px',
+                        color: '#78350f',
+                        fontWeight: 700,
+                    }}>Totals calculated locally</span>
                 </div>
             )}
+
             {/* ── LEFT: Product Catalog ── */}
             <div className="pos-left">
 
@@ -544,7 +620,18 @@ const Billing = () => {
                                     {inCart && (
                                         <div className="pos-product-qty-badge">{inCart.qty}</div>
                                     )}
-                                    <div className="pos-product-image">{product.image}</div>
+                                    <div className="pos-product-image">
+                                        {product.image && (product.image.startsWith('/') || product.image.startsWith('http')) ? (
+                                            <img
+                                                src={product.image}
+                                                alt={product.name}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                onError={(e) => { e.target.style.display = 'none'; }}
+                                            />
+                                        ) : (
+                                            <span>{product.image}</span>
+                                        )}
+                                    </div>
                                     <span className="pos-product-cat">{product.category}</span>
                                     <h3 className="pos-product-name">{product.name}</h3>
                                     {/* Display Barcode on product card */}
@@ -565,8 +652,35 @@ const Billing = () => {
                                     }}>
                                         <BsUpcScan size={10} /> Barcode: {product.barcode}
                                     </div>
+                                    {/* ── Discount badge on product card ── */}
+                                    {product.discount > 0 && (
+                                        <div style={{
+                                            display: 'inline-flex', alignItems: 'center', gap: 3,
+                                            fontSize: 10, fontWeight: 700,
+                                            color: '#dc2626', background: '#fef2f2',
+                                            border: '1px solid #fecaca',
+                                            padding: '2px 6px', borderRadius: 4,
+                                            width: 'fit-content', marginBottom: 2,
+                                        }}>
+                                            <BsPercent size={9} /> ₹{product.discount} OFF per item
+                                        </div>
+                                    )}
                                     <div className="pos-product-footer">
-                                        <span className="pos-product-price">₹{product.price.toLocaleString()}</span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                            {product.discount > 0 ? (
+                                                <>
+                                                    <span style={{ fontSize: 10, color: '#9ca3af', textDecoration: 'line-through' }}>
+                                                        ₹{product.price.toLocaleString()}
+                                                    </span>
+                                                    <span className="pos-product-price" style={{ color: '#10b981' }}>
+                                                        ₹{(product.price - product.discount).toLocaleString()}
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <span className="pos-product-price">₹{product.price.toLocaleString()}</span>
+                                            )}
+                                            <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 500 }}>excl. GST</span>
+                                        </div>
                                         <div className="pos-product-add-btn" style={addingItemId === product.id ? { opacity: 0.6 } : {}}>
                                             {addingItemId === product.id
                                                 ? <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0 }}>…</span>
@@ -574,7 +688,7 @@ const Billing = () => {
                                             }
                                         </div>
                                     </div>
-                                    <span className="pos-product-gst-tag">GST {product.gstRate}%</span>
+                                    <span className="pos-product-gst-tag">GST {product.gstRate}% excl.</span>
                                 </div>
                             );
                         })
@@ -628,6 +742,28 @@ const Billing = () => {
                     </div>
                 </div>
 
+                {/* ── Quantity Limit Warning Toast ── */}
+                {qtyLimitWarning && (
+                    <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        background: '#fef3c7', border: '1px solid #fcd34d',
+                        borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
+                        fontSize: 12, fontWeight: 600, color: '#92400e',
+                        animation: 'slideUp .18s ease',
+                    }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 14 }}>⚠️</span>
+                            {qtyLimitWarning}
+                        </span>
+                        <button
+                            onClick={() => setQtyLimitWarning('')}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', display: 'flex', padding: 0, marginLeft: 8 }}
+                        >
+                            <BsX size={16} />
+                        </button>
+                    </div>
+                )}
+
                 {/* Cart items */}
                 <div className="pos-cart-list custom-scrollbar">
                     {(() => {
@@ -650,7 +786,18 @@ const Billing = () => {
                         }
                         return cart.map(item => (
                             <div key={item.id} className="pos-cart-item" style={{ height: 'auto', padding: '10px 16px' }}>
-                                <div className="pos-cart-item-emoji">{item.image}</div>
+                                <div className="pos-cart-item-emoji">
+                                    {item.image && (item.image.startsWith('/') || item.image.startsWith('http')) ? (
+                                        <img
+                                            src={item.image}
+                                            alt={item.name}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                        />
+                                    ) : (
+                                        <span>{item.image}</span>
+                                    )}
+                                </div>
                                 <div className="pos-cart-item-info" style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                     <h4 className="pos-cart-item-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 0 }}>
                                         {item.name}
@@ -679,8 +826,20 @@ const Billing = () => {
                                     <button className="pos-qty-btn" onClick={() => updateQty(item.id, -1)}>
                                         <BsDash size={12} />
                                     </button>
-                                    <span className="pos-qty-val">{item.qty}</span>
-                                    <button className="pos-qty-btn" onClick={() => updateQty(item.id, 1)}>
+                                    <span
+                                        className="pos-qty-val"
+                                        title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units` : ''}
+                                        style={item.qty >= MAX_QTY ? { color: '#d97706', fontWeight: 800 } : {}}
+                                    >
+                                        {item.qty}{item.qty >= MAX_QTY && <span style={{ fontSize: 8, marginLeft: 2, verticalAlign: 'super', color: '#d97706' }}>MAX</span>}
+                                    </span>
+                                    <button
+                                        className="pos-qty-btn"
+                                        onClick={() => updateQty(item.id, 1)}
+                                        disabled={item.qty >= MAX_QTY}
+                                        title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units per item` : ''}
+                                        style={item.qty >= MAX_QTY ? { opacity: 0.35, cursor: 'not-allowed' } : {}}
+                                    >
                                         <BsPlus size={12} />
                                     </button>
                                 </div>
@@ -955,6 +1114,18 @@ const Billing = () => {
                                     <span>Subtotal</span>
                                     <span>₹{totals.subtotal.toLocaleString()}</span>
                                 </div>
+                                {totals.discountAmount > 0 && (
+                                    <div className="pos-receipt-sum-row" style={{ color: '#ef4444' }}>
+                                        <span>Discount</span>
+                                        <span>−₹{totals.discountAmount.toFixed(2)}</span>
+                                    </div>
+                                )}
+                                {totals.discountAmount > 0 && (
+                                    <div className="pos-receipt-sum-row" style={{ fontWeight: 600 }}>
+                                        <span>Taxable Value</span>
+                                        <span>₹{(totals.taxable != null ? totals.taxable : (totals.subtotal - totals.discountAmount)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                )}
                                 <div className="pos-receipt-sum-row">
                                     <span>GST Total</span>
                                     <span>₹{totals.totalGST.toFixed(2)}</span>
@@ -967,12 +1138,6 @@ const Billing = () => {
                                     <div className="pos-receipt-sum-row" style={{ fontSize: 10, color: '#6b7280', marginTop: -4 }}>
                                         <span>IGST</span>
                                         <span>₹{totals.igstAmount.toFixed(2)}</span>
-                                    </div>
-                                )}
-                                {totals.discountAmount > 0 && (
-                                    <div className="pos-receipt-sum-row" style={{ color: '#ef4444' }}>
-                                        <span>Discount</span>
-                                        <span>−₹{totals.discountAmount.toFixed(2)}</span>
                                     </div>
                                 )}
                             </div>
@@ -1104,8 +1269,17 @@ const Billing = () => {
                                             }}
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                <div style={{ fontSize: 24, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: 8 }}>
-                                                    {p.image}
+                                                <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: 8, overflow: 'hidden', flexShrink: 0, border: '1px solid #e2e8f0' }}>
+                                                    {p.image && (p.image.startsWith('/') || p.image.startsWith('http')) ? (
+                                                        <img
+                                                            src={p.image}
+                                                            alt={p.name}
+                                                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '7px' }}
+                                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                                        />
+                                                    ) : (
+                                                        <span style={{ fontSize: 22 }}>{p.image}</span>
+                                                    )}
                                                 </div>
                                                 <div style={{ flex: 1, minWidth: 0 }}>
                                                     <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
