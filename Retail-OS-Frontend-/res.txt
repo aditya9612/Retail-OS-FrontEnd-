@@ -1,0 +1,2 @@
+Error: {"detail":[{"type":"model_attributes_type","loc":["body"],"msg":"Input should be a valid dictionary or object to extract fields from","input":"username=admin%40myretailos.com&password=password"}]}
+Status: 422

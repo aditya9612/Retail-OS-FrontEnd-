@@ -1,7 +1,12 @@
 ﻿import axiosInstance from "./axios";
 
-// GET - List Purchase Orders
-export const getPurchaseOrders = async (page = 1, pageSize = 20) => {
+// ==========================================
+// GET ALL PURCHASE ORDERS
+// ==========================================
+export const getPurchaseOrders = async (
+  page = 1,
+  pageSize = 20
+) => {
   const response = await axiosInstance.get(
     "/api/v1/purchase-orders",
     {
@@ -15,17 +20,27 @@ export const getPurchaseOrders = async (page = 1, pageSize = 20) => {
   return response.data;
 };
 
-// GET - Purchase Order By ID
-export const getPurchaseOrderById = async (id) => {
+
+// ==========================================
+// GET SINGLE PURCHASE ORDER
+// ==========================================
+export const getPurchaseOrder = async (
+  purchaseOrderId
+) => {
   const response = await axiosInstance.get(
-    `/api/v1/purchase-orders/${id}`
+    `/api/v1/purchase-orders/${purchaseOrderId}`
   );
 
   return response.data;
 };
 
-// POST - Create Purchase Order
-export const createPurchaseOrder = async (payload) => {
+
+// ==========================================
+// CREATE PURCHASE ORDER
+// ==========================================
+export const createPurchaseOrder = async (
+  payload
+) => {
   const response = await axiosInstance.post(
     "/api/v1/purchase-orders",
     payload
@@ -34,29 +49,53 @@ export const createPurchaseOrder = async (payload) => {
   return response.data;
 };
 
-// PATCH - Update Purchase Order
-export const updatePurchaseOrder = async (id, payload) => {
+
+// ==========================================
+// UPDATE PURCHASE ORDER
+// ==========================================
+export const updatePurchaseOrder = async (
+  purchaseOrderId,
+  payload
+) => {
   const response = await axiosInstance.patch(
-    `/api/v1/purchase-orders/${id}`,
+    `/api/v1/purchase-orders/${purchaseOrderId}`,
     payload
   );
 
   return response.data;
 };
 
-// POST - Receive Purchase Order
-export const receivePurchaseOrder = async (id) => {
+// ==========================================
+// DELETE PURCHASE ORDER
+// ==========================================
+
+
+
+// ==========================================
+// RECEIVE PURCHASE ORDER
+// ==========================================
+export const receivePurchaseOrder = async (
+  purchaseOrderId,
+  payload = {}
+) => {
   const response = await axiosInstance.post(
-    `/api/v1/purchase-orders/${id}/receive`
+    `/api/v1/purchase-orders/${purchaseOrderId}/receive`,
+    payload
   );
 
   return response.data;
 };
 
-// PATCH - Update Purchase Order Status
-export const updatePurchaseOrderStatus = async (id, payload) => {
+
+// ==========================================
+// UPDATE PURCHASE ORDER STATUS
+// ==========================================
+export const updatePurchaseOrderStatus = async (
+  purchaseOrderId,
+  payload
+) => {
   const response = await axiosInstance.patch(
-    `/api/v1/purchase-orders/${id}/status`,
+    `/api/v1/purchase-orders/${purchaseOrderId}/status`,
     payload
   );
 

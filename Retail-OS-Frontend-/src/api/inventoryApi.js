@@ -25,9 +25,11 @@ export const getLowStock = async (params = {}) => {
 
 /**
  * List Movements
- * GET /inventory/movements
+ * GET /inventory/movements?store_id={storeId}
  */
-export const getMovements = async (storeId) => {
+export const getMovements = async (params = {}) => {
+  const storeId = params?.store_id || params?.storeId || params;
+
   return await listMovements(storeId);
 };
 

@@ -10,7 +10,6 @@ import DashboardLayout from './layouts/DashboardLayout';
 
 import Billing from './pages/Billing';
 import Dashboard from './pages/Dashboard';
-import AdminDashboard from './pages/AdminDashboard';
 import BillingManagement from './pages/BillingManagement';
 import GSTManagement from './pages/GSTManagement';
 
@@ -30,9 +29,9 @@ import OrderManagement from './pages/ECommerce/OrderManagement';
 import CouponManagement from './pages/ECommerce/CouponManagement';
 import DeliveryManagement from './pages/ECommerce/DeliveryManagement';
 import ProductCatalog from './pages/ECommerce/ProductCatalog';
-import CustomerManagement from './pages/ECommerce/CustomerManagement';
 import ReviewManagement from './pages/ECommerce/ReviewManagement';
 import ReturnManagement from './pages/ECommerce/ReturnManagement';
+import Profile from './pages/Profile';
 
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -76,9 +75,12 @@ function App() {
 
                         <Route
                             path="/admin-dashboard"
-                            element={<AdminDashboard />}
+                            element={
+                                <Placeholder title="Admin Panel" />
+                            }
                         />
 
+                        <Route path="/profile" element={<Profile />} />
                         {/* Billing and GST */}
                         <Route path="/billing" element={<Billing />} />
 
@@ -124,11 +126,6 @@ function App() {
                         />
 
                         <Route
-                            path="/ecommerce/customers"
-                            element={<CustomerManagement />}
-                        />
-
-                        <Route
                             path="/ecommerce/reviews"
                             element={<ReviewManagement />}
                         />
@@ -167,11 +164,11 @@ function App() {
                             element={<CategoryManagement />}
                         />
 
-                       {/* Purchases */}
-<Route
-    path="/purchases"
-    element={<Purchases />}
-/>
+                        {/* Purchases */}
+                        <Route
+                            path="/purchases"
+                            element={<Purchases />}
+                        />
 
                         {/* Returns */}
                         <Route

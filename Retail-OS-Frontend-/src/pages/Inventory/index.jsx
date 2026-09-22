@@ -1,62 +1,294 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+
 import InventoryHeader from "../../components/InventoryHeader";
-import InventoryCards from "../../components/InventoryCards";
+import InventoryFilters from "../../components/InventoryFilters";
 import InventoryTable from "../../components/InventoryTable";
+import LowStockAlert from "../../components/LowStockAlert";
+import "./Inventory.css";
+
 import category from "../../services/categoryService";
 
+import {
+    BsChevronLeft,
+    BsChevronRight,
+    BsBoxSeam,
+    BsBoxes,
+    BsExclamationTriangle,
+    BsXCircle,
+} from "react-icons/bs";
 
-{/*import { getInventory, stockIn, stockOut } from "../../api/inventoryApi"; */}
 import {
-    BsChevronLeft, BsChevronRight,
-} from 'react-icons/bs';
-import {
-  listInventory,
-  listProducts,
-  listStores,
-  stockIn,
-  stockOut,
-  transferStock,
-  lowStock,
-  inventoryDashboard,
-  getInventoryValuation,
-  getInventoryExpiry,
-   listMovements,
-  adjustInventory,
-  getInventoryByProductId,
+    listInventory,
+    listProducts,
+    listStores,
+    stockIn,
+    stockOut,
+    transferStock,
+    lowStock,
+    inventoryDashboard,
+    adjustInventory,
+    getInventoryValuation,
+    getInventoryExpiry,
+    listMovements
 } from "../../services/inventoryService";
- 
+
 const PAGE_SIZE = 8;
-const fmt = (n) => '₹' + (n || 0).toLocaleString('en-IN');
 
-const getItemStock = (item) => item.quantity !== undefined ? item.quantity : (item.stock !== undefined ? item.stock : 0);
-const getItemMinStock = (item) => item.low_stock_threshold !== undefined ? item.low_stock_threshold : (item.minStock !== undefined ? item.minStock : 0);
+const movementCellStyle = {
+    padding: "13px 14px",
+    fontSize: "13px",
+    color: "#374151",
+    borderBottom: "1px solid #f1f5f9",
+    verticalAlign: "middle",
+};
 
-const stockStatus = (item) => {
-    const stock = Number(getItemStock(item)) || 0;
-    const minStock = Number(getItemMinStock(item)) || 0;
+/* =========================================================
+   FORMAT PRICE
+========================================================= */
 
-    // Qty = 0 -> Out of Stock
-    if (stock === 0) {
-        return {
-            label: "Out of Stock",
-            color: "#ef4444",
-            bg: "#fef2f2",
-        };
+const fmt = (n) =>
+    "₹" + Number(n || 0).toLocaleString("en-IN");
+
+/* =========================================================
+   RESPONSE HELPER
+========================================================= */
+
+const getArrayFromResponse = (response) => {
+    const candidates = [
+        response?.data?.data,
+        response?.data?.items,
+        response?.data?.products,
+        response?.data?.results,
+        response?.data?.content,
+        response?.items,
+        response?.products,
+        response?.results,
+        response?.content,
+        response?.data,
+        response,
+    ];
+
+    return candidates.find(Array.isArray) || [];
+};
+
+/* =========================================================
+   NORMALIZE PRODUCT
+========================================================= */
+
+const normalizeProduct = (product) => {
+    const nestedProduct =
+        product?.product ||
+        product?.product_details ||
+        product?.productDetail ||
+        product?.details ||
+        {};
+
+    const id =
+        product?.id ??
+        product?.product_id ??
+        product?.productId ??
+        nestedProduct?.id ??
+        nestedProduct?.product_id ??
+        nestedProduct?.productId;
+
+    const name =
+        product?.name ??
+        product?.product_name ??
+        product?.productName ??
+        product?.title ??
+        nestedProduct?.name ??
+        nestedProduct?.product_name ??
+        nestedProduct?.productName ??
+        nestedProduct?.title ??
+        "";
+
+    const sku =
+        product?.sku ??
+        product?.SKU ??
+        product?.Sku ??
+        product?.product_sku ??
+        product?.productSku ??
+        product?.sku_code ??
+        product?.skuCode ??
+        product?.code ??
+        nestedProduct?.sku ??
+        nestedProduct?.SKU ??
+        nestedProduct?.Sku ??
+        nestedProduct?.product_sku ??
+        nestedProduct?.productSku ??
+        nestedProduct?.sku_code ??
+        nestedProduct?.skuCode ??
+        nestedProduct?.code ??
+        "";
+
+    return {
+        ...product,
+
+        id:
+            id !== undefined &&
+            id !== null
+                ? Number(id)
+                : null,
+
+        name: String(name || "").trim(),
+
+        sku: String(sku || "").trim(),
+
+        barcode:
+            product?.barcode ??
+            product?.bar_code ??
+            product?.barCode ??
+            nestedProduct?.barcode ??
+            nestedProduct?.bar_code ??
+            nestedProduct?.barCode ??
+            "",
+
+        category:
+            product?.category ??
+            product?.category_name ??
+            product?.categoryName ??
+            nestedProduct?.category ??
+            nestedProduct?.category_name ??
+            nestedProduct?.categoryName ??
+            "",
+
+        category_id:
+            product?.category_id ??
+            product?.categoryId ??
+            nestedProduct?.category_id ??
+            nestedProduct?.categoryId ??
+            null,
+
+        price:
+            product?.price ??
+            product?.selling_price ??
+            product?.sellingPrice ??
+            nestedProduct?.price ??
+            nestedProduct?.selling_price ??
+            nestedProduct?.sellingPrice ??
+            0,
+
+        cost_price:
+            product?.cost_price ??
+            product?.costPrice ??
+            product?.purchase_price ??
+            product?.purchasePrice ??
+            nestedProduct?.cost_price ??
+            nestedProduct?.costPrice ??
+            nestedProduct?.purchase_price ??
+            nestedProduct?.purchasePrice ??
+            0,
+
+        brand:
+            product?.brand ??
+            nestedProduct?.brand ??
+            "",
+
+        image_url:
+            product?.image_url ??
+            product?.imageUrl ??
+            product?.image ??
+            nestedProduct?.image_url ??
+            nestedProduct?.imageUrl ??
+            nestedProduct?.image ??
+            "",
+
+        supplier_name:
+            product?.supplier_name ??
+            product?.supplierName ??
+            product?.supplier ??
+            nestedProduct?.supplier_name ??
+            nestedProduct?.supplierName ??
+            nestedProduct?.supplier ??
+            "",
+    };
+};
+
+/* =========================================================
+   STOCK HELPERS
+========================================================= */
+
+const getItemStock = (item) => {
+    if (
+        item?.quantity !== undefined &&
+        item?.quantity !== null
+    ) {
+        return Number(item.quantity);
     }
 
-    // Qty < Min Stock -> Critical
-    // Examples: 7/10, 8/10, 9/10
-    if (minStock > 0 && stock < minStock) {
+    if (
+        item?.stock !== undefined &&
+        item?.stock !== null
+    ) {
+        return Number(item.stock);
+    }
+
+    return 0;
+};
+
+const getItemMinStock = (item) => {
+    if (
+        item?.low_stock_threshold !== undefined &&
+        item?.low_stock_threshold !== null
+    ) {
+        return Number(item.low_stock_threshold);
+    }
+
+    if (
+        item?.minStock !== undefined &&
+        item?.minStock !== null
+    ) {
+        return Number(item.minStock);
+    }
+
+    if (
+        item?.minimum_stock !== undefined &&
+        item?.minimum_stock !== null
+    ) {
+        return Number(item.minimum_stock);
+    }
+
+    return 0;
+};
+
+/* =========================================================
+   GET SELLING PRICE
+========================================================= */
+
+const getItemSellingPrice = (item) => {
+    const price =
+        item?.price ??
+        item?.selling_price ??
+        item?.sellingPrice ??
+        0;
+
+    const numericPrice = Number(price);
+
+    return Number.isFinite(numericPrice)
+        ? numericPrice
+        : 0;
+};
+
+/* =========================================================
+   STOCK STATUS
+========================================================= */
+
+const stockStatus = (item) => {
+    const stock = getItemStock(item);
+    const minStock = getItemMinStock(item);
+
+    if (stock <= 0) {
         return {
-            label: "Critical",
+            label: "Out of Stock",
             color: "#dc2626",
             bg: "#fef2f2",
         };
     }
 
-    // Qty = Min Stock -> Low Stock (NOT Critical)
-    // Example: 10/10
-    if (minStock > 0 && stock === minStock) {
+    if (
+        minStock > 0 &&
+        stock <= minStock
+    ) {
         return {
             label: "Low Stock",
             color: "#d97706",
@@ -64,1759 +296,2665 @@ const stockStatus = (item) => {
         };
     }
 
-    // Qty > Min Stock -> In Stock
     return {
         label: "In Stock",
-        color: "#10b981",
+        color: "#059669",
         bg: "#ecfdf5",
     };
 };
+
+/* =========================================================
+   STOCK UPDATE MODAL
+========================================================= */
+
 const StockUpdateModal = ({
     item,
     onClose,
     onSave,
     products,
     stores,
-    
 }) => {
-    
+    const [qty, setQty] = useState("");
 
-    const [qty, setQty] = useState('');
-    const [action, setAction] = useState('add');
-    const [reason, setReason] = useState('Purchase');
-    const [modalLoading, setModalLoading] = useState(false);
-    const [modalError, setModalError] = useState('');
-    const [selectedProduct, setSelectedProduct] = useState(0);
+    const [action, setAction] = useState(
+        item?.action || "add"
+    );
+
+    const [reason, setReason] = useState("Purchase");
+
+    /*
+     * Adjustment API requires:
+     *
+     * adjustment_type:
+     * "increase" OR "decrease"
+     */
+    const [adjustmentType, setAdjustmentType] =
+        useState("increase");
+
+    const [notes, setNotes] = useState("");
+
+    const [modalLoading, setModalLoading] =
+        useState(false);
+
+    const [modalError, setModalError] =
+        useState("");
+
+    const [selectedProduct, setSelectedProduct] =
+        useState(0);
+
     const currentStock = getItemStock(item);
-    const [fromStore, setFromStore] = useState(0); 
-     const [toStore, setToStore] = useState(0);
+
+    const [fromStore, setFromStore] =
+        useState(0);
+
+    const [toStore, setToStore] =
+        useState(0);
 
     useEffect(() => {
-    if (item?.product_id) {
-        setSelectedProduct(item.product_id);
-    }
-if (item?.store_id) {
-    setFromStore(item.store_id);
-}
+        if (item?.product_id) {
+            setSelectedProduct(
+                Number(item.product_id)
+            );
+        }
 
-    if (item?.action) {
-        setAction(item.action);
-    }
-}, [item]);
+        if (item?.store_id) {
+            setFromStore(
+                Number(item.store_id)
+            );
+        }
 
-const handleSave = async () => {
-    
-console.log("HANDLE SAVE STARTED");
+        if (item?.action) {
+            setAction(item.action);
+        }
+    }, [item]);
 
-    const delta = parseInt(qty) || 0;
+    const handleSave = async () => {
+        const delta = parseInt(qty, 10) || 0;
 
-    console.log("QTY =>", delta);
+        if (delta <= 0) {
+            setModalError(
+                "Please enter a valid quantity"
+            );
+            return;
+        }
 
+        if (selectedProduct === 0) {
+            setModalError(
+                "Please select a product"
+            );
+            return;
+        }
 
-   
+        if (action === "transfer") {
+            if (fromStore === 0) {
+                setModalError(
+                    "Please select From Store"
+                );
+                return;
+            }
 
+            if (toStore === 0) {
+                setModalError(
+                    "Please select To Store"
+                );
+                return;
+            }
 
-    if (delta <= 0) {
-        setModalError("Please enter a valid quantity");
-        return;
-    }
+            if (fromStore === toStore) {
+                setModalError(
+                    "From Store and To Store cannot be same"
+                );
+                return;
+            }
+        } else {
+            if (fromStore === 0) {
+                setModalError(
+                    "Please select Store"
+                );
+                return;
+            }
+        }
 
-    if (selectedProduct === 0) {
-        setModalError("Please select a product");
-        return;
-    }
+        if (
+            action === "adjustment" &&
+            !["increase", "decrease"].includes(
+                adjustmentType
+            )
+        ) {
+            setModalError(
+                "Please select adjustment type"
+            );
+            return;
+        }
 
-   if (action === "transfer") {
+        setModalLoading(true);
+        setModalError("");
 
-    if (fromStore === 0) {
-        setModalError("Please select From Store");
-        return;
-    }
+        try {
+            await onSave(
+                item,
+                selectedProduct,
+                fromStore,
+                toStore,
+                action,
+                delta,
+                reason,
+                adjustmentType,
+                notes
+            );
 
-    if (toStore === 0) {
-        setModalError("Please select To Store");
-        return;
-    }
+            onClose();
+        } catch (err) {
+            console.error(
+                "HANDLE SAVE ERROR =>",
+                err
+            );
 
-} else {
+            setModalError(
+                err?.response?.data?.detail?.[0]?.msg ||
+                    err?.response?.data?.message ||
+                    err?.response?.data?.detail?.message ||
+                    err?.data?.detail?.message ||
+                    err?.message ||
+                    "Failed to update stock"
+            );
+        } finally {
+            setModalLoading(false);
+        }
+    };
 
-    if (fromStore === 0) {
-        setModalError("Please select Store");
-        return;
-    }
+    const enteredQty =
+        parseInt(qty, 10) || 0;
 
-}
+    let newStock = currentStock;
 
-    setModalLoading(true);
-    setModalError("");
-
-    try {
-        console.log("ACTION =>", action);
-
-console.log("handleStockUpdate CALLED");
-
-console.log("ITEM =>", item);
-console.log("SELECTED PRODUCT =>", selectedProduct);
-console.log("FROM STORE =>", fromStore);
-console.log("TO STORE =>", toStore);
-console.log("ACTION =>", action);
-console.log("DELTA =>", delta);
-console.log("REASON =>", reason);
-
-      await onSave(
-    item,
-    selectedProduct,
-    fromStore,
-    toStore,
-    action,
-    delta,
-    reason
-);
-
-console.log("TRANSFER SUCCESS");
-console.log("Refreshing inventory...");
-
-        onClose();
-    } catch (err) {
-        setModalError(
-            err.response?.data?.detail?.[0]?.msg ||
-            err.response?.data?.message ||
-            err.message ||
-            "Failed to update stock"
+    if (action === "add") {
+        newStock =
+            currentStock + enteredQty;
+    } else if (action === "remove") {
+        newStock = Math.max(
+            0,
+            currentStock - enteredQty
         );
-    } finally {
-        setModalLoading(false);
+    } else if (action === "adjustment") {
+        newStock =
+            adjustmentType === "increase"
+                ? currentStock + enteredQty
+                : Math.max(
+                      0,
+                      currentStock - enteredQty
+                  );
     }
-};
-console.log("SELECTED PRODUCT =>", selectedProduct);
-console.log("PRODUCTS LENGTH =>", products.length);
-   
+
     return (
-        <div className="ec-modal-overlay" onClick={onClose}>
-            <div className="ec-modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div
+            className="ec-modal-overlay"
+            onClick={onClose}
+        >
+            <div
+                className="ec-modal"
+                onClick={(e) =>
+                    e.stopPropagation()
+                }
+            >
                 <div className="ec-modal-header">
                     <div>
-                        <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>Update Stock</h3>
-                        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{item.name || `Product #${item.product_id || item.id}`} · Current: {currentStock} {item.unit || 'Pcs'}</p>
+                        <h3 className="ec-modal-title">
+                            Update Stock
+                        </h3>
+
+                        <p className="ec-modal-subtitle">
+                            {item?.name ||
+                                item?.product_name ||
+                                `Product #${
+                                    item?.product_id ||
+                                    item?.id
+                                }`}
+                            {" · "}
+                            Current:{" "}
+                            <strong>
+                                {currentStock}
+                            </strong>{" "}
+                            {item?.unit || "Pcs"}
+                        </p>
                     </div>
-                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+
+                    <button
+                        className="ec-modal-close"
+                        onClick={onClose}
+                        disabled={modalLoading}
+                        type="button"
+                    >
+                        ✕
+                    </button>
                 </div>
-                {modalError && <div style={{ color: '#ef4444', fontSize: 12, marginBottom: 10 }}>{modalError}</div>}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                
-                </div>
-                <div className="ec-field">
-    <label>Product</label>
 
+                <div className="ec-modal-body">
+                    {modalError && (
+                        <div className="ec-modal-error">
+                            {modalError}
+                        </div>
+                    )}
 
-  
-<select
-    className="ec-input"
-    value={selectedProduct}
-    onChange={(e) => setSelectedProduct(Number(e.target.value))}
->
-    <option value={0}>Select Product</option>
+                    {/* =================================================
+                       ACTION
+                    ================================================= */}
 
-    {products.map((product) => (
-        <option key={product.id} value={product.id}>
-            {`${product.id} - ${product.name}`}
-        </option>
-    ))}
-</select>
-</div>
-{/* 
-{action === "transfer" && (
-  
-)}
-*/}
-<label>Store</label>
-
-<select
-  className="ec-input"
-  value={fromStore}
-  onChange={(e) => setFromStore(Number(e.target.value))}
->
-  <option value={0}>Select Store</option>
-
-  {stores.map((store) => (
-    <option key={store.id} value={store.id}>
-      {store.name} (ID: {store.id})
-    </option>
-  ))}
-</select>
-
-{action === "transfer" && (
-  <div className="ec-field">
-    <label>To Store</label>
-
-    <select
-      className="ec-input"
-      value={toStore}
-      onChange={(e) => setToStore(Number(e.target.value))}
-    >
-      <option value={0}>Select To Store</option>
-
-      {stores
-        .filter((store) => store.id !== fromStore)
-        .map((store) => (
-          <option key={store.id} value={store.id}>
-            {store.name} (ID: {store.id})
-          </option>
-        ))}
-    </select>
-  </div>
-)}
-
-
-                <div className="ec-form-row">
                     <div className="ec-field">
-                        <label>Quantity</label>
-                        <input className="ec-input" type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} placeholder="0" />
-                    </div>
-                    <div className="ec-field">
-                        <label>Reason</label>
-                        <select className="ec-input" value={reason} onChange={e => setReason(e.target.value)}>
-                            {['Purchase', 'Return', 'Adjustment', 'Damaged', 'Expired', 'Transfer'].map(r => <option key={r}>{r}</option>)}
+                        <label>
+                            Stock Action
+                        </label>
+
+                        <select
+                            className="ec-input"
+                            value={action}
+                            onChange={(e) => {
+                                setAction(
+                                    e.target.value
+                                );
+                                setModalError("");
+                            }}
+                        >
+                            <option value="add">
+                                Stock In
+                            </option>
+
+                            <option value="remove">
+                                Stock Out
+                            </option>
+
+                            <option value="adjustment">
+                                Adjustment
+                            </option>
+
+                            <option value="transfer">
+                                Transfer
+                            </option>
+
+                            <option value="purchase">
+                                Purchase
+                            </option>
                         </select>
                     </div>
-                </div>
-                <div className="ec-field">
-                    <label>Notes (Optional)</label>
-                    <input className="ec-input" placeholder="Additional notes..." />
-                </div>
-                <div style={{ background: '#f9fafb', borderRadius: 8, padding: '10px 14px', marginBottom: 16 }}>
-                       <p style={{ fontSize: 12, color: '#374151' }}>
-                        New Stock Level: <strong style={{ color: '#6366f1', fontSize: 14 }}>{Math.max(0, action === 'add' ? currentStock + (parseInt(qty) || 0) : currentStock - (parseInt(qty) || 0))} {item.unit || 'Pcs'}</strong>
-                    </p>
-                </div>
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                    <button className="adm-btn-secondary" onClick={onClose} disabled={modalLoading}>Cancel</button>
-<button
-  className="adm-btn-primary"
-  onClick={async () => {
-  
 
-    try {
-      await handleSave();
-      console.log("handleSave completed");
-    } catch (e) {
-      console.error("HANDLE SAVE ERROR =>", e);
-      alert(e.message);
-    }
-  }}
-  disabled={modalLoading}
->
-  {modalLoading ? "Saving..." : "Update Stock"}
-</button>
+                    {/* =================================================
+                       PRODUCT
+                    ================================================= */}
+
+                    <div className="ec-field">
+                        <label>
+                            Product
+                        </label>
+
+                        <select
+                            className="ec-input"
+                            value={
+                                selectedProduct
+                            }
+                            onChange={(e) =>
+                                setSelectedProduct(
+                                    Number(
+                                        e.target.value
+                                    )
+                                )
+                            }
+                        >
+                            <option value={0}>
+                                Select Product
+                            </option>
+
+                            {products.map(
+                                (product) => (
+                                    <option
+                                        key={
+                                            product.id
+                                        }
+                                        value={
+                                            product.id
+                                        }
+                                    >
+                                        {`${product.id} - ${
+                                            product.name
+                                        }${
+                                            product.sku
+                                                ? ` (${product.sku})`
+                                                : ""
+                                        }`}
+                                    </option>
+                                )
+                            )}
+                        </select>
+                    </div>
+
+                    {/* =================================================
+                       STORE
+                    ================================================= */}
+
+                    <div className="ec-field">
+                        <label>
+                            {action ===
+                            "transfer"
+                                ? "From Store"
+                                : "Store"}
+                        </label>
+
+                        <select
+                            className="ec-input"
+                            value={fromStore}
+                            onChange={(e) =>
+                                setFromStore(
+                                    Number(
+                                        e.target.value
+                                    )
+                                )
+                            }
+                        >
+                            <option value={0}>
+                                Select Store
+                            </option>
+
+                            {stores.map(
+                                (store) => (
+                                    <option
+                                        key={
+                                            store.id
+                                        }
+                                        value={
+                                            store.id
+                                        }
+                                    >
+                                        {
+                                            store.name
+                                        }{" "}
+                                        (ID:{" "}
+                                        {
+                                            store.id
+                                        }
+                                        )
+                                    </option>
+                                )
+                            )}
+                        </select>
+                    </div>
+
+                    {/* =================================================
+                       TO STORE
+                    ================================================= */}
+
+                    {action ===
+                        "transfer" && (
+                        <div className="ec-field">
+                            <label>
+                                To Store
+                            </label>
+
+                            <select
+                                className="ec-input"
+                                value={
+                                    toStore
+                                }
+                                onChange={(
+                                    e
+                                ) =>
+                                    setToStore(
+                                        Number(
+                                            e.target
+                                                .value
+                                        )
+                                    )
+                                }
+                            >
+                                <option value={0}>
+                                    Select To Store
+                                </option>
+
+                                {stores
+                                    .filter(
+                                        (
+                                            store
+                                        ) =>
+                                            Number(
+                                                store.id
+                                            ) !==
+                                            Number(
+                                                fromStore
+                                            )
+                                    )
+                                    .map(
+                                        (
+                                            store
+                                        ) => (
+                                            <option
+                                                key={
+                                                    store.id
+                                                }
+                                                value={
+                                                    store.id
+                                                }
+                                            >
+                                                {
+                                                    store.name
+                                                }{" "}
+                                                (ID:{" "}
+                                                {
+                                                    store.id
+                                                }
+                                                )
+                                            </option>
+                                        )
+                                    )}
+                            </select>
+                        </div>
+                    )}
+
+                    {/* =================================================
+                       ADJUSTMENT TYPE
+                    ================================================= */}
+
+                    {action ===
+                        "adjustment" && (
+                        <div className="ec-field">
+                            <label>
+                                Adjustment Type
+                            </label>
+
+                            <select
+                                className="ec-input"
+                                value={
+                                    adjustmentType
+                                }
+                                onChange={(
+                                    e
+                                ) =>
+                                    setAdjustmentType(
+                                        e.target
+                                            .value
+                                    )
+                                }
+                            >
+                                <option value="increase">
+                                    Increase
+                                </option>
+
+                                <option value="decrease">
+                                    Decrease
+                                </option>
+                            </select>
+                        </div>
+                    )}
+
+                    {/* =================================================
+                       QUANTITY + REASON
+                    ================================================= */}
+
+                    <div className="ec-form-row">
+                        <div className="ec-field">
+                            <label>
+                                Quantity
+                            </label>
+
+                            <input
+                                className="ec-input"
+                                type="number"
+                                min="1"
+                                value={qty}
+                                onChange={(e) =>
+                                    setQty(
+                                        e.target
+                                            .value
+                                    )
+                                }
+                                placeholder="Enter quantity"
+                            />
+                        </div>
+
+                        <div className="ec-field">
+                            <label>
+                                Reason
+                            </label>
+
+                            <select
+                                className="ec-input"
+                                value={reason}
+                                onChange={(e) =>
+                                    setReason(
+                                        e.target
+                                            .value
+                                    )
+                                }
+                            >
+                                {[
+                                    "Purchase",
+                                    "Return",
+                                    "Adjustment",
+                                    "Damaged",
+                                    "Expired",
+                                    "Transfer",
+                                    "Stock Correction",
+                                ].map(
+                                    (r) => (
+                                        <option
+                                            key={
+                                                r
+                                            }
+                                        >
+                                            {r}
+                                        </option>
+                                    )
+                                )}
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* =================================================
+                       NOTES
+                    ================================================= */}
+
+                    <div className="ec-field">
+                        <label>
+                            Notes (Optional)
+                        </label>
+
+                        <input
+                            className="ec-input"
+                            value={notes}
+                            onChange={(e) =>
+                                setNotes(
+                                    e.target
+                                        .value
+                                )
+                            }
+                            placeholder="Additional notes..."
+                        />
+                    </div>
+
+                    {/* =================================================
+                       NEW STOCK
+                    ================================================= */}
+
+                    <div className="ec-new-stock">
+                        <div className="ec-new-stock-inner">
+                            <span className="ec-new-stock-label">
+                                New Stock Level
+                            </span>
+
+                            <strong className="ec-new-stock-value">
+                                {newStock}{" "}
+                                {item?.unit ||
+                                    "Pcs"}
+                            </strong>
+                        </div>
+                    </div>
+
+                    {/* =================================================
+                       ACTION BUTTONS
+                    ================================================= */}
+
+                    <div className="ec-modal-actions">
+                        <button
+                            className="adm-btn-secondary ec-cancel-btn"
+                            onClick={onClose}
+                            disabled={
+                                modalLoading
+                            }
+                            type="button"
+                        >
+                            Cancel
+                        </button>
+
+                        <button
+                            className="adm-btn-primary ec-save-btn"
+                            onClick={handleSave}
+                            disabled={
+                                modalLoading
+                            }
+                            type="button"
+                        >
+                            {modalLoading
+                                ? "Saving..."
+                                : "Update Stock"}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
 
-   const Inventory = () => {
-    const [inventory, setInventory] = useState([]);
-    const [search, setSearch] = useState('');
-    const [filterCat, setFilterCat] = useState('All Categories');
-    const [filterStatus, setFilterStatus] = useState('All');
+/* =========================================================
+   MAIN INVENTORY
+========================================================= */
 
-    const [filterWarehouse, setFilterWarehouse] = useState("All Warehouses");
-    const [filterSupplier, setFilterSupplier] = useState("All Suppliers");
-    const [filterDate, setFilterDate] = useState("");
+const Inventory = () => {
+    const [inventory, setInventory] =
+        useState([]);
 
-    const [page, setPage] = useState(1);
-    const [stockModal, setStockModal] = useState(null);
-    const [products, setProducts] = useState([]);
-    const [stores, setStores] = useState([]);
-    const [activeTab, setActiveTab] = useState('All Items');
-    const [categories, setCategories] = useState([]);
+    const [dashboard, setDashboard] =
+        useState(null);
 
+    const [valuation, setValuation] =
+        useState(0);
 
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
+    const [search, setSearch] =
+        useState("");
 
-    
-    const [lowStockItems, setLowStockItems] = useState([]);
-    const [lowStockLoading, setLowStockLoading] = useState(false);
-    const [lowStockError, setLowStockError] = useState("");
+    const [filterCat, setFilterCat] =
+        useState("All Categories");
 
-    // Additional Inventory API data
-    const [dashboardData, setDashboardData] = useState(null);
-    const [valuationData, setValuationData] = useState(null);
-    const [expiryData, setExpiryData] = useState(null);
+    const [filterStatus, setFilterStatus] =
+        useState("All");
 
-    // Row action API state
-    const [viewInventoryItem, setViewInventoryItem] = useState(null);
-    const [viewInventoryLoading, setViewInventoryLoading] = useState(false);
-    const [viewInventoryError, setViewInventoryError] = useState("");
+    const [filterWarehouse, setFilterWarehouse] =
+        useState("All Warehouses");
 
-    const [movementItem, setMovementItem] = useState(null);
-    const [movementRows, setMovementRows] = useState([]);
-    const [movementLoading, setMovementLoading] = useState(false);
-    const [movementError, setMovementError] = useState("");
+    const [filterSupplier, setFilterSupplier] =
+        useState("All Suppliers");
 
-    const [adjustItem, setAdjustItem] = useState(null);
-    const [adjustQty, setAdjustQty] = useState("");
-    const [adjustReason, setAdjustReason] = useState("Adjustment");
-    const [adjustNotes, setAdjustNotes] = useState("");
-    const [adjustLoading, setAdjustLoading] = useState(false);
-    const [adjustError, setAdjustError] = useState("");
-  
-const fetchInventory = async () => {
-    try {
-        setLoading(true);
-        setError("");
+    const [filterDate, setFilterDate] =
+        useState("");
 
-        const response = await listInventory();
-    
+    const [page, setPage] =
+        useState(1);
 
-        const data =
-    response?.data ??
-    response?.items ??
-    response?.content ??
-    response;
+    const [stockModal, setStockModal] =
+        useState(null);
 
-if (!Array.isArray(data)) {
-    setInventory([]);
-    return;
-}
+    const [products, setProducts] =
+        useState([]);
 
+    const [stores, setStores] =
+        useState([]);
 
-console.log("Products Data =>", data);
+    const [activeTab, setActiveTab] =
+        useState("All Items");
 
+    const [categories, setCategories] =
+        useState([]);
 
+    const [loading, setLoading] =
+        useState(false);
 
-    const mergedInventory = data.map((item) => {
-        const product = products.find(
-            (p) => Number(p.id) === Number(item.product_id)
-        );
+    const [error, setError] =
+        useState("");
 
-        const store = stores.find(
-            (s) => Number(s.id) === Number(item.store_id)
-        );
+    const [lowStockItems, setLowStockItems] =
+        useState([]);
 
-        return {
-            ...item,
+    const [lowStockLoading, setLowStockLoading] =
+        useState(false);
 
-            name:
-                product?.name ||
-                item.product_name ||
-                "",
+    const [lowStockError, setLowStockError] =
+        useState("");
 
-            sku:
-                product?.sku ||
-                item.sku ||
-                "",
+    /* =====================================================
+       RECENT STOCK MOVEMENTS
+       Store: 8
+    ===================================================== */
+    const [movements, setMovements] = useState([]);
+    const [movementsLoading, setMovementsLoading] =
+        useState(false);
+    const [movementsError, setMovementsError] =
+        useState("");
 
-            barcode:
-                product?.barcode ||
-                item.barcode ||
-                "",
+    /* =====================================================
+       PRODUCT MAP
+    ===================================================== */
 
-            category:
-                product?.category ||
-                product?.category_name ||
-                item.category ||
-                item.category_name ||
-                "",
+    const productMap = useMemo(() => {
+        const map = new Map();
 
-            category_id:
-                product?.category_id ??
-                item.category_id ??
-                null,
+        products.forEach((product) => {
+            const productId =
+                product?.id ??
+                product?.product_id ??
+                product?.productId;
 
-            price:
-                product?.price ??
-                item.price ??
-                0,
-
-            costPrice:
-                product?.cost_price ??
-                item.cost_price ??
-                item.unit_cost ??
-                0,
-
-            brand:
-                product?.brand ||
-                item.brand ||
-                "",
-
-            image_url:
-                product?.image_url ||
-                item.image_url ||
-                "",
-
-            // Keep Store ID separate so InventoryTable can display it correctly.
-            store_id:
-                item.store_id ??
-                item.store?.id ??
-                store?.id ??
-                null,
-
-            // Prefer the name returned with the inventory item.
-            // Fall back to the Stores API only when needed.
-            store_name:
-                item.store_name ||
-                item.store?.name ||
-                store?.name ||
-                (item.store_id ? `Store #${item.store_id}` : ""),
-
-            location:
-                item.store_name ||
-                item.store?.name ||
-                store?.name ||
-                item.location ||
-                (item.store_id ? `Store #${item.store_id}` : ""),
-        };
-    });
-    setInventory(mergedInventory);
-}
-     catch (err) {
-        console.error("Inventory API Error:", err);
-        setError("Failed to load inventory from server");
-    } finally {
-        setLoading(false);
-    }
-};
-
-const fetchProducts = async () => {
-    try {
-        const response = await listProducts();
-
-        console.log("FULL PRODUCTS RESPONSE =>", response);
-
-        const data =
-            response?.data ??
-            response?.items ??
-            response?.content ??
-            response;
-
-        console.log("========== PRODUCTS CHECK ==========");
-
-        console.log("PRODUCTS DATA =>", data);
-        console.log("PRODUCTS LENGTH =>", data?.length);
-
-        console.log(
-            "PRODUCT ID 4 =>",
-            data?.find((p) => Number(p.id) === 4)
-        );
-
-        console.log(
-            "PRODUCT ID 13 =>",
-            data?.find((p) => Number(p.id) === 13)
-        );
-
-        console.table(data);
-
-        const boatProduct = data?.find((p) =>
-            p.name?.toLowerCase().includes("boat")
-        );
-
-        console.log("BOAT PRODUCT =>", boatProduct);
-
-        if (Array.isArray(data)) {
-            setProducts(data);
-        } else {
-            console.error("Products data is NOT an array =>", data);
-            setProducts([]);
-        }
-
-    } catch (err) {
-        console.error("Products API Error =>", err);
-        setProducts([]);
-    }
-};
-
-
-const fetchCategories = async () => {
-    try {
-        const response = await category.getAll();
-
-        console.log("FULL CATEGORIES RESPONSE =>", response);
-
-        const data =
-            response?.data?.data ??
-            response?.data ??
-            response?.items ??
-            response?.content ??
-            response;
-             console.log("CATEGORIES DATA =>", data);
-
-        if (Array.isArray(data)) {
-            setCategories(data);
-        } else {
-            setCategories([]);
-        }
-
-    } catch (err) {
-        console.error("Categories API Error:", err);
-        setCategories([]);
-    }
-};
-const fetchLowStock = async () => {
-    try {
-        setLowStockLoading(true);
-        setLowStockError("");
-        const response = await lowStock();
-        const data = Array.isArray(response)
-            ? response
-            : (response?.data || response?.content || response?.items || []);
-
-        const mergedLowStock = data.map((item) => {
-            const product = products.find(
-                (p) => Number(p.id) === Number(item.product_id)
-            );
-
-            const store = stores.find(
-                (s) => Number(s.id) === Number(item.store_id)
-            );
-
-            return {
-                ...item,
-
-                // Product
-                product_name: product?.name || `Product #${item.product_id}`,
-
-                // SKU
-                sku: product?.sku || "",
-
-                // Category
-                category: product?.category || "",
-
-                // Supplier
-                supplier_name:
-                    product?.supplier_name ||
-                    product?.supplier ||
-                    "",
-
-                // Warehouse
-                store_name:
-                    store?.name ||
-                    `Store #${item.store_id}`,
-            };
+            if (
+                productId !== undefined &&
+                productId !== null &&
+                Number.isFinite(
+                    Number(productId)
+                )
+            ) {
+                map.set(
+                    Number(productId),
+                    {
+                        ...product,
+                        id: Number(
+                            productId
+                        ),
+                    }
+                );
+            }
         });
 
-        console.log("MERGED LOW STOCK =>", mergedLowStock);
+        return map;
+    }, [products]);
 
-        setLowStockItems(mergedLowStock);
+    /* =====================================================
+       FETCH PRODUCTS
+    ===================================================== */
 
-    } catch (err) {
-        console.error("LOW STOCK API ERROR:", err);
-        setLowStockError("Failed to load low stock items");
-    } finally {
-        setLowStockLoading(false);
-    }
-};
-
-
-
-
-
-
-const handleSearch = () => {
-    console.log("Searching...");
-    fetchInventory();
-};
-
-
-const fetchStores = async () => {
-    try {
-        const response = await listStores();
-        
-
-        console.log("FULL STORES RESPONSE =>", response);
-
-        const data =
-            response?.data ??
-            response?.items ??
-            response?.content ??
-            response;
-
-        if (Array.isArray(data)) {
-            setStores(data);
-            console.log("Stores API Data =>", data);
-        }
-    } catch (err) {
-        console.error("Stores API Error:", err);
-    }
-
-};
-useEffect(() => {
-    fetchProducts();
-    fetchStores();
-    fetchCategories();
-
-    // Inventory and Low Stock should load independently.
-    // Do not wait for Products API to succeed.
-    fetchInventory();
-    fetchLowStock();
-}, []);
-
-// Additional Inventory APIs: keep independent from Inventory and Low Stock calls.
-useEffect(() => {
-    const fetchAdditionalInventoryApis = async () => {
-        const results = await Promise.allSettled([
-            inventoryDashboard(),
-            getInventoryValuation(),
-            getInventoryExpiry(),
-        ]);
-
-        if (results[0].status === "fulfilled") {
-            setDashboardData(results[0].value);
-        } else {
-            console.error("INVENTORY DASHBOARD FAILED =>", results[0].reason);
-        }
-
-        if (results[1].status === "fulfilled") {
-            setValuationData(results[1].value);
-        } else {
-            console.error("INVENTORY VALUATION FAILED =>", results[1].reason);
-        }
-
-        if (results[2].status === "fulfilled") {
-            setExpiryData(results[2].value);
-        } else {
-            console.error("INVENTORY EXPIRY FAILED =>", results[2].reason);
-        }
-
-        console.log("INVENTORY DASHBOARD RESULT =>", results[0]);
-        console.log("INVENTORY VALUATION RESULT =>", results[1]);
-        console.log("INVENTORY EXPIRY RESULT =>", results[2]);
-    };
-
-    fetchAdditionalInventoryApis();
-}, []);
-
-useEffect(() => {
-    // Refresh inventory as soon as Stores API data is available.
-    // Do not wait for Products API because it may fail independently.
-    if (stores.length > 0) {
-        fetchInventory();
-    }
-
-    // Refresh low-stock enrichment when either source becomes available.
-    if (products.length > 0 || stores.length > 0) {
-        fetchLowStock();
-    }
-}, [products, stores]);
-
-useEffect(() => {
-    console.log("===== PRODUCTS =====");
-
-    products.forEach((p) => {
-        console.log("Product ID:", p.id, "| Product Name:", p.name);
-    });
-}, [products]);
-
-useEffect(() => {
-    console.log("===== STORES =====");
-
-    stores.forEach((s) => {
-        console.log("Store ID:", s.id, "| Store Name:", s.name);
-    });
-}, [stores]);
-
-// Inventory is already fetched on initial page load above.
-// It is intentionally independent of the Products API.
-  console.log("Inventory State =>", inventory);
-console.log("Search Value =>", search);
-
-console.log("filterWarehouse =", filterWarehouse);
-console.log("filterCat =", filterCat);
-console.log("filterSupplier =", filterSupplier);
-console.log("filterStatus =", filterStatus);
-console.log("filterDate =", filterDate);
-
-console.log("Inventory =", inventory);
-
-
-
-const storeOptions = Array.from(
-    new Map(
-        stores
-            .filter((store) => store?.id != null && store?.name)
-            .map((store) => [String(store.id), store])
-    ).values()
-);
-
-const categoryOptions = Array.from(
-    new Map(
-        categories
-            .filter(
-                (cat) =>
-                    cat?.id != null &&
-                    (cat?.name || cat?.category_name)
-            )
-            .map((cat) => [
-                String(cat.id),
-                {
-                    id: cat.id,
-                    name: cat.name || cat.category_name,
-                },
-            ])
-    ).values()
-);
-
-const filtered = inventory.filter((item) => {
-    const name =
-        item.name ||
-        item.product_name ||
-        `Product #${item.product_id || item.id}`;
-
-    const sku = item.sku || "";
-
-
-    if (name.toLowerCase().includes("boat")) {
-        console.log("FILTER ITEM =>", item);
-        console.log("FILTER NAME =>", name);
-    }
-
-    const matchSearch =
-        name.toLowerCase().includes(search.toLowerCase()) ||
-        sku.toLowerCase().includes(search.toLowerCase());
-        if (name.toLowerCase().includes("boat")) {
-    console.log("SEARCH VALUE =>", search);
-    console.log("FILTER NAME =>", name);
-    console.log("MATCH SEARCH =>", matchSearch);
-}
-
-
-    // Warehouse
-    const warehouse =
-        item.store_name ||
-        item.location ||
-        (item.store_id ? "Store #" + item.store_id : "");
-
-    const matchWarehouse =
-        filterWarehouse === "All Warehouses" ||
-        String(item.store_id) === String(filterWarehouse) ||
-        warehouse === filterWarehouse;
-
-
-    if (name.toLowerCase().includes("boat")) {
-        console.log("FILTER ITEM =>", item);
-        console.log("FILTER NAME =>", name);
-        console.log("MATCH SEARCH =>", matchSearch);
-    }
-/// Category
-const selectedCategory = categories.find(
-    (cat) => String(cat.id) === String(filterCat)
-);
-
-const selectedCategoryName = String(
-    selectedCategory?.name ||
-    selectedCategory?.category_name ||
-    ""
-).trim().toLowerCase();
-
-const itemCategoryName = String(
-    item.category ||
-    item.category_name ||
-    ""
-).trim().toLowerCase();
-
-const matchCat =
-    filterCat === "All Categories" ||
-    String(item.category_id) === String(filterCat) ||
-    (
-        selectedCategoryName &&
-        itemCategoryName &&
-        itemCategoryName === selectedCategoryName
-    );
-
-    // Supplier
-    const supplier = item.supplier_name || "";
-
-    const matchSupplier =
-        filterSupplier === "All Suppliers" ||
-        supplier === filterSupplier;
-
-    // Date
-    const createdDate = item.created_at
-        ? item.created_at.split("T")[0]
-        : "";
-
-    const matchDate =
-        !filterDate ||
-        createdDate === filterDate;
-
-    // Stock Status
-    const st = stockStatus(item);
-
-    const matchStatus =
-        filterStatus === "All" ||
-        st.label === filterStatus;
-
-    // Tabs
-    const matchTab =
-        activeTab === "All Items" ||
-        (
-            activeTab === "Low Stock" &&
-            (st.label === "Low Stock" || st.label === "Critical")
-        ) ||
-        st.label === activeTab;
-console.log({
-    name,
-    sku,
-
-    category: item.category,
-    filterCat,
-     matchCat,
-
-   warehouse,
-    filterWarehouse,
-
-    supplier,
-    filterSupplier,
-    matchTab,
-    createdDate,
-    filterDate,
-
-    status: st.label,
-    filterStatus,
-
-    search,
-
-    matchSearch,
-    matchWarehouse,
-    matchCat,
-    matchSupplier,
-    matchDate,
-    matchStatus,
-   
-});
-
-    return (
-        matchSearch &&
-        matchWarehouse &&
-        matchCat &&
-        matchSupplier &&
-        matchDate &&
-        matchStatus &&
-        matchTab
-    );
-});
-    
-   
- 
-
-const totalPages = Math.ceil(filtered.length / PAGE_SIZE) || 1;
-const paginated = filtered.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE
-);
-   
-   
-console.log("Filtered =>", filtered);
-console.log("Paginated =>", paginated);
-
-const handleStockUpdate = async (
-    item,
-    selectedProduct,
-    fromStore,
-    toStore,
-    action,
-    delta,
-    reason
-) => {
-
-     console.log("ITEM =>", item);
-    console.log("ITEM STORE ID =>", item.store_id);
-    console.log("🔥 STOCK UPDATE CALLED");
-    console.log("ITEM =>", item);
-    console.log("SELECTED PRODUCT =>", selectedProduct);
-    console.log("ACTION =>", action);
-    console.log("DELTA =>", delta);
-
-    console.log("ITEM =>", item);
-console.log("ITEM STORE ID =>", item.store_id);
-let payload;
-
-if (action === "transfer") {
-    payload = {
-         from_store_id: Number(fromStore),
-        to_store_id: Number(toStore),
-        product_id: Number(selectedProduct),
-        quantity: Number(delta),
-        notes: reason,
-    };
-    } else {
-    payload = {
-        store_id: Number(fromStore),
-        product_id: Number(selectedProduct),
-        quantity: Number(delta),
-        notes: reason,
-    };
-}
-
-
-    
-
-    try {
-    console.log("BEFORE API");
-
-    if (action === "add") {
-        console.log("CALLING STOCK IN API");
-
-        const response = await stockIn(payload);
-        console.log("STOCK IN RESPONSE =>", response);
-    }
-
-    else if (action === "remove") {
-        console.log("CALLING STOCK OUT API");
-        console.log("PAYLOAD =>", payload);
-
-        const response = await stockOut(payload);
-        console.log("STOCK OUT RESPONSE =>", response);
-    }
-
-    else if (action === "purchase") {
-        alert("Purchase Order feature is under development");
-        return;
-    }
-
-    else if (action === "transfer") {
-        console.log("CALLING TRANSFER API");
-
-        const response = await transferStock(payload);
-        console.log("TRANSFER RESPONSE =>", response);
-    }
-
-    console.log("AFTER API");
-
-    await fetchInventory();
-    await fetchLowStock();
-
-    // Refresh valuation after stock-in / stock-out / transfer so the
-    // Stock Value card stays in sync without reloading the page.
-    try {
-        const valuationResponse = await getInventoryValuation();
-        setValuationData(valuationResponse);
-        console.log("VALUATION REFRESHED =>", valuationResponse);
-    } catch (valuationError) {
-        console.error("VALUATION REFRESH FAILED =>", valuationError);
-    }
-}
-catch (err) {
-    console.error("FULL ERROR =>", err);
-    console.error("ERROR RESPONSE =>", err.response);
-    console.error("ERROR DATA =>", err.response?.data);
-
-    throw err;
-}
-
-};
-    
-    /* =========================================================
-       ROW ACTION APIs
-    ========================================================= */
-
-    const handleViewInventory = async (item) => {
-        const productId = Number(item?.product_id ?? item?.id);
-
-        if (!productId) {
-            alert("Product ID is missing");
-            return;
-        }
-
+    const fetchProducts = async () => {
         try {
-            setViewInventoryLoading(true);
-            setViewInventoryError("");
-            setViewInventoryItem(null);
+            const response =
+                await listProducts();
 
-            const response = await getInventoryByProductId(productId);
-            const data =
-                response?.data?.data ??
-                response?.data ??
-                response?.item ??
-                response;
-
-            setViewInventoryItem(data || item);
-            console.log("GET INVENTORY BY PRODUCT RESPONSE =>", response);
-        } catch (err) {
-            console.error("GET INVENTORY BY PRODUCT ERROR =>", err);
-            setViewInventoryError(
-                err.response?.data?.detail ||
-                err.response?.data?.message ||
-                err.message ||
-                "Failed to load inventory details"
+            console.log(
+                "FULL PRODUCTS RESPONSE =>",
+                response
             );
-            setViewInventoryItem(item);
-        } finally {
-            setViewInventoryLoading(false);
+
+            const data =
+                getArrayFromResponse(
+                    response
+                );
+
+            const normalizedProducts =
+                data
+                    .map(normalizeProduct)
+                    .filter(
+                        (product) =>
+                            product.id !==
+                                null &&
+                            product.id !==
+                                undefined &&
+                            Number.isFinite(
+                                Number(
+                                    product.id
+                                )
+                            )
+                    );
+
+            const uniqueProducts = [];
+            const seenProductIds =
+                new Set();
+
+            normalizedProducts.forEach(
+                (product) => {
+                    const id =
+                        Number(
+                            product.id
+                        );
+
+                    if (
+                        seenProductIds.has(
+                            id
+                        )
+                    ) {
+                        console.warn(
+                            "Duplicate product skipped:",
+                            id
+                        );
+                        return;
+                    }
+
+                    seenProductIds.add(id);
+                    uniqueProducts.push(
+                        product
+                    );
+                }
+            );
+
+            setProducts(
+                uniqueProducts
+            );
+        } catch (err) {
+            console.error(
+                "Products API Error =>",
+                err
+            );
+
+            setProducts([]);
         }
     };
 
-    const handleViewMovements = async (item) => {
-        try {
-            setMovementItem(item);
-            setMovementRows([]);
-            setMovementError("");
-            setMovementLoading(true);
+    /* =====================================================
+       FETCH INVENTORY
+    ===================================================== */
 
-            // The current service accepts store_id for the movements request.
-            const response = await listMovements(item?.store_id);
+    const fetchInventory = async () => {
+        try {
+            setLoading(true);
+            setError("");
+
+            const response =
+                await listInventory();
+
+            const data =
+                getArrayFromResponse(
+                    response
+                );
+
+            if (!Array.isArray(data)) {
+                setInventory([]);
+                return;
+            }
+
+            console.log(
+                "RAW Inventory API Data =>",
+                data
+            );
+
+            const seenProductStore =
+                new Set();
+
+            const uniqueInventory =
+                data.filter((item) => {
+                    const productId =
+                        Number(
+                            item?.product_id
+                        );
+
+                    const storeId =
+                        Number(
+                            item?.store_id
+                        );
+
+                    if (
+                        !Number.isFinite(
+                            productId
+                        ) ||
+                        !Number.isFinite(
+                            storeId
+                        )
+                    ) {
+                        return false;
+                    }
+
+                    const key = `${productId}-${storeId}`;
+
+                    if (
+                        seenProductStore.has(
+                            key
+                        )
+                    ) {
+                        return false;
+                    }
+
+                    seenProductStore.add(
+                        key
+                    );
+
+                    return true;
+                });
+
+            const mergedInventory =
+                uniqueInventory
+                    .map((item) => {
+                        const productId =
+                            Number(
+                                item?.product_id
+                            );
+
+                        const product =
+                            productMap.get(
+                                productId
+                            );
+
+                        if (!product) {
+                            return null;
+                        }
+
+                        const productName =
+                            String(
+                                product?.name ||
+                                    ""
+                            ).trim();
+
+                        if (!productName) {
+                            return null;
+                        }
+
+                        const productSku =
+                            String(
+                                product?.sku ||
+                                    ""
+                            ).trim();
+
+                        if (!productSku) {
+                            return null;
+                        }
+
+                        const price =
+                            Number(
+                                product?.price ??
+                                    product?.selling_price ??
+                                    product?.sellingPrice ??
+                                    item?.price ??
+                                    item?.selling_price ??
+                                    item?.sellingPrice ??
+                                    0
+                            );
+
+                        const costPrice =
+                            Number(
+                                product?.cost_price ??
+                                    product?.costPrice ??
+                                    product?.purchase_price ??
+                                    product?.purchasePrice ??
+                                    item?.cost_price ??
+                                    item?.costPrice ??
+                                    item?.unit_cost ??
+                                    0
+                            );
+
+                        return {
+                            ...item,
+
+                            name: productName,
+
+                            product_name:
+                                productName,
+
+                            sku: productSku,
+
+                            product_id:
+                                productId,
+
+                            price:
+                                Number.isFinite(
+                                    price
+                                )
+                                    ? price
+                                    : 0,
+
+                            costPrice:
+                                Number.isFinite(
+                                    costPrice
+                                )
+                                    ? costPrice
+                                    : 0,
+
+                            barcode:
+                                product?.barcode ||
+                                item?.barcode ||
+                                item?.bar_code ||
+                                item?.barCode ||
+                                "",
+
+                            category:
+                                product?.category ||
+                                product?.category_name ||
+                                item?.category ||
+                                item?.category_name ||
+                                "",
+
+                            category_id:
+                                product?.category_id ??
+                                product?.categoryId ??
+                                item?.category_id ??
+                                item?.categoryId ??
+                                null,
+
+                            brand:
+                                product?.brand ||
+                                item?.brand ||
+                                "",
+
+                            image_url:
+                                product?.image_url ||
+                                product?.imageUrl ||
+                                item?.image_url ||
+                                "",
+
+                            supplier_name:
+                                product?.supplier_name ||
+                                product?.supplierName ||
+                                product?.supplier ||
+                                item?.supplier_name ||
+                                item?.supplierName ||
+                                "",
+                        };
+                    })
+                    .filter(Boolean);
+
+            setInventory(
+                mergedInventory
+            );
+        } catch (err) {
+            console.error(
+                "Inventory API Error:",
+                err
+            );
+
+            setInventory([]);
+
+            setError(
+                "Failed to load inventory from server"
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    /* =====================================================
+       FETCH CATEGORIES
+    ===================================================== */
+
+    const fetchCategories = async () => {
+        try {
+            const response =
+                await category.getAll();
+
             const data =
                 response?.data?.data ??
                 response?.data ??
                 response?.items ??
                 response?.content ??
-                response ??
-                [];
+                response;
 
-            const rows = Array.isArray(data)
-                ? data
-                : Array.isArray(data?.items)
-                    ? data.items
-                    : Array.isArray(data?.movements)
-                        ? data.movements
-                        : [];
-
-            // Keep the History modal focused on the selected product when
-            // product_id exists in the movements response.
-            const selectedProductId = Number(item?.product_id ?? item?.id);
-            const matchingRows = rows.filter((row) => {
-                if (row?.product_id == null || !selectedProductId) return true;
-                return Number(row.product_id) === selectedProductId;
-            });
-
-            setMovementRows(matchingRows);
-            console.log("INVENTORY MOVEMENTS RESPONSE =>", response);
+            if (Array.isArray(data)) {
+                setCategories(data);
+            } else {
+                setCategories([]);
+            }
         } catch (err) {
-            console.error("INVENTORY MOVEMENTS ERROR =>", err);
-            setMovementError(
-                err.response?.data?.detail ||
-                err.response?.data?.message ||
-                err.message ||
-                "Failed to load inventory movements"
+            console.error(
+                "Categories API Error:",
+                err
+            );
+
+            setCategories([]);
+        }
+    };
+
+    /* =====================================================
+       FETCH STORES
+    ===================================================== */
+
+    const fetchStores = async () => {
+        try {
+            const response =
+                await listStores();
+
+            const data =
+                response?.data?.data ??
+                response?.data ??
+                response?.items ??
+                response?.content ??
+                response;
+
+            if (Array.isArray(data)) {
+                setStores(data);
+
+                console.log(
+                    "Stores API Data =>",
+                    data
+                );
+            } else {
+                setStores([]);
+            }
+        } catch (err) {
+            console.error(
+                "Stores API Error =>",
+                err
+            );
+
+            setStores([]);
+        }
+    };
+
+    /* =====================================================
+       FETCH INVENTORY DASHBOARD
+    ===================================================== */
+
+    const fetchDashboard = async () => {
+        try {
+            const response =
+                await inventoryDashboard();
+
+            const dashboardData =
+                response?.data?.data ??
+                response?.data ??
+                response;
+
+            setDashboard(
+                dashboardData
+            );
+        } catch (err) {
+            console.error(
+                "Inventory Dashboard API Error =>",
+                err
+            );
+
+            setDashboard(null);
+        }
+    };
+
+    /* =====================================================
+   FETCH INVENTORY VALUATION
+===================================================== */
+
+const fetchValuation = async () => {
+    try {
+        const response = await getInventoryValuation();
+
+        console.log(
+            "INVENTORY VALUATION RESPONSE =>",
+            response
+        );
+
+        const valuationData =
+            response?.data?.data ??
+            response?.data ??
+            response;
+
+        const value =
+            valuationData?.total_inventory_value ??
+            valuationData?.totalInventoryValue ??
+            valuationData?.inventory_value ??
+            valuationData?.inventoryValue ??
+            0;
+
+        const numericValue = Number(value);
+
+        setValuation(
+            Number.isFinite(numericValue)
+                ? numericValue
+                : 0
+        );
+    } catch (err) {
+        console.error(
+            "Inventory Valuation API Error =>",
+            err
+        );
+
+        setValuation(0);
+    }
+};
+
+    /* =====================================================
+       FETCH LOW STOCK
+    ===================================================== */
+
+    const fetchLowStock = async () => {
+        try {
+            setLowStockLoading(true);
+            setLowStockError("");
+
+            const response =
+                await lowStock();
+
+            const data =
+                getArrayFromResponse(
+                    response
+                );
+
+            const mergedLowStock =
+                data
+                    .map((item) => {
+                        const product =
+                            productMap.get(
+                                Number(
+                                    item?.product_id
+                                )
+                            );
+
+                        if (!product) {
+                            return null;
+                        }
+
+                        const productName =
+                            String(
+                                product?.name ||
+                                    ""
+                            ).trim();
+
+                        const productSku =
+                            String(
+                                product?.sku ||
+                                    ""
+                            ).trim();
+
+                        if (
+                            !productName ||
+                            !productSku
+                        ) {
+                            return null;
+                        }
+
+                        const store =
+                            stores.find(
+                                (s) =>
+                                    Number(
+                                        s?.id
+                                    ) ===
+                                    Number(
+                                        item?.store_id
+                                    )
+                            );
+
+                        return {
+                            ...item,
+
+                            product_name:
+                                productName,
+
+                            sku: productSku,
+
+                            category:
+                                product?.category ||
+                                product?.category_name ||
+                                item?.category ||
+                                item?.category_name ||
+                                "",
+
+                            supplier_name:
+                                product?.supplier_name ||
+                                product?.supplierName ||
+                                product?.supplier ||
+                                item?.supplier_name ||
+                                item?.supplierName ||
+                                "",
+
+                            store_name:
+                                store?.name ||
+                                `Store #${item?.store_id}`,
+                        };
+                    })
+                    .filter(Boolean);
+
+            setLowStockItems(
+                mergedLowStock
+            );
+        } catch (err) {
+            console.error(
+                "LOW STOCK API ERROR:",
+                err
+            );
+
+            setLowStockError(
+                "Failed to load low stock items"
             );
         } finally {
-            setMovementLoading(false);
+            setLowStockLoading(false);
         }
     };
 
-    const handleOpenAdjust = (item) => {
-        setAdjustItem(item);
-        setAdjustQty("");
-        setAdjustReason("Adjustment");
-        setAdjustNotes("");
-        setAdjustError("");
-    };
-
-    const handleAdjustInventory = async () => {
-        const productId = Number(adjustItem?.product_id ?? adjustItem?.id);
-        const storeId = Number(adjustItem?.store_id);
-        const quantity = Number(adjustQty);
-
-        if (!productId) {
-            setAdjustError("Product ID is missing");
-            return;
-        }
-
-        if (!storeId) {
-            setAdjustError("Store ID is missing");
-            return;
-        }
-
-        if (!Number.isFinite(quantity) || quantity === 0) {
-            setAdjustError("Enter a non-zero adjustment quantity");
-            return;
-        }
-
+    /* =====================================================
+       FETCH RECENT STOCK MOVEMENTS
+       GET /api/v1/inventory/movements?store_id=8
+    ===================================================== */
+    const fetchMovements = async () => {
         try {
-            setAdjustLoading(true);
-            setAdjustError("");
+            setMovementsLoading(true);
+            setMovementsError("");
 
-            /*
-              IMPORTANT:
-              This payload uses the same product/store/quantity/notes naming
-              already used by this Inventory page for stock operations.
-              If Swagger shows a different required adjustment field name,
-              change only this payload to match that schema.
-            */
-            const payload = {
-                store_id: storeId,
-                product_id: productId,
-                quantity,
-                reason: adjustReason,
-                notes: adjustNotes || adjustReason,
-            };
+            const response = await listMovements(8);
 
-            console.log("ADJUST INVENTORY PAYLOAD =>", payload);
+            console.log(
+                "INVENTORY MOVEMENTS RESPONSE =>",
+                response
+            );
 
-            const response = await adjustInventory(payload);
-            console.log("ADJUST INVENTORY RESPONSE =>", response);
+            const data = getArrayFromResponse(response);
 
-            await fetchInventory();
-            await fetchLowStock();
-
-            try {
-                const valuationResponse = await getInventoryValuation();
-                setValuationData(valuationResponse);
-            } catch (valuationError) {
-                console.error("VALUATION REFRESH FAILED =>", valuationError);
+            if (!Array.isArray(data)) {
+                setMovements([]);
+                return;
             }
 
-            setAdjustItem(null);
-            setAdjustQty("");
-            setAdjustNotes("");
+            const recentMovements = data
+                .filter((movement) =>
+                    Number(movement?.store_id) === 8
+                )
+                .slice(0, 10)
+                .map((movement) => {
+                    const product = productMap.get(
+                        Number(movement?.product_id)
+                    );
+
+                    const store = stores.find(
+                        (item) =>
+                            Number(item?.id) ===
+                            Number(movement?.store_id)
+                    );
+
+                    return {
+                        ...movement,
+                        product_name:
+                            product?.name ||
+                            product?.product_name ||
+                            `Product #${movement?.product_id}`,
+                        sku: product?.sku || "",
+                        store_name:
+                            store?.name ||
+                            `Store #${movement?.store_id}`,
+                    };
+                });
+
+            setMovements(recentMovements);
         } catch (err) {
-            console.error("ADJUST INVENTORY ERROR =>", err);
-            setAdjustError(
-                err.response?.data?.detail?.[0]?.msg ||
-                err.response?.data?.detail ||
-                err.response?.data?.message ||
-                err.message ||
-                "Failed to adjust inventory"
+            console.error(
+                "INVENTORY MOVEMENTS API ERROR =>",
+                err
+            );
+
+            setMovements([]);
+            setMovementsError(
+                "Failed to load stock movements"
             );
         } finally {
-            setAdjustLoading(false);
+            setMovementsLoading(false);
         }
     };
 
-    // Local fallback values from the working inventory response
-    const totalValue = inventory.reduce(
-        (sum, i) => sum + getItemStock(i) * (i.costPrice || i.unit_cost || 0),
-        0
-    );
-    const lowStockCount = inventory.filter((i) => {
-        const qty = Number(getItemStock(i)) || 0;
-        const min = Number(getItemMinStock(i)) || 0;
+    /* =====================================================
+       INITIAL LOAD
+    ===================================================== */
 
-        // Low-stock group includes both:
-        // Qty < Min Stock  -> Critical
-        // Qty = Min Stock  -> Low Stock
-        return qty > 0 && min > 0 && qty <= min;
-    }).length;
+    useEffect(() => {
+        fetchProducts();
+        fetchStores();
+        fetchCategories();
+        fetchDashboard();
+        fetchValuation();
+        getInventoryExpiry();
 
-    const outOfStockCount = inventory.filter((i) => {
-        const qty = Number(getItemStock(i)) || 0;
-        return qty === 0;
-    }).length;
-    const totalItems = inventory.reduce((sum, i) => sum + getItemStock(i), 0);
 
-    // Normalize backend responses. If a field is absent, keep the current working
-    // inventory-derived value as a safe fallback instead of showing dummy data.
-    const dashboardPayload =
-        dashboardData?.data?.data ??
-        dashboardData?.data ??
-        dashboardData ??
-        {};
+    }, []);
 
-    // /inventory/valuation can come either as a direct object or inside Axios `data`.
-    // Keep this normalization separate so the Stock Value card always prefers
-    // the valuation endpoint instead of a dashboard fallback.
-    const valuationPayload =
-        valuationData?.data?.data ??
-        valuationData?.data ??
-        valuationData ??
-        {};
+    /* =====================================================
+       FETCH INVENTORY AFTER PRODUCTS
+    ===================================================== */
 
-    const expiryPayload =
-        expiryData?.data?.data ??
-        expiryData?.data ??
-        expiryData ??
-        null;
-
-    const toSafeNumber = (value, fallback = 0) => {
-        if (value === null || value === undefined || value === "") {
-            return Number(fallback) || 0;
+    useEffect(() => {
+        if (products.length > 0) {
+            fetchInventory();
+        } else {
+            setInventory([]);
         }
+    }, [products]);
 
-        if (typeof value === "number") {
-            return Number.isFinite(value) ? value : (Number(fallback) || 0);
+    /* =====================================================
+       LOW STOCK AFTER PRODUCTS + STORES
+    ===================================================== */
+
+    useEffect(() => {
+        if (
+            products.length > 0 &&
+            stores.length > 0
+        ) {
+            fetchLowStock();
+        } else {
+            setLowStockItems([]);
         }
+    }, [products, stores]);
 
-        const normalized = String(value)
-            .replace(/₹/g, "")
-            .replace(/,/g, "")
-            .trim();
+    /* =====================================================
+       MOVEMENTS AFTER PRODUCTS + STORES
+    ===================================================== */
 
-        const parsed = Number(normalized);
+    useEffect(() => {
+        if (products.length > 0 && stores.length > 0) {
+            fetchMovements();
+        } else {
+            setMovements([]);
+        }
+    }, [products, stores]);
 
-        return Number.isFinite(parsed) ? parsed : (Number(fallback) || 0);
+    /* =====================================================
+       SEARCH
+    ===================================================== */
+
+    const handleSearch = () => {
+        setPage(1);
     };
+
+    /* =====================================================
+       FILTER
+    ===================================================== */
+
+    const filtered =
+        inventory.filter((item) => {
+            const name =
+                item?.name || "";
+
+            const sku =
+                item?.sku || "";
+
+            const searchValue =
+                search
+                    .toLowerCase()
+                    .trim();
+
+            const matchSearch =
+                !searchValue ||
+                String(name)
+                    .toLowerCase()
+                    .includes(
+                        searchValue
+                    ) ||
+                String(sku)
+                    .toLowerCase()
+                    .includes(
+                        searchValue
+                    );
+
+            const warehouse =
+                `Store #${
+                    item?.store_id || ""
+                }`;
+
+            const matchWarehouse =
+                filterWarehouse ===
+                    "All Warehouses" ||
+                warehouse ===
+                    filterWarehouse;
+
+            const matchCat =
+                filterCat ===
+                    "All Categories" ||
+                String(
+                    item?.category_id
+                ) ===
+                    String(
+                        filterCat
+                    );
+
+            const supplier =
+                item?.supplier_name ||
+                "";
+
+            const matchSupplier =
+                filterSupplier ===
+                    "All Suppliers" ||
+                supplier ===
+                    filterSupplier;
+
+            const createdDate =
+                item?.created_at
+                    ? item.created_at.split(
+                          "T"
+                      )[0]
+                    : "";
+
+            const matchDate =
+                !filterDate ||
+                createdDate ===
+                    filterDate;
+
+            const st =
+                stockStatus(item);
+
+            const matchStatus =
+                filterStatus ===
+                    "All" ||
+                st.label ===
+                    filterStatus;
+
+            const matchTab =
+                activeTab ===
+                    "All Items" ||
+                st.label ===
+                    activeTab;
+
+            return (
+                matchSearch &&
+                matchWarehouse &&
+                matchCat &&
+                matchSupplier &&
+                matchDate &&
+                matchStatus &&
+                matchTab
+            );
+        });
+
+    /* =====================================================
+       PAGINATION
+    ===================================================== */
+
+    const totalPages =
+        Math.ceil(
+            filtered.length /
+                PAGE_SIZE
+        ) || 1;
+
+    const paginated =
+        filtered.slice(
+            (page - 1) *
+                PAGE_SIZE,
+            page * PAGE_SIZE
+        );
+
+    /* =====================================================
+       RESET PAGE
+    ===================================================== */
+
+    useEffect(() => {
+        setPage(1);
+    }, [
+        search,
+        filterCat,
+        filterStatus,
+        filterWarehouse,
+        filterSupplier,
+        filterDate,
+        activeTab,
+    ]);
+
+    /* =====================================================
+       STOCK UPDATE
+
+       SUPPORTS:
+
+       1. stock-in
+       2. stock-out
+       3. transfer
+       4. adjustment
+    ===================================================== */
+
+    const handleStockUpdate =
+        async (
+            item,
+            selectedProduct,
+            fromStore,
+            toStore,
+            action,
+            delta,
+            reason,
+            adjustmentType,
+            notes
+        ) => {
+            let payload;
+
+            /* =================================================
+               TRANSFER
+            ================================================= */
+
+            if (
+                action ===
+                "transfer"
+            ) {
+                payload = {
+                    from_store_id:
+                        Number(
+                            fromStore
+                        ),
+
+                    to_store_id:
+                        Number(
+                            toStore
+                        ),
+
+                    product_id:
+                        Number(
+                            selectedProduct
+                        ),
+
+                    quantity:
+                        Number(delta),
+
+                    notes:
+                        notes ||
+                        reason,
+                };
+            }
+
+            /* =================================================
+               ADJUSTMENT
+
+               POST
+               /api/v1/inventory/adjustment
+
+               Body:
+
+               {
+                 "store_id": 8,
+                 "product_id": 21,
+                 "quantity": 5,
+                 "adjustment_type": "increase",
+                 "reason": "Stock correction"
+               }
+            ================================================= */
+
+            else if (
+                action ===
+                "adjustment"
+            ) {
+                payload = {
+                    store_id:
+                        Number(
+                            fromStore
+                        ),
+
+                    product_id:
+                        Number(
+                            selectedProduct
+                        ),
+
+                    quantity:
+                        Number(delta),
+
+                    adjustment_type:
+                        adjustmentType ===
+                        "decrease"
+                            ? "decrease"
+                            : "increase",
+
+                    reason:
+                        notes ||
+                        reason ||
+                        "Stock correction",
+                };
+            }
+
+            /* =================================================
+               STOCK IN / STOCK OUT
+            ================================================= */
+
+            else {
+                payload = {
+                    store_id:
+                        Number(
+                            fromStore
+                        ),
+
+                    product_id:
+                        Number(
+                            selectedProduct
+                        ),
+
+                    quantity:
+                        Number(delta),
+
+                    notes:
+                        notes ||
+                        reason,
+                };
+            }
+
+            console.log(
+                "FINAL STOCK PAYLOAD =>",
+                payload
+            );
+
+            try {
+                /* =================================================
+                   STOCK IN
+                ================================================= */
+
+                if (
+                    action === "add"
+                ) {
+                    await stockIn(
+                        payload
+                    );
+                }
+
+                /* =================================================
+                   STOCK OUT
+                ================================================= */
+
+                else if (
+                    action ===
+                    "remove"
+                ) {
+                    await stockOut(
+                        payload
+                    );
+                }
+
+                /* =================================================
+                   ADJUSTMENT
+                ================================================= */
+
+                else if (
+                    action ===
+                    "adjustment"
+                ) {
+                    console.log(
+                        "ADJUSTMENT API PAYLOAD =>",
+                        payload
+                    );
+
+                    const adjustmentResponse =
+                        await adjustInventory(
+                            payload
+                        );
+
+                    console.log(
+                        "ADJUSTMENT API RESPONSE =>",
+                        adjustmentResponse
+                    );
+                }
+
+                /* =================================================
+                   PURCHASE
+                ================================================= */
+
+                else if (
+                    action ===
+                    "purchase"
+                ) {
+                    alert(
+                        "Purchase Order feature is under development"
+                    );
+
+                    return;
+                }
+
+                /* =================================================
+                   TRANSFER
+                ================================================= */
+
+                else if (
+                    action ===
+                    "transfer"
+                ) {
+                    await transferStock(
+                        payload
+                    );
+                }
+
+                /* =================================================
+                   REFRESH AFTER SUCCESS
+                ================================================= */
+
+                await fetchInventory();
+
+                await fetchDashboard();
+                await fetchMovements();
+
+                if (
+                    products.length >
+                        0 &&
+                    stores.length >
+                        0
+                ) {
+                    await fetchLowStock();
+                }
+            } catch (err) {
+                console.error(
+                    "FULL STOCK UPDATE ERROR =>",
+                    err
+                );
+
+                console.error(
+                    "ERROR RESPONSE =>",
+                    err?.response
+                );
+
+                console.error(
+                    "ERROR STATUS =>",
+                    err?.response?.status
+                );
+
+                console.error(
+                    "ERROR DATA =>",
+                    err?.response?.data
+                );
+
+                throw err;
+            }
+        };
+
+    /* =====================================================
+       CALCULATED KPI FALLBACK
+    ===================================================== */
+
+    const totalItems =
+        inventory.reduce(
+            (sum, item) =>
+                sum +
+                getItemStock(item),
+            0
+        );
+
+    const lowStockCount =
+        inventory.filter(
+            (item) => {
+                const stock =
+                    getItemStock(
+                        item
+                    );
+
+                const minStock =
+                    getItemMinStock(
+                        item
+                    );
+
+                return (
+                    stock > 0 &&
+                    minStock > 0 &&
+                    stock <=
+                        minStock
+                );
+            }
+        ).length;
+
+    const outOfStockCount =
+        inventory.filter(
+            (item) =>
+                getItemStock(
+                    item
+                ) <= 0
+        ).length;
+
+    /* =====================================================
+       DASHBOARD KPI HELPERS
+    ===================================================== */
+
+    const getDashboardNumber =
+        (...keys) => {
+            if (
+                !dashboard ||
+                typeof dashboard !==
+                    "object"
+            ) {
+                return null;
+            }
+
+            for (const key of keys) {
+                const value =
+                    dashboard?.[key];
+
+                if (
+                    value !==
+                        undefined &&
+                    value !== null &&
+                    value !== "" &&
+                    Number.isFinite(
+                        Number(value)
+                    )
+                ) {
+                    return Number(
+                        value
+                    );
+                }
+            }
+
+            return null;
+        };
 
     const dashboardTotalSkus =
-        dashboardPayload?.total_skus ??
-        dashboardPayload?.total_products ??
-        dashboardPayload?.sku_count ??
-        inventory.length;
+        getDashboardNumber(
+            "total_skus",
+            "totalSku",
+            "total_sku",
+            "total_products",
+            "totalProducts",
+            "sku_count",
+            "skuCount"
+        );
 
     const dashboardTotalUnits =
-        dashboardPayload?.total_stock ??
-        dashboardPayload?.total_stock_units ??
-        dashboardPayload?.total_units ??
-        dashboardPayload?.stock_units ??
-        totalItems;
+        getDashboardNumber(
+            "total_stock_units",
+            "totalStockUnits",
+            "total_stock",
+            "totalStock",
+            "total_quantity",
+            "totalQuantity",
+            "stock_units",
+            "stockUnits"
+        );
 
     const dashboardLowStock =
-        dashboardPayload?.low_stock_items ??
-        dashboardPayload?.low_stock_count ??
-        dashboardPayload?.low_stock ??
-        lowStockCount;
+        getDashboardNumber(
+            "low_stock_alerts",
+            "lowStockAlerts",
+            "low_stock_count",
+            "lowStockCount",
+            "low_stock_items",
+            "lowStockItems"
+        );
 
     const dashboardOutOfStock =
-        dashboardPayload?.out_of_stock_count ??
-        dashboardPayload?.out_of_stock ??
-        outOfStockCount;
+        getDashboardNumber(
+            "out_of_stock",
+            "outOfStock",
+            "out_of_stock_count",
+            "outOfStockCount",
+            "out_of_stock_items",
+            "outOfStockItems"
+        );
 
-    // IMPORTANT: Stock Value should come from GET /inventory/valuation.
-    // Support the common response field names while keeping the current
-    // inventory calculation as a final fallback.
-    const valuationValue = toSafeNumber(
-        valuationPayload?.total_inventory_value ??
-        valuationPayload?.total_stock_value ??
-        valuationPayload?.stock_value ??
-        valuationPayload?.total_value ??
-        valuationPayload?.inventory_value ??
-        valuationPayload?.valuation ??
-        valuationPayload?.total_valuation ??
-        valuationPayload?.value ??
-        valuationPayload?.grand_total,
-        totalValue
-    );
+    const kpis = [
+        {
+            label: "Total SKUs",
 
-    console.log("VALUATION API DATA =>", valuationData);
-    console.log("VALUATION PAYLOAD =>", valuationPayload);
-    console.log("STOCK VALUE USED IN CARD =>", valuationValue);
+            value:
+                dashboardTotalSkus ??
+                inventory.length,
 
-    const expiryList = Array.isArray(expiryPayload)
-        ? expiryPayload
-        : Array.isArray(expiryPayload?.items)
-            ? expiryPayload.items
-            : Array.isArray(expiryPayload?.content)
-                ? expiryPayload.content
-                : [];
+            icon: <BsBoxSeam />,
 
-    const expiredCount = Number(
-        dashboardPayload?.expired_products ??
-        expiryPayload?.expired_count ??
-        expiryPayload?.total_expired ??
-        expiryPayload?.count ??
-        expiryList.length
-    );
-     console.log("InventoryTable Props =>", {
-    paginated,
-    length: paginated?.length,
-  });
+            color: "#4f46e5",
 
+            bg: "#eef2ff",
+        },
+
+        {
+            label:
+                "Total Stock Units",
+
+            value: (
+                dashboardTotalUnits ??
+                totalItems
+            ).toLocaleString(
+                "en-IN"
+            ),
+
+            icon: <BsBoxes />,
+
+            color: "#059669",
+
+            bg: "#ecfdf5",
+        },
+
+        {
+            label:
+                "Low Stock Alerts",
+
+            value:
+                dashboardLowStock ??
+                lowStockCount,
+
+            icon: (
+                <BsExclamationTriangle />
+            ),
+
+            color: "#d97706",
+
+            bg: "#fffbeb",
+        },
+
+        {
+            label:
+                "Out of Stock",
+
+            value:
+                dashboardOutOfStock ??
+                outOfStockCount,
+
+            icon: <BsXCircle />,
+
+            color: "#dc2626",
+
+            bg: "#fef2f2",
+        },
+
+        {
+    label: "Inventory Value",
+
+    value: fmt(valuation),
+
+    icon: <BsBoxes />,
+
+    color: "#7c3aed",
+
+    bg: "#f5f3ff",
+},
+    ];
+
+    /* =====================================================
+       REFRESH
+    ===================================================== */
+
+    const handleRefresh =
+        async () => {
+            try {
+                setLoading(true);
+
+                await Promise.all([
+                    fetchProducts(),
+                    fetchStores(),
+                    fetchCategories(),
+                    fetchDashboard(),
+                    fetchValuation(),
+                    fetchMovements(),
+                ]);
+            } catch (err) {
+                console.error(
+                    "REFRESH ERROR =>",
+                    err
+                );
+            } finally {
+                setLoading(false);
+            }
+        };
+
+    /* =====================================================
+       UI
+    ===================================================== */
 
     return (
-        <div className="dash-page">
-            {loading && (
-                <div style={{ padding: "10px", color: "#6366f1", fontWeight: 600 }}>
-                    Loading inventory data...
+        <div className="inv-page">
+            <div className="inv-container">
+
+                {/* TOP BAR */}
+
+                <div className="inv-topbar">
+                    <div>
+                        <div className="inv-eyebrow">
+                            <span className="inv-eyebrow-dot" />
+                            Inventory Management
+                        </div>
+
+                        <h1 className="inv-title">
+                            Inventory Dashboard
+                        </h1>
+                    </div>
+
+                    <div className="inv-header-actions">
+                        <div className="inv-status">
+                            <span className="inv-status-dot" />
+                            Live inventory
+                        </div>
+
+                        <button
+                            type="button"
+                            className="inv-refresh-btn"
+                            onClick={
+                                handleRefresh
+                            }
+                            disabled={
+                                loading
+                            }
+                        >
+                            {loading
+                                ? "Refreshing..."
+                                : "↻ Refresh"}
+                        </button>
+                    </div>
                 </div>
-            )}
 
-            {error && (
-                <div style={{ padding: "10px", color: "#ef4444", fontWeight: 600 }}>
-                    {error}
-                </div>
-            )}
+                {/* LOADING */}
 
-            <div style={{ marginBottom: 16 }}>
-                <InventoryCards
-                    totalProducts={Number(dashboardTotalSkus || 0)}
-                    stockValue={valuationValue}
-                    availableStock={Number(dashboardTotalUnits || 0)}
-                    lowStock={Number(dashboardLowStock || 0)}
-                    outOfStock={Number(outOfStockCount || 0)}
-                    expiredProducts={Number(expiredCount || 0)}
-                />
-            </div>
+                {loading && (
+                    <div className="inv-message loading">
+                        <span className="inv-spinner" />
+                        Loading latest inventory data...
+                    </div>
+                )}
 
-            <div
-                style={{
-                    width: "100%",
-                    marginBottom: 18,
-                    display: "grid",
-                    gridTemplateColumns:
-                        "minmax(280px, 2fr) repeat(3, minmax(150px, 1fr)) minmax(82px, auto)",
-                    gap: 12,
-                    alignItems: "center",
-                    background: "#ffffff",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 12,
-                    padding: "14px 16px",
-                    boxShadow:
-                        "0 1px 2px rgba(15, 23, 42, 0.03), 0 4px 12px rgba(15, 23, 42, 0.04)",
-                    boxSizing: "border-box",
-                }}
-            >
-                <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => {
-                        setSearch(e.target.value);
-                        setPage(1);
-                    }}
-                    placeholder="Search product or SKU..."
-                    style={{
-                        width: "100%",
-                        height: 40,
-                        padding: "0 12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: 8,
-                        outline: "none",
-                        background: "#ffffff",
-                        color: "#374151",
-                        fontSize: 12,
-                        boxSizing: "border-box",
-                    }}
-                />
+                {/* ERROR */}
 
-                <select
-                    value={filterWarehouse}
-                    onChange={(e) => {
-                        setFilterWarehouse(e.target.value);
-                        setPage(1);
-                    }}
-                    style={{
-                        width: "100%",
-                        height: 40,
-                        padding: "0 12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: 8,
-                        background: "#ffffff",
-                        color: "#374151",
-                        fontSize: 12,
-                        outline: "none",
-                        boxSizing: "border-box",
-                    }}
-                >
-                    <option value="All Warehouses">All Stores</option>
-                    {storeOptions.map((store) => (
-                        <option key={store.id} value={String(store.id)}>
-                            {store.name}
-                        </option>
-                    ))}
-                </select>
+                {error && (
+                    <div className="inv-message error">
+                        {error}
+                    </div>
+                )}
 
-                <select
-                    value={filterCat}
-                    onChange={(e) => {
-                        setFilterCat(e.target.value);
-                        setPage(1);
-                    }}
-                    style={{
-                        width: "100%",
-                        height: 40,
-                        padding: "0 12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: 8,
-                        background: "#ffffff",
-                        color: "#374151",
-                        fontSize: 12,
-                        outline: "none",
-                        boxSizing: "border-box",
-                    }}
-                >
-                    <option value="All Categories">All Categories</option>
-                    {categoryOptions.map((cat) => (
-                        <option key={cat.id} value={String(cat.id)}>
-                            {cat.name}
-                        </option>
-                    ))}
-                </select>
+                {/* KPI */}
 
-                <select
-                    value={filterStatus}
-                    onChange={(e) => {
-                        setFilterStatus(e.target.value);
-                        setPage(1);
-                    }}
-                    style={{
-                        width: "100%",
-                        height: 40,
-                        padding: "0 12px",
-                        border: "1px solid #d1d5db",
-                        borderRadius: 8,
-                        background: "#ffffff",
-                        color: "#374151",
-                        fontSize: 12,
-                        outline: "none",
-                        boxSizing: "border-box",
-                    }}
-                >
-                    <option value="All">All Status</option>
-                    <option value="In Stock">In Stock</option>
-                    <option value="Low Stock">Low Stock</option>
-                    <option value="Critical">Critical</option>
-                    <option value="Out of Stock">Out of Stock</option>
-                </select>
-
-                <button
-                    type="button"
-                    className="adm-btn-secondary"
-                    style={{
-                        height: 40,
-                        minWidth: 82,
-                        padding: "0 16px",
-                        borderRadius: 8,
-                        whiteSpace: "nowrap",
-                    }}
-                    onClick={() => {
-                        setSearch("");
-                        setFilterWarehouse("All Warehouses");
-                        setFilterCat("All Categories");
-                        setFilterStatus("All");
-                        setPage(1);
-                    }}
-                >
-                    Clear
-                </button>
-            </div>
-
-            <div
-                style={{
-                    width: "100%",
-                    marginBottom: 18,
-                    boxSizing: "border-box",
-                }}
-            >
-                <InventoryHeader
-                    totalItems={inventory.length}
-                    lowStockCount={lowStockCount}
-                    outOfStockCount={outOfStockCount}
-                    activeTab={activeTab}
-                    setActiveTab={setActiveTab}
-                    setStockModal={setStockModal}
-                />
-            </div>
-
-            <div style={{ marginBottom: 16 }}>
-                <InventoryTable
-                    paginated={paginated}
-                    stockStatus={stockStatus}
-                    fmt={fmt}
-                    setStockModal={setStockModal}
-                    onView={handleViewInventory}
-                    onHistory={handleViewMovements}
-                    onAdjust={handleOpenAdjust}
-                />
-            </div>
-
-            {totalPages > 1 && (
                 <div
                     style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "12px 16px",
-                        marginBottom: 34,
+                        width: "100%",
+                        display: "grid",
+                        gridTemplateColumns:
+                            "repeat(5, minmax(0, 1fr))",
+                        gap: "16px",
+                        margin:
+                            "16px 0 20px",
+                        boxSizing:
+                            "border-box",
                     }}
                 >
-                    <span style={{ fontSize: 12, color: "#6b7280" }}>
-                        Showing {(page - 1) * PAGE_SIZE + 1}–
-                        {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
-                    </span>
-
-                    <div style={{ display: "flex", gap: 6 }}>
-                        <button
-                            className="adm-btn-secondary"
-                            disabled={page === 1}
-                            onClick={() => setPage(page - 1)}
-                        >
-                            <BsChevronLeft />
-                        </button>
-
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                            <button
-                                key={p}
-                                type="button"
-                                className="adm-btn-secondary"
-                                onClick={() => setPage(p)}
-                                style={{
-                                    minWidth: 34,
-                                    fontWeight: page === p ? 700 : 500,
-                                }}
-                            >
-                                {p}
-                            </button>
-                        ))}
-
-                        <button
-                            className="adm-btn-secondary"
-                            disabled={page === totalPages}
-                            onClick={() => setPage(page + 1)}
-                        >
-                            <BsChevronRight />
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* VIEW INVENTORY DETAILS */}
-            {(viewInventoryLoading || viewInventoryItem || viewInventoryError) && (
-                <div className="ec-modal-overlay" onClick={() => {
-                    if (!viewInventoryLoading) {
-                        setViewInventoryItem(null);
-                        setViewInventoryError("");
-                    }
-                }}>
-                    <div
-                        className="ec-modal"
-                        style={{ maxWidth: 560 }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="ec-modal-header">
-                            <div>
-                                <h3 style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>
-                                    Inventory Details
-                                </h3>
-                                <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
-                                    GET /inventory/{"{product_id}"}
-                                </p>
-                            </div>
-                            <button
-                                className="ec-modal-close"
-                                onClick={() => {
-                                    setViewInventoryItem(null);
-                                    setViewInventoryError("");
-                                }}
-                                disabled={viewInventoryLoading}
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        {viewInventoryLoading ? (
-                            <div style={{ padding: 16 }}>Loading inventory details...</div>
-                        ) : viewInventoryError ? (
-                            <div style={{ padding: 16, color: "#ef4444" }}>
-                                {String(viewInventoryError)}
-                            </div>
-                        ) : (
+                    {kpis.map(
+                        (item) => (
                             <div
+                                key={
+                                    item.label
+                                }
                                 style={{
-                                    display: "grid",
-                                    gridTemplateColumns: "1fr 1fr",
-                                    gap: 12,
-                                    paddingTop: 8,
+                                    width: "100%",
+                                    minWidth: 0,
+                                    height: "110px",
+                                    background:
+                                        "#ffffff",
+                                    border:
+                                        "1px solid #e5e7eb",
+                                    borderRadius:
+                                        "10px",
+                                    padding:
+                                        "16px 18px",
+                                    boxSizing:
+                                        "border-box",
+                                    boxShadow:
+                                        "0 2px 8px rgba(0,0,0,0.04)",
+                                    display:
+                                        "flex",
+                                    flexDirection:
+                                        "column",
+                                    justifyContent:
+                                        "space-between",
                                 }}
                             >
-                                {[
-                                    ["Product", viewInventoryItem?.name || viewInventoryItem?.product_name || `Product #${viewInventoryItem?.product_id ?? viewInventoryItem?.id ?? "-"}`],
-                                    ["Product ID", viewInventoryItem?.product_id ?? viewInventoryItem?.id ?? "-"],
-                                    ["Store ID", viewInventoryItem?.store_id ?? "-"],
-                                    ["Store", viewInventoryItem?.store_name || viewInventoryItem?.store?.name || "-"],
-                                    ["SKU", viewInventoryItem?.sku || "-"],
-                                    ["Quantity", viewInventoryItem?.quantity ?? viewInventoryItem?.stock ?? 0],
-                                    ["Reorder Level", viewInventoryItem?.low_stock_threshold ?? viewInventoryItem?.minStock ?? 0],
-                                    ["Status", stockStatus(viewInventoryItem || {}).label],
-                                ].map(([label, value]) => (
-                                    <div
-                                        key={label}
+                                <div
+                                    style={{
+                                        display:
+                                            "flex",
+                                        alignItems:
+                                            "center",
+                                        justifyContent:
+                                            "space-between",
+                                        width: "100%",
+                                    }}
+                                >
+                                    <span
                                         style={{
-                                            border: "1px solid #e5e7eb",
-                                            borderRadius: 8,
-                                            padding: "10px 12px",
+                                            fontSize:
+                                                "12px",
+                                            lineHeight:
+                                                "18px",
+                                            fontWeight: 600,
+                                            color:
+                                                "#6b7280",
                                         }}
                                     >
-                                        <div style={{ fontSize: 11, color: "#9ca3af" }}>{label}</div>
-                                        <div style={{ marginTop: 4, fontWeight: 600, color: "#111827" }}>
-                                            {String(value)}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
+                                        {
+                                            item.label
+                                        }
+                                    </span>
 
-            {/* INVENTORY MOVEMENT HISTORY */}
-            {movementItem && (
-                <div className="ec-modal-overlay" onClick={() => setMovementItem(null)}>
-                    <div
-                        className="ec-modal"
-                        style={{ maxWidth: 760 }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="ec-modal-header">
-                            <div>
-                                <h3 style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>
-                                    Stock Movement History
-                                </h3>
-                                <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
-                                    {movementItem?.name || movementItem?.product_name || `Product #${movementItem?.product_id ?? movementItem?.id}`}
-                                </p>
+                                    <span
+                                        style={{
+                                            width: "30px",
+                                            height: "30px",
+                                            display:
+                                                "flex",
+                                            alignItems:
+                                                "center",
+                                            justifyContent:
+                                                "center",
+                                            borderRadius:
+                                                "8px",
+                                            color:
+                                                item.color,
+                                            background:
+                                                item.bg,
+                                            fontSize:
+                                                "15px",
+                                        }}
+                                    >
+                                        {
+                                            item.icon
+                                        }
+                                    </span>
+                                </div>
+
+                                <div
+                                    style={{
+                                        fontSize:
+                                            "28px",
+                                        lineHeight:
+                                            "34px",
+                                        fontWeight: 700,
+                                        color:
+                                            "#111827",
+                                    }}
+                                >
+                                    {
+                                        item.value
+                                    }
+                                </div>
                             </div>
-                            <button className="ec-modal-close" onClick={() => setMovementItem(null)}>
-                                ✕
-                            </button>
+                        )
+                    )}
+                </div>
+
+                {/* LOW STOCK */}
+
+                <section className="inv-card">
+                    <div className="inv-card-heading">
+                        <div>
+                            <h2 className="inv-section-title">
+                                Low Stock Alerts
+                            </h2>
+
+                            <p className="inv-section-description">
+                                Products that have
+                                reached or fallen below
+                                their reorder level.
+                            </p>
+                        </div>
+                    </div>
+
+                    <LowStockAlert
+                        loading={
+                            lowStockLoading
+                        }
+                        error={
+                            lowStockError
+                        }
+                        items={
+                            lowStockItems
+                        }
+                    />
+                </section>
+
+                {/* RECENT STOCK MOVEMENTS */}
+
+                <section className="inv-card" style={{ marginTop: "20px" }}>
+                    <div className="inv-card-heading">
+                        <div>
+                            <h2 className="inv-section-title">
+                                Recent Stock Movements
+                            </h2>
+                            <p className="inv-section-description">
+                                Latest inventory movements for Store #8.
+                            </p>
                         </div>
 
-                        {movementLoading ? (
-                            <div style={{ padding: 16 }}>Loading stock movements...</div>
-                        ) : movementError ? (
-                            <div style={{ padding: 16, color: "#ef4444" }}>
-                                {String(movementError)}
-                            </div>
-                        ) : movementRows.length === 0 ? (
-                            <div style={{ padding: 16, color: "#6b7280" }}>
-                                No movement history found.
-                            </div>
-                        ) : (
-                            <div style={{ overflowX: "auto", marginTop: 10 }}>
-                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                                    <thead>
-                                        <tr>
-                                            {["Type", "Quantity", "Store", "Notes", "Date"].map((heading) => (
-                                                <th
-                                                    key={heading}
-                                                    style={{
-                                                        textAlign: "left",
-                                                        padding: "10px 8px",
-                                                        borderBottom: "1px solid #e5e7eb",
-                                                        color: "#6b7280",
-                                                    }}
-                                                >
-                                                    {heading}
-                                                </th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {movementRows.map((row, index) => (
-                                            <tr key={row?.id ?? index}>
-                                                <td style={{ padding: "10px 8px", borderBottom: "1px solid #f3f4f6" }}>
-                                                    {row?.movement_type || row?.type || row?.action || "-"}
+                        <button
+                            type="button"
+                            className="inv-refresh-btn"
+                            onClick={fetchMovements}
+                            disabled={movementsLoading}
+                        >
+                            {movementsLoading
+                                ? "Loading..."
+                                : "↻ Refresh"}
+                        </button>
+                    </div>
+
+                    {movementsError && (
+                        <div className="inv-message error">
+                            {movementsError}
+                        </div>
+                    )}
+
+                    {movementsLoading ? (
+                        <div className="inv-message loading">
+                            <span className="inv-spinner" />
+                            Loading recent stock movements...
+                        </div>
+                    ) : movements.length === 0 ? (
+                        <div
+                            style={{
+                                padding: "24px",
+                                textAlign: "center",
+                                color: "#6b7280",
+                                border: "1px solid #e5e7eb",
+                                borderRadius: "8px",
+                                background: "#fafafa",
+                            }}
+                        >
+                            No stock movements found for Store #8.
+                        </div>
+                    ) : (
+                        <div
+                            style={{
+                                width: "100%",
+                                overflowX: "auto",
+                                border: "1px solid #e5e7eb",
+                                borderRadius: "8px",
+                            }}
+                        >
+                            <table
+                                style={{
+                                    width: "100%",
+                                    borderCollapse: "collapse",
+                                    minWidth: "760px",
+                                }}
+                            >
+                                <thead>
+                                    <tr style={{ background: "#f9fafb" }}>
+                                        {[
+                                            "Movement ID",
+                                            "Product",
+                                            "Type",
+                                            "Quantity",
+                                            "Store",
+                                            "Notes",
+                                            "Date & Time",
+                                        ].map((heading) => (
+                                            <th
+                                                key={heading}
+                                                style={{
+                                                    padding: "12px 14px",
+                                                    textAlign: "left",
+                                                    fontSize: "12px",
+                                                    fontWeight: 700,
+                                                    color: "#6b7280",
+                                                    borderBottom: "1px solid #e5e7eb",
+                                                    whiteSpace: "nowrap",
+                                                }}
+                                            >
+                                                {heading}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {movements.map((movement) => {
+                                        const type = String(
+                                            movement?.movement_type || ""
+                                        ).toLowerCase();
+
+                                        const typeLabel = type
+                                            .replace(/_/g, " ")
+                                            .replace(/\b\w/g, (char) =>
+                                                char.toUpperCase()
+                                            );
+
+                                        const typeColor =
+                                            type === "stock_in"
+                                                ? "#059669"
+                                                : type === "stock_out"
+                                                ? "#dc2626"
+                                                : type === "transfer"
+                                                ? "#2563eb"
+                                                : "#d97706";
+
+                                        const typeBg =
+                                            type === "stock_in"
+                                                ? "#ecfdf5"
+                                                : type === "stock_out"
+                                                ? "#fef2f2"
+                                                : type === "transfer"
+                                                ? "#eff6ff"
+                                                : "#fffbeb";
+
+                                        return (
+                                            <tr key={movement?.id}>
+                                                <td style={movementCellStyle}>
+                                                    #{movement?.id ?? "-"}
                                                 </td>
-                                                <td style={{ padding: "10px 8px", borderBottom: "1px solid #f3f4f6" }}>
-                                                    {row?.quantity ?? row?.qty ?? row?.adjustment ?? "-"}
+                                                <td style={movementCellStyle}>
+                                                    <div style={{ fontWeight: 600, color: "#111827" }}>
+                                                        {movement?.product_name || "-"}
+                                                    </div>
+                                                    {movement?.sku && (
+                                                        <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "2px" }}>
+                                                            SKU: {movement.sku}
+                                                        </div>
+                                                    )}
                                                 </td>
-                                                <td style={{ padding: "10px 8px", borderBottom: "1px solid #f3f4f6" }}>
-                                                    {row?.store_name || row?.store?.name || row?.store_id || "-"}
+                                                <td style={movementCellStyle}>
+                                                    <span
+                                                        style={{
+                                                            display: "inline-flex",
+                                                            alignItems: "center",
+                                                            padding: "5px 9px",
+                                                            borderRadius: "999px",
+                                                            fontSize: "11px",
+                                                            fontWeight: 700,
+                                                            color: typeColor,
+                                                            background: typeBg,
+                                                            whiteSpace: "nowrap",
+                                                        }}
+                                                    >
+                                                        {typeLabel || "-"}
+                                                    </span>
                                                 </td>
-                                                <td style={{ padding: "10px 8px", borderBottom: "1px solid #f3f4f6" }}>
-                                                    {row?.notes || row?.reason || "-"}
+                                                <td style={{ ...movementCellStyle, fontWeight: 700 }}>
+                                                    {Number(movement?.quantity ?? 0).toLocaleString("en-IN")}
                                                 </td>
-                                                <td style={{ padding: "10px 8px", borderBottom: "1px solid #f3f4f6" }}>
-                                                    {row?.created_at
-                                                        ? new Date(row.created_at).toLocaleString("en-GB")
-                                                        : row?.updated_at
-                                                            ? new Date(row.updated_at).toLocaleString("en-GB")
-                                                            : "-"}
+                                                <td style={movementCellStyle}>
+                                                    {movement?.store_name || `Store #${movement?.store_id ?? "-"}`}
+                                                </td>
+                                                <td style={{ ...movementCellStyle, maxWidth: "220px" }}>
+                                                    {movement?.notes || "-"}
+                                                </td>
+                                                <td style={{ ...movementCellStyle, whiteSpace: "nowrap" }}>
+                                                    {movement?.created_at
+                                                        ? new Date(movement.created_at).toLocaleString("en-IN", {
+                                                              day: "2-digit",
+                                                              month: "short",
+                                                              year: "numeric",
+                                                              hour: "2-digit",
+                                                              minute: "2-digit",
+                                                          })
+                                                        : "-"}
                                                 </td>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </section>
 
-            {/* ADJUST INVENTORY */}
-            {adjustItem && (
-                <div className="ec-modal-overlay" onClick={() => {
-                    if (!adjustLoading) setAdjustItem(null);
-                }}>
-                    <div
-                        className="ec-modal"
-                        style={{ maxWidth: 460 }}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="ec-modal-header">
+                {/* FILTERS */}
+
+                <section className="inv-card inv-filter-card">
+                    <div className="inv-filter-inner">
+                        <div className="inv-card-heading">
                             <div>
-                                <h3 style={{ fontWeight: 700, fontSize: 16, color: "#111827" }}>
-                                    Adjust Inventory
-                                </h3>
-                                <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
-                                    {adjustItem?.name || adjustItem?.product_name || `Product #${adjustItem?.product_id ?? adjustItem?.id}`}
-                                    {" · "}Current: {getItemStock(adjustItem)}
+                                <h2 className="inv-section-title">
+                                    Inventory Filters
+                                </h2>
+
+                                <p className="inv-section-description">
+                                    Quickly narrow
+                                    inventory by
+                                    product,
+                                    warehouse,
+                                    category,
+                                    supplier or
+                                    stock status.
                                 </p>
                             </div>
-                            <button
-                                className="ec-modal-close"
-                                onClick={() => setAdjustItem(null)}
-                                disabled={adjustLoading}
-                            >
-                                ✕
-                            </button>
                         </div>
 
-                        {adjustError && (
-                            <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 10 }}>
-                                {String(adjustError)}
-                            </div>
-                        )}
-
-                        <div className="ec-field">
-                            <label>Adjustment Quantity</label>
-                            <input
-                                className="ec-input"
-                                type="number"
-                                value={adjustQty}
-                                onChange={(e) => setAdjustQty(e.target.value)}
-                                placeholder="Example: 5 or -3"
-                            />
-                            <div style={{ marginTop: 5, fontSize: 11, color: "#6b7280" }}>
-                                Use a positive value to increase and a negative value to decrease.
-                            </div>
-                        </div>
-
-                        <div className="ec-field">
-                            <label>Reason</label>
-                            <select
-                                className="ec-input"
-                                value={adjustReason}
-                                onChange={(e) => setAdjustReason(e.target.value)}
-                            >
-                                {["Adjustment", "Physical Count", "Damaged", "Expired", "Correction", "Return"].map((reason) => (
-                                    <option key={reason} value={reason}>
-                                        {reason}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="ec-field">
-                            <label>Notes (Optional)</label>
-                            <input
-                                className="ec-input"
-                                value={adjustNotes}
-                                onChange={(e) => setAdjustNotes(e.target.value)}
-                                placeholder="Reason for stock correction..."
-                            />
-                        </div>
-
-                        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                            <button
-                                type="button"
-                                className="adm-btn-secondary"
-                                onClick={() => setAdjustItem(null)}
-                                disabled={adjustLoading}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="button"
-                                className="adm-btn-primary"
-                                onClick={handleAdjustInventory}
-                                disabled={adjustLoading}
-                            >
-                                {adjustLoading ? "Saving..." : "Adjust Stock"}
-                            </button>
-                        </div>
+                        <InventoryFilters
+                            search={
+                                search
+                            }
+                            setSearch={
+                                setSearch
+                            }
+                            inventory={
+                                inventory
+                            }
+                            products={
+                                products
+                            }
+                            stores={
+                                stores
+                            }
+                            categories={
+                                categories
+                            }
+                            filterWarehouse={
+                                filterWarehouse
+                            }
+                            setFilterWarehouse={
+                                setFilterWarehouse
+                            }
+                            filterCat={
+                                filterCat
+                            }
+                            setFilterCat={
+                                setFilterCat
+                            }
+                            filterSupplier={
+                                filterSupplier
+                            }
+                            setFilterSupplier={
+                                setFilterSupplier
+                            }
+                            filterStatus={
+                                filterStatus
+                            }
+                            setFilterStatus={
+                                setFilterStatus
+                            }
+                            filterDate={
+                                filterDate
+                            }
+                            setFilterDate={
+                                setFilterDate
+                            }
+                            onSearch={
+                                handleSearch
+                            }
+                        />
                     </div>
-                </div>
-            )}
+                </section>
 
-            {stockModal && (
-                <StockUpdateModal
-                    item={stockModal}
-                    products={products}
-                    stores={stores}
-                    onClose={() => setStockModal(null)}
-                    onSave={handleStockUpdate}
-                />
-            )}
+                {/* TABLE */}
+
+                <section className="inv-card">
+                    <InventoryHeader
+                        totalItems={
+                            inventory.length
+                        }
+                        lowStockCount={
+                            lowStockCount
+                        }
+                        outOfStockCount={
+                            outOfStockCount
+                        }
+                        activeTab={
+                            activeTab
+                        }
+                        setActiveTab={
+                            setActiveTab
+                        }
+                        setStockModal={
+                            setStockModal
+                        }
+                    />
+
+                    <div className="inv-table-wrap">
+                        <InventoryTable
+                            paginated={
+                                paginated
+                            }
+                            stockStatus={
+                                stockStatus
+                            }
+                            fmt={fmt}
+                            setStockModal={
+                                setStockModal
+                            }
+                        />
+                    </div>
+
+                    {/* PAGINATION */}
+
+                    {totalPages >
+                        1 && (
+                        <div className="inv-pagination">
+                            <span className="inv-pagination-info">
+                                Showing{" "}
+                                <strong>
+                                    {(page -
+                                        1) *
+                                        PAGE_SIZE +
+                                        1}
+                                    –
+                                    {Math.min(
+                                        page *
+                                            PAGE_SIZE,
+                                        filtered.length
+                                    )}
+                                </strong>{" "}
+                                of{" "}
+                                <strong>
+                                    {
+                                        filtered.length
+                                    }
+                                </strong>{" "}
+                                items
+                            </span>
+
+                            <div className="inv-page-buttons">
+                                <button
+                                    type="button"
+                                    className="inv-page-btn"
+                                    disabled={
+                                        page ===
+                                        1
+                                    }
+                                    onClick={() =>
+                                        setPage(
+                                            page -
+                                                1
+                                        )
+                                    }
+                                    aria-label="Previous page"
+                                >
+                                    <BsChevronLeft />
+                                </button>
+
+                                {Array.from(
+                                    {
+                                        length:
+                                            totalPages,
+                                    },
+                                    (_, i) =>
+                                        i + 1
+                                ).map(
+                                    (p) => (
+                                        <button
+                                            type="button"
+                                            key={
+                                                p
+                                            }
+                                            className={`inv-page-btn ${
+                                                p ===
+                                                page
+                                                    ? "active"
+                                                    : ""
+                                            }`}
+                                            onClick={() =>
+                                                setPage(
+                                                    p
+                                                )
+                                            }
+                                        >
+                                            {
+                                                p
+                                            }
+                                        </button>
+                                    )
+                                )}
+
+                                <button
+                                    type="button"
+                                    className="inv-page-btn"
+                                    disabled={
+                                        page ===
+                                        totalPages
+                                    }
+                                    onClick={() =>
+                                        setPage(
+                                            page +
+                                                1
+                                        )
+                                    }
+                                    aria-label="Next page"
+                                >
+                                    <BsChevronRight />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </section>
+
+                {/* STOCK MODAL */}
+
+                {stockModal && (
+                    <StockUpdateModal
+                        item={
+                            stockModal
+                        }
+                        products={
+                            products
+                        }
+                        stores={
+                            stores
+                        }
+                        onClose={() =>
+                            setStockModal(
+                                null
+                            )
+                        }
+                        onSave={
+                            handleStockUpdate
+                        }
+                    />
+                )}
+            </div>
         </div>
     );
-   }
+};
+
 export default Inventory;

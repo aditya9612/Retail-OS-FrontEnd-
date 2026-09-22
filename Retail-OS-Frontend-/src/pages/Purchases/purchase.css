@@ -1,0 +1,413 @@
+/* =====================================================
+   PURCHASE PAGE
+===================================================== */
+
+.purchase-page-content {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  /* PAGE VERTICAL SCROLL */
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+}
+
+/* =====================================================
+   PAGE SCROLLBAR
+===================================================== */
+
+.purchase-page-content::-webkit-scrollbar {
+  width: 7px;
+}
+
+.purchase-page-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 10px;
+}
+
+.purchase-page-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.purchase-page-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* =====================================================
+   PAGE HEADER
+===================================================== */
+
+.purchase-page-content .adm-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.purchase-page-content .adm-page-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.purchase-page-content .adm-page-sub {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.purchase-page-content .adm-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* =====================================================
+   BUTTONS
+===================================================== */
+
+.purchase-page-content .adm-btn-primary,
+.purchase-page-content .adm-btn-secondary {
+  border: none;
+  border-radius: 7px;
+  padding: 8px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.purchase-page-content .adm-btn-primary {
+  background: #6366f1;
+  color: #ffffff;
+  box-shadow: 0 2px 5px rgba(99, 102, 241, 0.18);
+}
+
+.purchase-page-content .adm-btn-primary:hover {
+  background: #4f46e5;
+  transform: translateY(-1px);
+}
+
+.purchase-page-content .adm-btn-secondary {
+  background: #ffffff;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}
+
+.purchase-page-content .adm-btn-secondary:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.purchase-page-content .adm-btn-secondary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* =====================================================
+   KPI CARDS
+===================================================== */
+
+.purchase-page-content .adm-kpi-card {
+  background: #ffffff;
+  border: 1px solid #e8eaf0;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.purchase-page-content .adm-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.06);
+}
+
+/* =====================================================
+   INPUTS
+===================================================== */
+
+.purchase-page-content .ec-input {
+  width: 100%;
+  height: 38px;
+  box-sizing: border-box;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 12px;
+  padding: 0 11px;
+  outline: none;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.purchase-page-content .ec-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+}
+
+.purchase-page-content .ec-input::placeholder {
+  color: #9ca3af;
+}
+
+/* =====================================================
+   SEARCH / FILTER
+===================================================== */
+
+.purchase-page-content select.ec-input {
+  cursor: pointer;
+}
+
+/* =====================================================
+   TABLE
+===================================================== */
+
+.purchase-page-content .chart-card {
+  background: #ffffff;
+  border: 1px solid #e8eaf0;
+  border-radius: 12px;
+}
+
+.purchase-page-content table {
+  min-width: 900px;
+}
+
+.purchase-page-content thead th {
+  background: #f9fafb;
+}
+
+.purchase-page-content tbody tr {
+  transition: background 0.15s ease;
+}
+
+.purchase-page-content tbody tr:hover {
+  background: #fafafa;
+}
+
+.purchase-page-content tbody td {
+  vertical-align: middle;
+}
+
+/* =====================================================
+   PAYMENT TAG
+===================================================== */
+
+.purchase-page-content .adm-mode-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 20px;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* =====================================================
+   MODAL OVERLAY
+===================================================== */
+
+.purchase-page-content .ec-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(3px);
+}
+
+/* =====================================================
+   MODAL
+===================================================== */
+
+.purchase-page-content .ec-modal {
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+  animation: purchaseModalIn 0.2s ease-out;
+}
+
+@keyframes purchaseModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* =====================================================
+   MODAL HEADER
+===================================================== */
+
+.purchase-page-content .ec-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.purchase-page-content .ec-modal-close {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 7px;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.purchase-page-content .ec-modal-close:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* =====================================================
+   FORM
+===================================================== */
+
+.purchase-page-content .ec-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.purchase-page-content .ec-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.purchase-page-content .ec-field label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+}
+
+.purchase-page-content .ec-field .ec-input {
+  height: 40px;
+}
+
+/* =====================================================
+   PAGINATION
+===================================================== */
+
+.purchase-page-content .chart-card > div:last-child button {
+  transition: all 0.15s ease;
+}
+
+.purchase-page-content
+  .chart-card
+  > div:last-child
+  button:hover:not(:disabled) {
+  border-color: #6366f1;
+  color: #6366f1;
+}
+
+/* =====================================================
+   MODAL SCROLLBAR
+===================================================== */
+
+.purchase-page-content .ec-modal::-webkit-scrollbar {
+  width: 6px;
+}
+
+.purchase-page-content .ec-modal::-webkit-scrollbar-track {
+  background: #f9fafb;
+}
+
+.purchase-page-content .ec-modal::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 10px;
+}
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
+
+@media (max-width: 1100px) {
+  .purchase-page-content {
+    overflow-x: hidden;
+  }
+
+  .purchase-page-content .chart-card {
+    overflow-x: auto !important;
+  }
+
+  .purchase-page-content table {
+    min-width: 900px;
+  }
+}
+
+@media (max-width: 768px) {
+  .purchase-page-content .adm-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .purchase-page-content .adm-header-actions {
+    width: 100%;
+  }
+
+  .purchase-page-content .adm-header-actions button {
+    width: 100%;
+  }
+
+  .purchase-page-content .ec-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .purchase-page-content .ec-modal {
+    max-height: 94vh;
+    padding: 17px;
+  }
+
+  .purchase-page-content > div:nth-child(3) {
+    grid-template-columns: 1fr 1fr !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .purchase-page-content .adm-page-title {
+    font-size: 20px;
+  }
+
+  .purchase-page-content > div:nth-child(3) {
+    grid-template-columns: 1fr !important;
+  }
+
+  .purchase-page-content .ec-modal-overlay {
+    padding: 10px;
+  }
+
+  .purchase-page-content .ec-modal {
+    border-radius: 10px;
+  }
+}

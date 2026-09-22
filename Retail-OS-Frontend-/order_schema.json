@@ -1,0 +1,44 @@
+{
+  "tags": [
+    "orders"
+  ],
+  "summary": "Create Order",
+  "operationId": "create_order_api_v1_orders_post",
+  "security": [
+    {
+      "HTTPBearer": []
+    }
+  ],
+  "requestBody": {
+    "required": true,
+    "content": {
+      "application/json": {
+        "schema": {
+          "$ref": "#/components/schemas/OrderCreate"
+        }
+      }
+    }
+  },
+  "responses": {
+    "201": {
+      "description": "Successful Response",
+      "content": {
+        "application/json": {
+          "schema": {
+            "$ref": "#/components/schemas/OrderResponse"
+          }
+        }
+      }
+    },
+    "422": {
+      "description": "Validation Error",
+      "content": {
+        "application/json": {
+          "schema": {
+            "$ref": "#/components/schemas/HTTPValidationError"
+          }
+        }
+      }
+    }
+  }
+}

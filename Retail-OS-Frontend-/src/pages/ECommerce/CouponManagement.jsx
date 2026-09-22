@@ -4,7 +4,7 @@ import {
     BsXCircleFill, BsTagFill, BsPercent, BsCurrencyRupee, BsTruck,
     BsPeople, BsClockHistory, BsInfoCircle, BsEye, BsEyeSlash,
 } from 'react-icons/bs';
-import { getCoupons, createCoupon, updateCoupon, deleteCoupon, getActiveCoupons, getExpiredCoupons, getCouponStats, activateCoupon, deactivateCoupon, getCoupon } from '../../services/couponService';
+import { getCoupons, createCoupon, updateCoupon, deleteCoupon, getActiveCoupons, getExpiredCoupons, getCouponStats, activateCoupon, deactivateCoupon, getCoupon, validateCoupon, applyCoupon } from '../../services/couponService';
 
 
 
@@ -73,6 +73,7 @@ const CouponManagement = () => {
     const [coupons, setCoupons] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [apiAvailable, setApiAvailable] = useState(true); // tracks if backend coupon module exists
     const [search, setSearch] = useState('');
     const [filterType, setFilterType] = useState('All Types');
     const [filterStatus, setFilterStatus] = useState('All');
@@ -90,6 +91,12 @@ const CouponManagement = () => {
     const [activatingId, setActivatingId] = useState(null);
     const [deactivatingId, setDeactivatingId] = useState(null);
 
+    // Test Coupon Feature
+    const [showTestModal, setShowTestModal] = useState(false);
+    const [testForm, setTestForm] = useState({ code: '', amount: '' });
+    const [testResult, setTestResult] = useState(null);
+    const [testLoading, setTestLoading] = useState(false);
+
     const fetchCoupons = () => {
         let active = true;
         setLoading(true);
@@ -97,13 +104,21 @@ const CouponManagement = () => {
         getCoupons()
             .then(data => {
                 if (active) {
-                    setCoupons(data.map(mapBackendToFrontend));
+                    setApiAvailable(true);
+                    const arr = Array.isArray(data) ? data : (data.items || data.data || []);
+                    setCoupons(arr.map(mapBackendToFrontend));
                 }
             })
             .catch(err => {
                 console.error('[CouponManagement] Fetch error:', err);
                 if (active) {
-                    setError('Failed to fetch coupons from server.');
+                    // 404 means the coupon module is not deployed yet on the backend
+                    if (err.message && (err.message.includes('404') || err.message.includes('Not Found') || err.message.includes('Request failed (404)'))) {
+                        setApiAvailable(false);
+                        setError(''); // don't show red error banner, show the orange notice instead
+                    } else {
+                        setError(err.message || 'Failed to fetch coupons from server.');
+                    }
                 }
             })
             .finally(() => {
@@ -123,7 +138,10 @@ const CouponManagement = () => {
         setStatsLoading(true);
         getCouponStats()
             .then(data => { if (alive) setApiStats(data); })
-            .catch(err => console.error('[CouponManagement] Stats error:', err))
+            .catch(err => {
+                console.error('[CouponManagement] Stats error:', err);
+                // silently ignore 404 — stats endpoint may not exist yet
+            })
             .finally(() => { if (alive) setStatsLoading(false); });
         return () => { alive = false; };
     }, []);
@@ -134,8 +152,13 @@ const CouponManagement = () => {
         if (activeTab !== 'active') return;
         setActiveLoading(true);
         getActiveCoupons()
-            .then(data => { if (alive) setActiveCoupons(data.map(mapBackendToFrontend)); })
-            .catch(err => console.error('[CouponManagement] Active coupons error:', err))
+            .then(data => {
+                if (alive) {
+                    const arr = Array.isArray(data) ? data : (data.items || data.data || []);
+                    setActiveCoupons(arr.map(mapBackendToFrontend));
+                }
+            })
+            .catch(err => console.error('[CouponManagement] Active coupons error (may be 404 if not deployed):', err))
             .finally(() => { if (alive) setActiveLoading(false); });
         return () => { alive = false; };
     }, [activeTab]);
@@ -146,8 +169,13 @@ const CouponManagement = () => {
         if (activeTab !== 'expired') return;
         setExpiredLoading(true);
         getExpiredCoupons()
-            .then(data => { if (alive) setExpiredCoupons(data.map(mapBackendToFrontend)); })
-            .catch(err => console.error('[CouponManagement] Expired coupons error:', err))
+            .then(data => {
+                if (alive) {
+                    const arr = Array.isArray(data) ? data : (data.items || data.data || []);
+                    setExpiredCoupons(arr.map(mapBackendToFrontend));
+                }
+            })
+            .catch(err => console.error('[CouponManagement] Expired coupons error (may be 404 if not deployed):', err))
             .finally(() => { if (alive) setExpiredLoading(false); });
         return () => { alive = false; };
     }, [activeTab]);
@@ -296,6 +324,40 @@ const CouponManagement = () => {
         }
     };
 
+    const handleTestCoupon = async () => {
+        if (!testForm.code || !testForm.amount) return;
+        setTestLoading(true);
+        setTestResult(null);
+        try {
+            const data = await validateCoupon(testForm.code, testForm.amount);
+            setTestResult({ success: data.valid, message: data.message });
+        } catch (err) {
+            setTestResult({ success: false, message: err.message || 'Validation failed.' });
+        } finally {
+            setTestLoading(false);
+        }
+    };
+
+    const handleApplyCoupon = async () => {
+        if (!testForm.code || !testForm.amount) return;
+        setTestLoading(true);
+        setTestResult(null);
+        try {
+            const data = await applyCoupon(testForm.code, testForm.amount);
+            setTestResult({
+                success: true,
+                message: data.message || 'Applied successfully',
+                original: data.original_amount,
+                discount: data.discount_amount,
+                final: data.final_amount
+            });
+        } catch (err) {
+            setTestResult({ success: false, message: err.message || 'Failed to apply coupon.' });
+        } finally {
+            setTestLoading(false);
+        }
+    };
+
     // Stats — prefer live API data, fall back to local counts
     const stats = [
         {
@@ -337,12 +399,46 @@ const CouponManagement = () => {
                     <h1 className="adm-page-title">🏷️ Coupon Management</h1>
                     <p className="adm-page-sub">Create and manage discount coupons for your online store</p>
                 </div>
-                <div className="adm-header-actions">
+                <div className="adm-header-actions" style={{ display: 'flex', gap: 10 }}>
+                    <button className="adm-btn-secondary" onClick={() => { setShowTestModal(true); setTestResult(null); setTestForm({ code: '', amount: '' }); }}>
+                        🧪 Test Coupon
+                    </button>
                     <button className="adm-btn-primary" onClick={openAdd}>
                         <BsPlus size={17} /> New Coupon
                     </button>
                 </div>
             </div>
+
+            {/* API Unavailable Banner */}
+            {!apiAvailable && (
+                <div style={{
+                    background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+                    border: '1.5px solid #fb923c',
+                    borderRadius: 12,
+                    padding: '16px 20px',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 14,
+                }}>
+                    <span style={{ fontSize: 24, flexShrink: 0 }}>🔌</span>
+                    <div>
+                        <p style={{ fontWeight: 700, color: '#c2410c', fontSize: 14, marginBottom: 4 }}>
+                            Coupon API Not Available (404)
+                        </p>
+                        <p style={{ fontSize: 13, color: '#9a3412', lineHeight: 1.5 }}>
+                            The <code style={{ background: '#fed7aa', padding: '1px 5px', borderRadius: 4, fontSize: 12 }}>/api/v1/coupons</code> endpoint is returning <strong>404 Not Found</strong>.
+                            This means the Coupon module has not been deployed on the backend server yet.
+                            Please ask your backend team to deploy the coupon API routes.
+                        </p>
+                        <button
+                            onClick={fetchCoupons}
+                            style={{ marginTop: 10, padding: '6px 14px', background: '#ea580c', color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                        >
+                            🔄 Retry Connection
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Stats — from /api/v1/coupons/stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
@@ -805,6 +901,72 @@ const CouponManagement = () => {
                             </div>
                         </div>
                     )}
+
+                    {/* Test Coupon Modal */}
+                    {showTestModal && (
+                        <div className="ec-modal-overlay" onClick={() => setShowTestModal(false)}>
+                            <div className="ec-modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+                                <div className="ec-modal-header">
+                                    <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>🧪 Validate Coupon</h3>
+                                    <button className="ec-modal-close" onClick={() => setShowTestModal(false)}>✕</button>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+                                    <div className="ec-field">
+                                        <label>Coupon Code *</label>
+                                        <input className="ec-input" placeholder="e.g. MEGA300" value={testForm.code}
+                                            onChange={e => setTestForm(f => ({ ...f, code: e.target.value.toUpperCase() }))} style={{ fontFamily: 'monospace', fontWeight: 700, letterSpacing: 1 }} />
+                                    </div>
+                                    <div className="ec-field">
+                                        <label>Order Amount (₹) *</label>
+                                        <input className="ec-input" type="number" min="0" placeholder="e.g. 1500" value={testForm.amount}
+                                            onChange={e => setTestForm(f => ({ ...f, amount: e.target.value }))} />
+                                    </div>
+
+                                    {testResult && (
+                                        <div style={{
+                                            marginTop: 6, padding: '10px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                                            background: testResult.success ? '#ecfdf5' : '#fef2f2',
+                                            color: testResult.success ? '#047857' : '#b91c1c',
+                                            border: `1px solid ${testResult.success ? '#a7f3d0' : '#fecaca'}`
+                                        }}>
+                                            <div style={{ display: 'flex', gap: 6, marginBottom: testResult.final ? 8 : 0 }}>
+                                                <span>{testResult.success ? '✅' : '❌'}</span>
+                                                <span>{testResult.message}</span>
+                                            </div>
+
+                                            {testResult.final && (
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, background: '#fff', padding: 10, borderRadius: 6, border: '1px solid #d1fae5', color: '#374151', fontSize: 12 }}>
+                                                    <div>
+                                                        <span style={{ color: '#6b7280', fontSize: 10, textTransform: 'uppercase' }}>Subtotal</span>
+                                                        <p style={{ fontWeight: 700 }}>₹{testResult.original}</p>
+                                                    </div>
+                                                    <div>
+                                                        <span style={{ color: '#6b7280', fontSize: 10, textTransform: 'uppercase' }}>Discount</span>
+                                                        <p style={{ fontWeight: 700, color: '#10b981' }}>-₹{testResult.discount}</p>
+                                                    </div>
+                                                    <div style={{ gridColumn: '1/-1', borderTop: '1px solid #e5e7eb', paddingTop: 6, marginTop: 2 }}>
+                                                        <span style={{ color: '#6b7280', fontSize: 10, textTransform: 'uppercase' }}>Final Amount</span>
+                                                        <p style={{ fontWeight: 800, fontSize: 14 }}>₹{testResult.final}</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                                        <button className="adm-btn-secondary" style={{ flex: 0.8, justifyContent: 'center' }} onClick={() => setShowTestModal(false)} disabled={testLoading}>Close</button>
+                                        <button className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center', background: '#3b82f6' }} onClick={handleTestCoupon} disabled={testLoading || !testForm.code || !testForm.amount}>
+                                            {testLoading ? '...' : 'Validate Only'}
+                                        </button>
+                                        <button className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center', background: '#10b981' }} onClick={handleApplyCoupon} disabled={testLoading || !testForm.code || !testForm.amount}>
+                                            {testLoading ? '...' : 'Simulate Apply'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </>
             )}
         </div>
@@ -812,4 +974,3 @@ const CouponManagement = () => {
 };
 
 export default CouponManagement;
-

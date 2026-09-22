@@ -1,5 +1,10 @@
 import React from "react";
 import "./InventoryFilters.css";
+import {
+  FiRotateCcw,
+  FiSearch,
+  FiDownload,
+} from "react-icons/fi";
 
 const InventoryFilters = ({
   search,
@@ -14,11 +19,10 @@ const InventoryFilters = ({
   setFilterWarehouse,
 
   filterCat,
-setFilterCat,
+  setFilterCat,
 
-
-filterSupplier,
-setFilterSupplier,
+  filterSupplier,
+  setFilterSupplier,
 
   filterStatus,
   setFilterStatus,
@@ -27,10 +31,16 @@ setFilterSupplier,
   setFilterDate,
 
   onSearch,
-}) =>  {
+}) => {
+  console.log(
+    "CATEGORIES INSIDE FILTERS =>",
+    categories
+  );
 
-  console.log("CATEGORIES INSIDE FILTERS =>", categories);
-console.log("CATEGORIES LENGTH =>", categories?.length);
+  console.log(
+    "CATEGORIES LENGTH =>",
+    categories?.length
+  );
 
   return (
     <div className="inventory-filters">
@@ -38,135 +48,228 @@ console.log("CATEGORIES LENGTH =>", categories?.length);
       {/* Header */}
       <div className="filters-header">
         <h2>Inventory Filters</h2>
-        <p>Filter inventory records quickly using the options below.</p>
+
+        <p>
+          Filter inventory records quickly using the options below.
+        </p>
       </div>
 
-      {/* Search */}
-      <div className="filter-group">
-        <label>Search Product</label>
-       <input
-  type="text"
-  placeholder="Search by Product Name / SKU / Barcode"
-  value={search}
-  onChange={(e) => setSearch(e.target.value)}
-/>
-      </div>
-<div className="filter-group">
-  <label>Warehouse</label>
+      {/* =========================
+          FIRST ROW
+          Search Product + Created Date
+      ========================= */}
 
-  <select
-    value={filterWarehouse}
-    onChange={(e) => setFilterWarehouse(e.target.value)}
-  >
-    <option value="All Warehouses">All Warehouses</option>
+      <div className="filters-row filters-row-top">
 
-    {(stores || []).map((store) => (
-      <option key={store.id} value={store.name}>
-        {store.name}
-      </option>
-    ))}
-  </select>
-</div>
- 
-   {/* Category */}
-<div className="filter-group">
-  <label>Category</label>
+        {/* Search Product */}
+        <div className="filter-group search-product-group">
+          <label>Search Product</label>
 
-  <select
-    value={filterCat}
-    onChange={(e) => setFilterCat(e.target.value)}
-  >
-    <option value="All Categories">All Categories</option>
+          <input
+            type="text"
+            placeholder="Search by Product Name / SKU / Barcode"
+            value={search}
+            onChange={(e) =>
+              setSearch(e.target.value)
+            }
+          />
+        </div>
 
-    {(categories || []).map((cat) => (
-      <option key={cat.id} value={cat.id}>
-        {cat.name}
-      </option>
-    ))}
-  </select>
-</div>
+        {/* Created Date */}
+        <div className="filter-group created-date-group">
+          <label>Created Date</label>
 
+          <input
+            type="date"
+            value={filterDate}
+            onChange={(e) =>
+              setFilterDate(e.target.value)
+            }
+          />
+        </div>
 
-
-
-      
-      {/* Supplier */}
-<div className="filter-group">
-  <label>Supplier</label>
-
-  <select
-    value={filterSupplier}
-    onChange={(e) => setFilterSupplier(e.target.value)}
-  >
-    <option value="All Suppliers">All Suppliers</option>
-
-    {[...new Set(
-      (inventory || [])
-  .map(item => item.supplier_name)
-        .filter(Boolean)
-    )].map(supplier => (
-      <option key={supplier} value={supplier}>
-        {supplier}
-      </option>
-    ))}
-  </select>
-</div>
-   
-
-      {/* Stock Status */}
-      <div className="filter-group">
-        <label>Stock Status</label>
-      <select
-  value={filterStatus}
-  onChange={(e) => setFilterStatus(e.target.value)}
->
-  <option>All</option>
-  <option>In Stock</option>
-  <option>Low Stock</option>
-  <option>Out of Stock</option>
-</select>
       </div>
 
-      {/* Date */}
-<div className="filter-group">
-  <label>Created Date</label>
+      {/* =========================
+          SECOND ROW
+          Warehouse + Category +
+          Supplier + Stock Status
+      ========================= */}
 
-  <input
-    type="date"
-    value={filterDate}
-    onChange={(e) => setFilterDate(e.target.value)}
-  />
-</div>
+      <div className="filters-row filters-row-middle">
 
-      {/* Buttons */}
-<div className="filter-actions">
+        {/* Warehouse */}
+        <div className="filter-group">
+          <label>Warehouse</label>
 
-  <button
-    className="reset-btn"
-    onClick={() => {
-      setSearch("");
-      setFilterWarehouse("All Warehouses");
-      setFilterCat("All Categories");
-      setFilterSupplier("All Suppliers");
-      setFilterStatus("All");
-      setFilterDate("");
+          <select
+            value={filterWarehouse}
+            onChange={(e) =>
+              setFilterWarehouse(e.target.value)
+            }
+          >
+            <option value="All Warehouses">
+              All Warehouses
+            </option>
 
-      onSearch();
-    }}
-  >
-    Reset
-  </button>
+            {(stores || []).map((store) => (
+              <option
+                key={store.id}
+                value={store.name}
+              >
+                {store.name}
+              </option>
+            ))}
+          </select>
+        </div>
 
-  <button
-    className="search-btn"
-    onClick={onSearch}
-  >
-    Search
-  </button>
+        {/* Category */}
+        <div className="filter-group">
+          <label>Category</label>
 
-  <button className="export-btn">
-    Export
-  </button>
+          <select
+            value={filterCat}
+            onChange={(e) =>
+              setFilterCat(e.target.value)
+            }
+          >
+            <option value="All Categories">
+              All Categories
+            </option>
+
+            {(categories || []).map((cat) => (
+              <option
+                key={cat.id}
+                value={cat.id}
+              >
+                {cat.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Supplier */}
+        <div className="filter-group">
+          <label>Supplier</label>
+
+          <select
+            value={filterSupplier}
+            onChange={(e) =>
+              setFilterSupplier(e.target.value)
+            }
+          >
+            <option value="All Suppliers">
+              All Suppliers
+            </option>
+
+            {[
+              ...new Set(
+                (inventory || [])
+                  .map(
+                    (item) =>
+                      item.supplier_name
+                  )
+                  .filter(Boolean)
+              ),
+            ].map((supplier) => (
+              <option
+                key={supplier}
+                value={supplier}
+              >
+                {supplier}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Stock Status */}
+        <div className="filter-group">
+          <label>Stock Status</label>
+
+          <select
+            value={filterStatus}
+            onChange={(e) =>
+              setFilterStatus(e.target.value)
+            }
+          >
+            <option value="All">
+              All
+            </option>
+
+            <option value="In Stock">
+              In Stock
+            </option>
+
+            <option value="Low Stock">
+              Low Stock
+            </option>
+
+            <option value="Out of Stock">
+              Out of Stock
+            </option>
+          </select>
+        </div>
+
+      </div>
+
+      {/* =========================
+          THIRD ROW
+          ICON BUTTONS
+      ========================= */}
+
+      <div className="filter-actions">
+
+        {/* Reset */}
+        <button
+          type="button"
+          className="reset-btn"
+          onClick={() => {
+            setSearch("");
+
+            setFilterWarehouse(
+              "All Warehouses"
+            );
+
+            setFilterCat(
+              "All Categories"
+            );
+
+            setFilterSupplier(
+              "All Suppliers"
+            );
+
+            setFilterStatus("All");
+
+            setFilterDate("");
+
+            onSearch();
+          }}
+          title="Reset Filters"
+          aria-label="Reset Filters"
+        >
+          <FiRotateCcw size={18} />
+        </button>
+
+        {/* Search */}
+        <button
+          type="button"
+          className="search-btn"
+          onClick={onSearch}
+          title="Search"
+          aria-label="Search"
+        >
+          <FiSearch size={18} />
+        </button>
+
+        {/* Export */}
+        <button
+          type="button"
+          className="export-btn"
+          title="Export"
+          aria-label="Export"
+        >
+          <FiDownload size={18} />
+        </button>
 
       </div>
 
@@ -174,4 +277,4 @@ console.log("CATEGORIES LENGTH =>", categories?.length);
   );
 };
 
-export default InventoryFilters
+export default InventoryFilters;

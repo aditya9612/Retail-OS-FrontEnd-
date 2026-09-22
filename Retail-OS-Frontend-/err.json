@@ -1,0 +1,7 @@
+Status: 401
+{
+  "detail": {
+    "success": false,
+    "message": "Not authenticated"
+  }
+}

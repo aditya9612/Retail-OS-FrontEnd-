@@ -8,3 +8,5 @@ export default defineConfig({
     tailwindcss(),
   ],
 });
+// Trigger Vite restart to recognize country-state-city dependency
+// Second restart to ensure cache is cleared

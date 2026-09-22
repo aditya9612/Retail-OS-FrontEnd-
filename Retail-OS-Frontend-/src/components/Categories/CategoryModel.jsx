@@ -3,17 +3,14 @@ import "./CategoryModel.css";
 
 const CategoryModel = ({ category, onClose, onSave }) => {
   const [name, setName] = useState("");
-  const [status, setStatus] = useState("Active");
   const [description, setDescription] = useState("");
 
   useEffect(() => {
     if (category) {
       setName(category.name || "");
-      setStatus(category.status || "Active");
       setDescription(category.description || "");
     } else {
       setName("");
-      setStatus("Active");
       setDescription("");
     }
   }, [category]);
@@ -26,8 +23,8 @@ const CategoryModel = ({ category, onClose, onSave }) => {
 
     const categoryData = {
       name: name.trim(),
-      status: status,
       description: description.trim(),
+      parent_id: category?.parent_id ?? null,
     };
 
     onSave(categoryData);
@@ -41,7 +38,9 @@ const CategoryModel = ({ category, onClose, onSave }) => {
       >
         {/* Header */}
         <div className="modal-header">
-          <h2>{category ? "Edit Category" : "Add Category"}</h2>
+          <h2>
+            {category ? "Edit Category" : "Add Category"}
+          </h2>
 
           <button
             type="button"
@@ -54,7 +53,6 @@ const CategoryModel = ({ category, onClose, onSave }) => {
 
         {/* Body */}
         <div className="modal-body">
-
           {/* Category Name */}
           <div className="form-group">
             <label>Category Name</label>
@@ -67,19 +65,6 @@ const CategoryModel = ({ category, onClose, onSave }) => {
             />
           </div>
 
-          {/* Status */}
-          <div className="form-group">
-            <label>Status</label>
-
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-          </div>
-
           {/* Description */}
           <div className="form-group">
             <label>Description</label>
@@ -87,11 +72,12 @@ const CategoryModel = ({ category, onClose, onSave }) => {
             <textarea
               placeholder="Enter Category Description"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) =>
+                setDescription(e.target.value)
+              }
               rows="4"
             />
           </div>
-
         </div>
 
         {/* Footer */}

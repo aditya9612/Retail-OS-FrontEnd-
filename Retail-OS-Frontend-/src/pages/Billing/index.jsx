@@ -31,18 +31,41 @@ const PAYMENT_MODES = [
     { id: 'Card', label: 'Card', icon: <BsCreditCard2Front size={15} /> },
 ];
 
+/** Generate sequential invoice numbers like INV-2024011, INV-2024012, … */
+const nextInvoiceNo = () => {
+    const year = new Date().getFullYear();
+    const prefix = `INV-${year}`;
+    try {
+        const stored = localStorage.getItem('gst_invoices');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                // Find the highest sequential number across all stored invoices
+                let max = 0;
+                parsed.forEach(inv => {
+                    const m = inv.id && inv.id.match(/^INV-\d{4}(\d{3,})$/);
+                    if (m) max = Math.max(max, parseInt(m[1], 10));
+                });
+                return `${prefix}${String(max + 1).padStart(3, '0')}`;
+            }
+        }
+    } catch (_) { }
+    // Fallback: start from 001 in current year
+    return `${prefix}001`;
+};
+
 const Billing = () => {
     const [customer, setCustomer] = useState({ name: '', phone: '', gstin: '' });
     const [cart, setCart] = useState([]);
     const [serverCart, setServerCart] = useState(null); // last server cart response
     const [cartLoading, setCartLoading] = useState(true);  // initial fetch
-    const [cartLoadError, setCartLoadError] = useState(''); // non-blocking load error
+    const [offlineMode, setOfflineMode] = useState(false); // true = API unavailable, working locally
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [discountType, setDiscountType] = useState('percentage');
     const [billDiscount, setBillDiscount] = useState(0);
     const [paymentMode, setPaymentMode] = useState('Cash');
-    const [invoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
+    const [invoiceNo, setInvoiceNo] = useState(() => nextInvoiceNo());
     const [showPreview, setShowPreview] = useState(false);
     const [scannerValue, setScannerValue] = useState('');
     const [addingItemId, setAddingItemId] = useState(null);
@@ -51,14 +74,18 @@ const Billing = () => {
     const [couponCode, setCouponCode] = useState('');
     const [discountApplied, setDiscountApplied] = useState(false); // true = server confirmed
     const [discountLoading, setDiscountLoading] = useState(false);
+    // ── Barcode & Scanner state ────────────────────────────────────────────
+    const [showBarcodeModal, setShowBarcodeModal] = useState(false);
+    const [lastScanned, setLastScanned] = useState(null);
+    const [manualBarcodeInput, setManualBarcodeInput] = useState('');
     // ─────────────────────────────────────────────────────────────────────
     const scanInputRef = useRef(null);
 
     const products = [
         { id: 1, name: 'Premium Cotton T-Shirt', price: 899, hsn: '6109', gstRate: 5, category: 'Apparel', barcode: '1001', image: '👕' },
-        { id: 2, name: 'Parle-G Biscuits 800g', price: 10, hsn: '19053100', gstRate: 12, category: 'Groceries', barcode: '1002', image: '🍪', discount: 5 },
+        { id: 2, name: 'Parle-G Biscuits 800g', price: 85, hsn: '19053100', gstRate: 12, category: 'Groceries', barcode: '1002', image: '🍪', discount: 5 },
         { id: 3, name: 'Leather Slim Wallet', price: 1299, hsn: '4202', gstRate: 12, category: 'Accessories', barcode: '1003', image: '👛' },
-        { id: 4, name: 'Organic Green Tea', price: 450, hsn: '0902', gstRate: 0, category: 'Groceries', barcode: '1004', image: '🍵' },
+        { id: 4, name: 'Organic Green Tea', price: 450, hsn: '0902', gstRate: 5, category: 'Groceries', barcode: '1004', image: '🍵' },
         { id: 5, name: 'Smart Fitness Tracker', price: 3999, hsn: '8517', gstRate: 18, category: 'Electronics', barcode: '1005', image: '⌚' },
         { id: 6, name: 'Denim Slim Fit Jeans', price: 1999, hsn: '6203', gstRate: 12, category: 'Apparel', barcode: '1006', image: '👖' },
         { id: 7, name: 'USB-C Fast Charger', price: 799, hsn: '8504', gstRate: 18, category: 'Electronics', barcode: '1007', image: '🔌' },
@@ -73,28 +100,54 @@ const Billing = () => {
     const handleScanner = (e) => {
         const val = e.target.value;
         setScannerValue(val);
-        const product = products.find(p => p.barcode === val);
-        if (product) { addToCart(product); setScannerValue(''); }
+        const product = products.find(p => p.barcode === val.trim());
+        if (product) {
+            addToCart(product);
+            setScannerValue('');
+            setLastScanned({ barcode: product.barcode, name: product.name, success: true });
+        }
     };
+
+    const handleScanSubmit = (codeToScan) => {
+        const val = (codeToScan !== undefined ? codeToScan : scannerValue).trim();
+        if (!val) return;
+        const product = products.find(p => p.barcode.toLowerCase() === val.toLowerCase());
+        if (product) {
+            addToCart(product);
+            setScannerValue('');
+            setManualBarcodeInput('');
+            setLastScanned({ barcode: product.barcode, name: product.name, success: true });
+        } else {
+            setLastScanned({ barcode: val, error: 'Product with this barcode not found', success: false });
+        }
+    };
+
+    // Auto-dismiss scanned notice after 4 seconds
+    useEffect(() => {
+        if (lastScanned) {
+            const timer = setTimeout(() => setLastScanned(null), 4000);
+            return () => clearTimeout(timer);
+        }
+    }, [lastScanned]);
 
     // ── Fetch cart from server on mount ──────────────────────────────────────
     useEffect(() => {
         let cancelled = false;
         const fetchCart = async () => {
             setCartLoading(true);
-            setCartLoadError('');
             try {
                 const data = await getCart();
                 if (cancelled) return;
                 setServerCart(data);
+                setOfflineMode(false);
                 if (data?.items && data.items.length > 0) {
                     syncCartWithServer(data.items);
                 }
             } catch (err) {
                 if (cancelled) return;
-                console.warn('[Billing] getCart failed — starting with empty cart:', err.message);
-                setCartLoadError('Could not load server cart — starting fresh.');
-                setTimeout(() => setCartLoadError(''), 5000);
+                // API is down — switch to offline/local mode silently
+                console.warn('[Billing] getCart failed — switching to local mode:', err.message);
+                setOfflineMode(true);
             } finally {
                 if (!cancelled) setCartLoading(false);
             }
@@ -106,7 +159,9 @@ const Billing = () => {
     // ────────────────────────────────────────────────────────────────────────
 
     const syncCartWithServer = useCallback((responseItems) => {
-        if (!responseItems || responseItems.length === 0) {
+        // Only clear cart if server explicitly returns an empty array
+        if (!responseItems) return; // null/undefined means don't touch cart
+        if (responseItems.length === 0) {
             setCart([]);
             return;
         }
@@ -122,7 +177,7 @@ const Billing = () => {
                     qty: parseInt(serverItem.quantity, 10),
                     price: parseFloat(serverItem.unit_price),
                     discountPerItem: parseFloat(serverItem.discount || 0),
-                    gstRate: parseFloat(serverItem.gst_rate || 0),
+                    gstRate: parseFloat(serverItem.gst_rate || existing?.gstRate || 5),
                     gstAmount: parseFloat(serverItem.gst_amount || 0),
                     cgstAmount: parseFloat(serverItem.cgst_amount || 0),
                     sgstAmount: parseFloat(serverItem.sgst_amount || 0),
@@ -136,18 +191,19 @@ const Billing = () => {
     }, [products]);
 
     const addToCart = useCallback(async (product) => {
-        // Optimistic local update first (instant UI feedback)
+        // Optimistic local update first — instant UI feedback regardless of API status
         setCart(prev => {
             const existing = prev.find(i => i.id === product.id);
-            if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
-            return [...prev, { ...product, qty: 1, discountPerItem: product.discount || 0 }];
+            if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1, unsynced: true } : i);
+            return [...prev, { ...product, qty: 1, discountPerItem: product.discount || 0, unsynced: true }];
         });
 
         setAddingItemId(product.id);
-        setApiError('');
 
+        // Always try the API — offlineMode doesn't block calls, it's just a display hint
         try {
-            const currentQty = cart.find(i => i.id === product.id)?.qty ?? 0;
+            const existingItem = cart.find(i => i.id === product.id);
+            const currentQty = existingItem?.qty ?? 0;
             const payload = {
                 product_id: product.id,
                 quantity: currentQty + 1,
@@ -155,50 +211,55 @@ const Billing = () => {
                 discount: product.discount || 0,
             };
 
-            const response = await addCartItem(payload);
-            setServerCart(response);
-            if (response?.items) {
-                syncCartWithServer(response.items);
+            let response;
+            if (existingItem) {
+                response = await updateCartItem(payload);
+            } else {
+                response = await addCartItem(payload);
+            }
+            if (response) {
+                setServerCart(response);
+                setOfflineMode(false); // API works — go back online
+                if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] addCartItem API error:', err);
-            setApiError('Could not sync with server — cart updated locally.');
-            setTimeout(() => setApiError(''), 4000);
-        } finally {
-            setAddingItemId(null);
+            console.error('[Billing] cart API error:', err.message);
+            setOfflineMode(true); // mark offline only for banner display, cart already updated locally
         }
+
+        setAddingItemId(null);
     }, [cart, syncCartWithServer]);
 
     const removeFromCart = useCallback(async (id) => {
         // Optimistic local removal — instant UI feedback
         setCart(prev => prev.filter(i => i.id !== id));
-        setApiError('');
 
+        // Always try the API
         try {
             const response = await removeCartItem(id);
-            setServerCart(response);
-            if (response?.items) {
-                syncCartWithServer(response.items);
-            } else {
-                setCart([]);
+            if (response) {
+                setServerCart(response);
+                setOfflineMode(false);
+                if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] removeCartItem API error:', err);
-            setApiError('Could not sync removal with server — item removed locally.');
-            setTimeout(() => setApiError(''), 4000);
+            console.error('[Billing] removeCartItem API error:', err.message);
+            setOfflineMode(true);
         }
     }, [syncCartWithServer]);
 
     const updateQty = useCallback(async (id, delta) => {
-        // Find the item before updating
         const item = cart.find(i => i.id === id);
         if (!item) return;
-        const newQty = Math.max(1, item.qty + delta);
+        const newQty = item.qty + delta;
+        if (newQty <= 0) {
+            return removeFromCart(id);
+        }
 
         // Optimistic local update
-        setCart(prev => prev.map(i => i.id === id ? { ...i, qty: newQty } : i));
-        setApiError('');
+        setCart(prev => prev.map(i => i.id === id ? { ...i, qty: newQty, unsynced: true } : i));
 
+        // Always try the API
         try {
             const payload = {
                 product_id: item.id,
@@ -208,16 +269,16 @@ const Billing = () => {
             };
 
             const response = await updateCartItem(payload);
-            setServerCart(response);
-            if (response?.items) {
-                syncCartWithServer(response.items);
+            if (response) {
+                setServerCart(response);
+                setOfflineMode(false);
+                if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] updateCartItem API error:', err);
-            setApiError('Could not sync update with server — cart updated locally.');
-            setTimeout(() => setApiError(''), 4000);
+            console.error('[Billing] updateCartItem API error:', err.message);
+            setOfflineMode(true);
         }
-    }, [cart, syncCartWithServer]);
+    }, [cart, removeFromCart, syncCartWithServer]);
 
     const totals = useMemo(() => {
         if (serverCart) {
@@ -279,15 +340,15 @@ const Billing = () => {
                 invoicesList = JSON.parse(stored);
             } else {
                 invoicesList = [
-                    { id: 'INV-2024001', customer: 'Rahul Sharma', gstin: '27AAPFU0939F1ZV', date: '2026-06-24', taxable: 3893, cgst: 350.37, sgst: 350.37, igst: 0, total: 4580, rate: 18 },
-                    { id: 'INV-2024002', customer: 'Priya Patel', gstin: '—', date: '2026-06-24', taxable: 1919, cgst: 0, sgst: 0, igst: 0, total: 2340, rate: 5 },
-                    { id: 'INV-2024003', customer: 'Amit Kumar', gstin: '07BCEPK4283R1ZJ', date: '2026-06-23', taxable: 7315, cgst: 0, sgst: 0, igst: 1605, total: 8920, rate: 18 },
-                    { id: 'INV-2024005', customer: 'Vikram Mehta', gstin: '—', date: '2026-06-22', taxable: 5560, cgst: 610, sgst: 610, igst: 0, total: 6780, rate: 18 },
-                    { id: 'INV-2024006', customer: 'Anjali Gupta', gstin: '29BCEPK4283R1ZJ', date: '2026-06-22', taxable: 2829, cgst: 310.5, sgst: 310.5, igst: 0, total: 3450, rate: 12 },
-                    { id: 'INV-2024007', customer: 'Rohit Verma', gstin: '—', date: '2026-06-21', taxable: 9184, cgst: 1008, sgst: 1008, igst: 0, total: 11200, rate: 18 },
-                    { id: 'INV-2024008', customer: 'Kavya Nair', gstin: '—', date: '2026-06-21', taxable: 890, cgst: 0, sgst: 0, igst: 0, total: 890, rate: 0 },
-                    { id: 'INV-2024009', customer: 'Suresh Reddy', gstin: '36BCEPK4283R1ZJ', date: '2026-06-20', taxable: 4990, cgst: 340, sgst: 340, igst: 0, total: 5670, rate: 12 },
-                    { id: 'INV-2024010', customer: 'Meera Joshi', gstin: '—', date: '2026-06-20', taxable: 1722, cgst: 189, sgst: 189, igst: 0, total: 2100, rate: 18 },
+                    { id: 'INV-2024001', customer: 'Rahul Sharma', gstin: '27AAPFU0939F1ZV', date: '2026-06-24', taxable: 3893, cgst: 350.37, sgst: 350.37, igst: 0, total: 4593.74, rate: 18 },
+                    { id: 'INV-2024002', customer: 'Priya Patel', gstin: '—', date: '2026-06-24', taxable: 1919, cgst: 47.98, sgst: 47.98, igst: 0, total: 2014.96, rate: 5 },
+                    { id: 'INV-2024003', customer: 'Amit Kumar', gstin: '07BCEPK4283R1ZJ', date: '2026-06-23', taxable: 7315, cgst: 0, sgst: 0, igst: 1316.70, total: 8631.70, rate: 18 },
+                    { id: 'INV-2024005', customer: 'Vikram Mehta', gstin: '—', date: '2026-06-22', taxable: 5560, cgst: 500.40, sgst: 500.40, igst: 0, total: 6560.80, rate: 18 },
+                    { id: 'INV-2024006', customer: 'Anjali Gupta', gstin: '29BCEPK4283R1ZJ', date: '2026-06-22', taxable: 2829, cgst: 169.74, sgst: 169.74, igst: 0, total: 3168.48, rate: 12 },
+                    { id: 'INV-2024007', customer: 'Rohit Verma', gstin: '—', date: '2026-06-21', taxable: 9184, cgst: 826.56, sgst: 826.56, igst: 0, total: 10837.12, rate: 18 },
+                    { id: 'INV-2024008', customer: 'Kavya Nair', gstin: '—', date: '2026-06-21', taxable: 890, cgst: 53.40, sgst: 53.40, igst: 0, total: 996.80, rate: 12 },
+                    { id: 'INV-2024009', customer: 'Suresh Reddy', gstin: '36BCEPK4283R1ZJ', date: '2026-06-20', taxable: 4990, cgst: 299.40, sgst: 299.40, igst: 0, total: 5588.80, rate: 12 },
+                    { id: 'INV-2024010', customer: 'Meera Joshi', gstin: '—', date: '2026-06-20', taxable: 1722, cgst: 154.98, sgst: 154.98, igst: 0, total: 2031.96, rate: 18 },
                 ];
             }
             if (!invoicesList.some(inv => inv.id === newInvoice.id)) {
@@ -302,13 +363,18 @@ const Billing = () => {
     };
 
     const handleReset = () => {
+        cart.forEach(item => {
+            removeCartItem(item.id).catch(() => { });
+        });
         setCart([]);
         setServerCart(null);
+        setOfflineMode(false);
         setCustomer({ name: '', phone: '', gstin: '' });
         setBillDiscount(0);
         setCouponCode('');
         setDiscountApplied(false);
         setShowPreview(false);
+        setInvoiceNo(nextInvoiceNo());
     };
 
     const totalUnits = cart.reduce((s, i) => s + i.qty, 0);
@@ -352,17 +418,7 @@ const Billing = () => {
 
     return (
         <div className="pos-shell">
-            {/* ── Cart-load error banner (non-blocking) ── */}
-            {cartLoadError && (
-                <div style={{
-                    position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)',
-                    background: '#fef3c7', color: '#92400e', borderRadius: 8,
-                    padding: '8px 16px', fontSize: 12, zIndex: 9999,
-                    border: '1px solid #fcd34d', boxShadow: '0 4px 12px rgba(0,0,0,.1)',
-                }}>
-                    ⚠️ {cartLoadError}
-                </div>
-            )}
+
             {/* ── LEFT: Product Catalog ── */}
             <div className="pos-left">
 
@@ -378,7 +434,7 @@ const Billing = () => {
                             Active Terminal
                         </div>
                     </div>
-                    <div className="pos-search-row">
+                    <div className="pos-search-row" style={{ alignItems: 'center' }}>
                         <div className="pos-search-wrap">
                             <BsSearch className="pos-search-icon" size={13} />
                             <input
@@ -395,12 +451,76 @@ const Billing = () => {
                                 ref={scanInputRef}
                                 type="text"
                                 className="pos-search-input"
-                                placeholder="Scan barcode…"
+                                placeholder="Scan barcode (e.g. 1001)…"
                                 value={scannerValue}
                                 onChange={handleScanner}
+                                onKeyDown={e => e.key === 'Enter' && handleScanSubmit()}
                             />
                         </div>
+                        {/* Display Barcode Action in Scan Barcode Section */}
+                        <button
+                            type="button"
+                            id="display-barcode-btn"
+                            className="pos-display-barcode-btn"
+                            onClick={() => setShowBarcodeModal(true)}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                background: '#eef2ff',
+                                color: '#4f46e5',
+                                border: '1.5px solid #c7d2fe',
+                                borderRadius: 10,
+                                padding: '9px 14px',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                transition: 'all .15s ease',
+                            }}
+                            title="Display Barcodes & Barcode Scanner"
+                        >
+                            <BsUpcScan size={14} />
+                            <span>Display Barcode</span>
+                        </button>
                     </div>
+
+                    {/* Scan Barcode Section feedback */}
+                    {lastScanned && (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '6px 12px',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            background: lastScanned.success ? '#ecfdf5' : '#fef2f2',
+                            color: lastScanned.success ? '#065f46' : '#991b1b',
+                            border: `1px solid ${lastScanned.success ? '#a7f3d0' : '#fecaca'}`,
+                            marginTop: 8,
+                            width: '100%',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <BsUpcScan size={13} />
+                                {lastScanned.success ? (
+                                    <span>
+                                        Scanned Barcode: <strong>{lastScanned.barcode}</strong> — {lastScanned.name} added to cart!
+                                    </span>
+                                ) : (
+                                    <span>
+                                        Barcode <strong>"{lastScanned.barcode}"</strong>: {lastScanned.error}
+                                    </span>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => setLastScanned(null)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', display: 'flex', padding: 0 }}
+                            >
+                                <BsX size={16} />
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Category pills */}
@@ -438,6 +558,24 @@ const Billing = () => {
                                     <div className="pos-product-image">{product.image}</div>
                                     <span className="pos-product-cat">{product.category}</span>
                                     <h3 className="pos-product-name">{product.name}</h3>
+                                    {/* Display Barcode on product card */}
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        fontSize: 10,
+                                        fontFamily: 'monospace',
+                                        fontWeight: 700,
+                                        color: '#4f46e5',
+                                        background: '#eef2ff',
+                                        padding: '2px 6px',
+                                        borderRadius: 4,
+                                        width: 'fit-content',
+                                        marginTop: 2,
+                                        marginBottom: 2,
+                                    }}>
+                                        <BsUpcScan size={10} /> Barcode: {product.barcode}
+                                    </div>
                                     <div className="pos-product-footer">
                                         <span className="pos-product-price">₹{product.price.toLocaleString()}</span>
                                         <div className="pos-product-add-btn" style={addingItemId === product.id ? { opacity: 0.6 } : {}}>
@@ -525,7 +663,9 @@ const Billing = () => {
                             <div key={item.id} className="pos-cart-item" style={{ height: 'auto', padding: '10px 16px' }}>
                                 <div className="pos-cart-item-emoji">{item.image}</div>
                                 <div className="pos-cart-item-info" style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                    <h4 className="pos-cart-item-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 0 }}>{item.name}</h4>
+                                    <h4 className="pos-cart-item-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 0 }}>
+                                        {item.name}
+                                    </h4>
                                     <span className="pos-cart-item-price" style={{ fontSize: 11, color: '#6b7280' }}>
                                         ₹{item.price.toLocaleString()} × {item.qty}
                                         {item.discountPerItem > 0 && (
@@ -601,7 +741,7 @@ const Billing = () => {
                                         className={`pos-disc-type-btn${discountType === 'percentage' ? ' pos-disc-type-btn--active' : ''}`}
                                         onClick={() => setDiscountType('percentage')}
                                     >
-                                        <BsPercent size={11} /> %
+                                        %
                                     </button>
                                     <button
                                         className={`pos-disc-type-btn${discountType === 'fixed' ? ' pos-disc-type-btn--active' : ''}`}
@@ -707,7 +847,7 @@ const Billing = () => {
                         ))}
                     </div>
 
-                    {/* API error notice */}
+                    {/* API error notice — only for discount errors which are user-actionable */}
                     {apiError && (
                         <div style={{
                             background: '#fef3c7', color: '#92400e',
@@ -861,6 +1001,187 @@ const Billing = () => {
                             <button className="pos-receipt-btn-new" onClick={handleReset}>
                                 <BsArrowCounterclockwise size={15} /> New Sale
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* ── Display Barcode Modal ── */}
+            {showBarcodeModal && (
+                <div className="ec-modal-overlay" onClick={() => setShowBarcodeModal(false)} style={{ zIndex: 1050 }}>
+                    <div
+                        className="pos-receipt-modal"
+                        onClick={e => e.stopPropagation()}
+                        style={{ maxWidth: 640, maxHeight: '88vh', overflowY: 'auto' }}
+                    >
+                        {/* Modal Header */}
+                        <div style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            padding: '16px 20px', borderBottom: '1px solid #f1f5f9',
+                            position: 'sticky', top: 0, background: '#fff', zIndex: 3,
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ background: '#eef2ff', borderRadius: 8, padding: 8, display: 'flex' }}>
+                                    <BsUpcScan size={20} color="#4f46e5" />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+                                        Display Barcode & Scanner
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: 11, color: '#94a3b8' }}>
+                                        Scan Barcode Section — Click any barcode or scan to add to cart
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowBarcodeModal(false)}
+                                style={{
+                                    background: '#f1f5f9', border: 'none', borderRadius: 8,
+                                    width: 32, height: 32, cursor: 'pointer', display: 'flex',
+                                    alignItems: 'center', justifyContent: 'center',
+                                }}
+                            >
+                                <BsX size={18} color="#64748b" />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '20px' }}>
+                            {/* Manual scan input */}
+                            <div style={{
+                                background: '#f8fafc', border: '1px solid #e2e8f0',
+                                borderRadius: 12, padding: '14px 16px', marginBottom: 20,
+                            }}>
+                                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 8 }}>
+                                    Quick Barcode Scanner
+                                </label>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <div style={{
+                                        flex: 1, display: 'flex', alignItems: 'center', gap: 8,
+                                        background: '#fff', border: '1px solid #cbd5e1',
+                                        borderRadius: 8, padding: '0 12px',
+                                    }}>
+                                        <BsUpcScan size={14} color="#64748b" />
+                                        <input
+                                            type="text"
+                                            placeholder="Type or scan barcode (e.g. 1001, 1002)..."
+                                            value={manualBarcodeInput}
+                                            onChange={e => setManualBarcodeInput(e.target.value)}
+                                            onKeyDown={e => e.key === 'Enter' && handleScanSubmit(manualBarcodeInput)}
+                                            style={{
+                                                flex: 1, border: 'none', background: 'transparent',
+                                                fontSize: 13, padding: '10px 0', outline: 'none',
+                                            }}
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleScanSubmit(manualBarcodeInput)}
+                                        style={{
+                                            background: '#4f46e5', color: '#fff', border: 'none',
+                                            borderRadius: 8, padding: '0 18px', fontWeight: 600,
+                                            fontSize: 13, cursor: 'pointer', display: 'flex',
+                                            alignItems: 'center', gap: 6,
+                                        }}
+                                    >
+                                        <BsCheckCircleFill size={13} /> Scan
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Product Barcodes List */}
+                            <div style={{ marginBottom: 8 }}>
+                                <h4 style={{
+                                    fontSize: 12, fontWeight: 700, color: '#64748b',
+                                    textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                }}>
+                                    <span>Available Product Barcodes</span>
+                                    <span style={{ fontSize: 11, color: '#94a3b8', textTransform: 'none' }}>
+                                        {products.length} products with barcodes
+                                    </span>
+                                </h4>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12 }}>
+                                    {products.map(p => (
+                                        <div
+                                            key={p.id}
+                                            style={{
+                                                background: '#fff', border: '1.5px solid #e2e8f0',
+                                                borderRadius: 12, padding: '12px 14px',
+                                                display: 'flex', flexDirection: 'column', gap: 8,
+                                                transition: 'all .15s ease',
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                                <div style={{ fontSize: 24, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: 8 }}>
+                                                    {p.image}
+                                                </div>
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {p.name}
+                                                    </div>
+                                                    <div style={{ fontSize: 11, color: '#64748b' }}>
+                                                        ₹{p.price.toLocaleString()} • {p.category}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Barcode visual representation */}
+                                            <div style={{
+                                                background: '#fafafa', border: '1px dashed #cbd5e1',
+                                                borderRadius: 8, padding: '8px 10px', textAlign: 'center',
+                                            }}>
+                                                <div style={{
+                                                    fontFamily: 'monospace',
+                                                    fontSize: 18,
+                                                    letterSpacing: '4px',
+                                                    fontWeight: 900,
+                                                    color: '#0f172a',
+                                                    userSelect: 'all',
+                                                    lineHeight: 1,
+                                                }}>
+                                                    ||| | |||| | |||
+                                                </div>
+                                                <div style={{
+                                                    fontSize: 11,
+                                                    fontWeight: 700,
+                                                    color: '#4f46e5',
+                                                    fontFamily: 'monospace',
+                                                    letterSpacing: '0.08em',
+                                                    marginTop: 4,
+                                                }}>
+                                                    {p.barcode}
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    addToCart(p);
+                                                    setLastScanned({ barcode: p.barcode, name: p.name, success: true });
+                                                }}
+                                                style={{
+                                                    width: '100%',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    gap: 6,
+                                                    background: '#eef2ff',
+                                                    color: '#4f46e5',
+                                                    border: '1px solid #c7d2fe',
+                                                    borderRadius: 8,
+                                                    padding: '6px 0',
+                                                    fontSize: 12,
+                                                    fontWeight: 700,
+                                                    cursor: 'pointer',
+                                                    transition: 'background .15s',
+                                                }}
+                                            >
+                                                <BsPlus size={15} /> Scan to Cart
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
