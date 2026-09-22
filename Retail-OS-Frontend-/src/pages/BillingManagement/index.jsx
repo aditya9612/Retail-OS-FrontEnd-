@@ -51,7 +51,8 @@ const fmt = (n) => '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDi
 
 /* ── Derive June totals directly from ALL_INVOICES so chart matches table ── */
 const junInvoices = ALL_INVOICES.filter(inv => inv.date.startsWith('2026-06'));
-const junGst = Math.round(junInvoices.reduce((s, inv) => s + (inv.gst || 0), 0) * 100) / 100;
+const junActiveInvoices = ALL_INVOICES.filter(inv => inv.date.startsWith('2026-06') && inv.status !== 'Cancelled' && inv.status !== 'Returned');
+const junGst = Math.round(junActiveInvoices.reduce((s, inv) => s + (inv.gst || 0), 0) * 100) / 100;
 
 const monthlyTrend = [
     { month: 'Jan', invoices: 240, gst: 36000 },
@@ -214,14 +215,41 @@ const BillingManagement = () => {
     const totalPages = Math.ceil(filtered.length / perPage);
     const paginated = filtered.slice((page - 1) * perPage, page * perPage);
 
-    const summary = useMemo(() => ({
-        total: ALL_INVOICES.length,
-        paid: ALL_INVOICES.filter(i => i.status === 'Paid').length,
-        pending: ALL_INVOICES.filter(i => i.status === 'Pending').length,
-        cancelled: ALL_INVOICES.filter(i => i.status === 'Cancelled').length,
-        revenue: ALL_INVOICES.reduce((s, i) => s + i.amount, 0),
-        gstTotal: ALL_INVOICES.reduce((s, i) => s + i.gst, 0),
-    }), []);
+    const summary = useMemo(() => {
+        // Exclude Cancelled / Returned invoices from revenue and GST collection totals
+        const activeInvoices = ALL_INVOICES.filter(i => i.status !== 'Cancelled' && i.status !== 'Returned');
+        const cancelledInvoices = ALL_INVOICES.filter(i => i.status === 'Cancelled' || i.status === 'Returned');
+
+        const cash = ALL_INVOICES.filter(i => i.mode === 'Cash').length;
+        const upi  = ALL_INVOICES.filter(i => i.mode === 'UPI').length;
+        const card = ALL_INVOICES.filter(i => i.mode === 'Card').length;
+        // Top customer by invoice count
+        const custMap = {};
+        ALL_INVOICES.forEach(i => { custMap[i.customer] = (custMap[i.customer] || 0) + 1; });
+        const topCustomer = Object.entries(custMap).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+        const topCustomerCount = custMap[topCustomer] || 0;
+
+        const revenue = Math.round(activeInvoices.reduce((s, i) => s + i.amount, 0) * 100) / 100;
+        const gstTotal = Math.round(activeInvoices.reduce((s, i) => s + i.gst, 0) * 100) / 100;
+        const cancelledRevenue = Math.round(cancelledInvoices.reduce((s, i) => s + i.amount, 0) * 100) / 100;
+        const cancelledGst = Math.round(cancelledInvoices.reduce((s, i) => s + i.gst, 0) * 100) / 100;
+
+        return {
+            total:            ALL_INVOICES.length,
+            paid:             ALL_INVOICES.filter(i => i.status === 'Paid').length,
+            pending:          ALL_INVOICES.filter(i => i.status === 'Pending').length,
+            cancelled:        ALL_INVOICES.filter(i => i.status === 'Cancelled').length,
+            revenue,
+            gstTotal,
+            cancelledRevenue,
+            cancelledGst,
+            modeCash:         cash,
+            modeUPI:          upi,
+            modeCard:         card,
+            topCustomer,
+            topCustomerCount,
+        };
+    }, []);
 
     return (
         <div className="dash-page">
@@ -242,20 +270,75 @@ const BillingManagement = () => {
                 </div>
             </div>
 
-            {/* Summary Cards */}
+            {/* Summary Cards — Total = Paid + Pending + Cancelled (must reconcile) */}
             <div className="adm-kpi-grid">
                 {[
-                    { label: 'Total Invoices', value: summary.total, icon: <BsFileEarmarkText size={18} />, color: '#6366f1', bg: '#eef2ff', suffix: '' },
-                    { label: 'Paid', value: summary.paid, icon: <BsCheckCircleFill size={18} />, color: '#10b981', bg: '#ecfdf5', suffix: '' },
-                    { label: 'Total Revenue', value: fmt(summary.revenue), icon: <BsCurrencyRupee size={18} />, color: '#22d3ee', bg: '#ecfeff', suffix: '' },
-                    { label: 'GST Collected', value: fmt(summary.gstTotal), icon: <BsReceiptCutoff size={18} />, color: '#f59e0b', bg: '#fffbeb', suffix: '' },
+                    {
+                        label: 'Total Invoices',
+                        value: summary.total,
+                        icon: <BsFileEarmarkText size={18} />,
+                        color: '#6366f1', bg: '#eef2ff',
+                        note: `${summary.paid} Paid · ${summary.pending} Pending · ${summary.cancelled} Cancelled`,
+                    },
+                    {
+                        label: 'Status: Paid',
+                        value: summary.paid,
+                        icon: <BsCheckCircleFill size={18} />,
+                        color: '#10b981', bg: '#ecfdf5',
+                        note: `${Math.round(summary.paid / summary.total * 100)}% of total invoices`,
+                    },
+                    {
+                        label: 'Status: Pending',
+                        value: summary.pending,
+                        icon: <BsHourglassSplit size={18} />,
+                        color: '#f59e0b', bg: '#fffbeb',
+                        note: `${Math.round(summary.pending / summary.total * 100)}% of total invoices`,
+                    },
+                    {
+                        label: 'Status: Cancelled',
+                        value: summary.cancelled,
+                        icon: <BsXCircleFill size={18} />,
+                        color: '#ef4444', bg: '#fef2f2',
+                        note: `${Math.round(summary.cancelled / summary.total * 100)}% of total · ${fmt(summary.cancelledRevenue)} voided`,
+                    },
+                    {
+                        label: 'Mode: Payment Split',
+                        value: `${summary.modeCash}C / ${summary.modeUPI}U / ${summary.modeCard}K`,
+                        icon: <BsCurrencyRupee size={18} />,
+                        color: '#8b5cf6', bg: '#f5f3ff',
+                        note: `Cash: ${summary.modeCash} · UPI: ${summary.modeUPI} · Card: ${summary.modeCard}`,
+                    },
+                    {
+                        label: 'Top Customer',
+                        value: summary.topCustomer,
+                        icon: <BsFileEarmarkText size={18} />,
+                        color: '#0ea5e9', bg: '#f0f9ff',
+                        note: `${summary.topCustomerCount} invoice${summary.topCustomerCount !== 1 ? 's' : ''}`,
+                    },
+                    {
+                        label: 'Total Revenue',
+                        value: fmt(summary.revenue),
+                        icon: <BsCurrencyRupee size={18} />,
+                        color: '#22d3ee', bg: '#ecfeff',
+                        note: 'Paid + Pending · excl. Cancelled',
+                    },
+                    {
+                        label: 'GST Collected',
+                        value: fmt(summary.gstTotal),
+                        icon: <BsReceiptCutoff size={18} />,
+                        color: '#f59e0b', bg: '#fffbeb',
+                        note: 'Rates: 5% · 12% · 18% · excl. Cancelled',
+                    },
                 ].map((k, i) => (
                     <div key={i} className="adm-kpi-card">
                         <div className="adm-kpi-top">
                             <div className="adm-kpi-icon" style={{ background: k.bg, color: k.color }}>{k.icon}</div>
                         </div>
                         <p className="adm-kpi-label">{k.label}</p>
-                        <p className="adm-kpi-value">{k.value}</p>
+                        <p className="adm-kpi-value" style={{ fontSize: typeof k.value === 'string' && k.value.length > 14 ? 13 : undefined }}>{k.value}</p>
+                        {k.note && (
+                            <p style={{ fontSize: 10, color: '#9ca3af', margin: '2px 0 0', fontWeight: 500 }}>{k.note}</p>
+                        )}
                     </div>
                 ))}
             </div>
@@ -612,29 +695,57 @@ const BillingManagement = () => {
 
             {/* Charts row */}
             <div className="dash-charts-row">
+                {/* Bar Chart — Monthly Invoice Volume */}
                 <div className="chart-card">
                     <div className="chart-card-header">
                         <h2 className="chart-title">Monthly Invoice Volume</h2>
+                        <span style={{ fontSize: 11, color: '#9ca3af' }}>Jan – Jun 2026 &nbsp;·&nbsp; Count of invoices raised per month</span>
                     </div>
-                    <ResponsiveContainer width="100%" height={180}>
-                        <BarChart data={monthlyTrend} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+                    <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={monthlyTrend} margin={{ top: 8, right: 16, bottom: 28, left: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                            <XAxis
+                                dataKey="month"
+                                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                axisLine={false}
+                                tickLine={false}
+                                label={{ value: 'Month (2026)', position: 'insideBottom', offset: -16, fontSize: 11, fill: '#94a3b8' }}
+                            />
+                            <YAxis
+                                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                axisLine={false}
+                                tickLine={false}
+                                label={{ value: 'No. of Invoices', angle: -90, position: 'insideLeft', offset: 14, fontSize: 11, fill: '#94a3b8' }}
+                            />
                             <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
                             <Bar dataKey="invoices" name="Invoices" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={24} />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
+
+                {/* Line Chart — Monthly GST Collection Trend */}
                 <div className="chart-card">
                     <div className="chart-card-header">
                         <h2 className="chart-title">Monthly GST Collection Trend</h2>
+                        <span style={{ fontSize: 11, color: '#9ca3af' }}>Jan – Jun 2026 &nbsp;·&nbsp; Total GST collected (₹) per month</span>
                     </div>
-                    <ResponsiveContainer width="100%" height={180}>
-                        <LineChart data={monthlyTrend} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
+                    <ResponsiveContainer width="100%" height={200}>
+                        <LineChart data={monthlyTrend} margin={{ top: 8, right: 16, bottom: 28, left: 10 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                            <XAxis
+                                dataKey="month"
+                                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                axisLine={false}
+                                tickLine={false}
+                                label={{ value: 'Month (2026)', position: 'insideBottom', offset: -16, fontSize: 11, fill: '#94a3b8' }}
+                            />
+                            <YAxis
+                                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                axisLine={false}
+                                tickLine={false}
+                                tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                                label={{ value: 'GST Amount (₹)', angle: -90, position: 'insideLeft', offset: 14, fontSize: 11, fill: '#94a3b8' }}
+                            />
                             <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={v => fmt(v)} />
                             <Line type="monotone" dataKey="gst" name="GST" stroke="#22d3ee" strokeWidth={2.5} dot={{ r: 4, fill: '#22d3ee', strokeWidth: 0 }} />
                         </LineChart>
@@ -646,28 +757,89 @@ const BillingManagement = () => {
             <div className="chart-card">
                 <div className="adm-filter-bar">
                     <div className="adm-search-wrap">
+                        <label htmlFor="billing-search-input" style={{ display: 'none' }}>Search invoice or customer</label>
                         <BsSearch size={13} className="adm-search-icon" />
                         <input
+                            id="billing-search-input"
+                            name="billingSearch"
+                            aria-label="Search invoice or customer"
                             className="adm-search"
                             placeholder="Search invoice or customer…"
                             value={search}
                             onChange={e => { setSearch(e.target.value); setPage(1); }}
                         />
                     </div>
-                    <div className="adm-filter-group">
-                        <BsFilter size={15} style={{ color: '#9ca3af' }} />
-                        <select className="chart-period-select" value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}>
-                            <option>All</option>
-                            <option>Paid</option>
-                            <option>Pending</option>
-                            <option>Cancelled</option>
-                        </select>
-                        <select className="chart-period-select" value={mode} onChange={e => { setMode(e.target.value); setPage(1); }}>
-                            <option>All</option>
-                            <option>Cash</option>
-                            <option>UPI</option>
-                            <option>Card</option>
-                        </select>
+                    <div className="adm-filter-group" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <BsFilter size={15} style={{ color: '#6366f1' }} />
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Filter:</span>
+                        </div>
+
+                        {/* Status Filter */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <label htmlFor="billing-filter-status" style={{ fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                Status:
+                            </label>
+                            <select
+                                id="billing-filter-status"
+                                name="statusFilter"
+                                aria-label="Filter invoices by status"
+                                className="chart-period-select"
+                                value={status}
+                                onChange={e => { setStatus(e.target.value); setPage(1); }}
+                                style={{ cursor: 'pointer', minWidth: 110 }}
+                            >
+                                <option value="All">All Statuses</option>
+                                <option value="Paid">Paid</option>
+                                <option value="Pending">Pending</option>
+                                <option value="Cancelled">Cancelled</option>
+                            </select>
+                        </div>
+
+                        {/* Payment Mode Filter */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <label htmlFor="billing-filter-mode" style={{ fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                Payment Mode:
+                            </label>
+                            <select
+                                id="billing-filter-mode"
+                                name="modeFilter"
+                                aria-label="Filter invoices by payment mode"
+                                className="chart-period-select"
+                                value={mode}
+                                onChange={e => { setMode(e.target.value); setPage(1); }}
+                                style={{ cursor: 'pointer', minWidth: 120 }}
+                            >
+                                <option value="All">All Modes</option>
+                                <option value="Cash">Cash</option>
+                                <option value="UPI">UPI</option>
+                                <option value="Card">Card</option>
+                            </select>
+                        </div>
+
+                        {/* Reset Filters button if active */}
+                        {(status !== 'All' || mode !== 'All' || search) && (
+                            <button
+                                onClick={() => { setStatus('All'); setMode('All'); setSearch(''); setPage(1); }}
+                                style={{
+                                    background: '#f1f5f9',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: 6,
+                                    color: '#6366f1',
+                                    fontSize: 11,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    padding: '4px 8px',
+                                    transition: 'all 0.15s',
+                                }}
+                                title="Reset all filters"
+                            >
+                                <BsX size={13} /> Reset Filters
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -676,12 +848,13 @@ const BillingManagement = () => {
                     <thead>
                         <tr>
                             <th>Invoice ID</th>
-                            <th>Customer</th>
+                            <th>Customer Name</th>
                             <th>Date</th>
+                            <th>HSN Code</th>
                             <th>Taxable Amt</th>
-                            <th>GST</th>
-                            <th>Total</th>
-                            <th>Mode</th>
+                            <th>GST Rate &amp; Amt</th>
+                            <th>Total (incl. GST)</th>
+                            <th>Payment Mode</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -689,34 +862,117 @@ const BillingManagement = () => {
                     <tbody>
                         {paginated.map((inv, i) => {
                             const s = statusConfig[inv.status];
+                            const modeIcon = inv.mode === 'Cash' ? '💵' : inv.mode === 'UPI' ? '📱' : '💳';
                             return (
                                 <tr key={i}>
+                                    {/* Invoice ID */}
                                     <td className="dash-table-id">{inv.id}</td>
-                                    <td style={{ fontWeight: 500 }}>{inv.customer}</td>
-                                    <td style={{ color: '#9ca3af', fontSize: 12 }}>{inv.date}</td>
-                                    <td>{fmt(inv.taxable)}</td>
+
+                                    {/* Customer Name — labelled */}
                                     <td>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <span style={{ color: '#22d3ee', fontWeight: 600 }}>{fmt(inv.gst)}</span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                            <span style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+                                                {inv.customer}
+                                            </span>
+                                            <span style={{ fontSize: 10, color: '#94a3b8' }}>Customer</span>
+                                        </div>
+                                    </td>
+
+                                    {/* Date */}
+                                    <td style={{ color: '#9ca3af', fontSize: 12 }}>{inv.date}</td>
+
+                                    {/* HSN Code */}
+                                    <td>
+                                        <span style={{
+                                            fontFamily: 'monospace', fontSize: 11,
+                                            background: '#f8fafc', border: '1px solid #e2e8f0',
+                                            borderRadius: 4, padding: '1px 6px', color: '#475569',
+                                        }}>{inv.hsn || '—'}</span>
+                                    </td>
+
+                                    {/* Taxable Amount */}
+                                    <td>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                             <span style={{
-                                                fontSize: 10,
-                                                fontWeight: 700,
-                                                padding: '1px 5px',
-                                                borderRadius: 4,
-                                                background: inv.gstRate === 0 ? '#f1f5f9' : inv.gstRate === 5 ? '#ecfdf5' : inv.gstRate === 12 ? '#fffbeb' : inv.gstRate === 18 ? '#eef2ff' : '#fef2f2',
-                                                color: inv.gstRate === 0 ? '#64748b' : inv.gstRate === 5 ? '#059669' : inv.gstRate === 12 ? '#d97706' : inv.gstRate === 18 ? '#4f46e5' : '#dc2626',
+                                                fontWeight: 600,
+                                                textDecoration: inv.status === 'Cancelled' ? 'line-through' : 'none',
+                                                color: inv.status === 'Cancelled' ? '#94a3b8' : undefined,
                                             }}>
-                                                {inv.gstRate}%
+                                                {fmt(inv.taxable)}
+                                            </span>
+                                            <span style={{ fontSize: 10, color: '#94a3b8' }}>
+                                                {inv.status === 'Cancelled' ? 'Cancelled (void)' : 'excl. GST'}
                                             </span>
                                         </div>
                                     </td>
-                                    <td className="dash-table-amount">{fmt(inv.amount)}</td>
-                                    <td><span className="adm-mode-tag">{inv.mode}</span></td>
+
+                                    {/* GST Rate + Amount — labelled */}
                                     <td>
-                                        <span className="dash-badge adm-status-badge" style={{ background: s.bg, color: s.color }}>
-                                            {s.icon}&nbsp;{inv.status}
-                                        </span>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                <span style={{
+                                                    fontSize: 10, fontWeight: 700,
+                                                    padding: '1px 6px', borderRadius: 4,
+                                                    background: inv.gstRate === 5 ? '#ecfdf5' : inv.gstRate === 12 ? '#fffbeb' : inv.gstRate === 18 ? '#eef2ff' : '#f1f5f9',
+                                                    color:      inv.gstRate === 5 ? '#059669'  : inv.gstRate === 12 ? '#d97706'  : inv.gstRate === 18 ? '#4f46e5'  : '#64748b',
+                                                }}>GST {inv.gstRate}%</span>
+                                            </div>
+                                            <span style={{
+                                                fontSize: 11,
+                                                color: inv.status === 'Cancelled' ? '#94a3b8' : '#22d3ee',
+                                                fontWeight: 600,
+                                                textDecoration: inv.status === 'Cancelled' ? 'line-through' : 'none',
+                                            }}>
+                                                {fmt(inv.gst)}
+                                            </span>
+                                            {inv.cgst > 0 && (
+                                                <span style={{ fontSize: 9, color: '#94a3b8' }}>
+                                                    CGST: {fmt(inv.cgst)} | SGST: {fmt(inv.sgst)}
+                                                </span>
+                                            )}
+                                            {inv.igst > 0 && (
+                                                <span style={{ fontSize: 9, color: '#94a3b8' }}>IGST: {fmt(inv.igst)}</span>
+                                            )}
+                                        </div>
                                     </td>
+
+                                    {/* Grand Total incl. GST */}
+                                    <td className="dash-table-amount">
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                            <span style={{
+                                                fontWeight: 700,
+                                                textDecoration: inv.status === 'Cancelled' ? 'line-through' : 'none',
+                                                color: inv.status === 'Cancelled' ? '#94a3b8' : undefined,
+                                            }}>
+                                                {fmt(inv.amount)}
+                                            </span>
+                                            <span style={{ fontSize: 10, color: inv.status === 'Cancelled' ? '#ef4444' : '#94a3b8' }}>
+                                                {inv.status === 'Cancelled' ? 'Cancelled / Void' : 'incl. GST'}
+                                            </span>
+                                        </div>
+                                    </td>
+
+                                    {/* Payment Mode — with icon */}
+                                    <td>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                            <span className="adm-mode-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                <span>{modeIcon}</span> {inv.mode}
+                                            </span>
+                                            <span style={{ fontSize: 10, color: '#94a3b8' }}>Payment Mode</span>
+                                        </div>
+                                    </td>
+
+                                    {/* Status — with icon + badge */}
+                                    <td>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                            <span className="dash-badge adm-status-badge" style={{ background: s.bg, color: s.color, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                {s.icon}&nbsp;{inv.status}
+                                            </span>
+                                            <span style={{ fontSize: 10, color: '#94a3b8' }}>Status</span>
+                                        </div>
+                                    </td>
+
+                                    {/* Actions */}
                                     <td>
                                         <button className="adm-action-btn" title="Print" onClick={() => window.print()}>
                                             <BsPrinter size={13} />

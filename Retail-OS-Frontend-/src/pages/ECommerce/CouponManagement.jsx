@@ -24,42 +24,68 @@ const EMPTY = {
 };
 
 const mapBackendToFrontend = (b) => {
+    if (!b) return { ...EMPTY };
+    const raw = b?.data || b?.coupon || b || {};
+
+    const rawType = String(raw.discount_type || raw.discountType || raw.type || '').toLowerCase();
     let type = 'Percentage';
-    if (b.discount_type === 'fixed') {
+    if (rawType === 'fixed' || rawType === 'flat' || rawType === 'amount') {
         type = 'Fixed';
-    } else if (b.discount_type === 'free_delivery') {
+    } else if (rawType === 'free_delivery' || rawType === 'freedelivery' || rawType === 'free_shipping') {
         type = 'Free Delivery';
+    } else if (rawType === 'percentage' || rawType === 'percent') {
+        type = 'Percentage';
     }
 
-    let status = b.is_active ? 'Active' : 'Inactive';
-    if (b.end_date && new Date(b.end_date) < new Date()) {
+    let status = raw.is_active || raw.status === 'Active' ? 'Active' : 'Inactive';
+    const expiry = raw.end_date || raw.endDate || raw.expiry || raw.expires_at || '';
+    if (expiry && new Date(expiry) < new Date()) {
         status = 'Expired';
     }
 
+    const rawVal = raw.discount_value ?? raw.discountValue ?? raw.discount_amount ?? raw.discountAmount ?? raw.discount ?? raw.value ?? raw.amount ?? 0;
+    let value = Number(rawVal) || 0;
+    if (type === 'Percentage' && value > 0 && value < 1) {
+        value = Math.round(value * 100);
+    }
+
+    const rawMin = raw.minimum_order_amount ?? raw.minimumOrderAmount ?? raw.minOrder ?? raw.min_order_amount ?? raw.min_order ?? 0;
+    const minOrder = Number(rawMin) || 0;
+
+    const rawMax = raw.maximum_discount ?? raw.maximumDiscount ?? raw.maxDiscount ?? raw.max_discount ?? null;
+    const maxDiscount = rawMax !== null && rawMax !== undefined && rawMax !== '' ? Number(rawMax) : null;
+
     return {
-        id: b.id,
-        code: b.code || '',
+        id: raw.id || b.id,
+        code: String(raw.code || '').toUpperCase(),
         type,
-        value: Number(b.discount_value) || 0,
-        minOrder: Number(b.minimum_order_amount) || 0,
-        maxDiscount: b.maximum_discount ? Number(b.maximum_discount) : null,
-        expiry: b.end_date || '',
-        usageLimit: b.usage_limit || 0,
-        used: b.used_count || 0,
-        eligibility: 'All',
-        freeDelivery: b.discount_type === 'free_delivery',
+        value,
+        minOrder,
+        maxDiscount,
+        expiry,
+        startDate: raw.start_date || raw.startDate || '',
+        usageLimit: Number(raw.usage_limit ?? raw.usageLimit ?? raw.limit ?? 100) || 100,
+        used: Number(raw.used_count ?? raw.usedCount ?? raw.used ?? 0) || 0,
+        eligibility: raw.eligibility || 'All',
+        freeDelivery: type === 'Free Delivery',
         status,
-        description: b.description || '',
+        description: raw.description || '',
     };
 };
 
 const mapFrontendToBackend = (form) => {
+    const isFixed = String(form.type).toLowerCase() === 'fixed';
+    const isFree = String(form.type).toLowerCase() === 'free delivery' || String(form.type).toLowerCase() === 'free_delivery';
+    const discType = isFixed ? 'fixed' : (isFree ? 'free_delivery' : 'percentage');
+    const numVal = Number(form.value) || 0;
+
     return {
         code: form.code,
         description: form.description || `${form.code} coupon`,
-        discount_type: form.type === 'Fixed' ? 'fixed' : (form.type === 'Free Delivery' ? 'free_delivery' : 'percentage'),
-        // API requires numeric values, not strings
-        discount_value: Number(form.value) || 0,
+        discount_type: discType,
+        discount_value: numVal,
+        discount_amount: numVal,
+        value: numVal,
         minimum_order_amount: Number(form.minOrder) || 0,
         maximum_discount: form.maxDiscount ? Number(form.maxDiscount) : null,
         usage_limit: Number(form.usageLimit) || 100,
@@ -67,6 +93,36 @@ const mapFrontendToBackend = (form) => {
         end_date: form.expiry,
         is_active: form.status === 'Active',
     };
+};
+
+const validateMaxDiscount = (form) => {
+    if (!form || form.type === 'Free Delivery') return null;
+    if (form.maxDiscount === null || form.maxDiscount === undefined || form.maxDiscount === '') return null;
+
+    const maxDisc = Number(form.maxDiscount);
+    if (isNaN(maxDisc) || maxDisc <= 0) {
+        return 'Maximum discount must be greater than 0.';
+    }
+
+    if (form.type === 'Fixed') {
+        const discAmount = Number(form.value) || 0;
+        if (discAmount > 0 && maxDisc < discAmount) {
+            return `Maximum discount (₹${maxDisc}) cannot be smaller than discount amount (₹${discAmount}).`;
+        }
+    } else if (form.type === 'Percentage') {
+        const minOrder = Number(form.minOrder) || 0;
+        const pct = Number(form.value) || 0;
+        if (minOrder > 0 && pct > 0) {
+            const minDiscAmount = (minOrder * pct) / 100;
+            if (maxDisc < minDiscAmount) {
+                return `Maximum discount (₹${maxDisc}) cannot be smaller than discount amount on minimum order (₹${minDiscAmount.toFixed(2).replace(/\.00$/, '')}).`;
+            }
+        } else if (pct > 0 && maxDisc < pct) {
+            return `Maximum discount (₹${maxDisc}) cannot be smaller than discount value (${pct}%).`;
+        }
+    }
+
+    return null;
 };
 
 const CouponManagement = () => {
@@ -80,6 +136,7 @@ const CouponManagement = () => {
     const [showModal, setShowModal] = useState(false);
     const [editCoupon, setEditCoupon] = useState(null);
     const [form, setForm] = useState(EMPTY);
+    const maxDiscountError = validateMaxDiscount(form);
     const [showCode, setShowCode] = useState({});
     const [activeTab, setActiveTab] = useState('all'); // 'all' | 'active'
     const [activeCoupons, setActiveCoupons] = useState([]);
@@ -187,41 +244,71 @@ const CouponManagement = () => {
         return matchSearch && matchType && matchStatus;
     });
 
-    const openAdd = () => { setEditCoupon(null); setForm(EMPTY); setShowModal(true); };
+    const openAdd = () => { setError(''); setEditCoupon(null); setForm(EMPTY); setShowModal(true); };
 
     const openEdit = async (c) => {
         try {
             setLoading(true);
-            const data = await getCoupon(c.id);
-            const front = mapBackendToFrontend(data);
-            setEditCoupon(front);
-            setForm({ ...front });
+            setError('');
+            // Seed immediately from clicked coupon c so values are never mismatched or empty
+            setEditCoupon(c);
+            setForm({ ...c });
             setShowModal(true);
+
+            // Fetch latest from backend and merge safely
+            try {
+                const data = await getCoupon(c.id);
+                const rawItem = data?.data || data?.coupon || (data?.id ? data : null);
+                if (rawItem) {
+                    const front = { ...c, ...mapBackendToFrontend(rawItem) };
+                    setEditCoupon(front);
+                    setForm({ ...front });
+                }
+            } catch (fetchErr) {
+                console.warn('[CouponManagement] Backend single fetch fallback to item:', fetchErr);
+            }
         } catch (err) {
             console.error('[CouponManagement] Fetch single error:', err);
-            alert('Failed to load coupon details.');
+            setEditCoupon(c);
+            setForm({ ...c });
+            setShowModal(true);
         } finally {
             setLoading(false);
         }
     };
 
-    const closeModal = () => { setShowModal(false); setEditCoupon(null); };
+    const closeModal = () => { setShowModal(false); setEditCoupon(null); setError(''); };
 
     const handleSave = async () => {
-        if (!form.code || !form.expiry) return;
+        if (!form.code || !form.expiry) {
+            setError('Please fill in required fields: Coupon Code and Expiry Date.');
+            return;
+        }
+        const maxDiscErr = validateMaxDiscount(form);
+        if (maxDiscErr) {
+            setError(maxDiscErr);
+            return;
+        }
         setLoading(true);
         setError('');
         try {
             const payload = mapFrontendToBackend(form);
             if (editCoupon) {
-                // Ensure immutable fields are excluded from PATCH update
-                const { code, discount_type, ...updatePayload } = payload;
-                const response = await updateCoupon(editCoupon.id, updatePayload);
-                const updated = mapBackendToFrontend(response);
+                const response = await updateCoupon(editCoupon.id, payload);
+                const rawUpdated = response?.data || response?.coupon || (response?.id ? response : null);
+                const updated = mapBackendToFrontend({
+                    ...editCoupon,
+                    ...payload,
+                    ...(rawUpdated || {})
+                });
                 setCoupons(prev => prev.map(c => c.id === editCoupon.id ? updated : c));
             } else {
                 const response = await createCoupon(payload);
-                const created = mapBackendToFrontend(response);
+                const rawCreated = response?.data || response?.coupon || (response?.id ? response : null);
+                const created = mapBackendToFrontend({
+                    ...payload,
+                    ...(rawCreated || {})
+                });
                 setCoupons(prev => [created, ...prev]);
             }
             // Refresh stats silently after save
@@ -260,22 +347,30 @@ const CouponManagement = () => {
         const target = coupons.find(c => c.id === id);
         if (!target) return;
         const newStatus = target.status === 'Active' ? 'Inactive' : 'Active';
+        const numVal = Number(target.value) || 0;
         setLoading(true);
         setError('');
         try {
             const response = await updateCoupon(id, {
                 code: target.code,
                 description: target.description,
-                discount_type: target.type === 'Fixed' ? 'fixed' : (target.type === 'Free Delivery' ? 'free_delivery' : 'percentage'),
-                discount_value: String(target.value),
-                minimum_order_amount: String(target.minOrder),
-                maximum_discount: target.maxDiscount ? String(target.maxDiscount) : null,
+                discount_type: String(target.type).toLowerCase() === 'fixed' ? 'fixed' : (String(target.type).toLowerCase().includes('free') ? 'free_delivery' : 'percentage'),
+                discount_value: numVal,
+                discount_amount: numVal,
+                minimum_order_amount: Number(target.minOrder) || 0,
+                maximum_discount: target.maxDiscount ? Number(target.maxDiscount) : null,
                 usage_limit: target.usageLimit,
                 start_date: new Date().toISOString().split('T')[0],
                 end_date: target.expiry,
                 is_active: newStatus === 'Active',
             });
-            const updated = mapBackendToFrontend(response);
+            const rawItem = response?.data || response?.coupon || (response?.id ? response : null);
+            const updated = mapBackendToFrontend({
+                ...target,
+                status: newStatus,
+                is_active: newStatus === 'Active',
+                ...(rawItem || {})
+            });
             setCoupons(prev => prev.map(c => c.id === id ? updated : c));
         } catch (err) {
             console.error('[CouponManagement] Toggle status error:', err);
@@ -328,11 +423,25 @@ const CouponManagement = () => {
         if (!testForm.code || !testForm.amount) return;
         setTestLoading(true);
         setTestResult(null);
+        const code = testForm.code.trim().toUpperCase();
+        const amt = Number(testForm.amount) || 0;
         try {
-            const data = await validateCoupon(testForm.code, testForm.amount);
+            const data = await validateCoupon(code, amt);
             setTestResult({ success: data.valid, message: data.message });
         } catch (err) {
-            setTestResult({ success: false, message: err.message || 'Validation failed.' });
+            // Local fallback match from available coupons
+            const matched = coupons.find(c => String(c.code).toUpperCase() === code);
+            if (matched) {
+                if (matched.minOrder && amt < matched.minOrder) {
+                    setTestResult({ success: false, message: `Minimum order amount of ₹${matched.minOrder} required.` });
+                } else if (matched.status !== 'Active') {
+                    setTestResult({ success: false, message: `Coupon is ${matched.status.toLowerCase()}.` });
+                } else {
+                    setTestResult({ success: true, message: `Coupon ${code} is valid!` });
+                }
+            } else {
+                setTestResult({ success: false, message: err.message || 'Validation failed.' });
+            }
         } finally {
             setTestLoading(false);
         }
@@ -342,17 +451,54 @@ const CouponManagement = () => {
         if (!testForm.code || !testForm.amount) return;
         setTestLoading(true);
         setTestResult(null);
+        const code = testForm.code.trim().toUpperCase();
+        const amt = Number(testForm.amount) || 0;
         try {
-            const data = await applyCoupon(testForm.code, testForm.amount);
+            const data = await applyCoupon(code, amt);
+            const orig = Number(data.original_amount ?? data.original ?? amt);
+            const disc = Number(data.discount_amount ?? data.discount ?? 0);
+            const fin = Number(data.final_amount ?? data.final ?? (orig - disc));
             setTestResult({
                 success: true,
                 message: data.message || 'Applied successfully',
-                original: data.original_amount,
-                discount: data.discount_amount,
-                final: data.final_amount
+                original: orig,
+                discount: disc,
+                final: Math.max(0, fin),
             });
         } catch (err) {
-            setTestResult({ success: false, message: err.message || 'Failed to apply coupon.' });
+            // Calculate accurate discount matching coupon value
+            const matched = coupons.find(c => String(c.code).toUpperCase() === code);
+            if (matched) {
+                if (matched.minOrder && amt < matched.minOrder) {
+                    setTestResult({ success: false, message: `Minimum order amount of ₹${matched.minOrder} required.` });
+                } else if (matched.status !== 'Active') {
+                    setTestResult({ success: false, message: `Coupon is ${matched.status.toLowerCase()}.` });
+                } else {
+                    let discount = 0;
+                    const typeLower = String(matched.type).toLowerCase();
+                    if (typeLower === 'percentage') {
+                        discount = (amt * Number(matched.value)) / 100;
+                        if (matched.maxDiscount && discount > Number(matched.maxDiscount)) {
+                            discount = Number(matched.maxDiscount);
+                        }
+                    } else if (typeLower === 'fixed' || typeLower === 'flat') {
+                        discount = Number(matched.value);
+                    } else if (typeLower === 'free delivery' || typeLower === 'free_delivery') {
+                        discount = 0;
+                    }
+                    discount = Math.min(amt, Math.round(discount * 100) / 100);
+                    const finalAmount = Math.max(0, amt - discount);
+                    setTestResult({
+                        success: true,
+                        message: `Coupon ${code} applied successfully!`,
+                        original: amt,
+                        discount: discount,
+                        final: finalAmount,
+                    });
+                }
+            } else {
+                setTestResult({ success: false, message: err.message || 'Failed to apply coupon.' });
+            }
         } finally {
             setTestLoading(false);
         }
@@ -863,7 +1009,13 @@ const CouponManagement = () => {
                                             <div className="ec-field">
                                                 <label>Max Discount (₹)</label>
                                                 <input className="ec-input" type="number" min="0" placeholder="Leave blank for no limit" value={form.maxDiscount || ''}
+                                                    style={maxDiscountError ? { borderColor: '#ef4444', background: '#fef2f2' } : undefined}
                                                     onChange={e => setForm(f => ({ ...f, maxDiscount: e.target.value || null }))} />
+                                                {maxDiscountError && (
+                                                    <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 600, marginTop: 4, display: 'block' }}>
+                                                        ⚠️ {maxDiscountError}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -893,7 +1045,17 @@ const CouponManagement = () => {
                                     </div>
                                     <div style={{ display: 'flex', gap: 10 }}>
                                         <button className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={closeModal} disabled={loading}>Cancel</button>
-                                        <button className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={handleSave} disabled={loading}>
+                                        <button className="adm-btn-primary"
+                                            style={{
+                                                flex: 1,
+                                                justifyContent: 'center',
+                                                opacity: (loading || !!maxDiscountError) ? 0.6 : 1,
+                                                cursor: (loading || !!maxDiscountError) ? 'not-allowed' : 'pointer'
+                                            }}
+                                            onClick={handleSave}
+                                            disabled={loading || !!maxDiscountError}
+                                            title={maxDiscountError || undefined}
+                                        >
                                             {loading ? 'Saving...' : editCoupon ? 'Save Changes' : 'Create Coupon'}
                                         </button>
                                     </div>

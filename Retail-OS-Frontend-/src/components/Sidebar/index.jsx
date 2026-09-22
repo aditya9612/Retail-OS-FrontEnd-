@@ -55,12 +55,9 @@ const menuGroups = [
     {
         label: 'Inventory',
         items: [
-
             { name: 'Inventory', icon: <BsBoxSeam />, path: '/inventory', hasArrow: true },
             { name: 'Categories', icon: <BsTag />, path: '/categories', hasArrow: true },
             { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases', hasArrow: true },
-            { name: 'Returns', icon: <BsArrowReturnLeft />, path: '/returns', hasArrow: true },
-
         ],
     },
     {
@@ -82,6 +79,18 @@ const menuGroups = [
 const Sidebar = ({ collapsed, onToggle }) => {
     const location = useLocation();
 
+    // Guard against any duplicate navigation items across groups (e.g. duplicate Returns module)
+    const seenKeys = new Set();
+    const sanitizedMenuGroups = menuGroups.map(group => ({
+        ...group,
+        items: group.items.filter(item => {
+            const key = item.name.toLowerCase().trim();
+            if (seenKeys.has(key)) return false;
+            seenKeys.add(key);
+            return true;
+        }),
+    })).filter(group => group.items.length > 0);
+
     return (
         <aside className="sidebar" style={{ width: collapsed ? '62px' : '210px' }}>
             {/* Logo */}
@@ -94,14 +103,14 @@ const Sidebar = ({ collapsed, onToggle }) => {
 
             {/* Nav */}
             <nav className="sidebar-nav custom-scrollbar">
-                {menuGroups.map((group, gi) => (
+                {sanitizedMenuGroups.map((group, gi) => (
                     <div key={gi} className="sidebar-group">
                         {!collapsed && (
                             <p className="sidebar-group-label">{group.label}</p>
                         )}
                         {group.items.map((item) => (
                             <NavLink
-                                key={item.name}
+                                key={item.path}
                                 to={item.path}
                                 className={({ isActive }) =>
                                     `sidebar-item${isActive ? ' sidebar-item--active' : ''}`

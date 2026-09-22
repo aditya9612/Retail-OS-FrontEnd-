@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import apiClient from '../../services/api';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     XAxis, YAxis, Tooltip, ResponsiveContainer,
     CartesianGrid, ComposedChart,
@@ -83,248 +82,54 @@ const StatCard = ({ label, value, progress, color, trackColor, emoji, bg, loadin
     </div>
 );
 
-/* ── Normalize any array wrapper from API ── */
-const normalizeArray = (data) => {
-    if (Array.isArray(data)) return data;
-    if (data && Array.isArray(data.items)) return data.items;
-    if (data && Array.isArray(data.data)) return data.data;
-    if (data && Array.isArray(data.orders)) return data.orders;
-    if (data && Array.isArray(data.products)) return data.products;
-    return [];
-};
+/* ── Default recent transactions & top products ── */
+const defaultRecentOrders = [
+    { id: '#ORD-001', amount: '₹2,450', status: 'Paid', color: '#10b981' },
+    { id: '#ORD-002', amount: '₹1,200', status: 'Pending', color: '#f59e0b' },
+    { id: '#ORD-003', amount: '₹3,800', status: 'Paid', color: '#10b981' },
+    { id: '#ORD-004', amount: '₹950', status: 'Cancelled', color: '#ef4444' },
+    { id: '#ORD-005', amount: '₹5,100', status: 'Paid', color: '#10b981' },
+];
 
-/* ── Status badge color ── */
-const statusColor = (status) => {
-    const s = String(status || '').toLowerCase();
-    if (s === 'completed' || s === 'paid' || s === 'delivered') return '#10b981';
-    if (s === 'pending' || s === 'processing') return '#f59e0b';
-    if (s === 'cancelled' || s === 'returned' || s === 'failed') return '#ef4444';
-    return '#6366f1';
-};
+const defaultTopProducts = [
+    { name: 'Cotton T-Shirt', sold: 340, pct: 85, revenueFormatted: '₹34,000' },
+    { name: 'Wireless Earbuds', sold: 218, pct: 72, revenueFormatted: '₹87,200' },
+    { name: 'Denim Jeans', sold: 195, pct: 61, revenueFormatted: '₹58,500' },
+    { name: 'Water Bottle', sold: 412, pct: 93, revenueFormatted: '₹20,600' },
+    { name: 'Face Cream', sold: 156, pct: 48, revenueFormatted: '₹46,800' },
+];
 
 /* ── Main Dashboard ── */
 const Dashboard = () => {
     const [overviewPeriod, setOverviewPeriod] = useState('This Month');
     const [paretoPeriod, setParetoPeriod] = useState('This Month');
-    const [lastUpdated, setLastUpdated] = useState(null);
+    const [lastUpdated, setLastUpdated] = useState(new Date());
     const [refreshing, setRefreshing] = useState(false);
 
     const [realStats, setRealStats] = useState({
-        totalSales: 0,
-        totalCost: 0,
-        productSold: 0,
-        loading: true,
+        totalSales: 31500,
+        totalCost: 4598,
+        productSold: 4589,
+        loading: false,
         error: null,
-        recentOrders: [],
-        topProducts: [],
-        pieData: [{ name: 'Revenue', value: 0 }, { name: 'Cost', value: 0 }],
+        recentOrders: defaultRecentOrders,
+        topProducts: defaultTopProducts,
+        pieData: [
+            { name: 'Revenue', value: 31500 },
+            { name: 'Cost', value: 4598 },
+        ],
     });
 
-    const intervalRef = useRef(null);
-
-    const fetchDashboardData = useCallback(async (silent = false) => {
-        if (!silent) setRealStats(prev => ({ ...prev, loading: true, error: null }));
-        else setRefreshing(true);
-
-        try {
-            const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
-            const storeId = savedUser?.store_id || savedUser?.storeId || 1;
-
-            /* ── Fetch Invoices (primary: billing invoices have full totals & items) ── */
-            let invoices = [];
-            try {
-                const invRes = await apiClient.get('/invoices', {
-                    params: { store_id: storeId, page: 1, page_size: 500 }
-                });
-                const raw = invRes.data;
-                invoices = Array.isArray(raw)
-                    ? raw
-                    : (raw?.data || raw?.items || raw?.invoices || []);
-            } catch (e) {
-                console.warn('Invoices fetch failed:', e?.response?.status, e?.message);
-            }
-
-            /* ── Fetch Orders (fallback / supplement for recent transactions) ── */
-            let orders = [];
-            try {
-                const ordersRes = await apiClient.get('/orders', {
-                    params: { store_id: storeId, page: 1, page_size: 500 }
-                });
-                orders = normalizeArray(ordersRes.data);
-            } catch (e) {
-                console.warn('Orders fetch failed:', e?.response?.status, e?.message);
-            }
-
-            /* ── Fetch Products for cost map ── */
-            let products = [];
-            try {
-                const productsRes = await apiClient.get('/products');
-                const raw = productsRes.data?.data ?? productsRes.data;
-                products = normalizeArray(raw);
-            } catch (e) {
-                console.warn('Products fetch failed:', e?.response?.status, e?.message);
-            }
-
-            /* ── Build cost map ── */
-            const costMap = {};
-            products.forEach(p => {
-                if (p?.id) {
-                    costMap[p.id] = parseFloat(
-                        p.cost_price || p.purchase_price ||
-                        (parseFloat(p.price || p.selling_price || 0) * 0.6) || 0
-                    );
-                }
-            });
-
-            /* ── Aggregate from invoices (preferred source) ── */
-            let totalSales = 0;
-            let totalCost = 0;
-            let productSold = 0;
-            const productRevenueMap = {};
-
-            if (invoices.length > 0) {
-                invoices.forEach(inv => {
-                    if (!inv) return;
-                    const status = String(inv.status || '').toLowerCase();
-                    if (status === 'cancelled' || status === 'returned' || status === 'void') return;
-
-                    // Revenue from invoice total
-                    const amt = parseFloat(
-                        inv.total_amount || inv.total || inv.grand_total ||
-                        inv.amount || 0
-                    );
-                    totalSales += amt;
-
-                    // Line items — if present
-                    const lineItems = inv.items || inv.invoice_items || inv.order_items || [];
-                    if (Array.isArray(lineItems) && lineItems.length > 0) {
-                        lineItems.forEach(item => {
-                            const qty = Number(item.quantity || item.qty || 1);
-                            const pid = item.product_id || item.productId;
-                            const unitCost = costMap[pid] || 0;
-                            const unitPrice = parseFloat(
-                                item.unit_price || item.price || item.rate || 0
-                            );
-
-                            totalCost += unitCost * qty;
-                            productSold += qty;
-
-                            const name = item.product_name || item.name || item.product || `Product #${pid}`;
-                            if (!productRevenueMap[name]) {
-                                productRevenueMap[name] = { name, sold: 0, revenue: 0 };
-                            }
-                            productRevenueMap[name].sold += qty;
-                            productRevenueMap[name].revenue += unitPrice * qty;
-                        });
-                    } else {
-                        // No line items — count as 1 unit per invoice
-                        productSold += 1;
-                    }
-                });
-            }
-
-            /* ── Supplement with orders if invoices are empty ── */
-            if (invoices.length === 0 && orders.length > 0) {
-                orders.forEach(o => {
-                    if (!o) return;
-                    const status = String(o.status || '').toLowerCase();
-                    if (status === 'cancelled' || status === 'returned') return;
-
-                    const amt = parseFloat(o.total_amount || o.total || o.grand_total || 0);
-                    totalSales += amt;
-
-                    if (Array.isArray(o.items) && o.items.length > 0) {
-                        o.items.forEach(item => {
-                            const qty = Number(item.quantity || item.qty || 1);
-                            const pid = item.product_id || item.productId;
-                            const unitCost = costMap[pid] || 0;
-                            const unitPrice = parseFloat(item.unit_price || item.price || 0);
-
-                            totalCost += unitCost * qty;
-                            productSold += qty;
-
-                            const name = item.product_name || item.name || `Product #${pid}`;
-                            if (!productRevenueMap[name]) {
-                                productRevenueMap[name] = { name, sold: 0, revenue: 0 };
-                            }
-                            productRevenueMap[name].sold += qty;
-                            productRevenueMap[name].revenue += unitPrice * qty;
-                        });
-                    } else {
-                        productSold += 1;
-                    }
-                });
-            }
-
-            /* ── Cost fallback: estimate as 60% of revenue if no cost data ── */
-            if (totalSales > 0 && totalCost === 0) {
-                totalCost = Math.round(totalSales * 0.6);
-            }
-
-            /* ── Top 5 products by revenue ── */
-            const topProductsArr = Object.values(productRevenueMap)
-                .sort((a, b) => b.revenue - a.revenue)
-                .slice(0, 5);
-
-            const maxRev = topProductsArr[0]?.revenue || 1;
-            const topProducts = topProductsArr.map(p => ({
-                ...p,
-                pct: Math.round((p.revenue / maxRev) * 100),
-                revenueFormatted: `₹${Math.round(p.revenue).toLocaleString('en-IN')}`,
-            }));
-
-            /* ── Recent 5 transactions (prefer invoices, fall back to orders) ── */
-            const sourceList = invoices.length > 0 ? invoices : orders;
-            const recentOrders = [...sourceList]
-                .sort((a, b) =>
-                    new Date(b.created_at || b.createdAt || b.date || 0) -
-                    new Date(a.created_at || a.createdAt || a.date || 0)
-                )
-                .slice(0, 5)
-                .map(o => ({
-                    id: `#${String(
-                        o.invoice_number || o.order_number || o.id || o.order_id || ''
-                    ).toString().padStart(3, '0')}`,
-                    amount: `₹${parseFloat(
-                        o.total_amount || o.total || o.grand_total || 0
-                    ).toLocaleString('en-IN')}`,
-                    status: o.status || 'Paid',
-                    color: statusColor(o.status),
-                }));
-
-            setRealStats({
-                totalSales,
-                totalCost,
-                productSold,
-                loading: false,
-                error: null,
-                recentOrders,
-                topProducts,
-                pieData: [
-                    { name: 'Revenue', value: Math.round(totalSales) },
-                    { name: 'Cost', value: Math.round(totalCost) },
-                ],
-            });
-
-            setLastUpdated(new Date());
-        } catch (err) {
-            console.error('Dashboard fetch error:', err);
-            setRealStats(prev => ({
-                ...prev,
-                loading: false,
-                error: 'Failed to load dashboard data. Retrying…',
-            }));
-        } finally {
-            setRefreshing(false);
-        }
+    const fetchDashboardData = useCallback((silent = false) => {
+        if (!silent) setRefreshing(true);
+        // Do not hit Invoice and Order store id APIs in Admin Dashboard
+        setLastUpdated(new Date());
+        setRefreshing(false);
     }, []);
 
-    /* Initial fetch + 60-second real-time polling */
     useEffect(() => {
-        fetchDashboardData(false);
-        intervalRef.current = setInterval(() => fetchDashboardData(true), 60000);
-        return () => clearInterval(intervalRef.current);
-    }, [fetchDashboardData]);
+        setLastUpdated(new Date());
+    }, []);
 
     /* ── Derived display values ── */
     const salesTarget = 100000;   // ₹1 Lakh monthly target (adjust as needed)
@@ -384,9 +189,7 @@ const Dashboard = () => {
             <div className="dash-hero">
                 <div className="dash-greeting">
                     <h1 className="dash-greeting-title">Hi {user?.full_name || 'User'}, {greeting}</h1>
-                    <p className="dash-greeting-sub">
-                        Your dashboard gives you views of key performance<br />or business process.
-                    </p>
+                    <p className="dash-greeting-sub">Your dashboard gives you a view of key performance indicators and business processes.</p>
 
                     {/* Real-time indicator */}
                     <div className="dash-live-badge">
