@@ -7,6 +7,7 @@ import {
     BsEye,
     BsEyeSlash,
     BsArrowRight,
+    BsArrowLeft,
     BsShieldCheck,
     BsLightningCharge,
     BsCloudCheck,
@@ -35,7 +36,13 @@ const Login = () => {
     const [showPassword, setShowPassword] = useState(false);
 
     const [showForgotPassword, setShowForgotPassword] = useState(false);
+    const [forgotStep, setForgotStep] = useState(1); // 1: Email, 2: OTP, 3: Reset Password
     const [forgotEmail, setForgotEmail] = useState("");
+    const [forgotOtp, setForgotOtp] = useState("");
+    const [resetToken, setResetToken] = useState("");
+    const [newPassword, setNewPassword] = useState("");
+    const [confirmNewPassword, setConfirmNewPassword] = useState("");
+    const [showNewPassword, setShowNewPassword] = useState(false);
     const [forgotLoading, setForgotLoading] = useState(false);
     const [forgotError, setForgotError] = useState("");
     const [forgotSuccess, setForgotSuccess] = useState("");
@@ -65,19 +72,153 @@ const Login = () => {
             const message =
                 data?.detail?.message ||
                 data?.message ||
-                "Password reset link has been sent to your email address.";
+                "OTP has been sent to your registered email address.";
             setForgotSuccess(message);
+            setForgotStep(2);
+        } catch (error) {
+            const rawDetail = error.response?.data?.detail;
+            let errorMsg = "";
+
+            if (typeof rawDetail === "string") {
+                errorMsg = rawDetail;
+            } else if (rawDetail?.message) {
+                errorMsg = rawDetail.message;
+            } else if (error.response?.data?.message) {
+                errorMsg = error.response.data.message;
+            } else {
+                errorMsg = "Failed to send OTP. Please verify your email and try again.";
+            }
+
+            setForgotError(errorMsg);
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleVerifyOtpSubmit = async (e) => {
+        e.preventDefault();
+        setForgotError("");
+        setForgotSuccess("");
+
+        const trimmedOtp = forgotOtp.trim();
+
+        if (!trimmedOtp) {
+            setForgotError("OTP is required.");
+            return;
+        }
+
+        if (trimmedOtp.length !== 6) {
+            setForgotError("Please enter a valid 6-digit OTP.");
+            return;
+        }
+
+        setForgotLoading(true);
+
+        try {
+            const data = await auth.verifyOtp(forgotEmail.trim(), trimmedOtp);
+            console.log("Verify OTP response:", data);
+
+            const token =
+                data?.token ||
+                data?.reset_token ||
+                data?.data?.token ||
+                data?.data?.reset_token;
+
+            if (token) {
+                setResetToken(token);
+                setForgotSuccess("OTP verified successfully. Please enter your new password.");
+                setForgotStep(3);
+            } else {
+                setForgotError(
+                    "OTP verified, but no reset_token was returned by the server. API response ambiguity detected."
+                );
+            }
         } catch (error) {
             const errorMsg =
                 error.response?.data?.detail?.message ||
                 error.response?.data?.message ||
                 error.response?.data?.detail ||
-                "Failed to send reset link. Please verify your email and try again.";
+                "Invalid or expired OTP. Please try again.";
 
             setForgotError(
                 typeof errorMsg === "string"
                     ? errorMsg
-                    : "An error occurred while requesting password reset."
+                    : "Failed to verify OTP."
+            );
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleResetPasswordSubmit = async (e) => {
+        e.preventDefault();
+        setForgotError("");
+        setForgotSuccess("");
+
+        if (!newPassword.trim()) {
+            setForgotError("New password is required.");
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            setForgotError("Password must be at least 6 characters long.");
+            return;
+        }
+
+        if (newPassword !== confirmNewPassword) {
+            setForgotError("Passwords do not match.");
+            return;
+        }
+
+        if (!resetToken) {
+            setForgotError("Reset token is missing. Please verify OTP again.");
+            setForgotStep(2);
+            return;
+        }
+
+        setForgotLoading(true);
+
+        try {
+            const data = await auth.resetPassword(resetToken, newPassword);
+            const message =
+                data?.detail?.message ||
+                data?.message ||
+                "Password has been reset successfully!";
+            setForgotSuccess(message);
+
+            setTimeout(() => {
+                handleCloseForgotPassword();
+            }, 1800);
+        } catch (error) {
+            const errorMsg =
+                error.response?.data?.detail?.message ||
+                error.response?.data?.message ||
+                error.response?.data?.detail ||
+                "Failed to reset password. Please try again.";
+
+            setForgotError(
+                typeof errorMsg === "string"
+                    ? errorMsg
+                    : "An error occurred while resetting password."
+            );
+        } finally {
+            setForgotLoading(false);
+        }
+    };
+
+    const handleResendOtp = async () => {
+        if (!forgotEmail) return;
+        setForgotError("");
+        setForgotSuccess("");
+        setForgotLoading(true);
+        try {
+            const data = await auth.forgotPassword(forgotEmail.trim());
+            setForgotSuccess(data?.message || "A new OTP has been sent to your email address.");
+        } catch (error) {
+            setForgotError(
+                error.response?.data?.detail?.message ||
+                error.response?.data?.message ||
+                "Failed to resend OTP. Please try again."
             );
         } finally {
             setForgotLoading(false);
@@ -86,7 +227,12 @@ const Login = () => {
 
     const handleCloseForgotPassword = () => {
         setShowForgotPassword(false);
+        setForgotStep(1);
         setForgotEmail("");
+        setForgotOtp("");
+        setResetToken("");
+        setNewPassword("");
+        setConfirmNewPassword("");
         setForgotError("");
         setForgotSuccess("");
         setForgotLoading(false);
@@ -1103,10 +1249,15 @@ const Login = () => {
                             </button>
                         </div>
 
-                        {/* Contact Admin */}
+                        {/* Contact Admin / Register */}
                         <div className="contact-admin-box">
                             Don't have an account?{" "}
-                            <span className="contact-admin-action">Contact Admin</span>
+                            <span
+                                className="contact-admin-action"
+                                onClick={() => navigate("/register")}
+                            >
+                                Register here
+                            </span>
                         </div>
 
                         {/* Powered By Shekru Labs Link Under Contact Admin */}
@@ -1125,7 +1276,7 @@ const Login = () => {
                 </div>
             </div>
 
-            {/* Forgot Password Modal */}
+            {/* Forgot Password Multi-Step Modal */}
             {showForgotPassword &&
                 createPortal(
                     <div
@@ -1196,13 +1347,17 @@ const Login = () => {
                                 />
                             </div>
 
-                            {/* Header */}
+                            {/* Header Titles per step */}
                             <div style={{ textAlign: "center", marginBottom: 20 }}>
                                 <h3 style={{ fontSize: 22, fontWeight: 800, color: "#0F172A", margin: "0 0 6px 0", letterSpacing: "-0.02em" }}>
-                                    Forgot Password?
+                                    {forgotStep === 1 && "Forgot Password?"}
+                                    {forgotStep === 2 && "Verify OTP"}
+                                    {forgotStep === 3 && "Reset Password"}
                                 </h3>
                                 <p style={{ fontSize: 13, color: "#64748B", margin: 0, lineHeight: 1.5, fontWeight: 500 }}>
-                                    Enter your registered email address and we'll send you instructions to reset your password.
+                                    {forgotStep === 1 && "Enter your registered email address to receive a 6-digit OTP verification code."}
+                                    {forgotStep === 2 && `Enter the 6-digit OTP sent to ${forgotEmail}.`}
+                                    {forgotStep === 3 && "Create a new secure password for your RetailOS account."}
                                 </p>
                             </div>
 
@@ -1239,48 +1394,186 @@ const Login = () => {
                                 </div>
                             )}
 
-                            {/* Form */}
-                            <form onSubmit={handleForgotPasswordSubmit}>
-                                <div className="form-field-group">
-                                    <label className="form-field-label">Email Address</label>
-                                    <div className="input-field-relative">
-                                        <BsEnvelope size={16} className="input-prefix-icon" />
-                                        <input
-                                            type="email"
-                                            placeholder="Enter your email address"
-                                            value={forgotEmail}
-                                            onChange={(e) => {
-                                                setForgotEmail(e.target.value);
-                                                if (forgotError) setForgotError("");
-                                            }}
-                                            disabled={forgotLoading}
-                                            required
-                                            className="form-control-input"
-                                        />
+                            {/* STEP 1: Email Form */}
+                            {forgotStep === 1 && (
+                                <form onSubmit={handleForgotPasswordSubmit}>
+                                    <div className="form-field-group">
+                                        <label className="form-field-label">Email Address</label>
+                                        <div className="input-field-relative">
+                                            <BsEnvelope size={16} className="input-prefix-icon" />
+                                            <input
+                                                type="email"
+                                                placeholder="Enter your email address"
+                                                value={forgotEmail}
+                                                onChange={(e) => {
+                                                    setForgotEmail(e.target.value);
+                                                    if (forgotError) setForgotError("");
+                                                }}
+                                                disabled={forgotLoading}
+                                                required
+                                                className="form-control-input"
+                                            />
+                                        </div>
                                     </div>
-                                </div>
 
-                                <button
-                                    type="submit"
-                                    disabled={forgotLoading}
-                                    className="btn-submit-primary"
-                                    style={{
-                                        marginTop: 18,
-                                        opacity: forgotLoading ? 0.75 : 1,
-                                        cursor: forgotLoading ? "not-allowed" : "pointer",
-                                    }}
-                                >
-                                    {forgotLoading ? (
-                                        "Sending..."
-                                    ) : (
-                                        <>
-                                            Send Reset Link <BsArrowRight size={16} />
-                                        </>
-                                    )}
-                                </button>
-                            </form>
+                                    <button
+                                        type="submit"
+                                        disabled={forgotLoading}
+                                        className="btn-submit-primary"
+                                        style={{
+                                            marginTop: 18,
+                                            opacity: forgotLoading ? 0.75 : 1,
+                                            cursor: forgotLoading ? "not-allowed" : "pointer",
+                                        }}
+                                    >
+                                        {forgotLoading ? "Sending OTP..." : <>Send OTP <BsArrowRight size={16} /></>}
+                                    </button>
+                                </form>
+                            )}
 
-                            {/* Back to login */}
+                            {/* STEP 2: Verify OTP Form */}
+                            {forgotStep === 2 && (
+                                <form onSubmit={handleVerifyOtpSubmit}>
+                                    <div className="form-field-group">
+                                        <label className="form-field-label">6-Digit OTP Code</label>
+                                        <div className="input-field-relative">
+                                            <BsLock size={16} className="input-prefix-icon" />
+                                            <input
+                                                type="text"
+                                                maxLength={6}
+                                                placeholder="123456"
+                                                value={forgotOtp}
+                                                onChange={(e) => {
+                                                    setForgotOtp(e.target.value.replace(/\D/g, ""));
+                                                    if (forgotError) setForgotError("");
+                                                }}
+                                                disabled={forgotLoading}
+                                                required
+                                                className="form-control-input"
+                                                style={{ letterSpacing: "4px", fontSize: 16, fontWeight: 700 }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={forgotLoading}
+                                        className="btn-submit-primary"
+                                        style={{
+                                            marginTop: 18,
+                                            opacity: forgotLoading ? 0.75 : 1,
+                                            cursor: forgotLoading ? "not-allowed" : "pointer",
+                                        }}
+                                    >
+                                        {forgotLoading ? "Verifying OTP..." : <>Verify OTP <BsArrowRight size={16} /></>}
+                                    </button>
+
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16 }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setForgotStep(1); setForgotError(""); setForgotSuccess(""); }}
+                                            disabled={forgotLoading}
+                                            style={{
+                                                border: "none",
+                                                background: "transparent",
+                                                color: "#64748B",
+                                                fontSize: "12.5px",
+                                                fontWeight: 600,
+                                                cursor: forgotLoading ? "not-allowed" : "pointer",
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: 4,
+                                            }}
+                                        >
+                                            <BsArrowLeft size={14} /> Change Email
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={handleResendOtp}
+                                            disabled={forgotLoading}
+                                            style={{
+                                                border: "none",
+                                                background: "transparent",
+                                                color: "#2563EB",
+                                                fontSize: "12.5px",
+                                                fontWeight: 600,
+                                                cursor: forgotLoading ? "not-allowed" : "pointer",
+                                            }}
+                                        >
+                                            Resend OTP
+                                        </button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {/* STEP 3: Reset Password Form */}
+                            {forgotStep === 3 && (
+                                <form onSubmit={handleResetPasswordSubmit}>
+                                    <div className="form-field-group">
+                                        <label className="form-field-label">New Password</label>
+                                        <div className="input-field-relative">
+                                            <BsLock size={16} className="input-prefix-icon" />
+                                            <input
+                                                type={showNewPassword ? "text" : "password"}
+                                                placeholder="Enter new password (min 6 chars)"
+                                                value={newPassword}
+                                                onChange={(e) => {
+                                                    setNewPassword(e.target.value);
+                                                    if (forgotError) setForgotError("");
+                                                }}
+                                                disabled={forgotLoading}
+                                                required
+                                                minLength={6}
+                                                className="form-control-input form-control-input-pwd"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowNewPassword((prev) => !prev)}
+                                                className="password-toggle-button"
+                                                aria-label="Toggle password visibility"
+                                            >
+                                                {showNewPassword ? <BsEyeSlash size={16} /> : <BsEye size={16} />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="form-field-group">
+                                        <label className="form-field-label">Confirm New Password</label>
+                                        <div className="input-field-relative">
+                                            <BsLock size={16} className="input-prefix-icon" />
+                                            <input
+                                                type={showNewPassword ? "text" : "password"}
+                                                placeholder="Confirm new password"
+                                                value={confirmNewPassword}
+                                                onChange={(e) => {
+                                                    setConfirmNewPassword(e.target.value);
+                                                    if (forgotError) setForgotError("");
+                                                }}
+                                                disabled={forgotLoading}
+                                                required
+                                                minLength={6}
+                                                className="form-control-input form-control-input-pwd"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        type="submit"
+                                        disabled={forgotLoading}
+                                        className="btn-submit-primary"
+                                        style={{
+                                            marginTop: 18,
+                                            opacity: forgotLoading ? 0.75 : 1,
+                                            cursor: forgotLoading ? "not-allowed" : "pointer",
+                                        }}
+                                    >
+                                        {forgotLoading ? "Resetting Password..." : <>Reset Password <BsArrowRight size={16} /></>}
+                                    </button>
+                                </form>
+                            )}
+
+                            {/* Back to Login Footer */}
                             <div style={{ textAlign: "center", marginTop: 18 }}>
                                 <button
                                     type="button"

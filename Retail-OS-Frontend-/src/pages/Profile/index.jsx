@@ -8,8 +8,12 @@ import {
     BsCheckCircleFill,
     BsPersonBadge,
     BsShieldLock,
+    BsLock,
+    BsEye,
+    BsEyeSlash,
 } from 'react-icons/bs';
 import { getInitials } from '../../utils/userHelpers';
+import { auth } from '../../services/auth';
 
 const Profile = () => {
     const storedUser = JSON.parse(localStorage.getItem('user')) || {};
@@ -25,6 +29,17 @@ const Profile = () => {
     const [showPinModal, setShowPinModal] = useState(false);
     const [newPin, setNewPin] = useState('');
     const [saveSuccess, setSaveSuccess] = useState(false);
+
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+    const [passwordForm, setPasswordForm] = useState({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+    });
+    const [showPasswords, setShowPasswords] = useState(false);
+    const [passwordLoading, setPasswordLoading] = useState(false);
+    const [passwordError, setPasswordError] = useState('');
+    const [passwordSuccess, setPasswordSuccess] = useState('');
 
     const userInitials = useMemo(() => getInitials(userForm.name), [userForm.name]);
 
@@ -50,6 +65,57 @@ const Profile = () => {
         setShowPinModal(false);
         setNewPin('');
         alert('Security PIN updated successfully!');
+    };
+
+    const handleChangePasswordSubmit = async (e) => {
+        e.preventDefault();
+        setPasswordError('');
+        setPasswordSuccess('');
+
+        const { currentPassword, newPassword, confirmPassword } = passwordForm;
+
+        if (!currentPassword.trim()) {
+            setPasswordError('Current password is required.');
+            return;
+        }
+        if (!newPassword.trim()) {
+            setPasswordError('New password is required.');
+            return;
+        }
+        if (newPassword.length < 6) {
+            setPasswordError('New password must be at least 6 characters.');
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setPasswordError('New password and confirm password do not match.');
+            return;
+        }
+
+        setPasswordLoading(true);
+
+        try {
+            await auth.changePassword(currentPassword, newPassword, confirmPassword);
+            setPasswordSuccess('Password changed successfully!');
+            setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            setTimeout(() => {
+                setShowPasswordModal(false);
+                setPasswordSuccess('');
+            }, 1800);
+        } catch (error) {
+            const errorMsg =
+                error.response?.data?.detail?.message ||
+                error.response?.data?.message ||
+                error.response?.data?.detail ||
+                'Failed to change password. Please verify current password.';
+
+            setPasswordError(
+                typeof errorMsg === 'string'
+                    ? errorMsg
+                    : 'Failed to change password.'
+            );
+        } finally {
+            setPasswordLoading(false);
+        }
     };
 
     return (
@@ -196,31 +262,154 @@ const Profile = () => {
                 </div>
             </div>
 
-            {/* Security PIN Card */}
-            <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eef2ff', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
-                        <BsKeyFill />
+            {/* Security Cards Grid (PIN & Password) */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {/* Change Password Card */}
+                <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eef2ff', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                            <BsLock />
+                        </div>
+                        <div>
+                            <p style={{ fontSize: 14, fontWeight: 700, color: '#111827', margin: 0 }}>
+                                Change Account Password
+                            </p>
+                            <p style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 0 0' }}>
+                                Update your account password for secure login access.
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: '#111827', margin: 0 }}>
-                            Security & Terminal PIN
-                        </p>
-                        <p style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 0 0' }}>
-                            Update your security PIN for register lock and admin authorizations.
-                        </p>
-                    </div>
+
+                    <button
+                        type="button"
+                        className="adm-btn-primary"
+                        onClick={() => { setShowPasswordModal(true); setPasswordError(''); setPasswordSuccess(''); }}
+                        style={{ fontSize: 12, padding: '7px 16px', display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+                    >
+                        <BsLock size={14} /> Change Password
+                    </button>
                 </div>
 
-                <button
-                    type="button"
-                    className="adm-btn-secondary"
-                    onClick={() => setShowPinModal(true)}
-                    style={{ fontSize: 12, padding: '7px 16px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                >
-                    <BsShieldLock size={14} /> Update PIN
-                </button>
+                {/* Security PIN Card */}
+                <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 16, padding: '20px 24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#eef2ff', color: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                            <BsKeyFill />
+                        </div>
+                        <div>
+                            <p style={{ fontSize: 14, fontWeight: 700, color: '#111827', margin: 0 }}>
+                                Security & Terminal PIN
+                            </p>
+                            <p style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 0 0' }}>
+                                Update your security PIN for register lock.
+                            </p>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        className="adm-btn-secondary"
+                        onClick={() => setShowPinModal(true)}
+                        style={{ fontSize: 12, padding: '7px 16px', display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+                    >
+                        <BsShieldLock size={14} /> Update PIN
+                    </button>
+                </div>
             </div>
+
+            {/* Change Password Modal */}
+            {showPasswordModal && (
+                <div className="ec-modal-overlay" onClick={() => setShowPasswordModal(false)}>
+                    <div className="ec-modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+                        <div className="ec-modal-header">
+                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Change Account Password</h3>
+                            <button className="ec-modal-close" onClick={() => setShowPasswordModal(false)}>✕</button>
+                        </div>
+
+                        {passwordError && (
+                            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, marginTop: 12 }}>
+                                {passwordError}
+                            </div>
+                        )}
+
+                        {passwordSuccess && (
+                            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#16a34a', padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, marginTop: 12 }}>
+                                {passwordSuccess}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleChangePasswordSubmit} style={{ marginTop: 16 }}>
+                            <div style={{ marginBottom: 12 }}>
+                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                                    Current Password *
+                                </label>
+                                <div style={{ position: 'relative' }}>
+                                    <input
+                                        type={showPasswords ? "text" : "password"}
+                                        placeholder="Enter current password"
+                                        value={passwordForm.currentPassword}
+                                        onChange={e => setPasswordForm(p => ({ ...p, currentPassword: e.target.value }))}
+                                        className="ec-input"
+                                        style={{ width: '100%', height: 38, paddingRight: 36 }}
+                                        required
+                                        disabled={passwordLoading}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPasswords(prev => !prev)}
+                                        style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'transparent', cursor: 'pointer', color: '#9ca3af' }}
+                                    >
+                                        {showPasswords ? <BsEyeSlash size={14} /> : <BsEye size={14} />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ marginBottom: 12 }}>
+                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                                    New Password *
+                                </label>
+                                <input
+                                    type={showPasswords ? "text" : "password"}
+                                    placeholder="Enter new password (min 6 chars)"
+                                    value={passwordForm.newPassword}
+                                    onChange={e => setPasswordForm(p => ({ ...p, newPassword: e.target.value }))}
+                                    className="ec-input"
+                                    style={{ width: '100%', height: 38 }}
+                                    required
+                                    minLength={6}
+                                    disabled={passwordLoading}
+                                />
+                            </div>
+
+                            <div style={{ marginBottom: 16 }}>
+                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                                    Confirm New Password *
+                                </label>
+                                <input
+                                    type={showPasswords ? "text" : "password"}
+                                    placeholder="Confirm new password"
+                                    value={passwordForm.confirmPassword}
+                                    onChange={e => setPasswordForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                                    className="ec-input"
+                                    style={{ width: '100%', height: 38 }}
+                                    required
+                                    minLength={6}
+                                    disabled={passwordLoading}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+                                <button type="button" className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowPasswordModal(false)} disabled={passwordLoading}>
+                                    Cancel
+                                </button>
+                                <button type="submit" className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={passwordLoading}>
+                                    {passwordLoading ? 'Updating...' : 'Update Password'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {/* Change PIN Modal */}
             {showPinModal && (
