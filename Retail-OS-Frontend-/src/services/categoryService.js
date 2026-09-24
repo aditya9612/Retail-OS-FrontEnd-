@@ -3,27 +3,37 @@ import axiosInstance from "../api/axios";
 const BASE_URL = "/api/v1/categories";
 
 const category = {
-  // Get all categories
+  // =========================================================
+  // GET - All Categories
+  // =========================================================
   getAll() {
     return axiosInstance.get(BASE_URL);
   },
 
-  // Get single category
+  // =========================================================
+  // GET - Single Category
+  // =========================================================
   getById(id) {
     return axiosInstance.get(`${BASE_URL}/${id}`);
   },
 
-  // Create category
+  // =========================================================
+  // POST - Create Category
+  // =========================================================
   create(data) {
     return axiosInstance.post(BASE_URL, data);
   },
 
-  // Update category
+  // =========================================================
+  // PUT - Update Category
+  // =========================================================
   update(id, data) {
     return axiosInstance.put(`${BASE_URL}/${id}`, data);
   },
 
-  // Delete category
+  // =========================================================
+  // DELETE - Category
+  // =========================================================
   delete(id) {
     return axiosInstance.delete(`${BASE_URL}/${id}`);
   },

@@ -45,15 +45,6 @@ const InventoryFilters = ({
   return (
     <div className="inventory-filters">
 
-      {/* Header */}
-      <div className="filters-header">
-        <h2>Inventory Filters</h2>
-
-        <p>
-          Filter inventory records quickly using the options below.
-        </p>
-      </div>
-
       {/* =========================
           FIRST ROW
           Search Product + Created Date

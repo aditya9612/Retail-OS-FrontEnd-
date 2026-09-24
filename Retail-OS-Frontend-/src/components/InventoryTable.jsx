@@ -169,7 +169,8 @@ const InventoryTable = ({
             <th>Product</th>
             <th>SKU</th>
             <th>Category</th>
-            <th>Warehouse</th>
+            <th>Store Name</th>
+            <th>Store ID</th>
             <th>Available Qty</th>
             <th>Reorder Level</th>
 
@@ -232,11 +233,18 @@ const InventoryTable = ({
                LOCATION / WAREHOUSE
             ===================================================== */
 
-            const location =
+            const storeName =
+              item.store_name ||
+              item.storeName ||
               item.location ||
               item.warehouse ||
-              item.store_name ||
-              `Store #${item.store_id || 1}`;
+              "—";
+
+            const storeId =
+              item.store_id !== undefined &&
+              item.store_id !== null
+                ? item.store_id
+                : "—";
 
             /* =====================================================
                QUANTITY
@@ -470,7 +478,7 @@ const InventoryTable = ({
                           color: "#6b7280",
                         }}
                       >
-                        {brand} • {location}
+                        {brand} • {storeName}
                       </div>
                     </div>
                   </div>
@@ -502,10 +510,11 @@ const InventoryTable = ({
                 </td>
 
                 {/* =================================================
-                   WAREHOUSE
+                   STORE NAME / STORE ID
                 ================================================= */}
 
-                <td>{location}</td>
+                <td>{storeName}</td>
+                <td>{storeId}</td>
 
                 {/* =================================================
                    AVAILABLE STOCK

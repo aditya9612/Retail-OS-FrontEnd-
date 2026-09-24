@@ -986,3 +986,329 @@ input:focus-visible {
 .inv-page * {
     box-sizing: border-box;
 }
+
+/* =========================================================
+   INVENTORY HEADER ACTION ICONS
+   STOCK IN / STOCK OUT / TRANSFER
+========================================================= */
+
+.inventory-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.inventory-header-right .header-btn {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dbe1e8;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #475569;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        color 0.18s ease,
+        box-shadow 0.18s ease,
+        transform 0.15s ease;
+}
+
+.inventory-header-right .header-btn svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+    flex-shrink: 0;
+}
+
+.inventory-header-right .header-btn:hover {
+    background: #f8fafc;
+    border-color: #c7d2fe;
+    color: #4f46e5;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+    transform: translateY(-1px);
+}
+
+.inventory-header-right .header-btn:active {
+    transform: translateY(0);
+}
+
+.inventory-header-right .header-btn:focus-visible {
+    outline: 2px solid #818cf8;
+    outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+    .inventory-header-right {
+        gap: 6px;
+    }
+
+    .inventory-header-right .header-btn {
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
+        min-height: 34px;
+    }
+
+    .inventory-header-right .header-btn svg {
+        width: 15px;
+        height: 15px;
+    }
+}
+
+
+/* =========================================================
+   PROFESSIONAL COMPACT INVENTORY UI OVERRIDES
+   Keeps existing functionality intact and reduces excess
+   whitespace/oversized sections on desktop.
+========================================================= */
+
+.inv-page {
+    padding: 18px 20px 28px;
+    background: #f6f8fc;
+}
+
+.inv-container {
+    max-width: 100%;
+}
+
+/* Compact page heading */
+.inv-topbar {
+    margin-bottom: 12px;
+}
+
+.inv-eyebrow {
+    margin-bottom: 3px;
+    font-size: 10px;
+    line-height: 15px;
+    letter-spacing: 0.07em;
+}
+
+.inv-eyebrow-dot {
+    width: 6px;
+    height: 6px;
+    flex-basis: 6px;
+}
+
+.inv-title {
+    font-size: 22px;
+    line-height: 28px;
+    font-weight: 700;
+}
+
+/* Main white sections */
+.inv-card {
+    margin-bottom: 14px;
+    border-radius: 9px;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, 0.045);
+}
+
+.inv-card-heading {
+    padding: 13px 16px 11px;
+}
+
+.inv-section-title {
+    font-size: 15px;
+    line-height: 21px;
+}
+
+.inv-section-description {
+    margin-top: 2px;
+    font-size: 11px;
+    line-height: 16px;
+}
+
+/* Filter area: remove unnecessary double-card feeling */
+.inv-filter-card {
+    overflow: visible;
+}
+
+.inv-filter-inner {
+    width: 100%;
+}
+
+.inv-filter-inner .inv-card-heading {
+    padding: 13px 16px 10px;
+}
+
+/* InventoryFilters component is already inside inv-filter-card.
+   Flatten its own outer card so the page does not look nested. */
+.inv-filter-card .inventory-filters {
+    margin: 0;
+    padding: 12px 14px 14px;
+    gap: 12px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+/* Hide duplicate heading rendered by InventoryFilters itself.
+   The parent Inventory page already renders "Inventory Filters". */
+.inv-filter-card .inventory-filters > .filters-header {
+    display: none;
+}
+
+.inv-filter-card .filters-row {
+    gap: 10px;
+}
+
+.inv-filter-card .filter-group label {
+    margin-bottom: 5px;
+    font-size: 11px;
+    line-height: 16px;
+}
+
+.inv-filter-card .filter-group input,
+.inv-filter-card .filter-group select {
+    height: 38px;
+    padding: 7px 10px;
+    border-radius: 7px;
+    font-size: 12px;
+}
+
+.inv-filter-card .filter-actions {
+    gap: 7px;
+    padding-top: 10px;
+}
+
+.inv-filter-card .reset-btn,
+.inv-filter-card .search-btn,
+.inv-filter-card .export-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 7px;
+}
+
+/* Inventory list section */
+.inv-card > .inventory-header {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.inv-table-wrap {
+    border-top: 1px solid #e9edf3;
+}
+
+/* Pagination */
+.inv-pagination {
+    padding: 10px 14px;
+}
+
+.inv-page-btn {
+    width: 29px;
+    height: 29px;
+    border-radius: 6px;
+}
+
+/* Stock action icons */
+.inventory-header-right {
+    gap: 6px;
+}
+
+.inventory-header-right .header-btn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 7px;
+}
+
+.inventory-header-right .header-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* =========================================================
+   RESPONSIVE PROFESSIONAL OVERRIDES
+========================================================= */
+
+@media (max-width: 1100px) {
+    .inv-page {
+        padding: 16px;
+    }
+
+    .inv-title {
+        font-size: 21px;
+        line-height: 27px;
+    }
+}
+
+@media (max-width: 850px) {
+    .inv-filter-card .inventory-filters {
+        padding: 12px;
+    }
+}
+
+@media (max-width: 640px) {
+    .inv-page {
+        padding: 12px 10px 24px;
+    }
+
+    .inv-topbar {
+        margin-bottom: 10px;
+    }
+
+    .inv-title {
+        font-size: 20px;
+        line-height: 26px;
+    }
+
+    .inv-card {
+        margin-bottom: 12px;
+    }
+
+    .inv-card-heading {
+        padding: 12px;
+    }
+
+    .inv-filter-inner .inv-card-heading {
+        padding: 12px 12px 9px;
+    }
+
+    .inv-filter-card .inventory-filters {
+        padding: 10px 12px 12px;
+        gap: 10px;
+    }
+
+    .inv-filter-card .filter-group input,
+    .inv-filter-card .filter-group select {
+        height: 38px;
+    }
+
+    .inv-pagination {
+        padding: 10px 12px;
+    }
+
+    .inventory-header-right .header-btn {
+        width: 32px;
+        height: 32px;
+        min-width: 32px;
+        min-height: 32px;
+    }
+}
+
+@media (max-width: 420px) {
+    .inv-page {
+        padding: 10px 8px 22px;
+    }
+
+    .inv-title {
+        font-size: 19px;
+    }
+
+    .inv-card-heading {
+        padding: 11px;
+    }
+}

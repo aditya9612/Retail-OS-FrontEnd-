@@ -1,29 +1,35 @@
-/* ==========================================
-   INVENTORY TABLE CONTAINER
-========================================== */
+/* =========================================================
+   INVENTORY TABLE
+   Professional Responsive Dashboard Table
+========================================================= */
 
 .inventory-table-container {
+  position: relative;
+
   width: 100%;
-  background: #ffffff;
-
-  margin-top: 0;
-  padding: 0;
-
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.03),
-    0 4px 12px rgba(15, 23, 42, 0.04);
+  max-width: 100%;
+  min-width: 0;
 
   overflow-x: auto;
+  overflow-y: hidden;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 11px;
+
   box-sizing: border-box;
+
+  -webkit-overflow-scrolling: touch;
+
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
 }
 
 
-/* ==========================================
-   CUSTOM SCROLLBAR
-========================================== */
+/* =========================================================
+   HORIZONTAL SCROLLBAR
+========================================================= */
 
 .inventory-table-container::-webkit-scrollbar {
   height: 7px;
@@ -31,11 +37,15 @@
 
 .inventory-table-container::-webkit-scrollbar-track {
   background: #f8fafc;
+
+  border-radius: 999px;
 }
 
 .inventory-table-container::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 10px;
+
+  border: 2px solid #f8fafc;
+  border-radius: 999px;
 }
 
 .inventory-table-container::-webkit-scrollbar-thumb:hover {
@@ -43,85 +53,120 @@
 }
 
 
-/* ==========================================
-   TABLE
-========================================== */
+/* =========================================================
+   TABLE BASE
+========================================================= */
 
 .inventory-table {
   width: 100%;
+  min-width: 1420px;
 
-  /* Extra width so Margin + Status never hide behind Actions */
-  min-width: 1520px;
+  margin: 0;
 
-  border-collapse: separate;
+  border-collapse: collapse;
   border-spacing: 0;
 
+  table-layout: auto;
+
   background: #ffffff;
+
+  color: #334155;
+
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 
-/* ==========================================
+/* =========================================================
+   COMMON CELL
+========================================================= */
+
+.inventory-table th,
+.inventory-table td {
+  box-sizing: border-box;
+
+  text-align: left;
+  vertical-align: middle;
+}
+
+
+/* =========================================================
    TABLE HEADER
-========================================== */
+========================================================= */
 
 .inventory-table thead {
   background: #f8fafc;
 }
 
-.inventory-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+.inventory-table thead tr {
+  background: #f8fafc;
+}
 
-  padding: 14px 16px;
+.inventory-table th {
+  height: 44px;
 
+  padding: 11px 13px;
+
+  color: #475569;
   background: #f8fafc;
 
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e2e8f0;
 
-  color: #475569;
-
-  font-size: 11.5px;
-  line-height: 1.3;
+  font-size: 10px;
+  line-height: 16px;
   font-weight: 700;
 
-  text-align: left;
-  white-space: nowrap;
+  letter-spacing: 0.025em;
+  text-transform: none;
 
-  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 
-/* ==========================================
+/* =========================================================
    TABLE BODY
-========================================== */
+========================================================= */
 
-.inventory-table tbody td {
-  padding: 14px 16px;
-
-  color: #475569;
-
-  font-size: 12.5px;
-  line-height: 1.4;
-
-  border-bottom: 1px solid #edf0f4;
-
-  vertical-align: middle;
-  white-space: nowrap;
-
+.inventory-table tbody {
   background: #ffffff;
 }
+
+.inventory-table td {
+  padding: 12px 13px;
+
+  color: #334155;
+
+  background: transparent;
+
+  border-bottom: 1px solid #eef2f7;
+
+  font-size: 11px;
+  line-height: 17px;
+
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+
+/* =========================================================
+   TABLE ROW
+========================================================= */
 
 .inventory-table tbody tr {
   background: #ffffff;
 
   transition:
-    background-color 0.18s ease,
-    box-shadow 0.18s ease;
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.inventory-table tbody tr:hover {
+  background: #f8fafc;
 }
 
 .inventory-table tbody tr:hover td {
-  background: #fafbff;
+  background: transparent;
 }
 
 .inventory-table tbody tr:last-child td {
@@ -129,436 +174,526 @@
 }
 
 
-/* ==========================================
+/* =========================================================
    PRODUCT COLUMN
-   STICKY LEFT
-========================================== */
+========================================================= */
 
-.inventory-table th:first-child,
-.inventory-table td:first-child {
-  position: sticky;
-  left: 0;
-
-  min-width: 220px;
-  width: 220px;
-  max-width: 220px;
-}
-
-.inventory-table th:first-child {
-  z-index: 10;
-
-  background: #f8fafc;
-
-  box-shadow:
-    6px 0 10px rgba(15, 23, 42, 0.035);
-}
-
-.inventory-table td:first-child {
-  z-index: 6;
-
-  background: #ffffff;
-
-  box-shadow:
-    6px 0 10px rgba(15, 23, 42, 0.025);
-}
-
-.inventory-table tbody tr:hover td:first-child {
-  background: #fafbff;
+.inventory-table th:nth-child(1),
+.inventory-table td:nth-child(1) {
+  min-width: 210px;
+  width: 210px;
 }
 
 
-/* ==========================================
-   SKU COLUMN
-========================================== */
+/* =========================================================
+   PRODUCT CONTENT SAFETY
+========================================================= */
+
+.inventory-table td:nth-child(1) > div {
+  min-width: 0;
+}
+
+.inventory-table td:nth-child(1) > div > div:last-child {
+  min-width: 0;
+}
+
+
+/* Product name */
+
+.inventory-table td:nth-child(1)
+  > div
+  > div:last-child
+  > div:first-child {
+  max-width: 150px;
+
+  color: #1e293b;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* Product secondary information */
+
+.inventory-table td:nth-child(1)
+  > div
+  > div:last-child
+  > div:last-child {
+  max-width: 160px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   SKU
+========================================================= */
 
 .inventory-table th:nth-child(2),
 .inventory-table td:nth-child(2) {
-  min-width: 135px;
+  min-width: 110px;
+
+  white-space: nowrap;
+}
+
+.inventory-table td:nth-child(2) {
+  color: #475569;
+
+  font-weight: 500;
 }
 
 
-/* ==========================================
-   CATEGORY COLUMN
-========================================== */
+/* =========================================================
+   CATEGORY
+========================================================= */
 
 .inventory-table th:nth-child(3),
 .inventory-table td:nth-child(3) {
   min-width: 115px;
+
+  white-space: nowrap;
 }
 
 
-/* ==========================================
-   STORE ID
-========================================== */
+/* =========================================================
+   STORE NAME
+========================================================= */
 
 .inventory-table th:nth-child(4),
 .inventory-table td:nth-child(4) {
-  min-width: 85px;
+  min-width: 150px;
+}
+
+.inventory-table td:nth-child(4) {
+  max-width: 170px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 
-/* ==========================================
-   STORE NAME
-========================================== */
+/* =========================================================
+   STORE ID
+========================================================= */
 
 .inventory-table th:nth-child(5),
 .inventory-table td:nth-child(5) {
+  min-width: 75px;
+
+  white-space: nowrap;
+}
+
+.inventory-table td:nth-child(5) {
+  color: #64748b;
+}
+
+
+/* =========================================================
+   AVAILABLE QUANTITY
+========================================================= */
+
+.inventory-table th:nth-child(6),
+.inventory-table td:nth-child(6) {
+  min-width: 125px;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   REORDER LEVEL
+========================================================= */
+
+.inventory-table th:nth-child(7),
+.inventory-table td:nth-child(7) {
+  min-width: 115px;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   EXPIRY DATE
+========================================================= */
+
+.inventory-table th:nth-child(8),
+.inventory-table td:nth-child(8) {
   min-width: 145px;
 }
 
 
-/* ==========================================
-   AVAILABLE QUANTITY
-========================================== */
-
-.inventory-table th:nth-child(6),
-.inventory-table td:nth-child(6) {
-  min-width: 135px;
-}
-
-.inventory-table td:nth-child(6) {
-  font-weight: 600;
-}
-
-
-/* ==========================================
-   REORDER LEVEL
-========================================== */
-
-.inventory-table th:nth-child(7),
-.inventory-table td:nth-child(7) {
-  min-width: 120px;
-}
-
-
-/* ==========================================
+/* =========================================================
    COST PRICE
-========================================== */
-
-.inventory-table th:nth-child(8),
-.inventory-table td:nth-child(8) {
-  min-width: 110px;
-}
-
-
-/* ==========================================
-   SELLING PRICE
-========================================== */
+========================================================= */
 
 .inventory-table th:nth-child(9),
 .inventory-table td:nth-child(9) {
   min-width: 105px;
+
+  white-space: nowrap;
+}
+
+.inventory-table td:nth-child(9) {
+  color: #475569;
+
+  font-weight: 500;
 }
 
 
-/* ==========================================
-   MARGIN
-========================================== */
+/* =========================================================
+   SELLING PRICE
+========================================================= */
 
 .inventory-table th:nth-child(10),
 .inventory-table td:nth-child(10) {
-  min-width: 95px;
+  min-width: 115px;
+
+  white-space: nowrap;
 }
 
 
-/* ==========================================
-   STATUS
-========================================== */
+/* =========================================================
+   MARGIN
+========================================================= */
 
 .inventory-table th:nth-child(11),
 .inventory-table td:nth-child(11) {
-  min-width: 115px;
+  min-width: 85px;
+
+  white-space: nowrap;
 }
 
 
-/* ==========================================
+/* =========================================================
+   STATUS
+========================================================= */
+
+.inventory-table th:nth-child(12),
+.inventory-table td:nth-child(12) {
+  min-width: 110px;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
    ACTIONS
-   STICKY RIGHT
-========================================== */
+========================================================= */
 
-.inventory-table th:last-child,
-.inventory-table td:last-child {
-  position: static;
+.inventory-table th:nth-child(13),
+.inventory-table td:nth-child(13) {
+  min-width: 100px;
 
-  min-width: 160px;
-  width: 160px;
+  text-align: center;
 
-  box-sizing: border-box;
-}
-
-.inventory-table th:last-child {
-  z-index: auto;
-  background: #f8fafc;
-  box-shadow: none;
-}
-
-.inventory-table td:last-child {
-  z-index: auto;
-  background: #ffffff;
-  box-shadow: none;
-}
-
-.inventory-table tbody tr:hover td:last-child {
-  background: #fafbff;
+  white-space: nowrap;
 }
 
 
-/* ==========================================
-   ACTION ICON BUTTONS
-========================================== */
+/* =========================================================
+   UPDATE BUTTON
+========================================================= */
 
-.inventory-action-buttons {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-
-  gap: 7px;
-
-  flex-wrap: nowrap;
-}
-
-.inventory-action-btn {
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
+.inventory-table
+  td:last-child
+  .adm-btn-primary {
+  min-width: 68px;
+  height: 31px;
 
   display: inline-flex;
   align-items: center;
   justify-content: center;
 
-  padding: 0;
+  gap: 5px;
 
-  border: 1px solid transparent;
-  border-radius: 8px;
+  margin: 0;
+  padding: 0 11px;
+
+  color: #ffffff;
+  background: #4f46e5;
+
+  border: 1px solid #4f46e5;
+  border-radius: 7px;
+
+  box-shadow:
+    0 1px 2px rgba(79, 70, 229, 0.12);
+
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+
+  white-space: nowrap;
 
   cursor: pointer;
 
+  box-sizing: border-box;
+
   transition:
-    transform 0.18s ease,
+    color 0.18s ease,
     background-color 0.18s ease,
     border-color 0.18s ease,
-    box-shadow 0.18s ease;
-}
-
-.inventory-action-btn svg {
-  width: 15px;
-  height: 15px;
+    box-shadow 0.18s ease,
+    transform 0.15s ease;
 }
 
 
-/* ==========================================
-   VIEW
-========================================== */
+/* =========================================================
+   UPDATE BUTTON HOVER
+========================================================= */
 
-.inventory-action-view {
-  background: #eef2ff;
-  color: #4f46e5;
-}
+.inventory-table
+  td:last-child
+  .adm-btn-primary:hover:not(:disabled) {
+  background: #4338ca;
 
-.inventory-action-view:hover {
-  background: #e0e7ff;
-  border-color: #c7d2fe;
-}
-
-
-/* ==========================================
-   HISTORY
-========================================== */
-
-.inventory-action-history {
-  background: #f5f3ff;
-  color: #7c3aed;
-}
-
-.inventory-action-history:hover {
-  background: #ede9fe;
-  border-color: #ddd6fe;
-}
-
-
-/* ==========================================
-   ADJUST
-========================================== */
-
-.inventory-action-adjust {
-  background: #fff7ed;
-  color: #ea580c;
-}
-
-.inventory-action-adjust:hover {
-  background: #ffedd5;
-  border-color: #fed7aa;
-}
-
-
-/* ==========================================
-   UPDATE
-========================================== */
-
-.inventory-action-update {
-  background: #ecfdf5;
-  color: #059669;
-}
-
-.inventory-action-update:hover {
-  background: #d1fae5;
-  border-color: #a7f3d0;
-}
-
-
-/* ==========================================
-   COMMON ACTION HOVER
-========================================== */
-
-.inventory-action-btn:hover {
-  transform: translateY(-1px);
+  border-color: #4338ca;
 
   box-shadow:
-    0 3px 8px rgba(15, 23, 42, 0.08);
+    0 3px 8px rgba(79, 70, 229, 0.18);
+
+  transform: translateY(-1px);
 }
 
-.inventory-action-btn:active {
+
+/* =========================================================
+   UPDATE BUTTON ACTIVE
+========================================================= */
+
+.inventory-table
+  td:last-child
+  .adm-btn-primary:active:not(:disabled) {
+  background: #3730a3;
+
+  border-color: #3730a3;
+
   transform: translateY(0);
 }
 
-.inventory-action-btn:focus-visible {
-  outline: 3px solid rgba(99, 102, 241, 0.14);
-  outline-offset: 2px;
+
+/* =========================================================
+   UPDATE BUTTON FOCUS
+========================================================= */
+
+.inventory-table
+  td:last-child
+  .adm-btn-primary:focus-visible {
+  outline: none;
+
+  box-shadow:
+    0 0 0 3px rgba(99, 102, 241, 0.14);
 }
 
 
-/* ==========================================
-   EMPTY TABLE MESSAGE
-========================================== */
+/* =========================================================
+   UPDATE BUTTON DISABLED
+========================================================= */
 
-.inventory-table tbody td[colspan] {
-  padding: 32px 20px !important;
+.inventory-table
+  td:last-child
+  .adm-btn-primary:disabled {
+  opacity: 0.5;
 
-  text-align: center;
+  cursor: not-allowed;
 
-  color: #64748b !important;
+  transform: none;
 
-  font-size: 13px !important;
+  box-shadow: none;
+}
+
+
+/* =========================================================
+   EMPTY TABLE
+========================================================= */
+
+.inventory-table tbody:empty::after {
+  content: "No inventory data available";
+
+  display: table-cell;
+
+  width: 100%;
+
+  padding: 32px 20px;
+
+  color: #64748b;
+
+  background: #ffffff;
+
+  font-size: 12px;
+  line-height: 18px;
   font-weight: 500;
 
-  position: static !important;
+  text-align: center;
 }
 
 
-/* ==========================================
+/* =========================================================
+   LARGE LAPTOP
+========================================================= */
+
+@media (max-width: 1400px) {
+  .inventory-table {
+    min-width: 1380px;
+  }
+
+  .inventory-table th {
+    padding: 10px 12px;
+  }
+
+  .inventory-table td {
+    padding: 11px 12px;
+  }
+}
+
+
+/* =========================================================
    LAPTOP
-========================================== */
+========================================================= */
 
 @media (max-width: 1200px) {
-
   .inventory-table {
-    min-width: 1400px;
+    min-width: 1340px;
   }
 
-  .inventory-table thead th,
-  .inventory-table tbody td {
-    padding-left: 12px;
-    padding-right: 12px;
+  .inventory-table th {
+    font-size: 10px;
   }
 
-  .inventory-table th:first-child,
-  .inventory-table td:first-child {
-    min-width: 205px;
-    width: 205px;
-    max-width: 205px;
+  .inventory-table td {
+    font-size: 11px;
   }
 }
 
 
-/* ==========================================
+/* =========================================================
    TABLET
-========================================== */
+========================================================= */
+
+@media (max-width: 992px) {
+  .inventory-table-container {
+    border-radius: 9px;
+  }
+
+  .inventory-table {
+    min-width: 1300px;
+  }
+
+  .inventory-table th,
+  .inventory-table td {
+    padding-left: 11px;
+    padding-right: 11px;
+  }
+}
+
+
+/* =========================================================
+   SMALL TABLET
+========================================================= */
 
 @media (max-width: 768px) {
-
   .inventory-table-container {
-    border-radius: 10px;
+    border-radius: 8px;
   }
-
-  .inventory-table {
-    min-width: 1320px;
-  }
-
-  .inventory-table thead th {
-    padding: 12px;
-
-    font-size: 10.5px;
-  }
-
-  .inventory-table tbody td {
-    padding: 12px;
-
-    font-size: 11.5px;
-  }
-
-  .inventory-table th:first-child,
-  .inventory-table td:first-child {
-    min-width: 195px;
-    width: 195px;
-    max-width: 195px;
-  }
-
-  .inventory-table th:last-child,
-  .inventory-table td:last-child {
-    min-width: 145px;
-    width: 145px;
-  }
-
-  .inventory-action-btn {
-    width: 31px;
-    height: 31px;
-    min-width: 31px;
-  }
-}
-
-
-/* ==========================================
-   MOBILE
-========================================== */
-
-@media (max-width: 480px) {
 
   .inventory-table {
     min-width: 1260px;
+
+    font-size: 11px;
   }
 
-  .inventory-table thead th,
-  .inventory-table tbody td {
-    padding: 11px 10px;
+  .inventory-table th {
+    height: 40px;
+
+    padding: 9px 10px;
+
+    font-size: 9px;
+    line-height: 14px;
   }
 
-  .inventory-table th:first-child,
-  .inventory-table td:first-child {
-    min-width: 180px;
-    width: 180px;
-    max-width: 180px;
+  .inventory-table td {
+    padding: 10px;
+
+    font-size: 10px;
+    line-height: 16px;
   }
 
-  .inventory-table th:last-child,
-  .inventory-table td:last-child {
-    min-width: 140px;
-    width: 140px;
-  }
-
-  .inventory-action-buttons {
-    gap: 5px;
-  }
-
-  .inventory-action-btn {
-    width: 29px;
+  .inventory-table
+    td:last-child
+    .adm-btn-primary {
+    min-width: 62px;
     height: 29px;
-    min-width: 29px;
 
-    border-radius: 7px;
+    padding: 0 9px;
+
+    font-size: 9px;
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 576px) {
+  .inventory-table {
+    min-width: 1220px;
   }
 
-  .inventory-action-btn svg {
-    width: 13px;
-    height: 13px;
+  .inventory-table th {
+    padding: 8px 9px;
+  }
+
+  .inventory-table td {
+    padding: 9px;
+  }
+
+  .inventory-table
+    td:last-child
+    .adm-btn-primary {
+    min-width: 60px;
+    height: 28px;
+
+    padding: 0 8px;
+  }
+}
+
+
+/* =========================================================
+   VERY SMALL MOBILE
+========================================================= */
+
+@media (max-width: 400px) {
+  .inventory-table {
+    min-width: 1200px;
+  }
+
+  .inventory-table th,
+  .inventory-table td {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .inventory-table tbody tr,
+  .inventory-table
+    td:last-child
+    .adm-btn-primary {
+    transition: none;
+  }
+
+  .inventory-table
+    td:last-child
+    .adm-btn-primary:hover {
+    transform: none;
   }
 }

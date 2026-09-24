@@ -1,9 +1,9 @@
 import React from "react";
+
 import {
-  BsBoxArrowInDown,
-  BsBoxArrowUp,
-  BsArrowLeftRight,
-  BsBagCheck,
+    BsBoxArrowInDown,
+    BsBoxArrowUp,
+    BsArrowLeftRight,
 } from "react-icons/bs";
 
 import "./InventoryHeader.css";
@@ -15,8 +15,6 @@ const InventoryHeader = ({
     activeTab,
     setActiveTab,
     setStockModal,
-    onRefresh,
-    loading = false,
 }) => {
     return (
         <div className="inventory-header">
@@ -28,51 +26,22 @@ const InventoryHeader = ({
 
                 {/* LEFT */}
                 <div className="inventory-header-left">
-                    <span className="inventory-header-label">
-                        INVENTORY MANAGEMENT
-                    </span>
-
-                    <h1>
-                        Inventory Dashboard
+                    <h1 className="inventory-main-title">
+                        Inventory Management
                     </h1>
-
-                    <p className="inventory-header-subtitle">
-                        Manage stock levels, inventory movements
-                        and product availability.
-                    </p>
                 </div>
 
                 {/* RIGHT */}
                 <div className="inventory-header-right">
 
-                    {/* LIVE STATUS */}
-                    <div className="inventory-live-status">
-                        <span className="live-dot" />
-                        <span>Live inventory</span>
-                    </div>
-
-                    {/* REFRESH */}
-                    <button
-                        type="button"
-                        className="header-btn refresh-btn"
-                        onClick={onRefresh}
-                        disabled={loading}
-                    >
-                        <span className="btn-icon">
-                            ↻
-                        </span>
-
-                        <span>
-                            {loading
-                                ? "Refreshing..."
-                                : "Refresh"}
-                        </span>
-                    </button>
-
-                    {/* STOCK IN */}
+                    {/* =========================
+                        STOCK IN
+                    ========================= */}
                     <button
                         type="button"
                         className="header-btn stock-in-btn"
+                        title="Stock In"
+                        aria-label="Stock In"
                         onClick={() =>
                             setStockModal({
                                 name: "Stock In",
@@ -82,19 +51,17 @@ const InventoryHeader = ({
                             })
                         }
                     >
-                        <span className="btn-icon">
-                            +
-                        </span>
-
-                        <span>
-                            Stock In
-                        </span>
+                        <BsBoxArrowInDown />
                     </button>
 
-                    {/* STOCK OUT */}
+                    {/* =========================
+                        STOCK OUT
+                    ========================= */}
                     <button
                         type="button"
                         className="header-btn stock-out-btn"
+                        title="Stock Out"
+                        aria-label="Stock Out"
                         onClick={() =>
                             setStockModal({
                                 name: "Stock Out",
@@ -104,19 +71,17 @@ const InventoryHeader = ({
                             })
                         }
                     >
-                        <span className="btn-icon">
-                            −
-                        </span>
-
-                        <span>
-                            Stock Out
-                        </span>
+                        <BsBoxArrowUp />
                     </button>
 
-                    {/* TRANSFER */}
+                    {/* =========================
+                        TRANSFER
+                    ========================= */}
                     <button
                         type="button"
                         className="header-btn transfer-btn"
+                        title="Transfer"
+                        aria-label="Transfer"
                         onClick={() =>
                             setStockModal({
                                 name: "Transfer",
@@ -126,14 +91,9 @@ const InventoryHeader = ({
                             })
                         }
                     >
-                        <span className="btn-icon">
-                            ↔
-                        </span>
-
-                        <span>
-                            Transfer
-                        </span>
+                        <BsArrowLeftRight />
                     </button>
+
                 </div>
             </div>
 
@@ -204,6 +164,7 @@ const InventoryHeader = ({
                         {outOfStockCount}
                     </span>
                 </button>
+
             </div>
         </div>
     );

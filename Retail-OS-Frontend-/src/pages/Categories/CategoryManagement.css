@@ -1,200 +1,434 @@
-/* Scrollbar styles are defined globally in src/index.css (.custom-scrollbar) */
+/* =========================================================
+   CATEGORY MANAGEMENT
+   TABLE SCROLL + PAGINATION
+   READY TO USE
+========================================================= */
 
-/* ========================================= 
-   Categories Management Page 
-   ========================================= */
 
-.category-management-page { 
-  width: 100%; 
-  max-width: 100%; 
-  min-width: 0; 
-  box-sizing: border-box; 
-  overflow-x: hidden; 
-  padding: 0; 
-} 
+/* =========================================================
+   CATEGORY MANAGEMENT PAGE
+========================================================= */
 
-/* Prevent child components from forcing 
-   the complete page wider than the viewport */ 
-.category-management-page * { 
-  box-sizing: border-box; 
-} 
+.category-management-page {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 
-/* ========================================= 
-   Category Table Horizontal Scroll 
-   ========================================= */ 
+  padding: 0;
 
-.category-management-page .category-table-wrapper { 
-  width: 100%; 
-  max-width: 100%; 
-  overflow-x: auto; 
-  overflow-y: hidden; 
-  -webkit-overflow-scrolling: touch; 
-} 
+  box-sizing: border-box;
 
-/* Keep table readable when content is wider */ 
-.category-management-page .category-table-wrapper table { 
-  min-width: 700px; 
-  width: 100%; 
-} 
+  overflow-x: hidden;
+}
 
-/* ========================================= 
-   Filters / Cards 
-   ========================================= */ 
-
-.category-management-page .category-filters, 
-.category-management-page .category-cards { 
-  width: 100%; 
-  max-width: 100%; 
-  min-width: 0; 
-} 
-
-/* ========================================= 
-   Loading / Error 
-   ========================================= */ 
-
-.category-message, 
-.category-error { 
-  width: 100%; 
-  box-sizing: border-box; 
-  margin: 12px 0; 
-} 
-
-.category-error { 
-  color: #dc2626; 
-} 
-
-/* ========================================= 
-   Responsive 
-   ========================================= */ 
-
-@media (max-width: 768px) { 
-  .category-management-page { 
-    width: 100%; 
-    overflow-x: hidden; 
-  } 
-
-  .category-management-page .category-table-wrapper { 
-    overflow-x: auto; 
-  } 
-
-  .category-management-page .category-table-wrapper table { 
-    min-width: 650px; 
-  } 
+.category-management-page * {
+  box-sizing: border-box;
 }
 
 
-/* =========================================
-   Category Pagination
-   ========================================= */
+/* =========================================================
+   CATEGORY TABLE CONTAINER
+   Horizontal Scroll
+========================================================= */
+
+.category-management-page .category-table-container {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  position: relative;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 11px;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  -webkit-overflow-scrolling: touch;
+
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   HORIZONTAL SCROLLBAR
+========================================================= */
+
+.category-management-page
+  .category-table-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.category-management-page
+  .category-table-container::-webkit-scrollbar-track {
+  background: #f8fafc;
+
+  border-radius: 0 0 10px 10px;
+}
+
+.category-management-page
+  .category-table-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+
+  border: 2px solid #f8fafc;
+  border-radius: 999px;
+}
+
+.category-management-page
+  .category-table-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+
+/* =========================================================
+   CATEGORY TABLE WIDTH
+========================================================= */
+
+.category-management-page .category-table {
+  width: 100%;
+  min-width: 820px;
+}
+
+
+/* =========================================================
+   LOADING MESSAGE
+========================================================= */
+
+.category-message {
+  width: 100%;
+
+  margin: 0 0 14px;
+  padding: 11px 14px;
+
+  color: #475569;
+  background: #f8fafc;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   ERROR MESSAGE
+========================================================= */
+
+.category-error {
+  width: 100%;
+
+  margin: 0 0 14px;
+  padding: 11px 14px;
+
+  color: #b91c1c;
+  background: #fef2f2;
+
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   PAGINATION
+========================================================= */
 
 .category-pagination {
+  width: 100%;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 16px;
-  padding: 14px 16px;
+
+  gap: 16px;
+
+  margin-top: 14px;
+  padding: 12px 14px;
+
   background: #ffffff;
+
   border: 1px solid #e5e7eb;
   border-radius: 10px;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.025),
+    0 3px 8px rgba(15, 23, 42, 0.025);
+
+  box-sizing: border-box;
 }
 
+
+/* =========================================================
+   PAGINATION INFO
+========================================================= */
+
 .category-pagination-info {
-  font-size: 13px;
-  color: #6b7280;
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+
+  white-space: nowrap;
 }
+
+
+/* =========================================================
+   PAGINATION CONTROLS
+========================================================= */
 
 .category-pagination-controls {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+
   gap: 6px;
+
+  min-width: 0;
 }
+
+
+/* =========================================================
+   PAGINATION BUTTON
+========================================================= */
 
 .category-pagination-btn {
-  min-width: 34px;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  min-width: 32px;
+  height: 32px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0 9px;
+
+  color: #475569;
   background: #ffffff;
-  color: #374151;
-  font-size: 13px;
+
+  border: 1px solid #dbe1e8;
+  border-radius: 7px;
+
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+
   cursor: pointer;
+
+  box-sizing: border-box;
+
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.15s ease;
 }
 
-.category-pagination-btn:hover:not(:disabled) {
-  background: #f3f4f6;
+
+/* =========================================================
+   PAGINATION BUTTON HOVER
+========================================================= */
+
+.category-pagination-btn:hover:not(:disabled):not(.active) {
+  color: #4f46e5;
+  background: #f8faff;
+
+  border-color: #c7d2fe;
+
+  transform: translateY(-1px);
 }
+
+
+/* =========================================================
+   ACTIVE PAGE
+========================================================= */
 
 .category-pagination-btn.active {
-  background: #4f46e5;
   color: #ffffff;
+  background: #4f46e5;
+
   border-color: #4f46e5;
+
+  box-shadow:
+    0 2px 6px rgba(79, 70, 229, 0.18);
 }
+
+
+/* =========================================================
+   ACTIVE PAGE HOVER
+========================================================= */
+
+.category-pagination-btn.active:hover {
+  background: #4338ca;
+  border-color: #4338ca;
+}
+
+
+/* =========================================================
+   DISABLED PAGINATION
+========================================================= */
 
 .category-pagination-btn:disabled {
-  opacity: 0.45;
+  color: #94a3b8;
+  background: #f8fafc;
+
+  border-color: #e5e7eb;
+
+  opacity: 0.6;
+
   cursor: not-allowed;
+
+  transform: none;
+  box-shadow: none;
 }
 
 
-/* =========================================
-   Pagination Responsive
-   ========================================= */
+/* =========================================================
+   PAGINATION FOCUS
+========================================================= */
+
+.category-pagination-btn:focus-visible {
+  outline: none;
+
+  border-color: #818cf8;
+
+  box-shadow:
+    0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
 
 @media (max-width: 768px) {
-  .category-pagination {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
 
-  .category-pagination-controls {
+  .category-management-page {
     width: 100%;
-    justify-content: flex-end;
+    max-width: 100%;
+
+    overflow-x: hidden;
   }
 
-  .category-pagination {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .category-pagination-controls {
+  .category-management-page .category-table-container {
     width: 100%;
+
+    border-radius: 9px;
+
     overflow-x: auto;
+  }
+
+  .category-management-page .category-table {
+    min-width: 760px;
+  }
+
+  .category-pagination {
+    align-items: flex-start;
+    flex-direction: column;
+
+    gap: 10px;
+
+    padding: 11px 12px;
+  }
+
+  .category-pagination-controls {
+    width: 100%;
+
+    justify-content: flex-start;
+
+    overflow-x: auto;
+
     padding-bottom: 2px;
+
+    scrollbar-width: thin;
   }
 }
 
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
 @media (max-width: 480px) {
+
   .category-management-page {
-    padding: 12px 10px 20px;
+    width: 100%;
+
+    padding: 0;
   }
 
-  .category-management-page .adm-page-header {
-    border-radius: 10px;
+  .category-management-page .category-table-container {
+    border-radius: 8px;
   }
 
-  .category-management-page .adm-page-title {
-    font-size: 18px;
-  }
-
-  .category-management-page .adm-page-sub {
-    font-size: 11px;
+  .category-management-page .category-table {
+    min-width: 720px;
   }
 
   .category-message,
   .category-error {
+    padding: 10px 11px;
+
     font-size: 11px;
   }
 
   .category-pagination {
-    padding: 9px;
+    margin-top: 12px;
+
+    padding: 10px;
+
     border-radius: 8px;
+  }
+
+  .category-pagination-info {
+    font-size: 11px;
+  }
+
+  .category-pagination-controls {
+    gap: 5px;
   }
 
   .category-pagination-btn {
     min-width: 30px;
     height: 30px;
+
     padding: 0 8px;
+
+    border-radius: 6px;
+
+    font-size: 10px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+
+  .category-pagination-btn {
+    transition: none;
+  }
+
+  .category-pagination-btn:hover {
+    transform: none;
   }
 }

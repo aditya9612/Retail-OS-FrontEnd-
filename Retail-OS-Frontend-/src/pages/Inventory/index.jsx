@@ -1192,6 +1192,13 @@ const Inventory = () => {
                                 productId
                             );
 
+                        const store =
+                            stores.find(
+                                (s) =>
+                                    Number(s?.id) ===
+                                    Number(item?.store_id)
+                            );
+
                         if (!product) {
                             return null;
                         }
@@ -1305,6 +1312,15 @@ const Inventory = () => {
                                 item?.supplier_name ||
                                 item?.supplierName ||
                                 "",
+
+                            store_id:
+                                Number(item?.store_id),
+
+                            store_name:
+                                store?.name ||
+                                store?.store_name ||
+                                store?.storeName ||
+                                `Store #${item?.store_id}`,
                         };
                     })
                     .filter(Boolean);
@@ -1656,16 +1672,19 @@ const fetchValuation = async () => {
     }, []);
 
     /* =====================================================
-       FETCH INVENTORY AFTER PRODUCTS
+       FETCH INVENTORY AFTER PRODUCTS + STORES
     ===================================================== */
 
     useEffect(() => {
-        if (products.length > 0) {
+        if (
+            products.length > 0 &&
+            stores.length > 0
+        ) {
             fetchInventory();
         } else {
             setInventory([]);
         }
-    }, [products]);
+    }, [products, stores]);
 
     /* =====================================================
        LOW STOCK AFTER PRODUCTS + STORES
@@ -2290,33 +2309,6 @@ const fetchValuation = async () => {
     ];
 
     /* =====================================================
-       REFRESH
-    ===================================================== */
-
-    const handleRefresh =
-        async () => {
-            try {
-                setLoading(true);
-
-                await Promise.all([
-                    fetchProducts(),
-                    fetchStores(),
-                    fetchCategories(),
-                    fetchDashboard(),
-                    fetchValuation(),
-                    fetchMovements(),
-                ]);
-            } catch (err) {
-                console.error(
-                    "REFRESH ERROR =>",
-                    err
-                );
-            } finally {
-                setLoading(false);
-            }
-        };
-
-    /* =====================================================
        UI
     ===================================================== */
 
@@ -2338,27 +2330,6 @@ const fetchValuation = async () => {
                         </h1>
                     </div>
 
-                    <div className="inv-header-actions">
-                        <div className="inv-status">
-                            <span className="inv-status-dot" />
-                            Live inventory
-                        </div>
-
-                        <button
-                            type="button"
-                            className="inv-refresh-btn"
-                            onClick={
-                                handleRefresh
-                            }
-                            disabled={
-                                loading
-                            }
-                        >
-                            {loading
-                                ? "Refreshing..."
-                                : "↻ Refresh"}
-                        </button>
-                    </div>
                 </div>
 
                 {/* LOADING */}
@@ -2495,220 +2466,6 @@ const fetchValuation = async () => {
                         )
                     )}
                 </div>
-
-                {/* LOW STOCK */}
-
-                <section className="inv-card">
-                    <div className="inv-card-heading">
-                        <div>
-                            <h2 className="inv-section-title">
-                                Low Stock Alerts
-                            </h2>
-
-                            <p className="inv-section-description">
-                                Products that have
-                                reached or fallen below
-                                their reorder level.
-                            </p>
-                        </div>
-                    </div>
-
-                    <LowStockAlert
-                        loading={
-                            lowStockLoading
-                        }
-                        error={
-                            lowStockError
-                        }
-                        items={
-                            lowStockItems
-                        }
-                    />
-                </section>
-
-                {/* RECENT STOCK MOVEMENTS */}
-
-                <section className="inv-card" style={{ marginTop: "20px" }}>
-                    <div className="inv-card-heading">
-                        <div>
-                            <h2 className="inv-section-title">
-                                Recent Stock Movements
-                            </h2>
-                            <p className="inv-section-description">
-                                Latest inventory movements for Store #8.
-                            </p>
-                        </div>
-
-                        <button
-                            type="button"
-                            className="inv-refresh-btn"
-                            onClick={fetchMovements}
-                            disabled={movementsLoading}
-                        >
-                            {movementsLoading
-                                ? "Loading..."
-                                : "↻ Refresh"}
-                        </button>
-                    </div>
-
-                    {movementsError && (
-                        <div className="inv-message error">
-                            {movementsError}
-                        </div>
-                    )}
-
-                    {movementsLoading ? (
-                        <div className="inv-message loading">
-                            <span className="inv-spinner" />
-                            Loading recent stock movements...
-                        </div>
-                    ) : movements.length === 0 ? (
-                        <div
-                            style={{
-                                padding: "24px",
-                                textAlign: "center",
-                                color: "#6b7280",
-                                border: "1px solid #e5e7eb",
-                                borderRadius: "8px",
-                                background: "#fafafa",
-                            }}
-                        >
-                            No stock movements found for Store #8.
-                        </div>
-                    ) : (
-                        <div
-                            style={{
-                                width: "100%",
-                                overflowX: "auto",
-                                border: "1px solid #e5e7eb",
-                                borderRadius: "8px",
-                            }}
-                        >
-                            <table
-                                style={{
-                                    width: "100%",
-                                    borderCollapse: "collapse",
-                                    minWidth: "760px",
-                                }}
-                            >
-                                <thead>
-                                    <tr style={{ background: "#f9fafb" }}>
-                                        {[
-                                            "Movement ID",
-                                            "Product",
-                                            "Type",
-                                            "Quantity",
-                                            "Store",
-                                            "Notes",
-                                            "Date & Time",
-                                        ].map((heading) => (
-                                            <th
-                                                key={heading}
-                                                style={{
-                                                    padding: "12px 14px",
-                                                    textAlign: "left",
-                                                    fontSize: "12px",
-                                                    fontWeight: 700,
-                                                    color: "#6b7280",
-                                                    borderBottom: "1px solid #e5e7eb",
-                                                    whiteSpace: "nowrap",
-                                                }}
-                                            >
-                                                {heading}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {movements.map((movement) => {
-                                        const type = String(
-                                            movement?.movement_type || ""
-                                        ).toLowerCase();
-
-                                        const typeLabel = type
-                                            .replace(/_/g, " ")
-                                            .replace(/\b\w/g, (char) =>
-                                                char.toUpperCase()
-                                            );
-
-                                        const typeColor =
-                                            type === "stock_in"
-                                                ? "#059669"
-                                                : type === "stock_out"
-                                                ? "#dc2626"
-                                                : type === "transfer"
-                                                ? "#2563eb"
-                                                : "#d97706";
-
-                                        const typeBg =
-                                            type === "stock_in"
-                                                ? "#ecfdf5"
-                                                : type === "stock_out"
-                                                ? "#fef2f2"
-                                                : type === "transfer"
-                                                ? "#eff6ff"
-                                                : "#fffbeb";
-
-                                        return (
-                                            <tr key={movement?.id}>
-                                                <td style={movementCellStyle}>
-                                                    #{movement?.id ?? "-"}
-                                                </td>
-                                                <td style={movementCellStyle}>
-                                                    <div style={{ fontWeight: 600, color: "#111827" }}>
-                                                        {movement?.product_name || "-"}
-                                                    </div>
-                                                    {movement?.sku && (
-                                                        <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "2px" }}>
-                                                            SKU: {movement.sku}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td style={movementCellStyle}>
-                                                    <span
-                                                        style={{
-                                                            display: "inline-flex",
-                                                            alignItems: "center",
-                                                            padding: "5px 9px",
-                                                            borderRadius: "999px",
-                                                            fontSize: "11px",
-                                                            fontWeight: 700,
-                                                            color: typeColor,
-                                                            background: typeBg,
-                                                            whiteSpace: "nowrap",
-                                                        }}
-                                                    >
-                                                        {typeLabel || "-"}
-                                                    </span>
-                                                </td>
-                                                <td style={{ ...movementCellStyle, fontWeight: 700 }}>
-                                                    {Number(movement?.quantity ?? 0).toLocaleString("en-IN")}
-                                                </td>
-                                                <td style={movementCellStyle}>
-                                                    {movement?.store_name || `Store #${movement?.store_id ?? "-"}`}
-                                                </td>
-                                                <td style={{ ...movementCellStyle, maxWidth: "220px" }}>
-                                                    {movement?.notes || "-"}
-                                                </td>
-                                                <td style={{ ...movementCellStyle, whiteSpace: "nowrap" }}>
-                                                    {movement?.created_at
-                                                        ? new Date(movement.created_at).toLocaleString("en-IN", {
-                                                              day: "2-digit",
-                                                              month: "short",
-                                                              year: "numeric",
-                                                              hour: "2-digit",
-                                                              minute: "2-digit",
-                                                          })
-                                                        : "-"}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </section>
 
                 {/* FILTERS */}
 

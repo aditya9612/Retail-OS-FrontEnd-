@@ -37,7 +37,24 @@ const CategoryCards = ({ categories = [] }) => {
       }).length
     : "-";
 
+  // =========================================================
+  // TOTAL PRODUCTS
+  // Inactive categories' products should NOT be counted.
+  // Only Active categories' products are included.
+  // =========================================================
   const totalProducts = categories.reduce((sum, item) => {
+    const status =
+      typeof item.status === "boolean"
+        ? item.status
+          ? "active"
+          : "inactive"
+        : String(item.status || "").trim().toLowerCase();
+
+    // Inactive category = 0 products for Total Products
+    if (status === "inactive") {
+      return sum;
+    }
+
     const count = Number(item.products);
 
     return sum + (Number.isFinite(count) ? count : 0);

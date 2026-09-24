@@ -3,12 +3,11 @@ import "./purchase.css";
 
 import {
   getPurchaseOrders,
-   getPurchaseOrder,
+  getPurchaseOrder,
   createPurchaseOrder,
   updatePurchaseOrder,
   updatePurchaseOrderStatus,
   receivePurchaseOrder,
-  
 } from "../../api/purchaseOrdersApi";
 
 import { getSuppliers } from "../../api/supplierApi";
@@ -23,7 +22,6 @@ import {
   BsCheckCircleFill,
   BsClockHistory,
   BsXCircleFill,
-  BsTrashFill,
   BsCart3,
 } from "react-icons/bs";
 
@@ -37,11 +35,13 @@ const STATUS_CONFIG = {
     bg: "#fffbeb",
     icon: <BsClockHistory size={11} />,
   },
+
   Received: {
     color: "#10b981",
     bg: "#ecfdf5",
     icon: <BsCheckCircleFill size={11} />,
   },
+
   Cancelled: {
     color: "#ef4444",
     bg: "#fef2f2",
@@ -51,6 +51,20 @@ const STATUS_CONFIG = {
 
 const PAGE_SIZE = 8;
 const PURCHASE_FETCH_SIZE = 100;
+
+// Keep backend status values lowercase internally, but always show
+// consistent title-case labels in the UI.
+const getDisplayStatus = (status) => {
+  const value = String(status || "").trim().toLowerCase();
+
+  if (value === "received") return "Received";
+  if (value === "cancelled" || value === "canceled") return "Cancelled";
+  if (value === "draft" || value === "pending") return "Pending";
+
+  if (!value) return "Pending";
+
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
 
 /* =====================================================
    EMPTY ITEM
@@ -84,6 +98,24 @@ const EMPTY_FORM = {
 const fmt = (n) =>
   "₹" + Number(n || 0).toLocaleString("en-IN");
 
+// Purchase APIs can expose line items directly or inside a nested object.
+// Normalize those shapes once so the View modal always receives the real
+// purchase item details returned by the backend.
+const getPurchaseItems = (source) => {
+  const candidates = [
+    source?.items,
+    source?.purchase_items,
+    source?.purchaseItems,
+    source?.data?.items,
+    source?.purchase_order?.items,
+    source?.purchaseOrder?.items,
+    source?.purchase?.items,
+  ];
+
+  const items = candidates.find((value) => Array.isArray(value));
+  return items || [];
+};
+
 /* =====================================================
    DATE HELPER
 ===================================================== */
@@ -91,7 +123,6 @@ const fmt = (n) =>
 const formatDateForInput = (date) => {
   if (!date) return "";
 
-  // Already YYYY-MM-DD
   if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return date;
   }
@@ -156,14 +187,14 @@ const PurchaseFormModal = ({
         "",
 
       invoiceNumber:
-        purchase.invoiceNumber ??
-        purchase.id ??
-        "",
+        purchase.invoiceNumber &&
+        purchase.invoiceNumber !== "-"
+          ? purchase.invoiceNumber
+          : "",
 
-      purchaseDate:
-        formatDateForInput(
-          purchase.purchaseDate
-        ),
+      purchaseDate: formatDateForInput(
+        purchase.purchaseDate
+      ),
     };
   });
 
@@ -205,9 +236,7 @@ const PurchaseFormModal = ({
           maxHeight: "90vh",
           overflowY: "auto",
         }}
-        onClick={(e) =>
-          e.stopPropagation()
-        }
+        onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER */}
 
@@ -234,11 +263,12 @@ const PurchaseFormModal = ({
             >
               {isNew
                 ? "Create a new purchase order"
-                : "Update draft purchase order details"}
+                : "Update purchase order details"}
             </p>
           </div>
 
           <button
+            type="button"
             className="ec-modal-close"
             onClick={onClose}
           >
@@ -268,7 +298,8 @@ const PurchaseFormModal = ({
                   key={supplier.id}
                   value={supplier.id}
                 >
-                  {supplier.name} (ID: {supplier.id})
+                  {supplier.name} (Supplier ID:{" "}
+                  {supplier.id})
                 </option>
               ))}
             </select>
@@ -459,7 +490,6 @@ const PurchaseFormModal = ({
 
                 set("status", status);
 
-                // Received purchase should be Paid
                 if (status === "Received") {
                   set(
                     "paymentStatus",
@@ -505,12 +535,12 @@ const PurchaseFormModal = ({
           style={{
             display: "flex",
             gap: 10,
-            justifyContent:
-              "flex-end",
+            justifyContent: "flex-end",
             marginTop: 20,
           }}
         >
           <button
+            type="button"
             className="adm-btn-secondary"
             onClick={onClose}
           >
@@ -518,6 +548,7 @@ const PurchaseFormModal = ({
           </button>
 
           <button
+            type="button"
             className="adm-btn-primary"
             onClick={handleSubmit}
           >
@@ -551,17 +582,26 @@ const PurchaseDetailsModal = ({
 }) => {
   if (!purchase) return null;
 
+  const displayStatus = getDisplayStatus(
+    purchase.status ||
+      purchase.backendStatus ||
+      purchase?.rawData?.status
+  );
+
   const sc =
-    STATUS_CONFIG[
-      purchase.status
-    ] ||
+    STATUS_CONFIG[displayStatus] ||
     STATUS_CONFIG.Pending;
 
-  const rawItems = Array.isArray(
-    purchase?.rawData?.items
-  )
-    ? purchase.rawData.items
-    : [];
+  const rawItems =
+    getPurchaseItems({
+      items: purchase?.itemDetails,
+    }).length > 0
+      ? getPurchaseItems({
+          items: purchase?.itemDetails,
+        })
+      : getPurchaseItems(
+          purchase?.rawData || purchase
+        );
 
   return (
     <div
@@ -590,7 +630,7 @@ const PurchaseDetailsModal = ({
                 color: "#111827",
               }}
             >
-              Purchase {purchase.id}
+              Purchase Order {purchase.id}
             </h3>
 
             <p
@@ -605,6 +645,7 @@ const PurchaseDetailsModal = ({
           </div>
 
           <button
+            type="button"
             className="ec-modal-close"
             onClick={onClose}
           >
@@ -622,15 +663,31 @@ const PurchaseDetailsModal = ({
           }}
         >
           {[
-            ["Supplier", purchase.supplier],
-            ["Store ID", purchase.storeId],
+            [
+              "Purchase Order Number",
+              purchase.id,
+            ],
+            [
+              "Purchase Order ID",
+              purchase.backendId,
+            ],
+            [
+              "Supplier Name",
+              purchase.supplier,
+            ],
             [
               "Supplier ID",
               purchase.supplierId,
             ],
             [
+              "Store ID",
+              purchase.storeId,
+            ],
+            [
               "Purchase Date",
-              purchase.purchaseDate,
+              formatDisplayDate(
+                purchase.purchaseDate
+              ),
             ],
             [
               "Items",
@@ -640,7 +697,14 @@ const PurchaseDetailsModal = ({
               "Payment",
               purchase.paymentStatus,
             ],
-            ["Status", purchase.status],
+            [
+              "Status",
+              purchase.status,
+            ],
+            [
+              "Invoice",
+              purchase.invoiceNumber,
+            ],
           ].map(([label, value]) => (
             <div
               key={label}
@@ -655,25 +719,25 @@ const PurchaseDetailsModal = ({
                   fontSize: 10,
                   color: "#9ca3af",
                   fontWeight: 600,
-                  textTransform: "uppercase",
+                  textTransform:
+                    "uppercase",
                 }}
               >
                 {label}
               </p>
 
-                <p
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "#111827",
-                    marginTop: 3,
-                  }}
-                >
-                  {value ?? "-"}
-                </p>
-              </div>
-            )
-          )}
+              <p
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#111827",
+                  marginTop: 3,
+                }}
+              >
+                {value ?? "-"}
+              </p>
+            </div>
+          ))}
         </div>
 
         {/* STATUS */}
@@ -685,35 +749,26 @@ const PurchaseDetailsModal = ({
         >
           <span
             style={{
-              display:
-                "inline-flex",
-              alignItems:
-                "center",
+              display: "inline-flex",
+              alignItems: "center",
               gap: 5,
-              padding:
-                "5px 10px",
+              padding: "5px 10px",
               borderRadius: 20,
               fontSize: 11,
               fontWeight: 700,
-              background:
-                sc.bg,
-              color:
-                sc.color,
+              background: sc.bg,
+              color: sc.color,
             }}
           >
             {sc.icon}
-            {purchase.status}
+            {displayStatus}
           </span>
         </div>
 
         {/* ITEMS */}
 
         {rawItems.length > 0 && (
-          <div
-            style={{
-              marginTop: 16,
-            }}
-          >
+          <div style={{ marginTop: 16 }}>
             <p
               style={{
                 fontSize: 12,
@@ -727,139 +782,117 @@ const PurchaseDetailsModal = ({
 
             <div
               style={{
-                border:
-                  "1px solid #e5e7eb",
+                border: "1px solid #e5e7eb",
                 borderRadius: 8,
-                overflow:
-                  "hidden",
+                overflowX: "auto",
               }}
             >
               <table
                 style={{
                   width: "100%",
-                  borderCollapse:
-                    "collapse",
+                  borderCollapse: "collapse",
                 }}
               >
                 <thead>
-                  <tr
-                    style={{
-                      background:
-                        "#f9fafb",
-                    }}
-                  >
+                  <tr style={{ background: "#f9fafb" }}>
                     {[
                       "Product ID",
+                      "Product Name",
+                      "SKU",
                       "Quantity",
                       "Unit Price",
                       "Total",
-                    ].map(
-                      (heading) => (
-                        <th
-                          key={
-                            heading
-                          }
-                          style={{
-                            padding:
-                              "8px 10px",
-                            textAlign:
-                              heading ===
-                                "Unit Price" ||
-                              heading ===
-                                "Total"
-                                ? "right"
-                                : "left",
-                            fontSize: 10,
-                            color:
-                              "#6b7280",
-                          }}
-                        >
-                          {
-                            heading
-                          }
-                        </th>
-                      )
-                    )}
+                    ].map((heading) => (
+                      <th
+                        key={heading}
+                        style={{
+                          padding: "8px 10px",
+                          textAlign:
+                            heading === "Unit Price" || heading === "Total"
+                              ? "right"
+                              : "left",
+                          fontSize: 10,
+                          color: "#6b7280",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {heading}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
 
                 <tbody>
-                  {rawItems.map(
-                    (
-                      item,
-                      index
-                    ) => (
+                  {rawItems.map((item, index) => {
+                    const product =
+                      item?.product ||
+                      item?.product_details ||
+                      item?.productDetail ||
+                      {};
+
+                    const productName =
+                      item?.product_name ||
+                      item?.productName ||
+                      product?.name ||
+                      "-";
+
+                    const sku =
+                      item?.sku ||
+                      item?.product_sku ||
+                      product?.sku ||
+                      "-";
+
+                    const quantity = Number(item?.quantity || 0);
+                    const unitPrice = Number(
+                      item?.unit_price ?? item?.unitPrice ?? 0
+                    );
+                    const lineTotal = Number(
+                      item?.total ??
+                        item?.total_amount ??
+                        quantity * unitPrice
+                    );
+
+                    return (
                       <tr
-                        key={
-                          item?.id ??
-                          index
-                        }
-                        style={{
-                          borderTop:
-                            "1px solid #f3f4f6",
-                        }}
+                        key={item?.id ?? index}
+                        style={{ borderTop: "1px solid #f3f4f6" }}
                       >
+                        <td style={{ padding: "8px 10px", fontSize: 11, color: "#374151" }}>
+                          {item?.product_id ?? product?.id ?? "-"}
+                        </td>
+                        <td style={{ padding: "8px 10px", fontSize: 11, color: "#374151" }}>
+                          {productName}
+                        </td>
+                        <td style={{ padding: "8px 10px", fontSize: 11, color: "#374151" }}>
+                          {sku}
+                        </td>
+                        <td style={{ padding: "8px 10px", fontSize: 11, color: "#374151" }}>
+                          {quantity}
+                        </td>
                         <td
                           style={{
-                            padding:
-                              "8px 10px",
+                            padding: "8px 10px",
+                            textAlign: "right",
                             fontSize: 11,
-                            color:
-                              "#374151",
+                            color: "#374151",
                           }}
                         >
-                          {item?.product_id ??
-                            "-"}
+                          {fmt(unitPrice)}
                         </td>
-
                         <td
                           style={{
-                            padding:
-                              "8px 10px",
-                            fontSize: 11,
-                            color:
-                              "#374151",
-                          }}
-                        >
-                          {item?.quantity ??
-                            0}
-                        </td>
-
-                        <td
-                          style={{
-                            padding:
-                              "8px 10px",
-                            textAlign:
-                              "right",
-                            fontSize: 11,
-                            color:
-                              "#374151",
-                          }}
-                        >
-                          {fmt(
-                            item?.unit_price
-                          )}
-                        </td>
-
-                        <td
-                          style={{
-                            padding:
-                              "8px 10px",
-                            textAlign:
-                              "right",
+                            padding: "8px 10px",
+                            textAlign: "right",
                             fontSize: 11,
                             fontWeight: 600,
-                            color:
-                              "#111827",
+                            color: "#111827",
                           }}
                         >
-                          {fmt(
-                            item?.total
-                          )}
+                          {fmt(lineTotal)}
                         </td>
                       </tr>
-                    )
-                  )}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -872,11 +905,9 @@ const PurchaseDetailsModal = ({
           <div
             style={{
               marginTop: 14,
-              background:
-                "#f9fafb",
+              background: "#f9fafb",
               borderRadius: 8,
-              padding:
-                "10px 12px",
+              padding: "10px 12px",
             }}
           >
             <p
@@ -908,13 +939,12 @@ const PurchaseDetailsModal = ({
         <div
           style={{
             marginTop: 16,
-            background:
-              "#eef2ff",
+            background: "#eef2ff",
             borderRadius: 8,
-            padding:
-              "12px 14px",
+            padding: "12px 14px",
             display: "flex",
-            justifyContent: "space-between",
+            justifyContent:
+              "space-between",
           }}
         >
           <span
@@ -933,9 +963,7 @@ const PurchaseDetailsModal = ({
               fontSize: 16,
             }}
           >
-            {fmt(
-              purchase.total
-            )}
+            {fmt(purchase.total)}
           </span>
         </div>
       </div>
@@ -947,238 +975,448 @@ const PurchaseDetailsModal = ({
    PURCHASES PAGE
 ===================================================== */
 
+const isDraftPurchase = (purchase) =>
+  String(
+    purchase?.backendStatus ||
+      purchase?.rawData?.status ||
+      ""
+  ).toLowerCase() === "draft";
+
 const Purchases = () => {
-  const [purchases, setPurchases] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("All");
-  const [page, setPage] = useState(1);
-  const [modal, setModal] = useState(null);
+  const [purchases, setPurchases] =
+    useState([]);
 
-  const handleViewPurchase = async (purchase) => { 
-  try { 
-    const details = await getPurchaseOrder( 
-      purchase.backendId 
-    ); 
- 
-    console.log("SINGLE PURCHASE API:", details); 
- 
-    setModal({ 
-      type: "view", 
-      purchase: { 
-        ...purchase, 
-        ...details, 
-      }, 
-    }); 
-  } catch (err) { 
-    console.error( 
-      "Get Single Purchase Error:", 
-      err 
-    ); 
- 
-    alert("Failed to load purchase details."); 
-  } 
-}; 
-const handleReceivePurchase = async (purchase) => {
-  try {
-    const result = await receivePurchaseOrder(
-      purchase.backendId
-    );
+  const [suppliers, setSuppliers] =
+    useState([]);
 
-    console.log("RECEIVE PURCHASE API:", result);
+  const [loading, setLoading] =
+    useState(true);
 
-    setPurchases((prev) =>
-      prev.map((p) =>
-        p.backendId === purchase.backendId
-          ? {
-              ...p,
-              status: "Received",
-            }
-          : p
-      )
-    );
+  const [error, setError] =
+    useState("");
 
-    alert("Purchase order received successfully.");
-  } catch (err) {
-    console.error("Receive Purchase Error:", err);
-    console.error("Response:", err?.response?.data);
+  const [search, setSearch] =
+    useState("");
 
-    alert(
-      err?.response?.data?.detail ||
-        "Failed to receive purchase order."
-    );
-  }
-};
+  const [filterStatus, setFilterStatus] =
+    useState("All");
 
-const handleUpdatePurchaseStatus = async ( 
-  purchase, 
-  newStatus 
-) => { 
-  try { 
-    const updatedStatus = 
-      await updatePurchaseOrderStatus( 
-        purchase.backendId, 
-        { 
-          status: newStatus, 
-        } 
-      ); 
- 
-    console.log( 
-      "UPDATE PURCHASE STATUS API:", 
-      updatedStatus 
-    ); 
- 
-    setPurchases((prev) => 
-      prev.map((p) => 
-        p.backendId === purchase.backendId 
-          ? { 
-              ...p, 
-              status: 
-                updatedStatus?.status === "received" 
-                  ? "Received" 
-                  : updatedStatus?.status === "cancelled" 
-                  ? "Cancelled" 
-                  : "Pending", 
-            } 
-          : p 
-      ) 
-    ); 
- 
-    alert( 
-      "Purchase status updated successfully." 
-    ); 
-  } catch (err) { 
-    console.error( 
-      "Update Purchase Status Error:", 
-      err 
-    ); 
- 
-    console.error( 
-      "Response:", 
-      err?.response?.data 
-    ); 
- 
-    alert( 
-      err?.response?.data?.detail || 
-        "Failed to update purchase status." 
-    ); 
-  } 
-}; 
+  const [page, setPage] =
+    useState(1);
 
+  const [modal, setModal] =
+    useState(null);
 
   /* =====================================================
-     FETCH
+     NORMALIZE SINGLE PURCHASE RESPONSE
   ===================================================== */
 
-  useEffect(() => {
-    const fetchPurchases = async () => {
-      try {
-        setLoading(true);
-        setError("");
+  const normalizePurchaseDetails = (
+    response
+  ) => {
+    const root =
+      response?.data ?? response;
 
-        const suppliersData =
-          await getSuppliers();
+    return (
+      root?.data ??
+      root?.purchase_order ??
+      root?.purchaseOrder ??
+      root?.purchase ??
+      root ??
+      {}
+    );
+  };
 
-        console.log(
-          "Suppliers API:",
-          suppliersData
+  /* =====================================================
+     VIEW PURCHASE
+  ===================================================== */
+
+  const handleViewPurchase = async (
+    purchase
+  ) => {
+    if (!purchase?.backendId) {
+      alert("Purchase ID not found.");
+      return;
+    }
+
+    console.log(
+      "VIEW PURCHASE CLICKED:",
+      purchase
+    );
+
+    setModal({
+      type: "view",
+      purchase: {
+        ...purchase,
+        rawData:
+          purchase.rawData || {},
+      },
+    });
+
+    try {
+      const response =
+        await getPurchaseOrder(
+          purchase.backendId
         );
 
-        const supplierList =
-          Array.isArray(suppliersData)
-            ? suppliersData
-            : suppliersData?.data || [];
+      console.log(
+        "SINGLE PURCHASE API:",
+        response
+      );
 
-        setSuppliers(supplierList);
-
-        const data =
-          await getPurchaseOrders(1, 20);
-
-        console.log(
-          "Purchase Orders API:",
-          data
+      const details =
+        normalizePurchaseDetails(
+          response
         );
 
-        const purchaseList =
-          Array.isArray(data)
-            ? data
-            : data?.data || [];
+      console.log(
+        "NORMALIZED PURCHASE DETAILS:",
+        details
+      );
 
-        const mappedPurchases =
-          purchaseList.map((po) => ({
-            backendId: po.id,
+      setModal((currentModal) => {
+        if (
+          currentModal?.type !==
+            "view" ||
+          currentModal?.purchase
+            ?.backendId !==
+            purchase.backendId
+        ) {
+          return currentModal;
+        }
+
+        const backendStatus =
+          String(
+            details?.status ||
+              purchase.backendStatus ||
+              ""
+          ).toLowerCase();
+
+        return {
+          type: "view",
+
+          purchase: {
+            ...currentModal.purchase,
+            ...(details || {}),
+
+            backendId:
+              details?.id ??
+              currentModal.purchase
+                .backendId,
 
             id:
-              po.po_number ||
-              `PO-${po.id}`,
+              details?.po_number ??
+              currentModal.purchase.id,
 
             supplierId:
-              po.supplier_id,
+              details?.supplier_id ??
+              currentModal.purchase
+                .supplierId,
 
             supplier:
-              `Supplier #${po.supplier_id}`,
+              currentModal.purchase
+                .supplier,
 
             storeId:
-              po.store_id ?? "",
+              details?.store_id ??
+              currentModal.purchase
+                .storeId,
 
             invoiceNumber:
-              po.invoice_number ||
-              po.invoice_no ||
-              po.po_number ||
-              `INV-${po.id}`,
+              details?.invoice_number ??
+              details?.invoice_no ??
+              currentModal.purchase
+                .invoiceNumber ??
+              "-",
 
             purchaseDate:
-              po.created_at || "",
+              details?.created_at ??
+              currentModal.purchase
+                .purchaseDate,
+
+            paymentStatus:
+              details?.payment_status ??
+              details?.paymentStatus ??
+              currentModal.purchase
+                .paymentStatus,
+
+            status:
+              backendStatus ===
+              "received"
+                ? "Received"
+                : backendStatus ===
+                  "cancelled"
+                ? "Cancelled"
+                : backendStatus ===
+                  "draft"
+                ? "Pending"
+                : currentModal.purchase
+                    .status,
+
+            backendStatus,
+
+            itemDetails:
+              getPurchaseItems(details).length > 0
+                ? getPurchaseItems(details)
+                : currentModal.purchase
+                    .itemDetails || [],
+
+            rawData: {
+              ...(currentModal
+                .purchase.rawData ||
+                {}),
+              ...(details || {}),
+              items:
+                getPurchaseItems(details).length > 0
+                  ? getPurchaseItems(details)
+                  : getPurchaseItems(
+                      currentModal.purchase
+                        .rawData || {}
+                    ),
+            },
+
+            remarks:
+              details?.remarks ??
+              currentModal.purchase
+                .remarks,
+
+            total: Number(
+              details?.total_amount ??
+                currentModal.purchase
+                  .total ??
+                0
+            ),
 
             items:
-              po.items?.reduce(
+              getPurchaseItems(details).reduce(
                 (sum, item) =>
                   sum +
                   Number(
-                    item.quantity || 0
+                    item?.quantity || 0
                   ),
                 0
-              ) || 0,
+              ) ||
+              currentModal.purchase
+                .items ||
+              0,
+          },
+        };
+      });
+    } catch (err) {
+      console.error(
+        "Get Single Purchase Error:",
+        err
+      );
 
-            subtotal:
-              Number(
-                po.total_amount || 0
-              ),
+      console.error(
+        "Response:",
+        err?.response?.data
+      );
+    }
+  };
 
-            gst: 0,
-            discount: 0,
+  /* =====================================================
+     RECEIVE PURCHASE
+  ===================================================== */
 
-            total:
-              Number(
-                po.total_amount || 0
-              ),
+  const handleReceivePurchase = async (
+    purchase
+  ) => {
+    if (!purchase?.backendId) {
+      alert("Purchase ID not found.");
+      return;
+    }
 
-            paymentStatus:
-              po.payment_status ||
-              po.paymentStatus ||
-              (po.status === "received"
-                ? "Paid"
-                : "Pending"),
+    if (!isDraftPurchase(purchase)) {
+      alert(
+        "Only draft purchases can be received."
+      );
+      return;
+    }
 
-            status:
-              po.status === "draft"
-                ? "Pending"
-                : po.status === "received"
-                ? "Received"
-                : po.status === "cancelled"
-                ? "Cancelled"
-                : "Pending",
+    try {
+      const response =
+        await receivePurchaseOrder(
+          purchase.backendId
+        );
 
-            remarks:
-              po.remarks || "",
-          }));
+      const result =
+        response?.data ?? response;
 
-        setPurchases(mappedPurchases);
+      console.log(
+        "RECEIVE PURCHASE API:",
+        response
+      );
+
+      setPurchases((prev) =>
+        prev.map((p) =>
+          p.backendId ===
+          purchase.backendId
+            ? {
+                ...p,
+                status: "Received",
+                backendStatus:
+                  "received",
+                paymentStatus: "Paid",
+                rawData: {
+                  ...(p.rawData || {}),
+                  ...(result || {}),
+                  status: "received",
+                },
+              }
+            : p
+        )
+      );
+
+      alert(
+        "Purchase order received successfully."
+      );
+    } catch (err) {
+      console.error(
+        "Receive Purchase Error:",
+        err
+      );
+
+      console.error(
+        "Response:",
+        err?.response?.data
+      );
+
+      const detail =
+        err?.response?.data?.detail;
+
+      const message =
+        detail?.message ||
+        detail ||
+        err?.response?.data?.message ||
+        "Failed to receive purchase order.";
+
+      alert(
+        typeof message === "string"
+          ? message
+          : JSON.stringify(message)
+      );
+    }
+  };
+
+  /* =====================================================
+     EDIT PURCHASE
+  ===================================================== */
+
+  const handleEditPurchase = (
+    purchase
+  ) => {
+    if (!purchase?.backendId) {
+      alert("Purchase ID not found.");
+      return;
+    }
+
+    if (
+      String(
+        purchase?.backendStatus ||
+          purchase?.rawData?.status ||
+          ""
+      ).toLowerCase() === "received"
+    ) {
+      console.log(
+        "EDIT BLOCKED - PURCHASE IS ALREADY RECEIVED:",
+        purchase
+      );
+
+      alert(
+        "This purchase is already received and can't be edited."
+      );
+
+      return;
+    }
+
+    if (!isDraftPurchase(purchase)) {
+      console.log(
+        "EDIT BLOCKED - ONLY DRAFT PURCHASES CAN BE UPDATED:",
+        purchase
+      );
+
+      alert(
+        "Only draft purchase orders can be updated."
+      );
+
+      return;
+    }
+
+    console.log(
+      "EDIT PURCHASE CLICKED:",
+      purchase
+    );
+
+    setModal({
+      type: "edit",
+      purchase: {
+        ...purchase,
+        rawData:
+          purchase.rawData || {},
+      },
+    });
+  };
+
+  /* =====================================================
+     UPDATE PURCHASE STATUS
+  ===================================================== */
+
+  const handleUpdatePurchaseStatus =
+    async (
+      purchase,
+      newStatus
+    ) => {
+      try {
+        const updatedStatus =
+          await updatePurchaseOrderStatus(
+            purchase.backendId,
+            {
+              status: newStatus,
+            }
+          );
+
+        console.log(
+          "UPDATE PURCHASE STATUS API:",
+          updatedStatus
+        );
+
+        const statusValue =
+          String(
+            updatedStatus?.status ||
+              newStatus ||
+              ""
+          ).toLowerCase();
+
+        setPurchases((prev) =>
+          prev.map((p) =>
+            p.backendId ===
+            purchase.backendId
+              ? {
+                  ...p,
+
+                  status:
+                    statusValue ===
+                    "received"
+                      ? "Received"
+                      : statusValue ===
+                        "cancelled"
+                      ? "Cancelled"
+                      : "Pending",
+
+                  backendStatus:
+                    statusValue,
+                }
+              : p
+          )
+        );
+
+        alert(
+          "Purchase status updated successfully."
+        );
       } catch (err) {
         console.error(
-          "Purchase Orders API Error:",
+          "Update Purchase Status Error:",
           err
         );
 
@@ -1187,13 +1425,165 @@ const handleUpdatePurchaseStatus = async (
           err?.response?.data
         );
 
-        setError(
-          "Failed to load purchase orders"
+        alert(
+          err?.response?.data?.detail ||
+            "Failed to update purchase status."
         );
-      } finally {
-        setLoading(false);
       }
     };
+
+  /* =====================================================
+     FETCH
+  ===================================================== */
+
+  useEffect(() => {
+    const fetchPurchases =
+      async () => {
+        try {
+          setLoading(true);
+          setError("");
+
+          const suppliersData =
+            await getSuppliers();
+
+          console.log(
+            "Suppliers API:",
+            suppliersData
+          );
+
+          const supplierList =
+            Array.isArray(
+              suppliersData
+            )
+              ? suppliersData
+              : suppliersData?.data ||
+                [];
+
+          setSuppliers(
+            supplierList
+          );
+
+          const data =
+            await getPurchaseOrders(
+              1,
+              PURCHASE_FETCH_SIZE
+            );
+
+          console.log(
+            "Purchase Orders API:",
+            data
+          );
+
+          const purchaseList =
+            Array.isArray(data)
+              ? data
+              : data?.data || [];
+
+          const mappedPurchases =
+            purchaseList.map((po) => ({
+              backendId: po.id,
+
+              id:
+                po.po_number ||
+                `PO-${po.id}`,
+
+              supplierId:
+                po.supplier_id,
+
+              supplier:
+                supplierList.find(
+                  (supplier) =>
+                    Number(
+                      supplier.id
+                    ) ===
+                    Number(
+                      po.supplier_id
+                    )
+                )?.name ||
+                `Supplier #${po.supplier_id}`,
+
+              storeId:
+                po.store_id ?? "",
+
+              // Invoice number must come only from invoice fields.
+              // Do not fall back to PO number/ID because that makes
+              // Purchase Order Number and Invoice display the same value.
+              invoiceNumber:
+                po.invoice_number ||
+                po.invoice_no ||
+                "-",
+
+              purchaseDate:
+                po.created_at || "",
+
+              items:
+                po.items?.reduce(
+                  (sum, item) =>
+                    sum +
+                    Number(
+                      item.quantity ||
+                        0
+                    ),
+                  0
+                ) || 0,
+
+              subtotal: Number(
+                po.total_amount || 0
+              ),
+
+              gst: 0,
+              discount: 0,
+
+              total: Number(
+                po.total_amount || 0
+              ),
+
+              paymentStatus:
+                po.payment_status ||
+                po.paymentStatus ||
+                (po.status ===
+                "received"
+                  ? "Paid"
+                  : "Pending"),
+
+              status:
+                getDisplayStatus(po.status),
+
+              backendStatus:
+                String(
+                  po.status || ""
+                ).toLowerCase(),
+
+              // Keep the complete line-item objects for View details.
+              itemDetails: getPurchaseItems(po),
+
+              rawData: po,
+
+              remarks:
+                po.remarks || "",
+            }));
+
+          setPurchases(
+            mappedPurchases
+          );
+        } catch (err) {
+          console.error(
+            "Purchase Orders API Error:",
+            err
+          );
+
+          console.error(
+            "Response:",
+            err?.response?.data
+          );
+
+          setError(
+            "Failed to load purchase orders"
+          );
+        } finally {
+          setLoading(false);
+        }
+      };
 
     fetchPurchases();
   }, []);
@@ -1202,8 +1592,9 @@ const handleUpdatePurchaseStatus = async (
      SAVE
   ===================================================== */
 
-  const handleSave = async (form) => {
-
+  const handleSave = async (
+    form
+  ) => {
     try {
       setError("");
 
@@ -1240,12 +1631,8 @@ const handleUpdatePurchaseStatus = async (
           items: [
             {
               product_id: 13,
-
-              quantity:
-                quantity,
-
-              unit_price:
-                unitPrice,
+              quantity: quantity,
+              unit_price: unitPrice,
             },
           ],
         };
@@ -1255,14 +1642,18 @@ const handleUpdatePurchaseStatus = async (
           payload
         );
 
-        const created =
+        const createdResponse =
           await createPurchaseOrder(
             payload
           );
 
+        const created =
+          createdResponse?.data ??
+          createdResponse;
+
         console.log(
           "CREATE SUCCESS:",
-          created
+          createdResponse
         );
 
         const newPurchase = {
@@ -1278,6 +1669,16 @@ const handleUpdatePurchaseStatus = async (
             Number(form.supplier),
 
           supplier:
+            suppliers.find(
+              (supplier) =>
+                Number(
+                  supplier.id
+                ) ===
+                Number(
+                  created?.supplier_id ||
+                    form.supplier
+                )
+            )?.name ||
             `Supplier #${
               created?.supplier_id ||
               form.supplier
@@ -1298,32 +1699,43 @@ const handleUpdatePurchaseStatus = async (
             form.purchaseDate ||
             "",
 
-          items:
-            quantity,
+          items: quantity,
 
-          subtotal:
-            totalAmount,
+          subtotal: totalAmount,
 
           gst:
             Number(form.gst) || 0,
 
           discount:
-            Number(form.discount) || 0,
+            Number(form.discount) ||
+            0,
 
-          total:
-            totalAmount,
+          total: totalAmount,
 
           paymentStatus:
-            form.status === "Received"
+            form.status ===
+            "Received"
               ? "Paid"
-              : form.paymentStatus || "Pending",
+              : form.paymentStatus ||
+                "Pending",
 
           status:
-            created?.status === "received"
+            created?.status ===
+            "received"
               ? "Received"
-              : created?.status === "cancelled"
+              : created?.status ===
+                "cancelled"
               ? "Cancelled"
               : "Pending",
+
+          backendStatus:
+            String(
+              created?.status ||
+                "draft"
+            ).toLowerCase(),
+
+          rawData:
+            created || {},
 
           remarks:
             created?.remarks ||
@@ -1335,10 +1747,14 @@ const handleUpdatePurchaseStatus = async (
           newPurchase,
           ...prev,
         ]);
-        
+
         setError("");
         setModal(null);
-        alert("Purchase created successfully!");
+
+        alert(
+          "Purchase created successfully!"
+        );
+
         return;
       }
 
@@ -1346,18 +1762,69 @@ const handleUpdatePurchaseStatus = async (
          EDIT
       ================================================= */
 
-      if (modal?.id) {
+      if (
+        modal?.type === "edit" &&
+        modal?.purchase
+      ) {
+        const currentPurchase =
+          modal.purchase;
+
         const purchaseOrderId =
-          modal.backendId;
+          currentPurchase.backendId;
+
+        if (!purchaseOrderId) {
+          alert(
+            "Purchase Order ID not found."
+          );
+          return;
+        }
+
+        if (
+          String(
+            currentPurchase?.backendStatus ||
+              currentPurchase?.rawData?.status ||
+              ""
+          ).toLowerCase() === "received"
+        ) {
+          alert(
+            "This purchase is already received and can't be edited."
+          );
+          return;
+        }
+
+        if (
+          !isDraftPurchase(
+            currentPurchase
+          )
+        ) {
+          console.log(
+            "UPDATE BLOCKED - PURCHASE IS NOT DRAFT:",
+            currentPurchase
+          );
+
+          alert(
+            "Only draft purchase orders can be updated."
+          );
+
+          return;
+        }
 
         const totalAmount =
           Number(form.total) || 0;
 
         const payload = {
-          supplier_id: Number(form.supplier),
-          store_id: Number(form.storeId),
-          invoice_number: form.invoiceNumber,
-          remarks: form.remarks || "Updated purchase order",
+          supplier_id:
+            Number(form.supplier),
+
+          store_id:
+            Number(form.storeId),
+
+          invoice_number:
+            form.invoiceNumber,
+
+          remarks:
+            form.remarks ||
+            "Updated purchase order",
         };
 
         console.log(
@@ -1375,48 +1842,89 @@ const handleUpdatePurchaseStatus = async (
         );
 
         let updated;
-        if (purchaseOrderId) {
-          updated =
-            await updatePurchaseOrder(
-              purchaseOrderId,
-              payload
-            );
-        }
+
+        const updatedResponse =
+          await updatePurchaseOrder(
+            purchaseOrderId,
+            payload
+          );
+
+        updated =
+          updatedResponse?.data ??
+          updatedResponse;
+
+        console.log(
+          "UPDATE PURCHASE RESPONSE:",
+          updatedResponse
+        );
 
         let updatedStatus;
-        if (form.status && purchaseOrderId) {
-          updatedStatus =
+
+        if (form.status) {
+          const backendStatus =
+            form.status === "Pending"
+              ? "draft"
+              : form.status ===
+                "Received"
+              ? "received"
+              : form.status ===
+                "Cancelled"
+              ? "cancelled"
+              : form.status;
+
+          const updatedStatusResponse =
             await updatePurchaseOrderStatus(
               purchaseOrderId,
               {
                 status:
-                  form.status === "Pending"
-                    ? "draft"
-                    : form.status === "Received"
-                    ? "received"
-                    : form.status === "Cancelled"
-                    ? "cancelled"
-                    : form.status,
+                  backendStatus,
               }
             );
+
+          updatedStatus =
+            updatedStatusResponse?.data ??
+            updatedStatusResponse;
+
+          console.log(
+            "UPDATE PURCHASE STATUS RESPONSE:",
+            updatedStatusResponse
+          );
         }
 
+        const finalBackendStatus =
+          String(
+            updatedStatus?.status ||
+              updated?.status ||
+              currentPurchase.backendStatus ||
+              ""
+          ).toLowerCase();
+
         const updatedPurchase = {
-          ...modal,
+          ...currentPurchase,
 
           backendId:
             updated?.id ??
-            modal.backendId,
+            currentPurchase.backendId,
 
           id:
             updated?.po_number ??
-            modal.id,
+            currentPurchase.id,
 
           supplierId:
             updated?.supplier_id ??
             Number(form.supplier),
 
           supplier:
+            suppliers.find(
+              (supplier) =>
+                Number(
+                  supplier.id
+                ) ===
+                Number(
+                  updated?.supplier_id ??
+                    form.supplier
+                )
+            )?.name ||
             `Supplier #${
               updated?.supplier_id ??
               form.supplier
@@ -1425,17 +1933,18 @@ const handleUpdatePurchaseStatus = async (
           storeId:
             updated?.store_id ??
             Number(form.storeId) ??
-            modal.storeId,
+            currentPurchase.storeId,
 
           invoiceNumber:
             form.invoiceNumber ||
             updated?.invoice_number ||
-            modal.invoiceNumber,
+            updated?.invoice_no ||
+            currentPurchase.invoiceNumber,
 
           purchaseDate:
             updated?.created_at ??
             form.purchaseDate ??
-            modal.purchaseDate,
+            currentPurchase.purchaseDate,
 
           items:
             updated?.items?.reduce(
@@ -1447,56 +1956,79 @@ const handleUpdatePurchaseStatus = async (
               0
             ) ||
             Number(form.items) ||
-            modal.items ||
+            currentPurchase.items ||
             0,
 
-          subtotal:
-            Number(
-              updated?.total_amount ??
+          subtotal: Number(
+            updated?.total_amount ??
               totalAmount
-            ),
+          ),
 
           gst:
             Number(form.gst) || 0,
 
           discount:
-            Number(form.discount) || 0,
+            Number(form.discount) ||
+            0,
 
-          total:
-            Number(
-              updated?.total_amount ??
+          total: Number(
+            updated?.total_amount ??
               totalAmount
-            ),
+          ),
 
           paymentStatus:
-            form.status === "Received"
+            form.status ===
+            "Received"
               ? "Paid"
-              : form.paymentStatus || modal.paymentStatus || "Pending",
+              : form.paymentStatus ||
+                currentPurchase.paymentStatus ||
+                "Pending",
 
           status:
-            updatedStatus?.status === "received"
+            finalBackendStatus ===
+            "received"
               ? "Received"
-              : updatedStatus?.status === "cancelled"
+              : finalBackendStatus ===
+                "cancelled"
               ? "Cancelled"
-              : form.status || "Pending",
+              : finalBackendStatus ===
+                "draft"
+              ? "Pending"
+              : form.status ||
+                "Pending",
+
+          backendStatus:
+            finalBackendStatus,
+
+          rawData: {
+            ...(currentPurchase.rawData ||
+              {}),
+            ...(updated || {}),
+          },
 
           remarks:
             updated?.remarks ??
             form.remarks ??
-            modal.remarks ??
+            currentPurchase.remarks ??
             "",
         };
 
         setPurchases((prev) =>
           prev.map((p) =>
-            (purchaseOrderId && p.backendId === purchaseOrderId) || p.id === modal.id
+            p.backendId ===
+              purchaseOrderId ||
+            p.id ===
+              currentPurchase.id
               ? updatedPurchase
               : p
           )
         );
 
         setModal(null);
-        alert("Purchase updated successfully!");
+
+        alert(
+          "Purchase updated successfully!"
+        );
       }
     } catch (err) {
       console.error(
@@ -1526,10 +2058,12 @@ const handleUpdatePurchaseStatus = async (
       const apiError =
         err?.response?.data;
 
+      const detail =
+        apiError?.detail;
+
       const message =
-        apiError?.detail
-          ?.message ||
-        apiError?.detail ||
+        detail?.message ||
+        detail ||
         apiError?.message ||
         "Failed to save purchase";
 
@@ -1607,7 +2141,9 @@ const handleUpdatePurchaseStatus = async (
     purchases.reduce(
       (sum, purchase) =>
         sum +
-        Number(purchase.total || 0),
+        Number(
+          purchase.total || 0
+        ),
       0
     );
 
@@ -1623,6 +2159,16 @@ const handleUpdatePurchaseStatus = async (
         p.status === "Received"
     ).length;
 
+  // Keep every purchase status visible in the KPI summary.
+  // Previously Total included Cancelled purchases, but only
+  // Received and Pending counts were shown, which made the
+  // totals look mismatched.
+  const cancelledCount =
+    purchases.filter(
+      (p) =>
+        p.status === "Cancelled"
+    ).length;
+
   const kpis = [
     {
       label: "Total Purchases",
@@ -1630,21 +2176,33 @@ const handleUpdatePurchaseStatus = async (
       color: "#6366f1",
       icon: "🛒",
     },
+
     {
       label: "Received",
       value: receivedCount,
       color: "#10b981",
       icon: "✅",
     },
+
     {
       label: "Pending",
       value: pendingCount,
       color: "#f59e0b",
       icon: "⏳",
     },
+
+    {
+      label: "Cancelled",
+      value: cancelledCount,
+      color: "#ef4444",
+      icon: "❌",
+    },
+
     {
       label: "Purchase Value",
-      value: fmt(totalPurchaseAmount),
+      value: fmt(
+        totalPurchaseAmount
+      ),
       color: "#0ea5e9",
       icon: "💰",
     },
@@ -1656,297 +2214,364 @@ const handleUpdatePurchaseStatus = async (
 
   return (
     <div className="dash-page">
-       <div className="purchase-page-content">
+      <div className="purchase-page-content">
 
-      {/* HEADER */}
+        {/* HEADER */}
 
-      <div className="adm-page-header">
-        <div>
-          <h1 className="adm-page-title">
-            <BsCart3 size={20} style={{ marginRight: 8, verticalAlign: "middle" }} />
-            Purchases
-          </h1>
+        <div className="adm-page-header">
+          <div>
+            <h1 className="adm-page-title">
+              <BsCart3
+                size={20}
+                style={{
+                  marginRight: 8,
+                  verticalAlign:
+                    "middle",
+                }}
+              />
+              Purchases
+            </h1>
 
-          <p className="adm-page-sub">
-            Manage purchase orders,
-            suppliers and incoming stock
-          </p>
-        </div>
-
-        <div className="adm-header-actions">
-          <button
-            className="adm-btn-primary"
-            onClick={() =>
-              setModal("new")
-            }
-          >
-            <BsPlus size={17} />
-            Add Purchase
-          </button>
-        </div>
-      </div>
-
-      {/* ERROR */}
-
-      {error && (
-        <div
-          style={{
-            background: "#fef2f2",
-            color: "#dc2626",
-            padding: 12,
-            borderRadius: 8,
-            marginBottom: 12,
-          }}
-        >
-          {error}
-        </div>
-        
-      )}
-
-      {/* LOADING */}
-
-      {loading && (
-        <div
-          style={{
-            padding: 20,
-            textAlign: "center",
-            color: "#6b7280",
-          }}
-        >
-          Loading purchases...
-        </div>
-      )}
-
-      {/* KPI */}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(4, 1fr)",
-          gap: 14,
-        }}
-      >
-        {kpis.map((k, i) => (
-          <div
-            key={i}
-            className="adm-kpi-card"
-            style={{
-              padding: "14px 18px",
-            }}
-          >
-            <span
-              style={{
-                fontSize: 22,
-              }}
-            >
-              {k.icon}
-            </span>
-
-            <p
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#9ca3af",
-                textTransform:
-                  "uppercase",
-                letterSpacing:
-                  "0.05em",
-                marginTop: 8,
-              }}
-            >
-              {k.label}
-            </p>
-
-            <p
-              style={{
-                fontSize:
-                  i === 3 ? 16 : 26,
-                fontWeight: 800,
-                color: k.color,
-                marginTop: 4,
-              }}
-            >
-              {k.value}
+            <p className="adm-page-sub">
+              Manage purchase orders,
+              suppliers and incoming stock
             </p>
           </div>
-        ))}
-      </div>
 
-      {/* SEARCH + FILTER */}
-
-      <div
-        style={{
-          background: "#fff",
-          border:
-            "1px solid #e8eaf0",
-          borderRadius: 12,
-          padding: "14px 16px",
-          display: "flex",
-          gap: 12,
-          flexWrap: "wrap",
-          alignItems: "center",
-        }}
-      >
-        <div
-          style={{
-            position: "relative",
-            flex: 1,
-            minWidth: 220,
-          }}
-        >
-          <BsSearch
-            size={13}
-            style={{
-              position:
-                "absolute",
-              left: 11,
-              top: "50%",
-              transform:
-                "translateY(-50%)",
-              color: "#9ca3af",
-            }}
-          />
-
-          <input
-            className="ec-input"
-            style={{
-              paddingLeft: 32,
-            }}
-            placeholder="Search purchase ID or supplier..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-          />
+          <div className="adm-header-actions">
+            <button
+              type="button"
+              className="adm-btn-primary"
+              onClick={() =>
+                setModal("new")
+              }
+            >
+              <BsPlus size={17} />
+              Add Purchase
+            </button>
+          </div>
         </div>
 
-        <select
-          className="ec-input"
+        {/* ERROR */}
+
+        {error && (
+          <div
+            style={{
+              background:
+                "#fef2f2",
+              color: "#dc2626",
+              padding: 12,
+              borderRadius: 8,
+              marginBottom: 12,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        {/* LOADING */}
+
+        {loading && (
+          <div
+            style={{
+              padding: 20,
+              textAlign:
+                "center",
+              color: "#6b7280",
+            }}
+          >
+            Loading purchases...
+          </div>
+        )}
+
+        {/* KPI */}
+
+        <div
           style={{
-            minWidth: 150,
-          }}
-          value={filterStatus}
-          onChange={(e) => {
-            setFilterStatus(
-              e.target.value
-            );
-            setPage(1);
+            display: "grid",
+            gridTemplateColumns:
+              "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: 14,
           }}
         >
-          <option value="All">
-            All Status
-          </option>
-
-          {Object.keys(
-            STATUS_CONFIG
-          ).map((status) => (
-            <option
-              key={status}
-              value={status}
-            >
-              {status}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* TABLE */}
-
-      <div
-        className="chart-card"
-        style={{
-          padding: 0,
-          overflow: "hidden",
-        }}
-      >
-        <table
-          style={{
-            width: "100%",
-            borderCollapse:
-              "collapse",
-          }}
-        >
-          <thead>
-            <tr
+          {kpis.map((k, i) => (
+            <div
+              key={i}
+              className="adm-kpi-card"
               style={{
-                background:
-                  "#f9fafb",
-                borderBottom:
-                  "1px solid #e8eaf0",
+                padding:
+                  "14px 18px",
               }}
             >
-              {[
-                "Purchase ID",
-                "Supplier",
-                "Invoice",
-                "Date",
-                "Items",
-                "Total",
-                "Payment",
-                "Status",
-                "Actions",
-              ].map((heading) => (
-                <th
-                  key={heading}
-                  style={{
-                    padding:
-                      "12px 14px",
-                    textAlign:
-                      "left",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#9ca3af",
-                    textTransform:
-                      "uppercase",
-                    letterSpacing:
-                      "0.05em",
-                    whiteSpace:
-                      "nowrap",
-                  }}
-                >
-                  {heading}
-                </th>
-              ))}
-            </tr>
-          </thead>
+              <span
+                style={{
+                  fontSize: 22,
+                }}
+              >
+                {k.icon}
+              </span>
 
-          <tbody>
-            {paginated.map(
-              (purchase) => {
-                const sc =
-                  STATUS_CONFIG[
-                    purchase.status
-                  ] ||
-                  STATUS_CONFIG.Pending;
+              <p
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color:
+                    "#9ca3af",
+                  textTransform:
+                    "uppercase",
+                  letterSpacing:
+                    "0.05em",
+                  marginTop: 8,
+                }}
+              >
+                {k.label}
+              </p>
 
-                return (
-                  <tr
-                    key={
-                      purchase.backendId ||
-                      purchase.id
-                    }
-                    style={{
-                      borderBottom:
-                        "1px solid #f3f4f6",
-                    }}
-                  >
-                    {/* ID */}
+              <p
+                style={{
+                  fontSize:
+                    k.label === "Purchase Value"
+                      ? 16
+                      : 26,
+                  fontWeight: 800,
+                  color: k.color,
+                  marginTop: 4,
+                }}
+              >
+                {k.value}
+              </p>
+            </div>
+          ))}
+        </div>
 
-                    <td
+        {/* SEARCH + FILTER */}
+
+        <div
+          style={{
+            background: "#fff",
+            border:
+              "1px solid #e8eaf0",
+            borderRadius: 12,
+            padding:
+              "14px 16px",
+            display: "flex",
+            gap: 12,
+            flexWrap:
+              "wrap",
+            alignItems:
+              "center",
+          }}
+        >
+          <div
+            style={{
+              position:
+                "relative",
+              flex: 1,
+              minWidth: 220,
+            }}
+          >
+            <BsSearch
+              size={13}
+              style={{
+                position:
+                  "absolute",
+                left: 11,
+                top: "50%",
+                transform:
+                  "translateY(-50%)",
+                color:
+                  "#9ca3af",
+              }}
+            />
+
+            <input
+              className="ec-input"
+              style={{
+                paddingLeft: 32,
+              }}
+              placeholder="Search purchase order number or supplier..."
+              value={search}
+              onChange={(e) => {
+                setSearch(
+                  e.target.value
+                );
+                setPage(1);
+              }}
+            />
+          </div>
+
+          <select
+            className="ec-input"
+            style={{
+              minWidth: 150,
+            }}
+            value={
+              filterStatus
+            }
+            onChange={(e) => {
+              setFilterStatus(
+                e.target.value
+              );
+              setPage(1);
+            }}
+          >
+            <option value="All">
+              All Status
+            </option>
+
+            {Object.keys(
+              STATUS_CONFIG
+            ).map((status) => (
+              <option
+                key={status}
+                value={status}
+              >
+                {status}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* TABLE */}
+
+        <div
+          className="chart-card"
+          style={{
+            padding: 0,
+            overflow:
+              "hidden",
+          }}
+        >
+          <table
+            style={{
+              width: "100%",
+              borderCollapse:
+                "collapse",
+            }}
+          >
+            <thead>
+              <tr
+                style={{
+                  background:
+                    "#f9fafb",
+                  borderBottom:
+                    "1px solid #e8eaf0",
+                }}
+              >
+                {[
+                  "Purchase Order Number",
+                  "Supplier",
+                  "Store ID",
+                  "Invoice",
+                  "Date",
+                  "Items",
+                  "Total",
+                  "Payment",
+                  "Status",
+                  "Actions",
+                ].map(
+                  (heading) => (
+                    <th
+                      key={
+                        heading
+                      }
                       style={{
                         padding:
                           "12px 14px",
-                        fontFamily:
-                          "monospace",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: "#6b7280",
+                        textAlign:
+                          "left",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color:
+                          "#9ca3af",
+                        textTransform:
+                          "uppercase",
+                        letterSpacing:
+                          "0.05em",
+                        whiteSpace:
+                          "nowrap",
                       }}
                     >
-                      {purchase.id}
-                    </td>
+                      {heading}
+                    </th>
+                  )
+                )}
+              </tr>
+            </thead>
+
+            <tbody>
+              {paginated.map(
+                (purchase) => {
+                  const displayStatus =
+                    getDisplayStatus(
+                      purchase.status ||
+                        purchase.backendStatus ||
+                        purchase?.rawData?.status
+                    );
+
+                  const sc =
+                    STATUS_CONFIG[
+                      displayStatus
+                    ] ||
+                    STATUS_CONFIG.Pending;
+
+                  return (
+                    <tr
+                      key={
+                        purchase.backendId ||
+                        purchase.id
+                      }
+                      style={{
+                        borderBottom:
+                          "1px solid #f3f4f6",
+                      }}
+                    >
+                      {/* PURCHASE ORDER ID */}
+
+                      <td
+                        style={{
+                          padding:
+                            "12px 14px",
+                        }}
+                      >
+                        <p
+                          style={{
+                            fontFamily:
+                              "monospace",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color:
+                              "#374151",
+                            margin: 0,
+                          }}
+                        >
+                          {purchase.id}
+                        </p>
+
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color:
+                              "#9ca3af",
+                          }}
+                        >
+                          Purchase Order Number
+                        </span>
+
+                        <br />
+
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color:
+                              "#9ca3af",
+                          }}
+                        >
+                          Purchase Order ID:{" "}
+                          {purchase.backendId ??
+                            "-"}
+                        </span>
+                      </td>
 
                       {/* SUPPLIER */}
 
@@ -1964,6 +2589,7 @@ const handleUpdatePurchaseStatus = async (
                               "#111827",
                             whiteSpace:
                               "nowrap",
+                            margin: 0,
                           }}
                         >
                           {
@@ -1978,7 +2604,7 @@ const handleUpdatePurchaseStatus = async (
                               "#9ca3af",
                           }}
                         >
-                          ID:{" "}
+                          Supplier ID:{" "}
                           {
                             purchase.supplierId ??
                             "-"
@@ -1988,111 +2614,149 @@ const handleUpdatePurchaseStatus = async (
 
                       {/* STORE */}
 
-                    <td
-                      style={{
-                        padding:
-                          "12px 14px",
-                        fontSize: 12,
-                        color: "#6b7280",
-                      }}
-                    >
-                      {
-                        purchase.invoiceNumber ||
-                        "-"
-                      }
-                    </td>
+                      <td
+                        style={{
+                          padding:
+                            "12px 14px",
+                        }}
+                      >
+                        <p
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color:
+                              "#111827",
+                            whiteSpace:
+                              "nowrap",
+                            margin: 0,
+                          }}
+                        >
+                          {purchase.storeId ?? "-"}
+                        </p>
+
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color:
+                              "#9ca3af",
+                          }}
+                        >
+                          Store ID
+                        </span>
+                      </td>
+
+                      {/* INVOICE */}
+
+                      <td
+                        style={{
+                          padding:
+                            "12px 14px",
+                          fontSize: 12,
+                          color:
+                            "#6b7280",
+                        }}
+                      >
+                        {purchase.invoiceNumber ||
+                          "-"}
+                      </td>
 
                       {/* DATE */}
 
-                    <td
-                      style={{
-                        padding:
-                          "12px 14px",
-                        fontSize: 12,
-                        color: "#6b7280",
-                      }}
-                    >
-                      {formatDisplayDate(
-                        purchase.purchaseDate
-                      )}
-                    </td>
+                      <td
+                        style={{
+                          padding:
+                            "12px 14px",
+                          fontSize: 12,
+                          color:
+                            "#6b7280",
+                        }}
+                      >
+                        {formatDisplayDate(
+                          purchase.purchaseDate
+                        )}
+                      </td>
 
                       {/* ITEMS */}
 
-                    <td
-                      style={{
-                        padding:
-                          "12px 14px",
-                        fontSize: 13,
-                        color: "#374151",
-                      }}
-                    >
-                      {purchase.items} items
-                    </td>
+                      <td
+                        style={{
+                          padding:
+                            "12px 14px",
+                          fontSize: 13,
+                          color:
+                            "#374151",
+                        }}
+                      >
+                        {purchase.items}{" "}
+                        items
+                      </td>
 
                       {/* TOTAL */}
 
-                    <td
-                      style={{
-                        padding:
-                          "12px 14px",
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: "#111827",
-                      }}
-                    >
-                      {fmt(
-                        purchase.total
-                      )}
-                    </td>
+                      <td
+                        style={{
+                          padding:
+                            "12px 14px",
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color:
+                            "#111827",
+                        }}
+                      >
+                        {fmt(
+                          purchase.total
+                        )}
+                      </td>
+
+                      {/* PAYMENT */}
+
+                      <td
+                        style={{
+                          padding:
+                            "12px 14px",
+                        }}
+                      >
+                        <span className="adm-mode-tag">
+                          {
+                            purchase.paymentStatus
+                          }
+                        </span>
+                      </td>
 
                       {/* STATUS */}
 
-                    <td
-                      style={{
-                        padding:
-                          "12px 14px",
-                      }}
-                    >
-                      <span className="adm-mode-tag">
-                        {
-                          purchase.paymentStatus
-                        }
-                      </span>
-                    </td>
-
-                    {/* Status */}
-
-                    <td
-                      style={{
-                        padding:
-                          "12px 14px",
-                      }}
-                    >
-                      <span
+                      <td
                         style={{
-                          display:
-                            "inline-flex",
-                          alignItems:
-                            "center",
-                          gap: 4,
                           padding:
-                            "4px 10px",
-                          borderRadius:
-                            20,
-                          fontSize: 11,
-                          fontWeight: 700,
-                          background:
-                            sc.bg,
-                          color:
-                            sc.color,
+                            "12px 14px",
                         }}
                       >
-                        {sc.icon}
-                        &nbsp;
-                        {purchase.status}
-                      </span>
-                    </td>
+                        <span
+                          style={{
+                            display:
+                              "inline-flex",
+                            alignItems:
+                              "center",
+                            gap: 4,
+                            padding:
+                              "4px 10px",
+                            borderRadius:
+                              20,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background:
+                              sc.bg,
+                            color:
+                              sc.color,
+                          }}
+                        >
+                          {sc.icon}
+                          &nbsp;
+                          {
+                            purchase.status
+                          }
+                        </span>
+                      </td>
 
                       {/* ACTIONS */}
 
@@ -2111,258 +2775,274 @@ const handleUpdatePurchaseStatus = async (
                         >
                           {/* VIEW */}
 
-                        <button
-                          className="adm-btn-secondary"
-                          style={{
-                            padding:
-                              "5px 9px",
-                          }}
-                         onClick={() =>
-  handleViewPurchase(purchase)
-}
-                          
-                        >
-                          <BsEye size={11} />
-                        </button>
+                          <button
+                            type="button"
+                            className="adm-btn-secondary"
+                            style={{
+                              padding:
+                                "5px 9px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              cursor:
+                                "pointer",
+                            }}
+                            title="View"
+                            aria-label="View purchase order"
+                            onClick={() =>
+                              handleViewPurchase(
+                                purchase
+                              )
+                            }
+                          >
+                            <BsEye size={14} />
+                          </button>
+
+                          {/* EDIT */}
+
+                          <button
+                            type="button"
+                            className="adm-btn-secondary"
+                            style={{
+                              padding:
+                                "5px 9px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 5,
+                              cursor:
+                                "pointer",
+                            }}
+                            title="Edit"
+                            aria-label="Edit purchase order"
+                            onClick={() =>
+                              handleEditPurchase(
+                                purchase
+                              )
+                            }
+                          >
+                            <BsPencilFill size={14} />
+                          </button>
 
                           {/* RECEIVE */}
 
-                        <button
-                          className="adm-btn-secondary"
-                          style={{
-                            padding:
-                              "5px 9px",
-                          }}
-                          onClick={() =>
-                            setModal(
-                              purchase
-                            )
-                          }
-                        >
-                          <BsPencilFill
-                            size={11}
-                          />
-                        </button>
+                          <button
+                            type="button"
+                            className="adm-btn-secondary"
+                            style={{
+                              padding: "5px 9px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: isDraftPurchase(purchase)
+                                ? "pointer"
+                                : "not-allowed",
+                              opacity: isDraftPurchase(purchase)
+                                ? 1
+                                : 0.45,
+                            }}
+                            disabled={!isDraftPurchase(purchase)}
+                            onClick={() =>
+                              handleReceivePurchase(purchase)
+                            }
+                            title="Receive"
+                            aria-label="Receive purchase order"
+                          >
+                            <BsCheckCircleFill size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+              )}
 
-                        <button
-  className="adm-btn-secondary"
-  style={{
-    padding: "5px 9px",
-  }}
-  onClick={() =>
-    handleReceivePurchase(purchase)
-  }
-  disabled={purchase.status === "Received"}
-  title="Receive Purchase"
->
-  <BsCheckCircleFill size={11} />
-</button>
-
-                        {/* DELETE */}
-
-                        <button
-                          className="adm-btn-secondary"
-                          style={{
-                            padding:
-                              "5px 9px",
-                          }}
-                          onClick={() =>
-                            alert(
-                              "Delete functionality will be added later."
-                            )
-                          }
-                        >
-                          <BsTrashFill
-                            size={11}
-                          />
-                        </button>
-                      </div>
+              {!loading &&
+                paginated.length ===
+                  0 && (
+                  <tr>
+                    <td
+                      colSpan={10}
+                      style={{
+                        padding: 30,
+                        textAlign:
+                          "center",
+                        color:
+                          "#9ca3af",
+                        fontSize: 13,
+                      }}
+                    >
+                      No purchase orders
+                      found.
                     </td>
                   </tr>
-                );
-              }
-            )}
+                )}
+            </tbody>
+          </table>
 
-            {!loading &&
-              paginated.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={9}
-                    style={{
-                      padding: 30,
-                      textAlign:
-                        "center",
-                      color:
-                        "#9ca3af",
-                      fontSize: 13,
-                    }}
-                  >
-                    No purchase orders
-                    found.
-                  </td>
-                </tr>
-              )}
-          </tbody>
-        </table>
+          {/* PAGINATION */}
 
-        {/* PAGINATION */}
-
-        {totalPages > 1 && (
-          <div
-            style={{
-              display: "flex",
-              alignItems:
-                "center",
-              justifyContent:
-                "space-between",
-              padding:
-                "12px 16px",
-              borderTop:
-                "1px solid #f3f4f6",
-            }}
-          >
-            <span
-              style={{
-                fontSize: 12,
-                color:
-                  "#6b7280",
-              }}
-            >
-              Showing{" "}
-              {(page - 1) *
-                PAGE_SIZE +
-                1}
-              –
-              {Math.min(
-                page *
-                  PAGE_SIZE,
-                filtered.length
-              )}{" "}
-              of{" "}
-              {filtered.length}
-            </span>
-
+          {totalPages > 1 && (
             <div
               style={{
                 display:
                   "flex",
-                gap: 6,
+                alignItems:
+                  "center",
+                justifyContent:
+                  "space-between",
+                padding:
+                  "12px 16px",
+                borderTop:
+                  "1px solid #f3f4f6",
               }}
             >
-              <button
-                className="adm-btn-secondary"
+              <span
                 style={{
-                  padding:
-                    "5px 10px",
+                  fontSize: 12,
+                  color:
+                    "#6b7280",
                 }}
-                disabled={
-                  page === 1
-                }
-                onClick={() =>
-                  setPage(
-                    (p) => p - 1
-                  )
-                }
               >
-                <BsChevronLeft
-                  size={12}
-                />
-              </button>
+                Showing{" "}
+                {(page - 1) *
+                  PAGE_SIZE +
+                  1}
+                –
+                {Math.min(
+                  page *
+                    PAGE_SIZE,
+                  filtered.length
+                )}{" "}
+                of{" "}
+                {filtered.length}
+              </span>
 
-              {Array.from(
-                {
-                  length:
-                    totalPages,
-                },
-                (_, i) =>
-                  i + 1
-              ).map((p) => (
+              <div
+                style={{
+                  display:
+                    "flex",
+                  gap: 6,
+                }}
+              >
                 <button
-                  key={p}
-                  onClick={() =>
-                    setPage(p)
-                  }
+                  type="button"
+                  className="adm-btn-secondary"
                   style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 6,
-                    border: `1.5px solid ${
-                      p === page
-                        ? "#6366f1"
-                        : "#e5e7eb"
-                    }`,
-                    background:
-                      p === page
-                        ? "#eef2ff"
-                        : "#fff",
-                    color:
-                      p === page
-                        ? "#6366f1"
-                        : "#6b7280",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor:
-                      "pointer",
+                    padding:
+                      "5px 10px",
                   }}
+                  disabled={
+                    page === 1
+                  }
+                  onClick={() =>
+                    setPage(
+                      (p) => p - 1
+                    )
+                  }
                 >
-                  {p}
+                  <BsChevronLeft
+                    size={12}
+                  />
                 </button>
-              ))}
 
-              <button
-                className="adm-btn-secondary"
-                style={{
-                  padding:
-                    "5px 10px",
-                }}
-                disabled={
-                  page ===
-                  totalPages
-                }
-                onClick={() =>
-                  setPage(
-                    (p) => p + 1
-                  )
-                }
-              >
-                <BsChevronRight
-                  size={12}
-                />
-              </button>
+                {Array.from(
+                  {
+                    length:
+                      totalPages,
+                  },
+                  (_, i) =>
+                    i + 1
+                ).map((p) => (
+                  <button
+                    type="button"
+                    key={p}
+                    onClick={() =>
+                      setPage(p)
+                    }
+                    style={{
+                      width: 30,
+                      height: 30,
+                      borderRadius: 6,
+                      border: `1.5px solid ${
+                        p === page
+                          ? "#6366f1"
+                          : "#e5e7eb"
+                      }`,
+                      background:
+                        p === page
+                          ? "#eef2ff"
+                          : "#fff",
+                      color:
+                        p === page
+                          ? "#6366f1"
+                          : "#6b7280",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor:
+                        "pointer",
+                    }}
+                  >
+                    {p}
+                  </button>
+                ))}
+
+                <button
+                  type="button"
+                  className="adm-btn-secondary"
+                  style={{
+                    padding:
+                      "5px 10px",
+                  }}
+                  disabled={
+                    page ===
+                    totalPages
+                  }
+                  onClick={() =>
+                    setPage(
+                      (p) => p + 1
+                    )
+                  }
+                >
+                  <BsChevronRight
+                    size={12}
+                  />
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+        </div>
+
+        {/* ADD / EDIT MODAL */}
+
+        {(modal === "new" ||
+          modal?.type === "edit") && (
+          <PurchaseFormModal
+            purchase={
+              modal === "new"
+                ? null
+                : modal.purchase
+            }
+            onClose={() =>
+              setModal(null)
+            }
+            onSave={handleSave}
+            suppliers={suppliers}
+          />
+        )}
+
+        {/* VIEW MODAL */}
+
+        {modal?.type === "view" && (
+          <PurchaseDetailsModal
+            purchase={
+              modal.purchase
+            }
+            onClose={() =>
+              setModal(null)
+            }
+          />
         )}
       </div>
-
-      {/* ADD / EDIT MODAL */}
-
-      {(modal === "new" ||
-        (modal && modal.id)) && (
-        <PurchaseFormModal
-          purchase={
-            modal === "new"
-              ? null
-              : modal
-          }
-          onClose={() =>
-            setModal(null)
-          }
-          onSave={handleSave}
-          suppliers={suppliers}
-        />
-      )}
-
-      {/* VIEW MODAL */}
-
-      {modal?.type === "view" && (
-        <PurchaseDetailsModal
-          purchase={modal.purchase}
-          onClose={() =>
-            setModal(null)
-          }
-        />
-      )}
-    </div>
     </div>
   );
 };

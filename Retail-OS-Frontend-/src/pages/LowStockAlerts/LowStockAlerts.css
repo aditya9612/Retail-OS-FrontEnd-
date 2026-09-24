@@ -5,10 +5,14 @@
 .low-stock-page {
   width: 100%;
   min-height: 100vh;
-  padding: 24px 28px 40px;
-  box-sizing: border-box;
+
+  padding: 18px 20px 32px;
+
   background: #f5f7fb;
   color: #0f172a;
+
+  box-sizing: border-box;
+
   overflow-x: hidden;
 }
 
@@ -22,137 +26,320 @@
   width: 100%;
   max-width: 1600px;
   min-width: 0;
+
   margin: 0 auto;
 }
 
 
 /* =========================================================
-   HEADER
+   PAGE HEADER
 ========================================================= */
 
 .low-stock-header {
   width: 100%;
+
+  margin-bottom: 14px;
+  padding: 16px 18px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 16px;
+
   background: #ffffff;
-  padding: 22px 24px;
+
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-  margin-bottom: 18px;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.03),
+    0 3px 8px rgba(15, 23, 42, 0.04);
 }
+
+.low-stock-header > div {
+  min-width: 0;
+}
+
+.low-stock-header h1 {
+  margin: 0 !important;
+
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 700;
+
+  color: #dc2626;
+
+  letter-spacing: -0.02em;
+}
+
+.low-stock-header p {
+  margin: 4px 0 0;
+
+  font-size: 12px;
+  line-height: 1.5;
+
+  color: #64748b;
+}
+
+
+/* =========================================================
+   OPTIONAL EYEBROW
+========================================================= */
 
 .low-stock-eyebrow {
   display: flex;
   align-items: center;
+
   gap: 7px;
+
   margin-bottom: 5px;
-  font-size: 11px;
+
+  font-size: 10px;
   font-weight: 700;
+
   color: #64748b;
+
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .low-stock-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
+
   flex-shrink: 0;
+
   background: #4f46e5;
+
   border-radius: 50%;
-}
-
-.low-stock-header h1 {
-  margin: 0;
-  font-size: 27px;
-  line-height: 36px;
-  font-weight: 750;
-  color: #dc2626;
-  letter-spacing: -0.02em;
-}
-
-.low-stock-header p {
-  margin: 5px 0 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: #64748b;
 }
 
 
 /* =========================================================
    FILTER TOOLBAR
-   Matches the Search + Store + Status + Clear section
 ========================================================= */
 
-.low-stock-container > section:not(.low-stock-header):not(.low-stock-card) {
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card) {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-}
 
-.low-stock-container > section:not(.low-stock-header):not(.low-stock-card) input,
-.low-stock-container > section:not(.low-stock-header):not(.low-stock-card) select,
-.low-stock-container > section:not(.low-stock-header):not(.low-stock-card) button {
-  min-height: 40px;
-  font-size: 13px;
-  font-family: inherit;
-}
+  margin-bottom: 14px !important;
+  padding: 10px !important;
 
-.low-stock-container > section:not(.low-stock-header):not(.low-stock-card) input,
-.low-stock-container > section:not(.low-stock-header):not(.low-stock-card) select {
-  color: #111827;
-  transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
-}
+  display: grid !important;
 
-.low-stock-container > section:not(.low-stock-header):not(.low-stock-card) input::placeholder {
-  color: #9ca3af;
-}
+  grid-template-columns:
+    minmax(280px, 2fr)
+    minmax(200px, 1fr)
+    minmax(180px, 1fr)
+    auto !important;
 
-.low-stock-container > section:not(.low-stock-header):not(.low-stock-card) input:focus,
-.low-stock-container > section:not(.low-stock-header):not(.low-stock-card) select:focus {
-  border-color: #6366f1 !important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-}
+  gap: 10px !important;
 
-.low-stock-container > section:not(.low-stock-header):not(.low-stock-card) button {
-  color: #374151;
-  font-weight: 600;
-  transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    transform 0.18s ease;
-}
+  align-items: center !important;
 
-.low-stock-container > section:not(.low-stock-header):not(.low-stock-card) button:hover {
-  background: #f9fafb !important;
-  border-color: #c7d2fe !important;
-  color: #4f46e5;
-  transform: translateY(-1px);
+  background: #ffffff !important;
+
+  border: 1px solid #e5e7eb !important;
+  border-radius: 10px !important;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.02),
+    0 2px 6px rgba(15, 23, 42, 0.03) !important;
 }
 
 
 /* =========================================================
-   SUMMARY CARDS
+   FILTER INPUT + SELECT
+========================================================= */
+
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card)
+  input,
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card)
+  select {
+  width: 100% !important;
+  min-width: 0;
+
+  height: 38px;
+  min-height: 38px !important;
+
+  margin: 0 !important;
+  padding: 0 11px !important;
+
+  background: #ffffff !important;
+
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 7px !important;
+
+  outline: none;
+
+  color: #111827;
+
+  font-family: inherit;
+  font-size: 12px !important;
+  font-weight: 400;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card)
+  input::placeholder {
+  color: #94a3b8;
+}
+
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card)
+  input:hover,
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card)
+  select:hover {
+  border-color: #94a3b8 !important;
+}
+
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card)
+  input:focus,
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card)
+  select:focus {
+  border-color: #6366f1 !important;
+
+  box-shadow:
+    0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card)
+  select {
+  cursor: pointer;
+}
+
+
+/* =========================================================
+   CLEAR BUTTON
+========================================================= */
+
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card)
+  button {
+  height: 38px;
+  min-height: 38px !important;
+
+  padding: 0 14px !important;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  background: #ffffff !important;
+
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 7px !important;
+
+  color: #475569;
+
+  font-family: inherit;
+  font-size: 12px !important;
+  font-weight: 600;
+
+  white-space: nowrap;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card)
+  button:hover {
+  background: #f8fafc !important;
+
+  border-color: #a5b4fc !important;
+
+  color: #4f46e5;
+
+  transform: translateY(-1px);
+}
+
+.low-stock-container
+  > section:not(.low-stock-header):not(.low-stock-card)
+  button:active {
+  transform: translateY(0);
+}
+
+
+/* =========================================================
+   ERROR MESSAGE
+========================================================= */
+
+.low-stock-error {
+  width: 100%;
+
+  margin-bottom: 14px;
+
+  padding: 10px 12px;
+
+  background: #fef2f2;
+
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+
+  color: #b91c1c;
+
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+
+/* =========================================================
+   OPTIONAL SUMMARY
 ========================================================= */
 
 .low-stock-summary {
   width: 100%;
+
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
+
+  gap: 12px;
+
+  margin-bottom: 14px;
 }
 
 .low-stock-summary-card {
   min-width: 0;
-  background: #ffffff;
-  padding: 18px 20px;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+
+  padding: 15px 17px;
+
   display: flex;
   flex-direction: column;
-  gap: 7px;
+
+  gap: 5px;
+
+  background: #ffffff;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.03),
+    0 3px 8px rgba(15, 23, 42, 0.04);
+
   transition:
     border-color 0.18s ease,
     box-shadow 0.18s ease,
@@ -161,39 +348,26 @@
 
 .low-stock-summary-card:hover {
   border-color: #d8dee8;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+
+  box-shadow:
+    0 3px 10px rgba(15, 23, 42, 0.06);
+
   transform: translateY(-1px);
 }
 
 .low-stock-summary-card span {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
+
   color: #64748b;
 }
 
 .low-stock-summary-card strong {
-  font-size: 26px;
-  line-height: 32px;
-  font-weight: 750;
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 700;
+
   color: #dc2626;
-}
-
-
-/* =========================================================
-   ERROR
-========================================================= */
-
-.low-stock-error {
-  width: 100%;
-  margin-bottom: 18px;
-  padding: 11px 14px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  color: #b91c1c;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 18px;
 }
 
 
@@ -203,71 +377,486 @@
 
 .low-stock-card {
   width: 100%;
+  max-width: 100%;
   min-width: 0;
+
   background: #ffffff;
+
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.03),
+    0 3px 8px rgba(15, 23, 42, 0.04);
+
   overflow: hidden;
 }
 
+
+/* =========================================================
+   OPTIONAL CARD HEADING
+========================================================= */
+
 .low-stock-card-heading {
   width: 100%;
-  padding: 18px 20px 16px;
-  border-bottom: 1px solid #eef2f7;
+
+  padding: 14px 16px;
+
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+
   gap: 12px;
+
+  border-bottom: 1px solid #eef2f7;
 }
 
 .low-stock-card-heading h2 {
   margin: 0;
-  font-size: 16px;
-  line-height: 24px;
+
+  font-size: 15px;
+  line-height: 1.4;
   font-weight: 700;
+
   color: #111827;
+
   letter-spacing: -0.01em;
 }
 
 .low-stock-card-heading p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 18px;
+  margin: 3px 0 0;
+
+  font-size: 11px;
+  line-height: 1.5;
+
   color: #64748b;
 }
 
 
 /* =========================================================
-   LOW STOCK COMPONENT / TABLE AREA
+   LOW STOCK ALERT COMPONENT
 ========================================================= */
 
-.low-stock-card > *:last-child {
+.low-stock-card > .low-stock-alert {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+
+  margin: 0;
+
+  padding: 12px 10px 10px;
+
+  border: none;
+  border-radius: 0;
+
+  box-shadow: none;
+
+  background: #ffffff;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  -webkit-overflow-scrolling: touch;
+
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
 }
 
-.low-stock-card table {
+
+/* =========================================================
+   HORIZONTAL SCROLLBAR
+========================================================= */
+
+.low-stock-card > .low-stock-alert::-webkit-scrollbar {
+  height: 7px;
+}
+
+.low-stock-card > .low-stock-alert::-webkit-scrollbar-track {
+  background: #f8fafc;
+
+  border-radius: 999px;
+}
+
+.low-stock-card > .low-stock-alert::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+
+  border-radius: 999px;
+}
+
+.low-stock-card > .low-stock-alert::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+
+/* =========================================================
+   TABLE
+========================================================= */
+
+.low-stock-card .low-stock-table {
   width: 100%;
-  min-width: 760px;
-  border-collapse: collapse;
+  min-width: 1050px;
+
+  border-collapse: separate;
+  border-spacing: 0;
+
+  background: #ffffff;
+
+  color: #334155;
+
+  font-size: 12px;
 }
 
-.low-stock-card th,
-.low-stock-card td {
+
+/* =========================================================
+   TABLE HEADER
+========================================================= */
+
+.low-stock-card .low-stock-table thead {
+  background: #f8fafc;
+}
+
+.low-stock-card .low-stock-table thead th {
+  padding: 10px 12px;
+
+  background: #f8fafc;
+
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+
+  color: #475569;
+
+  text-align: left;
+  vertical-align: middle;
+
+  font-size: 10px;
+  line-height: 1.4;
+  font-weight: 700;
+
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+
   white-space: nowrap;
 }
 
-.low-stock-card .table-scroll-container,
-.low-stock-card .low-stock-table-wrapper,
-.low-stock-card .inventory-table-container {
+.low-stock-card .low-stock-table thead th:first-child {
+  border-left: 1px solid #e5e7eb;
+
+  border-top-left-radius: 7px;
+}
+
+.low-stock-card .low-stock-table thead th:last-child {
+  border-right: 1px solid #e5e7eb;
+
+  border-top-right-radius: 7px;
+}
+
+
+/* =========================================================
+   TABLE BODY
+========================================================= */
+
+.low-stock-card .low-stock-table tbody tr {
+  background: #ffffff;
+
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.low-stock-card .low-stock-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.low-stock-card .low-stock-table td {
+  padding: 10px 12px;
+
+  border-bottom: 1px solid #f1f5f9;
+
+  color: #334155;
+
+  font-size: 11px;
+  line-height: 1.45;
+  font-weight: 500;
+
+  vertical-align: middle;
+
+  white-space: nowrap;
+}
+
+.low-stock-card .low-stock-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+
+/* =========================================================
+   PRODUCT COLUMN
+========================================================= */
+
+.low-stock-card .low-stock-table th:first-child,
+.low-stock-card .low-stock-table td:first-child {
+  min-width: 155px;
+}
+
+.low-stock-card .low-stock-table td:first-child {
+  color: #111827;
+
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   SKU COLUMN
+========================================================= */
+
+.low-stock-card .low-stock-table th:nth-child(2),
+.low-stock-card .low-stock-table td:nth-child(2) {
+  min-width: 135px;
+}
+
+.low-stock-card .low-stock-table td:nth-child(2) {
+  color: #64748b;
+
+  font-size: 10px;
+}
+
+
+/* =========================================================
+   SUPPLIER COLUMN
+========================================================= */
+
+.low-stock-card .low-stock-table th:nth-child(3),
+.low-stock-card .low-stock-table td:nth-child(3) {
+  min-width: 120px;
+}
+
+
+/* =========================================================
+   WAREHOUSE COLUMN
+========================================================= */
+
+.low-stock-card .low-stock-table th:nth-child(4),
+.low-stock-card .low-stock-table td:nth-child(4) {
+  min-width: 150px;
+}
+
+
+/* =========================================================
+   AVAILABLE QUANTITY
+========================================================= */
+
+.low-stock-card .low-stock-table th:nth-child(5),
+.low-stock-card .low-stock-table td:nth-child(5) {
+  min-width: 110px;
+}
+
+.low-stock-card .low-stock-table td:nth-child(5) {
+  color: #111827;
+
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   REORDER LEVEL
+========================================================= */
+
+.low-stock-card .low-stock-table th:nth-child(6),
+.low-stock-card .low-stock-table td:nth-child(6) {
+  min-width: 105px;
+}
+
+.low-stock-card .low-stock-table td:nth-child(6) {
+  color: #111827;
+
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   LAST UPDATED
+========================================================= */
+
+.low-stock-card .low-stock-table th:nth-child(7),
+.low-stock-card .low-stock-table td:nth-child(7) {
+  min-width: 110px;
+}
+
+
+/* =========================================================
+   STATUS COLUMN
+========================================================= */
+
+.low-stock-card .low-stock-table th:nth-child(8),
+.low-stock-card .low-stock-table td:nth-child(8) {
+  min-width: 95px;
+
+  text-align: center;
+}
+
+
+/* =========================================================
+   ACTION COLUMN
+========================================================= */
+
+.low-stock-card .low-stock-table th:last-child,
+.low-stock-card .low-stock-table td:last-child {
+  min-width: 90px;
+
+  text-align: center;
+}
+
+
+/* =========================================================
+   STATUS BADGES
+========================================================= */
+
+.low-stock-badge,
+.critical-stock-badge,
+.out-of-stock-badge,
+.in-stock-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 72px;
+
+  padding: 4px 8px;
+
+  border-radius: 999px;
+
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 700;
+
+  white-space: nowrap;
+}
+
+
+/* LOW STOCK */
+
+.low-stock-badge {
+  background: #fffbeb;
+
+  border: 1px solid #fde68a;
+
+  color: #b45309;
+}
+
+
+/* CRITICAL */
+
+.critical-stock-badge {
+  background: #fff7ed;
+
+  border: 1px solid #fed7aa;
+
+  color: #c2410c;
+}
+
+
+/* OUT OF STOCK */
+
+.out-of-stock-badge {
+  background: #fef2f2;
+
+  border: 1px solid #fecaca;
+
+  color: #dc2626;
+}
+
+
+/* IN STOCK */
+
+.in-stock-badge {
+  background: #ecfdf5;
+
+  border: 1px solid #a7f3d0;
+
+  color: #047857;
+}
+
+
+/* =========================================================
+   REORDER BUTTON
+========================================================= */
+
+.reorder-btn {
+  min-width: 62px;
+  height: 29px;
+
+  padding: 0 10px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  background: #ffffff;
+
+  border: 1px solid #a5b4fc;
+  border-radius: 6px;
+
+  color: #4f46e5;
+
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.15s ease;
+}
+
+.reorder-btn:hover {
+  background: #eef2ff;
+
+  border-color: #818cf8;
+
+  color: #4338ca;
+
+  box-shadow:
+    0 2px 6px rgba(79, 70, 229, 0.12);
+
+  transform: translateY(-1px);
+}
+
+.reorder-btn:active {
+  transform: translateY(0);
+}
+
+.reorder-btn:focus-visible {
+  outline: 2px solid rgba(79, 70, 229, 0.3);
+  outline-offset: 2px;
+}
+
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+
+.low-stock-card .low-stock-table td[colspan="9"] {
+  padding: 24px 16px !important;
+
+  color: #94a3b8;
+
+  font-size: 12px;
+  font-weight: 500;
+
+  text-align: center !important;
+}
+
+
+/* =========================================================
+   LOADING / ERROR INSIDE TABLE COMPONENT
+========================================================= */
+
+.low-stock-card .low-stock-alert > div {
   width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
 }
 
 
@@ -277,7 +866,9 @@
 
 .low-stock-summary-card:focus-within {
   border-color: #fecaca;
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.08);
+
+  box-shadow:
+    0 0 0 3px rgba(220, 38, 38, 0.08);
 }
 
 .low-stock-page button:focus-visible,
@@ -289,32 +880,57 @@
 
 
 /* =========================================================
+   LARGE LAPTOP
+========================================================= */
+
+@media (max-width: 1200px) {
+  .low-stock-page {
+    padding: 18px;
+  }
+
+  .low-stock-container
+    > section:not(.low-stock-header):not(.low-stock-card) {
+    grid-template-columns:
+      minmax(230px, 2fr)
+      minmax(170px, 1fr)
+      minmax(150px, 1fr)
+      auto !important;
+  }
+
+  .low-stock-card .low-stock-table {
+    min-width: 1000px;
+  }
+}
+
+
+/* =========================================================
    TABLET
 ========================================================= */
 
 @media (max-width: 992px) {
   .low-stock-page {
-    padding: 20px;
+    padding: 16px;
   }
 
   .low-stock-header {
-    padding: 20px;
+    padding: 15px 16px;
   }
 
   .low-stock-header h1 {
-    font-size: 25px;
+    font-size: 20px;
   }
 
-  .low-stock-summary {
-    gap: 12px;
-  }
-
-  .low-stock-container > section:not(.low-stock-header):not(.low-stock-card) {
+  .low-stock-container
+    > section:not(.low-stock-header):not(.low-stock-card) {
     grid-template-columns:
-      minmax(240px, 2fr)
-      minmax(180px, 1fr)
+      minmax(220px, 2fr)
       minmax(160px, 1fr)
+      minmax(150px, 1fr)
       auto !important;
+  }
+
+  .low-stock-card .low-stock-table {
+    min-width: 980px;
   }
 }
 
@@ -325,36 +941,53 @@
 
 @media (max-width: 768px) {
   .low-stock-page {
-    padding: 18px;
+    padding: 14px;
+  }
+
+  .low-stock-header {
+    padding: 14px 15px;
+
+    margin-bottom: 12px;
+  }
+
+  .low-stock-header h1 {
+    font-size: 19px;
+  }
+
+  .low-stock-header p {
+    font-size: 11px;
   }
 
   .low-stock-summary {
     grid-template-columns: 1fr;
   }
 
-  .low-stock-header {
-    padding: 18px;
-  }
-
-  .low-stock-header h1 {
-    font-size: 24px;
-    line-height: 32px;
-  }
-
-  .low-stock-card-heading {
-    padding: 16px 18px 14px;
-  }
-
-  .low-stock-container > section:not(.low-stock-header):not(.low-stock-card) {
+  .low-stock-container
+    > section:not(.low-stock-header):not(.low-stock-card) {
     grid-template-columns: 1fr 1fr !important;
+
+    gap: 8px !important;
+
+    padding: 9px !important;
   }
 
-  .low-stock-container > section:not(.low-stock-header):not(.low-stock-card) button {
+  .low-stock-container
+    > section:not(.low-stock-header):not(.low-stock-card)
+    button {
     width: 100%;
   }
 
-  .low-stock-card table {
-    min-width: 700px;
+  .low-stock-card > .low-stock-alert {
+    padding: 10px 8px 8px;
+  }
+
+  .low-stock-card .low-stock-table {
+    min-width: 920px;
+  }
+
+  .low-stock-card .low-stock-table th,
+  .low-stock-card .low-stock-table td {
+    padding: 9px 10px;
   }
 }
 
@@ -365,65 +998,95 @@
 
 @media (max-width: 576px) {
   .low-stock-page {
-    padding: 14px 12px 28px;
+    padding: 12px 10px 24px;
   }
 
   .low-stock-header {
-    padding: 16px;
-    border-radius: 9px;
-    margin-bottom: 14px;
-  }
+    padding: 13px 14px;
 
-  .low-stock-eyebrow {
-    font-size: 10px;
+    border-radius: 8px;
   }
 
   .low-stock-header h1 {
-    font-size: 22px;
-    line-height: 29px;
+    font-size: 18px;
+    line-height: 1.3;
   }
 
   .low-stock-header p {
-    font-size: 11.5px;
+    font-size: 11px;
+  }
+
+  .low-stock-container
+    > section:not(.low-stock-header):not(.low-stock-card) {
+    grid-template-columns: 1fr !important;
+
+    gap: 8px !important;
+  }
+
+  .low-stock-container
+    > section:not(.low-stock-header):not(.low-stock-card)
+    input,
+  .low-stock-container
+    > section:not(.low-stock-header):not(.low-stock-card)
+    select,
+  .low-stock-container
+    > section:not(.low-stock-header):not(.low-stock-card)
+    button {
+    height: 37px;
+    min-height: 37px !important;
   }
 
   .low-stock-summary {
-    gap: 10px;
-    margin-bottom: 14px;
+    gap: 8px;
+
+    margin-bottom: 12px;
   }
 
   .low-stock-summary-card {
-    padding: 15px 16px;
-    border-radius: 9px;
+    padding: 13px 14px;
+
+    border-radius: 8px;
   }
 
   .low-stock-summary-card strong {
-    font-size: 23px;
-    line-height: 29px;
+    font-size: 20px;
   }
 
   .low-stock-card {
-    border-radius: 9px;
+    border-radius: 8px;
   }
 
   .low-stock-card-heading {
-    padding: 15px 16px 13px;
+    padding: 13px 14px;
   }
 
   .low-stock-card-heading h2 {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .low-stock-card-heading p {
-    font-size: 11.5px;
+    font-size: 11px;
   }
 
-  .low-stock-container > section:not(.low-stock-header):not(.low-stock-card) {
-    grid-template-columns: 1fr !important;
+  .low-stock-card .low-stock-table {
+    min-width: 880px;
   }
 
-  .low-stock-card table {
-    min-width: 660px;
+  .low-stock-card .low-stock-table th {
+    font-size: 9px;
+  }
+
+  .low-stock-card .low-stock-table td {
+    font-size: 10px;
+  }
+
+  .reorder-btn {
+    min-width: 58px;
+    height: 28px;
+
+    padding: 0 8px;
+
+    font-size: 9px;
   }
 }
 
@@ -434,15 +1097,41 @@
 
 @media (max-width: 420px) {
   .low-stock-page {
-    padding: 12px 10px 24px;
+    padding: 10px 8px 20px;
+  }
+
+  .low-stock-header {
+    padding: 12px;
   }
 
   .low-stock-header h1 {
-    font-size: 20px;
+    font-size: 17px;
   }
 
-  .low-stock-summary-card {
-    padding: 14px;
+  .low-stock-card .low-stock-table {
+    min-width: 850px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .low-stock-summary-card,
+  .low-stock-container
+    > section:not(.low-stock-header):not(.low-stock-card)
+    input,
+  .low-stock-container
+    > section:not(.low-stock-header):not(.low-stock-card)
+    select,
+  .low-stock-container
+    > section:not(.low-stock-header):not(.low-stock-card)
+    button,
+  .low-stock-card .low-stock-table tbody tr,
+  .reorder-btn {
+    transition: none;
   }
 }
 

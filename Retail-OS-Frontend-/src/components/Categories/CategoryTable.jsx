@@ -121,10 +121,16 @@ const CategoryTable = ({
                   ? "Inactive"
                   : "-";
 
+              // =====================================================
+              // TOTAL PRODUCTS
+              // Inactive category = 0 products
+              // =====================================================
               const displayProductCount =
-                item.products !== null &&
-                item.products !== undefined &&
-                Number.isFinite(Number(item.products))
+                status === "Inactive"
+                  ? 0
+                  : item.products !== null &&
+                    item.products !== undefined &&
+                    Number.isFinite(Number(item.products))
                   ? Number(item.products)
                   : "-";
 
@@ -157,7 +163,9 @@ const CategoryTable = ({
 
                   <td>
                     {status === "-" ? (
-                      <span className="created-date">-</span>
+                      <span className="created-date">
+                        -
+                      </span>
                     ) : (
                       <span
                         className={
@@ -170,6 +178,7 @@ const CategoryTable = ({
                           className="status-dot"
                           aria-hidden="true"
                         />
+
                         {status}
                       </span>
                     )}
@@ -183,6 +192,7 @@ const CategoryTable = ({
 
                   <td>
                     <div className="table-actions">
+                      {/* EDIT */}
                       <button
                         type="button"
                         className="edit-btn"
@@ -199,6 +209,7 @@ const CategoryTable = ({
                         <BsPencil />
                       </button>
 
+                      {/* DELETE */}
                       <button
                         type="button"
                         className="delete-btn"

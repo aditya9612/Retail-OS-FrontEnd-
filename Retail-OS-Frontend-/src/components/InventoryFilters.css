@@ -1,147 +1,296 @@
-/* ===========================
-   Inventory Filters
-=========================== */
+/* =========================================================
+   INVENTORY FILTERS
+   Professional Compact UI
+========================================================= */
 
 .inventory-filters {
   width: 100%;
-  background: #ffffff;
-  padding: 24px;
-  margin: 25px 0;
-  border-radius: 12px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* ===========================
-   Filters Header
-=========================== */
-
-.filters-header {
-  width: 100%;
-  margin-bottom: 2px;
-}
-
-.filters-header h2 {
-  font-size: 22px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0 0 6px;
-}
-
-.filters-header p {
-  font-size: 14px;
-  color: #6b7280;
-  margin: 0;
-}
-
-/* ===========================
-   Filter Rows
-=========================== */
-
-.filters-row {
-  width: 100%;
-  display: flex;
-  gap: 20px;
-  align-items: flex-end;
-}
-
-/* ===========================
-   First Row
-   Search Product + Created Date
-=========================== */
-
-.filters-row-top {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-}
-
-/* ===========================
-   Second Row
-   Warehouse + Category +
-   Supplier + Stock Status
-=========================== */
-
-.filters-row-middle {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-/* ===========================
-   Filter Group
-=========================== */
-
-.filter-group {
-  display: flex;
-  flex-direction: column;
+  max-width: 100%;
   min-width: 0;
-}
-
-.filter-group label {
-  margin-bottom: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-}
-
-.filter-group input,
-.filter-group select {
-  width: 100%;
-  height: 44px;
-  padding: 10px 14px;
-
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-
-  font-size: 14px;
-  outline: none;
-
-  transition: all 0.3s ease;
-
-  background: #ffffff;
-  color: #111827;
-}
-
-.filter-group input::placeholder {
-  color: #9ca3af;
-}
-
-.filter-group input:focus,
-.filter-group select:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-}
-
-/* ===========================
-   Buttons Row
-=========================== */
-
-.filter-actions {
-  width: 100%;
 
   display: flex;
-  justify-content: flex-end;
-  align-items: center;
+  flex-direction: column;
+
+  gap: 12px;
+
+  margin: 0;
+  padding: 12px 14px 14px;
+
+  background: transparent;
+
+  border: none;
+  border-radius: 0;
+
+  box-shadow: none;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   FILTER ROW - COMMON
+========================================================= */
+
+.inventory-filters .filters-row {
+  width: 100%;
+  min-width: 0;
+
+  display: grid;
 
   gap: 10px;
 
-  padding-top: 4px;
-
-  border-top: 1px solid #f0f2f5;
+  box-sizing: border-box;
 }
 
-/* ===========================
-   Common Icon Buttons
-=========================== */
 
-.reset-btn,
-.search-btn,
-.export-btn {
-  width: 42px;
-  height: 42px;
+/* =========================================================
+   FIRST ROW
+   Search Product + Created Date
+========================================================= */
+
+.inventory-filters .filters-row-top {
+  grid-template-columns:
+    minmax(320px, 2fr)
+    minmax(210px, 1fr);
+
+  align-items: end;
+}
+
+
+/* =========================================================
+   SECOND ROW
+   Warehouse + Category + Supplier + Stock Status
+========================================================= */
+
+.inventory-filters .filters-row-middle {
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+
+  align-items: end;
+}
+
+
+/* =========================================================
+   FILTER GROUP
+========================================================= */
+
+.inventory-filters .filter-group {
+  width: 100%;
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 5px;
+
+  margin: 0;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   LABEL
+========================================================= */
+
+.inventory-filters .filter-group label {
+  display: block;
+
+  margin: 0;
+
+  color: #475569;
+
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+
+  letter-spacing: 0.01em;
+}
+
+
+/* =========================================================
+   INPUT + SELECT
+========================================================= */
+
+.inventory-filters .filter-group input,
+.inventory-filters .filter-group select {
+  width: 100%;
+  height: 38px;
+
+  margin: 0;
+
+  padding: 0 11px;
+
+  color: #1e293b;
+  background: #ffffff;
+
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+
+  outline: none;
+
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+
+  box-sizing: border-box;
+
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+
+/* =========================================================
+   SELECT
+========================================================= */
+
+.inventory-filters .filter-group select {
+  padding-right: 32px;
+
+  cursor: pointer;
+}
+
+
+/* =========================================================
+   PLACEHOLDER
+========================================================= */
+
+.inventory-filters .filter-group input::placeholder {
+  color: #94a3b8;
+
+  font-weight: 400;
+}
+
+
+/* =========================================================
+   INPUT / SELECT HOVER
+========================================================= */
+
+.inventory-filters .filter-group input:hover,
+.inventory-filters .filter-group select:hover {
+  border-color: #b8c1ce;
+}
+
+
+/* =========================================================
+   INPUT / SELECT FOCUS
+========================================================= */
+
+.inventory-filters .filter-group input:focus,
+.inventory-filters .filter-group select:focus {
+  border-color: #6366f1;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 0 0 3px rgba(99, 102, 241, 0.09);
+}
+
+
+/* =========================================================
+   KEYBOARD FOCUS
+========================================================= */
+
+.inventory-filters .filter-group input:focus-visible,
+.inventory-filters .filter-group select:focus-visible {
+  outline: none;
+
+  border-color: #6366f1;
+
+  box-shadow:
+    0 0 0 3px rgba(99, 102, 241, 0.11);
+}
+
+
+/* =========================================================
+   DATE INPUT
+========================================================= */
+
+.inventory-filters
+  .created-date-group
+  input[type="date"] {
+  cursor: pointer;
+}
+
+.inventory-filters
+  .created-date-group
+  input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+
+  opacity: 0.65;
+
+  transition: opacity 0.18s ease;
+}
+
+.inventory-filters
+  .created-date-group
+  input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+
+/* =========================================================
+   SEARCH PRODUCT
+========================================================= */
+
+.inventory-filters .search-product-group {
+  min-width: 0;
+}
+
+
+/* =========================================================
+   DISABLED INPUT / SELECT
+========================================================= */
+
+.inventory-filters .filter-group input:disabled,
+.inventory-filters .filter-group select:disabled {
+  color: #94a3b8;
+
+  background: #f8fafc;
+
+  border-color: #e2e8f0;
+
+  cursor: not-allowed;
+
+  opacity: 0.75;
+}
+
+
+/* =========================================================
+   FILTER ACTIONS
+========================================================= */
+
+.inventory-filters .filter-actions {
+  width: 100%;
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+
+  gap: 7px;
+
+  padding-top: 10px;
+
+  border-top: 1px solid #eef2f7;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   COMMON ACTION BUTTON
+========================================================= */
+
+.inventory-filters .reset-btn,
+.inventory-filters .search-btn,
+.inventory-filters .export-btn {
+  width: 34px;
+  height: 34px;
+
+  flex: 0 0 34px;
 
   display: inline-flex;
   align-items: center;
@@ -149,104 +298,307 @@
 
   padding: 0;
 
-  border: none;
-  border-radius: 8px;
+  border-radius: 7px;
 
-  font-size: 14px;
+  font-family: inherit;
+
   cursor: pointer;
 
-  transition: all 0.2s ease;
+  box-sizing: border-box;
+
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.15s ease;
 }
 
-/* ===========================
-   Reset Button
-=========================== */
 
-.reset-btn {
-  background: #e5e7eb;
-  color: #374151;
+/* =========================================================
+   BUTTON ICONS
+========================================================= */
+
+.inventory-filters .reset-btn svg,
+.inventory-filters .search-btn svg,
+.inventory-filters .export-btn svg {
+  width: 15px;
+  height: 15px;
+
+  pointer-events: none;
 }
 
-.reset-btn:hover {
-  background: #d1d5db;
+
+/* =========================================================
+   RESET BUTTON
+========================================================= */
+
+.inventory-filters .reset-btn {
+  color: #475569;
+
+  background: #ffffff;
+
+  border: 1px solid #d1d5db;
+}
+
+.inventory-filters .reset-btn:hover:not(:disabled) {
+  color: #1f2937;
+
+  background: #f8fafc;
+
+  border-color: #b8c1ce;
+
   transform: translateY(-1px);
 }
 
-/* ===========================
-   Search Button
-=========================== */
 
-.search-btn {
-  background: #2563eb;
+/* =========================================================
+   SEARCH BUTTON
+========================================================= */
+
+.inventory-filters .search-btn {
   color: #ffffff;
+
+  background: #4f46e5;
+
+  border: 1px solid #4f46e5;
+
+  box-shadow:
+    0 1px 2px rgba(79, 70, 229, 0.12);
 }
 
-.search-btn:hover {
-  background: #1d4ed8;
+.inventory-filters .search-btn:hover:not(:disabled) {
+  background: #4338ca;
+
+  border-color: #4338ca;
+
+  box-shadow:
+    0 3px 7px rgba(79, 70, 229, 0.16);
+
   transform: translateY(-1px);
 }
 
-/* ===========================
-   Export Button
-=========================== */
 
-.export-btn {
-  background: #10b981;
-  color: #ffffff;
+/* =========================================================
+   EXPORT BUTTON
+========================================================= */
+
+.inventory-filters .export-btn {
+  color: #047857;
+
+  background: #ffffff;
+
+  border: 1px solid #a7f3d0;
 }
 
-.export-btn:hover {
-  background: #059669;
+.inventory-filters .export-btn:hover:not(:disabled) {
+  color: #047857;
+
+  background: #ecfdf5;
+
+  border-color: #6ee7b7;
+
+  box-shadow:
+    0 3px 7px rgba(16, 185, 129, 0.09);
+
   transform: translateY(-1px);
 }
 
-/* ===========================
-   Responsive - Tablet
-=========================== */
+
+/* =========================================================
+   BUTTON ACTIVE
+========================================================= */
+
+.inventory-filters .reset-btn:active:not(:disabled),
+.inventory-filters .search-btn:active:not(:disabled),
+.inventory-filters .export-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+
+/* =========================================================
+   BUTTON KEYBOARD FOCUS
+========================================================= */
+
+.inventory-filters .reset-btn:focus-visible,
+.inventory-filters .search-btn:focus-visible,
+.inventory-filters .export-btn:focus-visible {
+  outline: none;
+
+  box-shadow:
+    0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+
+/* =========================================================
+   DISABLED BUTTONS
+========================================================= */
+
+.inventory-filters .reset-btn:disabled,
+.inventory-filters .search-btn:disabled,
+.inventory-filters .export-btn:disabled {
+  opacity: 0.5;
+
+  cursor: not-allowed;
+
+  transform: none;
+
+  box-shadow: none;
+}
+
+
+/* =========================================================
+   LARGE LAPTOP
+========================================================= */
+
+@media (max-width: 1200px) {
+  .inventory-filters {
+    padding: 12px 13px 13px;
+
+    gap: 11px;
+  }
+
+  .inventory-filters .filters-row-top {
+    grid-template-columns:
+      minmax(260px, 2fr)
+      minmax(190px, 1fr);
+  }
+
+  .inventory-filters .filters-row-middle {
+    grid-template-columns:
+      repeat(4, minmax(130px, 1fr));
+  }
+}
+
+
+/* =========================================================
+   SMALL LAPTOP / TABLET
+========================================================= */
 
 @media (max-width: 992px) {
-
-  .filters-row-top {
-    grid-template-columns: 1fr 1fr;
+  .inventory-filters .filters-row-top {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
   }
 
-  .filters-row-middle {
-    grid-template-columns: 1fr 1fr;
+  .inventory-filters .filters-row-middle {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
   }
-
 }
 
-/* ===========================
-   Responsive - Mobile
-=========================== */
 
-@media (max-width: 576px) {
+/* =========================================================
+   TABLET
+========================================================= */
 
+@media (max-width: 768px) {
   .inventory-filters {
-    padding: 18px;
-    gap: 16px;
+    padding: 11px 12px 12px;
+
+    gap: 11px;
   }
 
-  .filters-row {
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .filter-group {
-    width: 100%;
-  }
-
-  .filter-actions {
-    justify-content: flex-start;
+  .inventory-filters .filters-row {
     gap: 10px;
   }
 
-  .reset-btn,
-  .search-btn,
-  .export-btn {
-    width: 42px;
-    height: 42px;
+  .inventory-filters .filters-row-top,
+  .inventory-filters .filters-row-middle {
+    grid-template-columns: 1fr;
   }
 
+  .inventory-filters .filter-group {
+    width: 100%;
+  }
+
+  .inventory-filters .filter-actions {
+    justify-content: flex-start;
+
+    padding-top: 10px;
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 576px) {
+  .inventory-filters {
+    padding: 10px;
+
+    gap: 10px;
+  }
+
+  .inventory-filters .filters-row {
+    gap: 9px;
+  }
+
+  .inventory-filters .filter-group {
+    gap: 4px;
+  }
+
+  .inventory-filters .filter-group label {
+    font-size: 10px;
+    line-height: 15px;
+  }
+
+  .inventory-filters .filter-group input,
+  .inventory-filters .filter-group select {
+    height: 37px;
+
+    padding-left: 10px;
+
+    border-radius: 7px;
+
+    font-size: 11px;
+  }
+
+  .inventory-filters .filter-group select {
+    padding-right: 30px;
+  }
+
+  .inventory-filters .filter-actions {
+    gap: 6px;
+
+    padding-top: 9px;
+  }
+
+  .inventory-filters .reset-btn,
+  .inventory-filters .search-btn,
+  .inventory-filters .export-btn {
+    width: 33px;
+    height: 33px;
+
+    flex-basis: 33px;
+  }
+
+  .inventory-filters .reset-btn svg,
+  .inventory-filters .search-btn svg,
+  .inventory-filters .export-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .inventory-filters .filter-group input,
+  .inventory-filters .filter-group select,
+  .inventory-filters .reset-btn,
+  .inventory-filters .search-btn,
+  .inventory-filters .export-btn {
+    transition: none;
+  }
+
+  .inventory-filters .reset-btn:hover,
+  .inventory-filters .search-btn:hover,
+  .inventory-filters .export-btn:hover {
+    transform: none;
+  }
 }

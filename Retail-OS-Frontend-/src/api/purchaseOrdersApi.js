@@ -1,8 +1,9 @@
 ﻿import axiosInstance from "./axios";
 
-// ==========================================
-// GET ALL PURCHASE ORDERS
-// ==========================================
+// =====================================================
+// GET - List Purchase Orders
+// =====================================================
+
 export const getPurchaseOrders = async (
   page = 1,
   pageSize = 20
@@ -20,13 +21,19 @@ export const getPurchaseOrders = async (
   return response.data;
 };
 
+// =====================================================
+// GET - Purchase Order By ID
+// =====================================================
 
-// ==========================================
-// GET SINGLE PURCHASE ORDER
-// ==========================================
 export const getPurchaseOrder = async (
   purchaseOrderId
 ) => {
+  if (!purchaseOrderId) {
+    throw new Error(
+      "Purchase Order ID is required"
+    );
+  }
+
   const response = await axiosInstance.get(
     `/api/v1/purchase-orders/${purchaseOrderId}`
   );
@@ -34,10 +41,10 @@ export const getPurchaseOrder = async (
   return response.data;
 };
 
+// =====================================================
+// POST - Create Purchase Order
+// =====================================================
 
-// ==========================================
-// CREATE PURCHASE ORDER
-// ==========================================
 export const createPurchaseOrder = async (
   payload
 ) => {
@@ -49,14 +56,26 @@ export const createPurchaseOrder = async (
   return response.data;
 };
 
+// =====================================================
+// PATCH - Update Purchase Order
+// =====================================================
 
-// ==========================================
-// UPDATE PURCHASE ORDER
-// ==========================================
 export const updatePurchaseOrder = async (
   purchaseOrderId,
   payload
 ) => {
+  if (!purchaseOrderId) {
+    throw new Error(
+      "Purchase Order ID is required"
+    );
+  }
+
+  console.log(
+    "UPDATE PURCHASE ORDER:",
+    purchaseOrderId,
+    payload
+  );
+
   const response = await axiosInstance.patch(
     `/api/v1/purchase-orders/${purchaseOrderId}`,
     payload
@@ -65,19 +84,20 @@ export const updatePurchaseOrder = async (
   return response.data;
 };
 
-// ==========================================
-// DELETE PURCHASE ORDER
-// ==========================================
+// =====================================================
+// POST - Receive Purchase Order
+// =====================================================
 
-
-
-// ==========================================
-// RECEIVE PURCHASE ORDER
-// ==========================================
 export const receivePurchaseOrder = async (
   purchaseOrderId,
   payload = {}
 ) => {
+  if (!purchaseOrderId) {
+    throw new Error(
+      "Purchase Order ID is required"
+    );
+  }
+
   const response = await axiosInstance.post(
     `/api/v1/purchase-orders/${purchaseOrderId}/receive`,
     payload
@@ -86,14 +106,20 @@ export const receivePurchaseOrder = async (
   return response.data;
 };
 
+// =====================================================
+// PATCH - Update Purchase Order Status
+// =====================================================
 
-// ==========================================
-// UPDATE PURCHASE ORDER STATUS
-// ==========================================
 export const updatePurchaseOrderStatus = async (
   purchaseOrderId,
   payload
 ) => {
+  if (!purchaseOrderId) {
+    throw new Error(
+      "Purchase Order ID is required"
+    );
+  }
+
   const response = await axiosInstance.patch(
     `/api/v1/purchase-orders/${purchaseOrderId}/status`,
     payload
