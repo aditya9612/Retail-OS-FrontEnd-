@@ -1,6 +1,6 @@
-import apiClient from './api';
+import apiClient from '../api/axios';
 
-const CUSTOMER_API_URL = '/customers';
+const CUSTOMER_API_URL = '/api/v1/customers';
 
 export const getCustomers = async () => {
     const response = await apiClient.get(CUSTOMER_API_URL);

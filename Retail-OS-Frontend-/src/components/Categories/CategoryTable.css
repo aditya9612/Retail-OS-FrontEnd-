@@ -1,212 +1,761 @@
+﻿/* =========================================================
+   CATEGORY TABLE
+   Professional Responsive UI
+========================================================= */
+
+
+/* =========================================================
+   TABLE CONTAINER
+========================================================= */
+
 .category-table-container {
-    background: #fff;
-    border-radius: 18px;
-    border: 1px solid #e5e7eb;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 
-    /* Horizontal scrolling */
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
+  position: relative;
 
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  background: #ffffff;
 
-    /* Smooth scrolling */
-    -webkit-overflow-scrolling: touch;
+  border: 1px solid #e5e7eb;
+  border-radius: 11px;
 
-    /* Firefox scrollbar */
-    scrollbar-width: thin;
-    scrollbar-color: #b8b8b8 #f1f1f1;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.025),
+    0 4px 12px rgba(15, 23, 42, 0.035);
+
+  overflow-x: auto;
+  overflow-y: hidden;
+
+  -webkit-overflow-scrolling: touch;
+
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+
+  box-sizing: border-box;
 }
 
 
-/* ================================
-   Category Table
-================================ */
-
-.category-table {
-    width: 100%;
-    min-width: 750px;
-    border-collapse: collapse;
-}
-
-
-/* ================================
-   Table Header
-================================ */
-
-.category-table thead {
-    background: #f8fafc;
-}
-
-
-.category-table th {
-    padding: 16px;
-    text-align: left;
-    font-size: 14px;
-    font-weight: 700;
-    color: #475569;
-    white-space: nowrap;
-}
-
-
-/* ================================
-   Table Body
-================================ */
-
-.category-table td {
-    padding: 18px 16px;
-    border-top: 1px solid #f1f5f9;
-    font-size: 14px;
-    color: #334155;
-    white-space: nowrap;
-}
-
-
-.category-table tbody tr:hover {
-    background: #f8fafc;
-}
-
-
-/* ================================
-   Category Name
-================================ */
-
-.category-name {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-
-.category-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    background: #eef2ff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 20px;
-}
-
-
-/* ================================
-   Status
-================================ */
-
-.status {
-    display: inline-block;
-    padding: 6px 14px;
-    border-radius: 30px;
-    font-size: 12px;
-    font-weight: 700;
-}
-
-
-.active {
-    background: #dcfce7;
-    color: #15803d;
-}
-
-
-.inactive {
-    background: #fee2e2;
-    color: #dc2626;
-}
-
-
-/* ================================
-   Table Actions
-================================ */
-
-.table-actions {
-    display: flex;
-    gap: 10px;
-}
-
-
-.edit-btn {
-    border: none;
-    background: #4f46e5;
-    color: #fff;
-    padding: 8px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-}
-
-
-.edit-btn:hover {
-    background: #4338ca;
-}
-
-
-.delete-btn {
-    border: none;
-    background: #ef4444;
-    color: #fff;
-    padding: 8px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-}
-
-
-.delete-btn:hover {
-    background: #dc2626;
-}
-
-
-/* ================================
-   Empty Row
-================================ */
-
-.empty-row {
-    text-align: center;
-    padding: 40px;
-    color: #94a3b8;
-    font-weight: 600;
-}
-
-
-/* ================================
-   Horizontal Scrollbar
-================================ */
+/* =========================================================
+   HORIZONTAL SCROLLBAR
+========================================================= */
 
 .category-table-container::-webkit-scrollbar {
-    height: 8px;
+  height: 8px;
 }
-
 
 .category-table-container::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 10px;
+  background: #f8fafc;
+  border-radius: 0 0 10px 10px;
 }
-
 
 .category-table-container::-webkit-scrollbar-thumb {
-    background: #b8b8b8;
-    border-radius: 10px;
-}
+  background: #cbd5e1;
 
+  border: 2px solid #f8fafc;
+  border-radius: 999px;
+}
 
 .category-table-container::-webkit-scrollbar-thumb:hover {
-    background: #888;
+  background: #94a3b8;
 }
 
 
-/* ================================
-   Responsive
-================================ */
+/* =========================================================
+   TABLE
+========================================================= */
+
+.category-table {
+  width: 100%;
+  min-width: 820px;
+
+  margin: 0;
+
+  background: #ffffff;
+
+  border-collapse: separate;
+  border-spacing: 0;
+
+  table-layout: fixed;
+}
+
+
+/* =========================================================
+   TABLE HEADER
+========================================================= */
+
+.category-table thead {
+  background: #f8fafc;
+}
+
+.category-table th {
+  height: 42px;
+
+  padding: 0 16px;
+
+  color: #64748b;
+  background: #f8fafc;
+
+  border-bottom: 1px solid #e5e7eb;
+
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 700;
+
+  text-align: left;
+  text-transform: uppercase;
+
+  letter-spacing: 0.045em;
+
+  white-space: nowrap;
+  vertical-align: middle;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   COLUMN WIDTHS
+========================================================= */
+
+.category-table th:nth-child(1),
+.category-table td:nth-child(1) {
+  width: 34%;
+}
+
+.category-table th:nth-child(2),
+.category-table td:nth-child(2) {
+  width: 16%;
+}
+
+.category-table th:nth-child(3),
+.category-table td:nth-child(3) {
+  width: 15%;
+}
+
+.category-table th:nth-child(4),
+.category-table td:nth-child(4) {
+  width: 20%;
+}
+
+.category-table th:nth-child(5),
+.category-table td:nth-child(5) {
+  width: 15%;
+}
+
+
+/* =========================================================
+   TABLE BODY
+========================================================= */
+
+.category-table tbody {
+  background: #ffffff;
+}
+
+.category-table tbody tr {
+  background: #ffffff;
+
+  transition:
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.category-table tbody tr:hover {
+  background: #fafbff;
+}
+
+
+/* =========================================================
+   TABLE CELLS
+========================================================= */
+
+.category-table td {
+  height: 52px;
+
+  padding: 8px 16px;
+
+  color: #374151;
+
+  border-bottom: 1px solid #f1f5f9;
+
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 400;
+
+  white-space: nowrap;
+  vertical-align: middle;
+
+  box-sizing: border-box;
+}
+
+.category-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+
+/* =========================================================
+   CATEGORY NAME
+========================================================= */
+
+.category-table .category-name {
+  width: 100%;
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+}
+
+
+/* =========================================================
+   CATEGORY ICON
+========================================================= */
+
+.category-table .category-icon {
+  width: 32px;
+  height: 32px;
+
+  flex: 0 0 32px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #6366f1;
+  background: #eef2ff;
+
+  border: 1px solid #dbe4ff;
+  border-radius: 8px;
+
+  box-sizing: border-box;
+
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.category-table .category-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.category-table tbody tr:hover .category-icon {
+  background: #e8edff;
+  border-color: #c7d2fe;
+
+  transform: scale(1.03);
+}
+
+
+/* =========================================================
+   CATEGORY NAME TEXT
+========================================================= */
+
+.category-table .category-name-text {
+  display: block;
+
+  min-width: 0;
+  max-width: 300px;
+
+  color: #1f2937;
+
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   PRODUCT COUNT
+========================================================= */
+
+.category-table .product-count {
+  min-width: 30px;
+  min-height: 25px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 3px 9px;
+
+  color: #475569;
+  background: #f8fafc;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 600;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   STATUS BADGE
+========================================================= */
+
+.category-table .status {
+  min-width: 72px;
+  min-height: 26px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 6px;
+
+  padding: 4px 9px;
+
+  border-radius: 999px;
+
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 600;
+
+  white-space: nowrap;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   STATUS DOT
+========================================================= */
+
+.category-table .status-dot {
+  width: 6px;
+  height: 6px;
+
+  flex: 0 0 6px;
+
+  display: inline-block;
+
+  border-radius: 50%;
+}
+
+
+/* =========================================================
+   ACTIVE STATUS
+========================================================= */
+
+.category-table .status.active {
+  color: #15803d;
+  background: #ecfdf3;
+
+  border: 1px solid #bbf7d0;
+}
+
+.category-table .status.active .status-dot {
+  background: #22c55e;
+}
+
+
+/* =========================================================
+   INACTIVE STATUS
+========================================================= */
+
+.category-table .status.inactive {
+  color: #dc2626;
+  background: #fef2f2;
+
+  border: 1px solid #fecaca;
+}
+
+.category-table .status.inactive .status-dot {
+  background: #ef4444;
+}
+
+
+/* =========================================================
+   CREATED DATE
+========================================================= */
+
+.category-table .created-date {
+  color: #64748b;
+
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 500;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   TABLE ACTIONS
+========================================================= */
+
+.category-table .table-actions {
+  display: flex;
+  align-items: center;
+
+  gap: 7px;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   ACTION BUTTON COMMON
+========================================================= */
+
+.category-table .edit-btn,
+.category-table .delete-btn {
+  width: 31px;
+  height: 31px;
+
+  flex: 0 0 31px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0;
+
+  background: #ffffff;
+
+  border-radius: 7px;
+
+  font-family: inherit;
+
+  cursor: pointer;
+
+  box-sizing: border-box;
+
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.15s ease;
+}
+
+.category-table .edit-btn svg,
+.category-table .delete-btn svg {
+  width: 13px;
+  height: 13px;
+
+  pointer-events: none;
+}
+
+
+/* =========================================================
+   EDIT BUTTON
+========================================================= */
+
+.category-table .edit-btn {
+  color: #4f46e5;
+
+  border: 1px solid #c7d2fe;
+}
+
+.category-table .edit-btn:hover {
+  color: #3730a3;
+  background: #eef2ff;
+
+  border-color: #a5b4fc;
+
+  box-shadow:
+    0 2px 6px rgba(79, 70, 229, 0.1);
+
+  transform: translateY(-1px);
+}
+
+
+/* =========================================================
+   DELETE BUTTON
+========================================================= */
+
+.category-table .delete-btn {
+  color: #dc2626;
+
+  border: 1px solid #fecaca;
+}
+
+.category-table .delete-btn:hover {
+  color: #b91c1c;
+  background: #fef2f2;
+
+  border-color: #fca5a5;
+
+  box-shadow:
+    0 2px 6px rgba(220, 38, 38, 0.1);
+
+  transform: translateY(-1px);
+}
+
+
+/* =========================================================
+   ACTION ACTIVE
+========================================================= */
+
+.category-table .edit-btn:active,
+.category-table .delete-btn:active {
+  transform: translateY(0);
+}
+
+
+/* =========================================================
+   ACTION FOCUS
+========================================================= */
+
+.category-table .edit-btn:focus-visible,
+.category-table .delete-btn:focus-visible {
+  outline: none;
+
+  box-shadow:
+    0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+
+/* =========================================================
+   EMPTY ROW
+========================================================= */
+
+.category-table .empty-row {
+  height: auto;
+
+  padding: 0 !important;
+
+  text-align: center;
+}
+
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+
+.category-table .empty-state {
+  width: 100%;
+  min-height: 180px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  gap: 9px;
+
+  padding: 30px 20px;
+
+  color: #64748b;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   EMPTY ICON
+========================================================= */
+
+.category-table .empty-icon {
+  width: 42px;
+  height: 42px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #94a3b8;
+  background: #f8fafc;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+
+  box-sizing: border-box;
+}
+
+.category-table .empty-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.category-table .empty-state > span {
+  color: #64748b;
+
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   LAPTOP
+========================================================= */
+
+@media (max-width: 1200px) {
+  .category-table {
+    min-width: 800px;
+  }
+
+  .category-table th {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .category-table td {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
 
 @media (max-width: 768px) {
-    .category-table-container {
-        width: 100%;
-        overflow-x: auto;
-    }
+  .category-table-container {
+    border-radius: 9px;
+  }
 
-    .category-table {
-        min-width: 700px;
-    }
+  .category-table {
+    min-width: 760px;
+  }
+
+  .category-table th {
+    height: 40px;
+
+    padding-left: 12px;
+    padding-right: 12px;
+
+    font-size: 9px;
+  }
+
+  .category-table td {
+    height: 50px;
+
+    padding: 8px 12px;
+
+    font-size: 11px;
+  }
+
+  .category-table .category-name-text {
+    max-width: 220px;
+  }
+
+  .category-table .category-icon {
+    width: 30px;
+    height: 30px;
+
+    flex-basis: 30px;
+  }
+
+  .category-table .edit-btn,
+  .category-table .delete-btn {
+    width: 30px;
+    height: 30px;
+
+    flex-basis: 30px;
+  }
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 480px) {
+  .category-table-container {
+    border-radius: 8px;
+  }
+
+  .category-table {
+    min-width: 720px;
+  }
+
+  .category-table th {
+    height: 38px;
+
+    padding-left: 10px;
+    padding-right: 10px;
+
+    font-size: 9px;
+  }
+
+  .category-table td {
+    height: 48px;
+
+    padding: 7px 10px;
+
+    font-size: 11px;
+  }
+
+  .category-table .category-name {
+    gap: 8px;
+  }
+
+  .category-table .category-name-text {
+    max-width: 190px;
+
+    font-size: 11px;
+  }
+
+  .category-table .category-icon {
+    width: 29px;
+    height: 29px;
+
+    flex-basis: 29px;
+  }
+
+  .category-table .product-count,
+  .category-table .created-date {
+    font-size: 10px;
+  }
+
+  .category-table .status {
+    min-width: 68px;
+    min-height: 25px;
+
+    padding: 3px 8px;
+
+    font-size: 10px;
+  }
+
+  .category-table .edit-btn,
+  .category-table .delete-btn {
+    width: 29px;
+    height: 29px;
+
+    flex-basis: 29px;
+  }
+
+  .category-table .edit-btn svg,
+  .category-table .delete-btn svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .category-table .empty-state {
+    min-height: 150px;
+  }
+}
+
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .category-table tbody tr,
+  .category-table .category-icon,
+  .category-table .edit-btn,
+  .category-table .delete-btn {
+    transition: none;
+  }
+
+  .category-table tbody tr:hover .category-icon,
+  .category-table .edit-btn:hover,
+  .category-table .delete-btn:hover {
+    transform: none;
+  }
 }

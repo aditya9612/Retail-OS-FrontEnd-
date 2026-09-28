@@ -16,11 +16,14 @@ import GSTManagement from './pages/GSTManagement';
 import Products from './pages/Products';
 import Supplier from './pages/Supplier';
 import Inventory from './pages/Inventory';
+import LowStockAlerts from './pages/LowStockAlerts';
 import CategoryManagement from './pages/Categories/CategoryManagement';
 import Orders from './pages/Orders';
 import Purchases from './pages/Purchases';
 import Customers from './pages/Customers';
-import Returns from './pages/Reports';
+
+// Purchase Order Returns - Inventory Module
+import PurchaseOrderReturns from './pages/PurchaseOrderReturns';
 
 import ECommerceDashboard from './pages/ECommerce/ECommerceDashboard';
 import StoreManagement from './pages/ECommerce/StoreManagement';
@@ -81,7 +84,10 @@ function App() {
                     <Route element={<DashboardLayout />}>
 
                         {/* Main */}
-                        <Route path="/dashboard" element={<Dashboard />} />
+                        <Route
+                            path="/dashboard"
+                            element={<Dashboard />}
+                        />
 
                         <Route
                             path="/admin-dashboard"
@@ -90,9 +96,16 @@ function App() {
                             }
                         />
 
-                        <Route path="/profile" element={<Profile />} />
+                        <Route
+                            path="/profile"
+                            element={<Profile />}
+                        />
+
                         {/* Billing and GST */}
-                        <Route path="/billing" element={<Billing />} />
+                        <Route
+                            path="/billing"
+                            element={<Billing />}
+                        />
 
                         <Route
                             path="/billing-management"
@@ -151,6 +164,12 @@ function App() {
                             element={<Inventory />}
                         />
 
+                        {/* Low Stock Alerts */}
+                        <Route
+                            path="/low-stock-alerts"
+                            element={<LowStockAlerts />}
+                        />
+
                         {/* Products */}
                         <Route
                             path="/products"
@@ -175,10 +194,10 @@ function App() {
                             element={<Purchases />}
                         />
 
-                        {/* Returns */}
+                        {/* Purchase Order Returns */}
                         <Route
                             path="/returns"
-                            element={<Returns />}
+                            element={<PurchaseOrderReturns />}
                         />
 
                         {/* Customers */}

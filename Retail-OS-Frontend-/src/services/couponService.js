@@ -37,7 +37,7 @@ const request = async (url, options = {}) => {
  * @returns {Promise<Array>} list of coupons
  */
 export const getCoupons = () =>
-    request(`${BASE_URL}/coupons`, { method: 'GET' });
+    request(`${BASE_URL}/coupons/`, { method: 'GET' });
 
 /**
  * Fetch a single coupon by ID.

@@ -16,10 +16,6 @@ const CategoryHeader = ({
       <div className="category-header-left">
         <h1>Category Management</h1>
 
-        <p>
-          Manage product categories, organize products efficiently,
-          and keep your inventory well structured.
-        </p>
       </div>
 
       {/* Right */}

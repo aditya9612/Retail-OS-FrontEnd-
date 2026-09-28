@@ -1,0 +1,721 @@
+/* =========================================================
+   PURCHASE ORDER RETURNS
+   Professional / Compact UI
+========================================================= */
+
+.purchase-order-returns-page {
+  width: 100%;
+  min-height: 100%;
+  padding: 20px 16px 32px;
+  box-sizing: border-box;
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.purchase-order-returns-page *,
+.purchase-order-returns-page *::before,
+.purchase-order-returns-page *::after {
+  box-sizing: border-box;
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
+.purchase-order-returns-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.purchase-order-returns-header h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.015em;
+}
+
+.purchase-order-returns-header p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
+.purchase-order-returns-header > button {
+  min-height: 38px;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border: 1px solid #2563eb;
+  border-radius: 7px;
+  background: #2563eb;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.purchase-order-returns-header > button:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.18);
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   SEARCH + STATUS FILTER
+========================================================= */
+
+.purchase-order-returns-filters {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.purchase-order-returns-search {
+  flex: 1;
+  min-width: 0;
+  max-width: 520px;
+}
+
+.purchase-order-returns-status-filter {
+  width: 150px;
+  flex-shrink: 0;
+}
+
+.purchase-order-returns-search input,
+.purchase-order-returns-status-filter select {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #1f2937;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.purchase-order-returns-search input {
+  padding: 0 12px;
+}
+
+.purchase-order-returns-status-filter select {
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.purchase-order-returns-search input::placeholder {
+  color: #94a3b8;
+}
+
+.purchase-order-returns-search input:hover,
+.purchase-order-returns-status-filter select:hover {
+  border-color: #94a3b8;
+}
+
+.purchase-order-returns-search input:focus,
+.purchase-order-returns-status-filter select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* =========================================================
+   ERROR / SUCCESS
+========================================================= */
+
+.purchase-order-returns-error,
+.purchase-order-returns-success {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.purchase-order-returns-error {
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.purchase-order-returns-success {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+/* =========================================================
+   TABLE WRAPPER
+========================================================= */
+
+.purchase-order-returns-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  -webkit-overflow-scrolling: touch;
+}
+
+/* =========================================================
+   TABLE
+========================================================= */
+
+.purchase-order-returns-table {
+  width: 100%;
+  min-width: 1000px;
+  border-collapse: collapse;
+  table-layout: auto;
+  background: #ffffff;
+}
+
+.purchase-order-returns-table th,
+.purchase-order-returns-table td {
+  padding: 10px 11px;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid #e8edf3;
+}
+
+.purchase-order-returns-table th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 10px;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.purchase-order-returns-table td {
+  color: #1f2937;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.purchase-order-returns-table tbody tr {
+  background: #ffffff;
+  transition: background-color 0.15s ease;
+}
+
+.purchase-order-returns-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.purchase-order-returns-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* ID columns */
+.purchase-order-returns-table td:nth-child(1),
+.purchase-order-returns-table td:nth-child(2),
+.purchase-order-returns-table td:nth-child(7) {
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* Reason */
+.purchase-order-returns-table td:nth-child(3) {
+  min-width: 135px;
+}
+
+/* Remarks */
+.purchase-order-returns-table td:nth-child(4) {
+  min-width: 260px;
+  max-width: 360px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Created date */
+.purchase-order-returns-table td:nth-child(6) {
+  min-width: 150px;
+  white-space: nowrap;
+}
+
+/* Action */
+.purchase-order-returns-table th:last-child,
+.purchase-order-returns-table td:last-child {
+  min-width: 135px;
+  white-space: nowrap;
+}
+
+/* =========================================================
+   STATUS BADGES
+========================================================= */
+
+.purchase-order-return-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  min-height: 24px;
+  padding: 4px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 10.5px;
+  line-height: 1;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.purchase-order-return-status.status-requested {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
+.purchase-order-return-status.status-approved {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.purchase-order-return-status.status-rejected {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.purchase-order-return-status.status-completed {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+/* =========================================================
+   ACTION BUTTONS
+========================================================= */
+
+.purchase-order-return-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.purchase-order-returns-table td button {
+  min-height: 29px;
+  padding: 5px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font-family: inherit;
+  font-size: 10.5px;
+  line-height: 1;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.purchase-order-returns-table td button:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.purchase-order-returns-table td button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  background: #f8fafc;
+}
+
+/* =========================================================
+   CREATE / UPDATE / DETAILS CARD
+========================================================= */
+
+.purchase-order-return-details {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 16px;
+  padding: 18px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.purchase-order-return-details-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.purchase-order-return-details-header h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+
+.purchase-order-return-details-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.purchase-order-return-details-text {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(280px, 1.7fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.purchase-order-return-details-grid label,
+.purchase-order-return-details-text label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #374151;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.purchase-order-return-details input,
+.purchase-order-return-details select,
+.purchase-order-return-details textarea {
+  display: block;
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #111827;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.purchase-order-return-details input,
+.purchase-order-return-details select {
+  height: 39px;
+  padding: 0 11px;
+}
+
+.purchase-order-return-details textarea {
+  min-height: 88px;
+  padding: 9px 11px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.purchase-order-return-details input::placeholder,
+.purchase-order-return-details textarea::placeholder {
+  color: #94a3b8;
+}
+
+.purchase-order-return-details input:hover,
+.purchase-order-return-details select:hover,
+.purchase-order-return-details textarea:hover {
+  border-color: #94a3b8;
+}
+
+.purchase-order-return-details input:focus,
+.purchase-order-return-details select:focus,
+.purchase-order-return-details textarea:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Details values */
+.purchase-order-return-details-grid p,
+.purchase-order-return-details-text p {
+  min-height: 42px;
+  margin: 0;
+  padding: 10px 11px;
+  display: flex;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.purchase-order-return-details-grid p strong,
+.purchase-order-return-details-text p strong {
+  margin-right: 4px;
+  color: #111827;
+  font-weight: 600;
+}
+
+.purchase-order-return-details h4 {
+  margin: 18px 0 10px;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* =========================================================
+   FORM BUTTONS
+========================================================= */
+
+.purchase-order-return-details > button,
+.purchase-order-return-details-header button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #334155;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.purchase-order-return-details > button[type="submit"] {
+  min-width: 125px;
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.purchase-order-return-details > button[type="submit"]:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.purchase-order-return-details-header button:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.purchase-order-return-details button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* =========================================================
+   LOADING / EMPTY
+========================================================= */
+
+.purchase-order-returns-message {
+  padding: 34px 18px;
+  text-align: center;
+  color: #64748b;
+  font-size: 12px;
+}
+
+/* =========================================================
+   PAGINATION
+========================================================= */
+
+.purchase-order-returns-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.purchase-order-returns-pagination span {
+  color: #334155;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.purchase-order-returns-pagination button {
+  min-height: 32px;
+  padding: 6px 11px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.purchase-order-returns-pagination button:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.purchase-order-returns-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  background: #f8fafc;
+}
+
+/* =========================================================
+   SCROLLBAR
+========================================================= */
+
+.purchase-order-returns-table-wrapper::-webkit-scrollbar {
+  height: 7px;
+}
+
+.purchase-order-returns-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.purchase-order-returns-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.purchase-order-returns-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* =========================================================
+   ACCESSIBILITY
+========================================================= */
+
+.purchase-order-returns-page button:focus-visible,
+.purchase-order-returns-page input:focus-visible,
+.purchase-order-returns-page select:focus-visible,
+.purchase-order-returns-page textarea:focus-visible {
+  outline: 2px solid rgba(79, 70, 229, 0.35);
+  outline-offset: 2px;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 1200px) {
+  .purchase-order-return-details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .purchase-order-return-details-text {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 992px) {
+  .purchase-order-returns-page {
+    padding: 18px 14px 28px;
+  }
+
+  .purchase-order-returns-table {
+    min-width: 980px;
+  }
+}
+
+@media (max-width: 768px) {
+  .purchase-order-returns-page {
+    padding: 16px 12px 26px;
+  }
+
+  .purchase-order-returns-header {
+    align-items: stretch;
+    flex-direction: column;
+    margin-bottom: 14px;
+  }
+
+  .purchase-order-returns-header h2 {
+    font-size: 19px;
+  }
+
+  .purchase-order-returns-header > button {
+    width: 100%;
+  }
+
+  .purchase-order-returns-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .purchase-order-returns-search,
+  .purchase-order-returns-status-filter {
+    width: 100%;
+    max-width: none;
+  }
+
+  .purchase-order-return-details {
+    padding: 16px;
+  }
+
+  .purchase-order-return-details-grid,
+  .purchase-order-return-details-text {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .purchase-order-return-details-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .purchase-order-return-details > button[type="submit"] {
+    width: 100%;
+  }
+
+  .purchase-order-returns-pagination {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .purchase-order-returns-page {
+    padding: 12px 10px 22px;
+  }
+
+  .purchase-order-returns-header h2 {
+    font-size: 18px;
+  }
+
+  .purchase-order-return-details {
+    padding: 13px;
+    border-radius: 8px;
+  }
+
+  .purchase-order-returns-pagination {
+    flex-wrap: wrap;
+  }
+}

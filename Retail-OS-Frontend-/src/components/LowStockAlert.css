@@ -1,215 +1,727 @@
-/* ==========================================
-   Low Stock Alert Container
-========================================== */
+/* =========================================================
+   LOW STOCK ALERT
+   Professional + Compact + Responsive
+========================================================= */
 
 .low-stock-alert {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  margin-top: 16px;
+
+  padding: 12px;
+
   background: #ffffff;
-  margin-top: 25px;
-  padding: 24px;
-  border-radius: 12px;
+
   border: 1px solid #e5e7eb;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-radius: 10px;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.025),
+    0 3px 10px rgba(15, 23, 42, 0.035);
+
   overflow-x: auto;
-  transition: all 0.3s ease;
+  overflow-y: visible;
+
+  box-sizing: border-box;
+
+  -webkit-overflow-scrolling: touch;
+
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
 }
 
-/* Custom Scrollbar */
+
+/* =========================================================
+   CUSTOM HORIZONTAL SCROLLBAR
+========================================================= */
 
 .low-stock-alert::-webkit-scrollbar {
-  height: 8px;
+  height: 7px;
 }
 
 .low-stock-alert::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: #f8fafc;
+  border-radius: 999px;
 }
 
 .low-stock-alert::-webkit-scrollbar-thumb {
   background: #cbd5e1;
-  border-radius: 10px;
+  border-radius: 999px;
 }
 
 .low-stock-alert::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
-/* ==========================================
-   Header
-========================================== */
+
+/* =========================================================
+   OPTIONAL HEADER
+   Safe even if header is not currently used in JSX
+========================================================= */
 
 .low-stock-header {
+  width: 100%;
+
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  margin-bottom: 12px;
 }
 
 .low-stock-header h2 {
   margin: 0;
-  font-size: 22px;
+
+  color: #0f172a;
+
+  font-size: 16px;
+  line-height: 1.3;
   font-weight: 700;
-  color: #dc2626;
 }
 
 .low-stock-header p {
-  margin-top: 6px;
-  color: #6b7280;
-  font-size: 14px;
+  margin: 3px 0 0;
+
+  color: #64748b;
+
+  font-size: 11px;
+  line-height: 1.5;
 }
 
-/* ==========================================
-   View All Button
-========================================== */
+
+/* =========================================================
+   OPTIONAL VIEW ALL BUTTON
+========================================================= */
 
 .view-all-btn {
-  background: #2563eb;
-  color: #ffffff;
-  border: none;
-  padding: 10px 18px;
-  border-radius: 8px;
-  font-size: 14px;
+  min-height: 32px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0 12px;
+
+  border: 1px solid #c7d2fe;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #4f46e5;
+
+  font-family: inherit;
+  font-size: 11px;
   font-weight: 600;
+
   cursor: pointer;
-  transition: all 0.3s ease;
+
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.15s ease;
 }
 
 .view-all-btn:hover {
-  background: #1d4ed8;
-  transform: translateY(-2px);
+  background: #eef2ff;
+  border-color: #a5b4fc;
+  color: #4338ca;
+
+  transform: translateY(-1px);
 }
 
-/* ==========================================
-   Table
-========================================== */
+.view-all-btn:active {
+  transform: translateY(0);
+}
+
+.view-all-btn:focus-visible {
+  outline: none;
+
+  box-shadow:
+    0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+
+/* =========================================================
+   TABLE BASE
+========================================================= */
 
 .low-stock-table {
   width: 100%;
-  border-collapse: collapse;
-  min-width: 1100px;
+  min-width: 1050px;
+
+  border-collapse: separate;
+  border-spacing: 0;
+
+  background: #ffffff;
+
+  color: #334155;
+
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
+
+/* =========================================================
+   TABLE HEADER
+========================================================= */
+
 .low-stock-table thead {
-  background: #f9fafb;
+  background: #f8fafc;
 }
 
 .low-stock-table thead th {
-  position: sticky;
-  top: 0;
-  background: #f9fafb;
-  z-index: 5;
-}
+  padding: 10px 12px;
 
-.low-stock-table th {
-  padding: 14px;
+  background: #f8fafc;
+
+  color: #475569;
+
   text-align: left;
-  font-size: 14px;
-  font-weight: 600;
-  color: #374151;
-  border-bottom: 2px solid #e5e7eb;
+  vertical-align: middle;
+
+  white-space: nowrap;
+
+  font-size: 9px;
+  line-height: 1.3;
+  font-weight: 700;
+
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+
+  box-sizing: border-box;
 }
 
-.low-stock-table td {
-  padding: 14px;
-  font-size: 14px;
-  color: #4b5563;
-  border-bottom: 1px solid #e5e7eb;
-  vertical-align: middle;
+.low-stock-table thead th:first-child {
+  border-left: 1px solid #e5e7eb;
+  border-top-left-radius: 7px;
 }
+
+.low-stock-table thead th:last-child {
+  border-right: 1px solid #e5e7eb;
+  border-top-right-radius: 7px;
+}
+
+
+/* =========================================================
+   TABLE BODY
+========================================================= */
 
 .low-stock-table tbody tr {
-  transition: all 0.3s ease;
+  background: #ffffff;
+
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .low-stock-table tbody tr:hover {
-  background: #f9fafb;
+  background: #f8fafc;
 }
 
-/* ==========================================
-   Status Badges
-========================================== */
+.low-stock-table td {
+  padding: 10px 12px;
+
+  color: #334155;
+
+  vertical-align: middle;
+
+  white-space: nowrap;
+
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 500;
+
+  border-bottom: 1px solid #eef2f7;
+
+  box-sizing: border-box;
+}
+
+.low-stock-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+
+/* =========================================================
+   PRODUCT COLUMN
+========================================================= */
+
+.low-stock-table th:nth-child(1),
+.low-stock-table td:nth-child(1) {
+  min-width: 160px;
+}
+
+.low-stock-table td:nth-child(1) {
+  color: #0f172a;
+
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   SKU COLUMN
+========================================================= */
+
+.low-stock-table th:nth-child(2),
+.low-stock-table td:nth-child(2) {
+  min-width: 135px;
+}
+
+.low-stock-table td:nth-child(2) {
+  color: #64748b;
+
+  font-size: 10px;
+
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    monospace;
+}
+
+
+/* =========================================================
+   SUPPLIER COLUMN
+========================================================= */
+
+.low-stock-table th:nth-child(3),
+.low-stock-table td:nth-child(3) {
+  min-width: 125px;
+}
+
+
+/* =========================================================
+   WAREHOUSE COLUMN
+========================================================= */
+
+.low-stock-table th:nth-child(4),
+.low-stock-table td:nth-child(4) {
+  min-width: 155px;
+}
+
+
+/* =========================================================
+   AVAILABLE QUANTITY
+========================================================= */
+
+.low-stock-table th:nth-child(5),
+.low-stock-table td:nth-child(5) {
+  min-width: 105px;
+}
+
+.low-stock-table td:nth-child(5) {
+  color: #0f172a;
+
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   REORDER LEVEL
+========================================================= */
+
+.low-stock-table th:nth-child(6),
+.low-stock-table td:nth-child(6) {
+  min-width: 105px;
+}
+
+.low-stock-table td:nth-child(6) {
+  color: #0f172a;
+
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   LAST UPDATED
+========================================================= */
+
+.low-stock-table th:nth-child(7),
+.low-stock-table td:nth-child(7) {
+  min-width: 115px;
+}
+
+
+/* =========================================================
+   STATUS COLUMN
+========================================================= */
+
+.low-stock-table th:nth-child(8),
+.low-stock-table td:nth-child(8) {
+  min-width: 105px;
+}
+
+
+/* =========================================================
+   ACTION COLUMN
+========================================================= */
+
+.low-stock-table th:nth-child(9),
+.low-stock-table td:nth-child(9) {
+  min-width: 90px;
+
+  text-align: center;
+}
+
+
+/* =========================================================
+   STATUS BADGES - COMMON
+========================================================= */
+
+.low-stock-badge,
+.critical-stock-badge,
+.out-of-stock-badge,
+.in-stock-badge {
+  min-width: 70px;
+  min-height: 22px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 3px 8px;
+
+  border: 1px solid transparent;
+  border-radius: 999px;
+
+  font-size: 9px;
+  line-height: 1.2;
+  font-weight: 700;
+
+  white-space: nowrap;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   LOW STOCK
+========================================================= */
 
 .low-stock-badge {
-  display: inline-block;
-  padding: 6px 12px;
-  background: #fef3c7;
+  background: #fffbeb;
   color: #b45309;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
+
+  border-color: #fde68a;
 }
+
+
+/* =========================================================
+   CRITICAL
+========================================================= */
 
 .critical-stock-badge {
-  display: inline-block;
-  padding: 6px 12px;
-  background: #fee2e2;
-  color: #dc2626;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
+  background: #fff7ed;
+  color: #c2410c;
+
+  border-color: #fed7aa;
 }
 
-/* ==========================================
-   Reorder Button
-========================================== */
+
+/* =========================================================
+   OUT OF STOCK
+========================================================= */
+
+.out-of-stock-badge {
+  background: #fef2f2;
+  color: #dc2626;
+
+  border-color: #fecaca;
+}
+
+
+/* =========================================================
+   IN STOCK
+========================================================= */
+
+.in-stock-badge {
+  background: #ecfdf5;
+  color: #047857;
+
+  border-color: #a7f3d0;
+}
+
+
+/* =========================================================
+   REORDER BUTTON
+========================================================= */
 
 .reorder-btn {
-  border: none;
-  background: #10b981;
-  color: #ffffff;
-  padding: 8px 14px;
+  min-width: 64px;
+  height: 29px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0 10px;
+
+  border: 1px solid #c7d2fe;
   border-radius: 6px;
+
+  background: #ffffff;
+  color: #4f46e5;
+
+  font-family: inherit;
+
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+
+  white-space: nowrap;
+
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all 0.3s ease;
+
+  box-sizing: border-box;
+
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.15s ease;
 }
 
-.reorder-btn:hover {
-  background: #059669;
-  transform: translateY(-2px);
+
+/* =========================================================
+   REORDER BUTTON HOVER
+========================================================= */
+
+.reorder-btn:hover:not(:disabled) {
+  background: #4f46e5;
+  border-color: #4f46e5;
+
+  color: #ffffff;
+
+  box-shadow:
+    0 2px 6px rgba(79, 70, 229, 0.16);
+
+  transform: translateY(-1px);
 }
 
-/* ==========================================
-   Responsive
-========================================== */
+
+/* =========================================================
+   REORDER BUTTON ACTIVE
+========================================================= */
+
+.reorder-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+
+/* =========================================================
+   REORDER BUTTON FOCUS
+========================================================= */
+
+.reorder-btn:focus-visible {
+  outline: none;
+
+  box-shadow:
+    0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+
+/* =========================================================
+   REORDER BUTTON DISABLED
+========================================================= */
+
+.reorder-btn:disabled {
+  background: #f8fafc;
+
+  color: #94a3b8;
+
+  border-color: #e2e8f0;
+
+  opacity: 0.7;
+
+  cursor: not-allowed;
+
+  transform: none;
+
+  box-shadow: none;
+}
+
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
+
+.low-stock-table td[colspan="9"] {
+  height: 90px;
+
+  padding: 24px 20px !important;
+
+  background: #ffffff;
+
+  color: #94a3b8;
+
+  font-size: 11px;
+  font-weight: 500;
+
+  text-align: center;
+}
+
+
+/* =========================================================
+   LOADING / ERROR MESSAGE
+   Supports current inline JSX content
+========================================================= */
+
+.low-stock-alert > div:first-child {
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   LAPTOP
+========================================================= */
+
+@media (max-width: 1200px) {
+  .low-stock-alert {
+    padding: 11px;
+  }
+
+  .low-stock-table {
+    min-width: 1020px;
+  }
+
+  .low-stock-table thead th,
+  .low-stock-table td {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
 
 @media (max-width: 992px) {
+  .low-stock-alert {
+    margin-top: 14px;
+
+    padding: 10px;
+
+    border-radius: 9px;
+  }
 
   .low-stock-header {
     flex-direction: column;
+
     align-items: flex-start;
-    gap: 15px;
-  }
 
-}
-
-@media (max-width: 768px) {
-
-  .low-stock-alert {
-    overflow-x: auto;
+    gap: 8px;
   }
 
   .low-stock-table {
     min-width: 1000px;
   }
-
 }
 
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 768px) {
+  .low-stock-alert {
+    margin-top: 12px;
+
+    padding: 8px;
+
+    border-radius: 8px;
+  }
+
+  .low-stock-table {
+    min-width: 960px;
+  }
+
+  .low-stock-table thead th {
+    padding: 9px;
+
+    font-size: 9px;
+  }
+
+  .low-stock-table td {
+    padding: 9px;
+
+    font-size: 10px;
+  }
+
+  .low-stock-badge,
+  .critical-stock-badge,
+  .out-of-stock-badge,
+  .in-stock-badge {
+    min-width: 66px;
+    min-height: 21px;
+
+    padding: 3px 7px;
+
+    font-size: 9px;
+  }
+
+  .reorder-btn {
+    min-width: 60px;
+    height: 28px;
+
+    padding: 0 8px;
+
+    font-size: 9px;
+  }
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+========================================================= */
+
 @media (max-width: 576px) {
+  .low-stock-alert {
+    padding: 7px;
+  }
+
+  .low-stock-table {
+    min-width: 920px;
+  }
 
   .low-stock-header h2 {
-    font-size: 18px;
+    font-size: 15px;
   }
 
   .low-stock-header p {
-    font-size: 13px;
+    font-size: 10px;
   }
 
   .view-all-btn {
     width: 100%;
   }
+}
 
-  .reorder-btn {
-    width: 100%;
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .low-stock-table tbody tr,
+  .reorder-btn,
+  .view-all-btn {
+    transition: none;
   }
 
+  .reorder-btn:hover,
+  .view-all-btn:hover {
+    transform: none;
+  }
 }
