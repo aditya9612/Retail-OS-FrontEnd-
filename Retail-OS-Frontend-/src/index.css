@@ -3044,44 +3044,51 @@ body {
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
-  scrollbar-color: #c5c5c5 #f3f4f6;
+  scrollbar-color: #cbd5e1 #f1f5f9;
 }
 
 .table-scroll-container::-webkit-scrollbar {
   height: 8px;
+  width: 8px;
 }
 
 .table-scroll-container::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: #f1f5f9;
   border-radius: 8px;
 }
 
 .table-scroll-container::-webkit-scrollbar-thumb {
-  background: #c5c5c5;
+  background: #cbd5e1;
   border-radius: 8px;
   transition: background 0.2s ease;
 }
 
 .table-scroll-container::-webkit-scrollbar-thumb:hover {
-  background: #7c7c7c;
+  background: #94a3b8;
 }
 
-
-
 /* Product table horizontal scrollbar */
+.table-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
 .table-scroll::-webkit-scrollbar {
-  height: 6px;
+  height: 8px;
+  width: 8px;
 }
 
 .table-scroll::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #f1f5f9;
+  border-radius: 8px;
 }
 
 .table-scroll::-webkit-scrollbar-thumb {
-  background: #c7c7c7;
-  border-radius: 10px;
+  background: #cbd5e1;
+  border-radius: 8px;
+  transition: background 0.2s ease;
 }
 
 .table-scroll::-webkit-scrollbar-thumb:hover {
-  background: #999;
+  background: #94a3b8;
 }
