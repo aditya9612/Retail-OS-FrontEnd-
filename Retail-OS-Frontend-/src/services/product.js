@@ -2,9 +2,8 @@ import apiClient from "../api/axios";
 
 const productService = {
     getAll: () => {
-        return apiClient.get("/api/v1/products");
-    },
-
+    return apiClient.get("/api/v1/products?page=1&page_size=100");
+},
     getById: (productId) => {
         return apiClient.get(`/api/v1/products/${productId}`);
     },
