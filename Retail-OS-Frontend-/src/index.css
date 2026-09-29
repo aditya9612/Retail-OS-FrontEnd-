@@ -633,6 +633,107 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Dashboard Feedback & State Styles ── */
+.dash-state-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  padding: 24px 16px;
+  text-align: center;
+  gap: 8px;
+}
+
+.dash-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.dash-empty-icon {
+  font-size: 28px;
+  margin-bottom: 4px;
+  opacity: 0.7;
+}
+
+.dash-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: #6366f1;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dash-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #e0e7ff;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: dashSpin 0.8s linear infinite;
+  margin-bottom: 8px;
+}
+
+@keyframes dashSpin {
+  to { transform: rotate(360deg); }
+}
+
+.dash-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
+  color: #ef4444;
+  font-size: 13px;
+  padding: 16px;
+  text-align: center;
+}
+
+.dash-error-retry {
+  margin-top: 8px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dash-error-retry:hover {
+  background: #fecaca;
+}
+
+.dash-stat-skeleton {
+  display: inline-block;
+  width: 60px;
+  height: 22px;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: dashShimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+@keyframes dashShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+
 /* ─────────────────────────────────────────
    Scrollbars
 ───────────────────────────────────────── */

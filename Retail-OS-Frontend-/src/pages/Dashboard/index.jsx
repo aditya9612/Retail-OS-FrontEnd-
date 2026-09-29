@@ -1,219 +1,321 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import dashboardService, {
+    getDashboardSummary,
+    getDashboardOverview,
+    getRevenueVsCost,
+    getTopProducts,
+} from '../../services/dashboard';
 import { getOrders } from '../../services/orderService';
-import productService from '../../services/product';
 import {
-    BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-    LineChart, Line, CartesianGrid, ComposedChart, Area,
-    ReferenceLine, Legend, PieChart, Pie, Cell,
+    Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
+    Line, CartesianGrid, ComposedChart,
+    Legend, PieChart, Pie, Cell,
 } from 'recharts';
 
-/* ── Candlestick raw data ── */
-const candleData = [
-    { x: 'Jan', open: 30, close: 45, high: 60, low: 20 },
-    { x: 'Feb', open: 45, close: 38, high: 55, low: 30 },
-    { x: 'Mar', open: 38, close: 55, high: 70, low: 32 },
-    { x: 'Apr', open: 55, close: 42, high: 65, low: 38 },
-    { x: 'May', open: 42, close: 60, high: 75, low: 35 },
-    { x: 'Jun', open: 60, close: 50, high: 80, low: 45 },
-    { x: 'Jul', open: 50, close: 38, high: 65, low: 30 },
-    { x: 'Aug', open: 38, close: 48, high: 60, low: 28 },
-    { x: 'Sep', open: 48, close: 62, high: 72, low: 40 },
-    { x: 'Oct', open: 62, close: 55, high: 78, low: 48 },
-    { x: 'Nov', open: 55, close: 70, high: 85, low: 48 },
-    { x: 'Dec', open: 70, close: 58, high: 88, low: 52 },
-];
-
-/* ── Pareto data ── */
-const paretoRaw = [
-    { name: 'Jan', revenue: 3025, cost: 1500 },
-    { name: 'Feb', revenue: 2200, cost: 1200 },
-    { name: 'Mar', revenue: 2800, cost: 1400 },
-    { name: 'Apr', revenue: 2100, cost: 1100 },
-    { name: 'May', revenue: 3200, cost: 1600 },
-    { name: 'Jun', revenue: 2600, cost: 1300 },
-    { name: 'Jul', revenue: 2400, cost: 1250 },
-    { name: 'Aug', revenue: 3100, cost: 1550 },
-    { name: 'Sep', revenue: 2900, cost: 1450 },
-    { name: 'Oct', revenue: 3400, cost: 1700 },
-    { name: 'Nov', revenue: 3800, cost: 1900 },
-    { name: 'Dec', revenue: 4000, cost: 2000 },
-];
-
-/* Compute cumulative % for Pareto line */
-const total = paretoRaw.reduce((s, d) => s + d.revenue, 0);
-let cum = 0;
-const paretoData = paretoRaw.map(d => {
-    cum += d.revenue;
-    return { ...d, cumPct: Math.round((cum / total) * 100) };
-});
-
-/* ── Custom Candlestick bar ── */
-const CandleBar = (props) => {
-    const { x, y, width, height, open, close, high, low, index } = props;
-    if (!width || !height) return null;
-    const bullish = close >= open;
-    const color = bullish ? '#22d3ee' : '#f97316';
-    const centerX = x + width / 2;
-    const barW = Math.max(width * 0.55, 4);
-
-    /* We need pixel coords; recharts passes y as top of the entire cell */
-    /* open/close come as values, but we need to map them to pixels */
-    /* Instead, we use the built-in y/height which represents close-open in pixels */
-    return (
-        <g>
-            {/* Wick */}
-            <line x1={centerX} y1={y} x2={centerX} y2={y + height} stroke={color} strokeWidth={1.5} />
-            {/* Body – use y / height directly since recharts already mapped them */}
-            <rect
-                x={centerX - barW / 2}
-                y={y + height * 0.2}
-                width={barW}
-                height={Math.max(height * 0.6, 4)}
-                fill={color}
-                rx={2}
-            />
-        </g>
-    );
-};
-
-/* ── Stat cards ── */
-const stats = [
-    {
-        label: 'Total Sales',
-        value: '31.50',
-        progress: 62,
-        color: '#6366f1',
-        trackColor: '#e0e7ff',
-        emoji: '🛍️',
-        bg: 'linear-gradient(135deg,#eef2ff 0%,#f5f3ff 100%)',
-    },
-    {
-        label: 'Total Cost',
-        value: '$ 4598',
-        progress: 45,
-        color: '#ec4899',
-        trackColor: '#fce7f3',
-        emoji: '💳',
-        bg: 'linear-gradient(135deg,#fdf2f8 0%,#fff1f9 100%)',
-    },
-    {
-        label: 'Product Sold',
-        value: '4589 M',
-        progress: 78,
-        color: '#10b981',
-        trackColor: '#d1fae5',
-        emoji: '📦',
-        bg: 'linear-gradient(135deg,#ecfdf5 0%,#f0fdf4 100%)',
-    },
-];
-
-/* ── Custom Tooltip for pareto ── */
-const ParetoTooltip = ({ active, payload, label }) => {
-    if (!active || !payload?.length) return null;
-    return (
-        <div className="dash-tooltip">
-            <p className="dash-tooltip-label">{label}</p>
-            {payload.map((p, i) => (
-                <p key={i} style={{ color: p.color }}>
-                    {p.name}: {p.value}{p.name === 'pareto' ? '%' : ''}
-                </p>
-            ))}
-        </div>
-    );
-};
-
-/* ── Main Dashboard ── */
 const Dashboard = () => {
+    const navigate = useNavigate();
+
+    // Periods
     const [overviewPeriod, setOverviewPeriod] = useState('This Month');
     const [paretoPeriod, setParetoPeriod] = useState('This Month');
 
-    const [realStats, setRealStats] = useState({
-        totalSales: 0,
-        totalCost: 0,
-        productSold: 0,
-        loading: true
+    // 1. Dashboard Summary State
+    const [summaryState, setSummaryState] = useState({
+        loading: true,
+        error: null,
+        data: {
+            todaySales: 0,
+            monthlySales: 0,
+            totalCustomers: 0,
+            totalRevenue: 0,
+            lowStockProducts: 0,
+        },
     });
 
-    useEffect(() => {
-        let active = true;
-        const fetchDashboardData = async () => {
-            try {
-                // Fetch up to 500 orders (adjust logic if pagination is required)
-                const ordersData = await getOrders({ store_id: 1, page: 1, page_size: 500 });
-                const orders = Array.isArray(ordersData) ? ordersData : (ordersData.items || ordersData.data || []);
+    // 2. Dashboard Overview State
+    const [overviewState, setOverviewState] = useState({
+        loading: true,
+        error: null,
+        data: [],
+    });
 
-                let sales = 0;
-                let sold = 0;
-                let cost = 0;
+    // 3. Revenue vs Cost State
+    const [revCostState, setRevCostState] = useState({
+        loading: true,
+        error: null,
+        data: {
+            revenue: 0,
+            cost: 0,
+        },
+    });
 
-                // Fetch products to estimate cost (fallback to 60% of price if cost_price is missing)
-                const productsData = await productService.getAll();
-                const products = Array.isArray(productsData) ? productsData : (productsData.items || productsData.data || []);
-                const costMap = {};
-                products.forEach(p => {
-                    costMap[p.id] = parseFloat(p.cost_price || (p.price * 0.6) || 0);
-                });
+    // 4. Top Products State
+    const [topProductsState, setTopProductsState] = useState({
+        loading: true,
+        error: null,
+        data: [],
+    });
 
-                orders.forEach(o => {
-                    const status = o.status ? o.status.toLowerCase() : 'pending';
-                    if (status !== 'cancelled' && status !== 'returned') {
-                        sales += parseFloat(o.total_amount || 0);
-                        if (o.items && Array.isArray(o.items)) {
-                            o.items.forEach(i => {
-                                const qty = Number(i.quantity) || 1;
-                                sold += qty;
-                                cost += (costMap[i.product_id] || 0) * qty;
-                            });
-                        }
-                    }
-                });
+    // 5. Recent Transactions State
+    const [transactionsState, setTransactionsState] = useState({
+        loading: true,
+        error: null,
+        data: [],
+    });
 
-                if (active) {
-                    setRealStats({ totalSales: sales, totalCost: cost, productSold: sold, loading: false });
-                }
-            } catch (err) {
-                console.error("Dashboard fetch error:", err);
-                if (active) {
-                    setRealStats(prev => ({ ...prev, loading: false }));
-                }
-            }
-        };
-        fetchDashboardData();
-        return () => { active = false; };
+    // Fetch Summary
+    const fetchSummary = useCallback(async () => {
+        setSummaryState(prev => ({ ...prev, loading: true, error: null }));
+        try {
+            const res = await getDashboardSummary();
+            const s = res?.data ?? res ?? {};
+            setSummaryState({
+                loading: false,
+                error: null,
+                data: {
+                    todaySales: Number(s.today_sales ?? s.todaySales ?? 0),
+                    monthlySales: Number(s.monthly_sales ?? s.monthlySales ?? 0),
+                    totalCustomers: Number(s.total_customers ?? s.totalCustomers ?? 0),
+                    totalRevenue: Number(s.total_revenue ?? s.totalRevenue ?? 0),
+                    lowStockProducts: Number(s.low_stock_products ?? s.lowStockProducts ?? 0),
+                },
+            });
+        } catch (err) {
+            console.error('Failed to fetch dashboard summary:', err);
+            setSummaryState(prev => ({
+                ...prev,
+                loading: false,
+                error: err?.response?.data?.detail || err?.message || 'Error loading summary',
+            }));
+        }
     }, []);
 
-    const displayStats = stats.map(s => {
-        if (s.label === 'Total Sales') {
-            return { ...s, value: realStats.loading ? '...' : `₹${realStats.totalSales.toLocaleString('en-IN')}` };
+    // Fetch Overview
+    const fetchOverview = useCallback(async () => {
+        setOverviewState(prev => ({ ...prev, loading: true, error: null }));
+        try {
+            const res = await getDashboardOverview();
+            const raw = res?.data ?? res ?? {};
+            const list = Array.isArray(raw)
+                ? raw
+                : (raw.overview || raw.items || raw.data || []);
+            const parsed = list.map(item => ({
+                month: String(item.month || item.name || item.date || item.label || ''),
+                sales: Number(item.sales ?? item.revenue ?? item.total_sales ?? item.amount ?? 0),
+            }));
+            setOverviewState({
+                loading: false,
+                error: null,
+                data: parsed,
+            });
+        } catch (err) {
+            console.error('Failed to fetch dashboard overview:', err);
+            setOverviewState(prev => ({
+                ...prev,
+                loading: false,
+                error: err?.response?.data?.detail || err?.message || 'Error loading overview',
+            }));
         }
-        if (s.label === 'Total Cost') {
-            return { ...s, value: realStats.loading ? '...' : `₹${Math.round(realStats.totalCost).toLocaleString('en-IN')}` };
-        }
-        if (s.label === 'Product Sold') {
-            return { ...s, value: realStats.loading ? '...' : `${realStats.productSold.toLocaleString('en-IN')}` };
-        }
-        return s;
-    });
+    }, []);
 
-    const user = JSON.parse(localStorage.getItem("user"));
+    // Fetch Revenue vs Cost
+    const fetchRevenueVsCost = useCallback(async () => {
+        setRevCostState(prev => ({ ...prev, loading: true, error: null }));
+        try {
+            const res = await getRevenueVsCost();
+            const raw = res?.data ?? res ?? {};
+            setRevCostState({
+                loading: false,
+                error: null,
+                data: {
+                    revenue: Number(raw.revenue ?? raw.total_revenue ?? 0),
+                    cost: Number(raw.cost ?? raw.total_cost ?? 0),
+                },
+            });
+        } catch (err) {
+            console.error('Failed to fetch revenue vs cost:', err);
+            setRevCostState(prev => ({
+                ...prev,
+                loading: false,
+                error: err?.response?.data?.detail || err?.message || 'Error loading revenue vs cost',
+            }));
+        }
+    }, []);
 
+    // Fetch Top Products
+    const fetchTopProducts = useCallback(async () => {
+        setTopProductsState(prev => ({ ...prev, loading: true, error: null }));
+        try {
+            const res = await getTopProducts();
+            const raw = res?.data ?? res ?? {};
+            const list = Array.isArray(raw)
+                ? raw
+                : (raw.top_products || raw.topProducts || raw.products || raw.items || []);
+            const parsed = list.map(item => ({
+                name: String(item.product_name || item.name || item.title || 'Product'),
+                category: String(item.category || item.category_name || ''),
+                sold: Number(item.quantity_sold ?? item.sold ?? item.quantity ?? 0),
+                revenue: Number(item.revenue ?? item.total_revenue ?? item.amount ?? 0),
+            }));
+            setTopProductsState({
+                loading: false,
+                error: null,
+                data: parsed,
+            });
+        } catch (err) {
+            console.error('Failed to fetch top products:', err);
+            setTopProductsState(prev => ({
+                ...prev,
+                loading: false,
+                error: err?.response?.data?.detail || err?.message || 'Error loading top products',
+            }));
+        }
+    }, []);
+
+    // Fetch Recent Transactions
+    const fetchRecentTransactions = useCallback(async () => {
+        setTransactionsState(prev => ({ ...prev, loading: true, error: null }));
+        try {
+            const res = await getOrders({ page: 1, page_size: 5 });
+            const list = Array.isArray(res)
+                ? res
+                : (res?.items || res?.data || res?.orders || []);
+            const parsed = list.slice(0, 5).map(o => {
+                const status = (o.status || 'Paid').toLowerCase();
+                let color = '#10b981';
+                if (status === 'pending') color = '#f59e0b';
+                else if (status === 'cancelled' || status === 'returned') color = '#ef4444';
+
+                return {
+                    id: o.order_number || (o.id ? `#ORD-${String(o.id).padStart(3, '0')}` : '#ORD-000'),
+                    customer: o.customer_name || o.customer?.name || (o.customer_id ? `Customer #${o.customer_id}` : 'Walk-in Customer'),
+                    amount: `₹${Number(o.total_amount ?? o.amount ?? 0).toLocaleString('en-IN')}`,
+                    status: (o.status || 'Paid').charAt(0).toUpperCase() + (o.status || 'Paid').slice(1).toLowerCase(),
+                    color,
+                };
+            });
+            setTransactionsState({
+                loading: false,
+                error: null,
+                data: parsed,
+            });
+        } catch (err) {
+            console.warn('Unable to load recent orders, using empty state:', err);
+            setTransactionsState({
+                loading: false,
+                error: null,
+                data: [],
+            });
+        }
+    }, []);
+
+    // Initial load
+    useEffect(() => {
+        fetchSummary();
+        fetchOverview();
+        fetchRevenueVsCost();
+        fetchTopProducts();
+        fetchRecentTransactions();
+    }, [fetchSummary, fetchOverview, fetchRevenueVsCost, fetchTopProducts, fetchRecentTransactions]);
+
+    // User & Greeting
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
     const hour = new Date().getHours();
     const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
+    // Summary KPI Cards mapping
+    const summaryCards = [
+        {
+            label: 'Total Sales',
+            value: summaryState.loading ? '...' : `₹${summaryState.data.totalRevenue.toLocaleString('en-IN')}`,
+            progress: revCostState.data.cost > 0 && summaryState.data.totalRevenue > 0
+                ? Math.min(100, Math.round(((summaryState.data.totalRevenue - revCostState.data.cost) / summaryState.data.totalRevenue) * 100))
+                : 70,
+            color: '#6366f1',
+            trackColor: '#e0e7ff',
+            emoji: '🛍️',
+            bg: 'linear-gradient(135deg,#eef2ff 0%,#f5f3ff 100%)',
+        },
+        {
+            label: 'Total Cost',
+            value: revCostState.loading ? '...' : `₹${Math.round(revCostState.data.cost).toLocaleString('en-IN')}`,
+            progress: revCostState.data.revenue > 0
+                ? Math.min(100, Math.round((revCostState.data.cost / revCostState.data.revenue) * 100))
+                : 45,
+            color: '#ec4899',
+            trackColor: '#fce7f3',
+            emoji: '💳',
+            bg: 'linear-gradient(135deg,#fdf2f8 0%,#fff1f9 100%)',
+        },
+        {
+            label: 'Monthly Sales',
+            value: summaryState.loading ? '...' : `₹${summaryState.data.monthlySales.toLocaleString('en-IN')}`,
+            progress: summaryState.data.totalRevenue > 0
+                ? Math.min(100, Math.round((summaryState.data.monthlySales / summaryState.data.totalRevenue) * 100))
+                : 60,
+            color: '#8b5cf6',
+            trackColor: '#ede9fe',
+            emoji: '📈',
+            bg: 'linear-gradient(135deg,#f5f3ff 0%,#ede9fe 100%)',
+        },
+        {
+            label: "Today's Sales",
+            value: summaryState.loading ? '...' : `₹${summaryState.data.todaySales.toLocaleString('en-IN')}`,
+            progress: summaryState.data.monthlySales > 0
+                ? Math.min(100, Math.round((summaryState.data.todaySales / summaryState.data.monthlySales) * 100))
+                : 35,
+            color: '#0284c7',
+            trackColor: '#e0f2fe',
+            emoji: '⚡',
+            bg: 'linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%)',
+        },
+        {
+            label: 'Total Customers',
+            value: summaryState.loading ? '...' : summaryState.data.totalCustomers.toLocaleString('en-IN'),
+            progress: Math.min(100, Math.max(20, summaryState.data.totalCustomers * 5)),
+            color: '#10b981',
+            trackColor: '#d1fae5',
+            emoji: '👥',
+            bg: 'linear-gradient(135deg,#ecfdf5 0%,#f0fdf4 100%)',
+        },
+        {
+            label: 'Low Stock Products',
+            value: summaryState.loading ? '...' : summaryState.data.lowStockProducts.toLocaleString('en-IN'),
+            progress: summaryState.data.lowStockProducts === 0 ? 100 : Math.max(15, 100 - summaryState.data.lowStockProducts * 10),
+            color: '#f59e0b',
+            trackColor: '#fef3c7',
+            emoji: '⚠️',
+            bg: 'linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%)',
+        },
+    ];
+
+    // Overview total sum
+    const totalOverviewSales = overviewState.data.reduce((acc, curr) => acc + curr.sales, 0);
+
+    // Top products calculation for progress bar
+    const maxTopProductSold = Math.max(...topProductsState.data.map(p => p.sold), 1);
+
+    // Revenue vs Cost pie chart data
+    const pieData = [
+        { name: 'Revenue', value: revCostState.data.revenue },
+        { name: 'Cost', value: revCostState.data.cost },
+    ];
+    const hasPieData = revCostState.data.revenue > 0 || revCostState.data.cost > 0;
+
     return (
         <div className="dash-page">
-
             {/* ── Hero greeting + stat cards ── */}
             <div className="dash-hero">
                 <div className="dash-greeting">
-                    <h1 className="dash-greeting-title"> Hi {user?.full_name || "User"}, {greeting}</h1>
+                    <h1 className="dash-greeting-title">Hi {user?.full_name || 'User'}, {greeting}</h1>
                     <p className="dash-greeting-sub">
                         Your dashboard gives you views of key performance<br />or business process.
                     </p>
                 </div>
 
                 <div className="dash-stats">
-                    {displayStats.map((s, i) => (
+                    {summaryCards.map((s, i) => (
                         <div key={i} className="stat-card" style={{ background: s.bg }}>
                             <div className="stat-card-top">
                                 <div>
@@ -235,8 +337,7 @@ const Dashboard = () => {
 
             {/* ── Charts row ── */}
             <div className="dash-charts-row">
-
-                {/* Overview – candlestick-style */}
+                {/* 1. Overview Chart */}
                 <div className="chart-card">
                     <div className="chart-card-header">
                         <h2 className="chart-title">Overview</h2>
@@ -250,26 +351,57 @@ const Dashboard = () => {
                             <option>This Year</option>
                         </select>
                     </div>
-                    <p className="chart-subtitle">$45,78956</p>
+                    <p className="chart-subtitle">
+                        {overviewState.loading ? 'Loading overview...' :
+                         overviewState.error ? 'Unavailable' :
+                         overviewState.data.length === 0 ? 'No overview data' :
+                         `₹${totalOverviewSales.toLocaleString('en-IN')}`}
+                    </p>
 
-                    <ResponsiveContainer width="100%" height={240}>
-                        <ComposedChart data={candleData} margin={{ top: 10, right: 10, bottom: 0, left: -20 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <XAxis dataKey="x" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                            <Tooltip
-                                contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 12 }}
-                            />
-                            {/* Bull bars */}
-                            <Bar dataKey="high" fill="#22d3ee" opacity={0.85} radius={[3, 3, 0, 0]} maxBarSize={16} />
-                            {/* Bear bars */}
-                            <Bar dataKey="low" fill="#f97316" opacity={0.85} radius={[3, 3, 0, 0]} maxBarSize={16} />
-                            <Line type="monotone" dataKey="close" stroke="#6366f1" strokeWidth={2} dot={false} />
-                        </ComposedChart>
-                    </ResponsiveContainer>
+                    {overviewState.loading ? (
+                        <div className="dash-loading-state">
+                            <div className="dash-spinner" />
+                            <span>Loading overview chart...</span>
+                        </div>
+                    ) : overviewState.error ? (
+                        <div className="dash-error-state">
+                            <p>{overviewState.error}</p>
+                            <button className="dash-error-retry" onClick={fetchOverview}>Retry</button>
+                        </div>
+                    ) : overviewState.data.length === 0 ? (
+                        <div className="dash-empty-state">
+                            <div className="dash-empty-icon">📊</div>
+                            <p>No overview data available.</p>
+                        </div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height={240}>
+                            <ComposedChart data={overviewState.data} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
+                                <defs>
+                                    <linearGradient id="overviewBarGrad" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.9} />
+                                        <stop offset="100%" stopColor="#0ea5e9" stopOpacity={0.4} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                                <YAxis
+                                    tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tickFormatter={(val) => val >= 1000 ? `₹${(val / 1000).toFixed(0)}k` : `₹${val}`}
+                                />
+                                <Tooltip
+                                    formatter={(value) => [`₹${Number(value).toLocaleString('en-IN')}`, 'Sales']}
+                                    contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 12 }}
+                                />
+                                <Bar dataKey="sales" name="Sales" fill="url(#overviewBarGrad)" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                                <Line type="monotone" dataKey="sales" name="Sales Trend" stroke="#6366f1" strokeWidth={2.5} dot={{ r: 3, fill: '#6366f1' }} activeDot={{ r: 5 }} />
+                            </ComposedChart>
+                        </ResponsiveContainer>
+                    )}
                 </div>
 
-                {/* Revenue vs Cost – Pie Chart */}
+                {/* 2. Revenue vs Cost Chart */}
                 <div className="chart-card">
                     <div className="chart-card-header">
                         <h2 className="chart-title">Revenue Vs Cost</h2>
@@ -284,98 +416,135 @@ const Dashboard = () => {
                         </select>
                     </div>
 
-                    <ResponsiveContainer width="100%" height={260}>
-                        <PieChart>
-                            <Pie
-                                data={[
-                                    { name: 'Revenue', value: realStats.totalSales },
-                                    { name: 'Cost', value: realStats.totalCost }
-                                ]}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={90}
-                                paddingAngle={5}
-                                dataKey="value"
-                            >
-                                <Cell fill="#38bdf8" />
-                                <Cell fill="#f43f5e" />
-                            </Pie>
-                            <Tooltip formatter={(value) => `₹${value.toLocaleString('en-IN')}`} />
-                            <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                        </PieChart>
-                    </ResponsiveContainer>
+                    {revCostState.loading ? (
+                        <div className="dash-loading-state">
+                            <div className="dash-spinner" />
+                            <span>Loading revenue vs cost...</span>
+                        </div>
+                    ) : revCostState.error ? (
+                        <div className="dash-error-state">
+                            <p>{revCostState.error}</p>
+                            <button className="dash-error-retry" onClick={fetchRevenueVsCost}>Retry</button>
+                        </div>
+                    ) : !hasPieData ? (
+                        <div className="dash-empty-state">
+                            <div className="dash-empty-icon">💳</div>
+                            <p>No revenue vs cost data recorded.</p>
+                        </div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height={260}>
+                            <PieChart>
+                                <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={90}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    <Cell fill="#38bdf8" />
+                                    <Cell fill="#f43f5e" />
+                                </Pie>
+                                <Tooltip formatter={(value) => `₹${Number(value).toLocaleString('en-IN')}`} />
+                                <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    )}
                 </div>
             </div>
 
             {/* ── Bottom row: Recent Transactions + Top Products ── */}
             <div className="dash-bottom-row">
-
                 {/* Recent Transactions */}
                 <div className="chart-card">
                     <div className="chart-card-header">
                         <h2 className="chart-title">Recent Transactions</h2>
-                        <button className="chart-view-all">View All</button>
+                        <button className="chart-view-all" onClick={() => navigate('/orders')}>View All</button>
                     </div>
-                    <table className="dash-table">
-                        <thead>
-                            <tr>
-                                <th>Order ID</th>
-                                <th>Customer</th>
-                                <th>Amount</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {[
-                                { id: '#ORD-001', customer: 'Rahul Sharma', amount: '₹2,450', status: 'Paid', color: '#10b981' },
-                                { id: '#ORD-002', customer: 'Priya Patel', amount: '₹1,200', status: 'Pending', color: '#f59e0b' },
-                                { id: '#ORD-003', customer: 'Amit Kumar', amount: '₹3,800', status: 'Paid', color: '#10b981' },
-                                { id: '#ORD-004', customer: 'Sneha Singh', amount: '₹950', status: 'Cancelled', color: '#ef4444' },
-                                { id: '#ORD-005', customer: 'Vikram Mehta', amount: '₹5,100', status: 'Paid', color: '#10b981' },
-                            ].map((row, i) => (
-                                <tr key={i}>
-                                    <td className="dash-table-id">{row.id}</td>
-                                    <td>{row.customer}</td>
-                                    <td className="dash-table-amount">{row.amount}</td>
-                                    <td>
-                                        <span className="dash-badge" style={{ background: `${row.color}18`, color: row.color }}>
-                                            {row.status}
-                                        </span>
-                                    </td>
+
+                    {transactionsState.loading ? (
+                        <div className="dash-loading-state">
+                            <div className="dash-spinner" />
+                            <span>Loading transactions...</span>
+                        </div>
+                    ) : transactionsState.data.length === 0 ? (
+                        <div className="dash-empty-state">
+                            <div className="dash-empty-icon">🧾</div>
+                            <p>No recent transactions found.</p>
+                        </div>
+                    ) : (
+                        <table className="dash-table">
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Customer</th>
+                                    <th>Amount</th>
+                                    <th>Status</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {transactionsState.data.map((row, i) => (
+                                    <tr key={i}>
+                                        <td className="dash-table-id">{row.id}</td>
+                                        <td>{row.customer}</td>
+                                        <td className="dash-table-amount">{row.amount}</td>
+                                        <td>
+                                            <span className="dash-badge" style={{ background: `${row.color}18`, color: row.color }}>
+                                                {row.status}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
 
                 {/* Top Products */}
                 <div className="chart-card">
                     <div className="chart-card-header">
                         <h2 className="chart-title">Top Products</h2>
-                        <button className="chart-view-all">View All</button>
+                        <button className="chart-view-all" onClick={() => navigate('/products')}>View All</button>
                     </div>
-                    <div className="top-products-list">
-                        {[
-                            { name: 'Cotton T-Shirt', category: 'Apparel', sold: 340, revenue: '₹34,000', pct: 85 },
-                            { name: 'Wireless Earbuds', category: 'Electronics', sold: 218, revenue: '₹87,200', pct: 72 },
-                            { name: 'Denim Jeans', category: 'Apparel', sold: 195, revenue: '₹58,500', pct: 61 },
-                            { name: 'Water Bottle', category: 'Accessories', sold: 412, revenue: '₹20,600', pct: 93 },
-                            { name: 'Face Cream', category: 'Beauty', sold: 156, revenue: '₹46,800', pct: 48 },
-                        ].map((p, i) => (
-                            <div key={i} className="top-product-item">
-                                <div className="top-product-rank">{i + 1}</div>
-                                <div className="top-product-info">
-                                    <p className="top-product-name">{p.name}</p>
-                                    <p className="top-product-cat">{p.category} · {p.sold} sold</p>
-                                    <div className="top-product-bar-track">
-                                        <div className="top-product-bar-fill" style={{ width: `${p.pct}%` }} />
+
+                    {topProductsState.loading ? (
+                        <div className="dash-loading-state">
+                            <div className="dash-spinner" />
+                            <span>Loading top products...</span>
+                        </div>
+                    ) : topProductsState.error ? (
+                        <div className="dash-error-state">
+                            <p>{topProductsState.error}</p>
+                            <button className="dash-error-retry" onClick={fetchTopProducts}>Retry</button>
+                        </div>
+                    ) : topProductsState.data.length === 0 ? (
+                        <div className="dash-empty-state">
+                            <div className="dash-empty-icon">📦</div>
+                            <p>No top-performing products recorded yet.</p>
+                        </div>
+                    ) : (
+                        <div className="top-products-list">
+                            {topProductsState.data.map((p, i) => {
+                                const pct = Math.round((p.sold / maxTopProductSold) * 100);
+                                return (
+                                    <div key={i} className="top-product-item">
+                                        <div className="top-product-rank">{i + 1}</div>
+                                        <div className="top-product-info">
+                                            <p className="top-product-name">{p.name}</p>
+                                            <p className="top-product-cat">
+                                                {p.category ? `${p.category} · ` : ''}{p.sold.toLocaleString('en-IN')} sold
+                                            </p>
+                                            <div className="top-product-bar-track">
+                                                <div className="top-product-bar-fill" style={{ width: `${pct}%` }} />
+                                            </div>
+                                        </div>
+                                        <p className="top-product-rev">₹{p.revenue.toLocaleString('en-IN')}</p>
                                     </div>
-                                </div>
-                                <p className="top-product-rev">{p.revenue}</p>
-                            </div>
-                        ))}
-                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
