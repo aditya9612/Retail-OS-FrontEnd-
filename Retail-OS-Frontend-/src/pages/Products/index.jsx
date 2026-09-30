@@ -83,6 +83,7 @@ const EMPTY_FORM = {
     featured: false,
     description: '',
     minStock: 10,
+    expiryDate: '',
 };
 
 const toPayload = (form) => ({
@@ -93,45 +94,103 @@ const toPayload = (form) => ({
     brand: form.brand,
     unit: form.unit,
     mrp: String(Number(form.mrp) || 0),
-price: String(Number(form.sellingPrice) || 0),
-gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
+    price: String(Number(form.sellingPrice) || 0),
+    gst_rate: String(
+        Number(String(form.gst).replace('%', '')) || 0
+    ),
     stock: Number(form.stock) || 0,
     hsn_code: form.hsnCode,
     is_active: Boolean(form.status),
     featured: Boolean(form.featured),
     description: form.description,
     min_stock: Number(form.minStock) || 10,
+
+    // Food/Grocery expiry
+    expiry_date: form.expiryDate || null,
+
     variants: null,
 });
 
-const ProductFormModal = ({ product, onClose, onSave, existingProducts = [] }) => {
+export const ProductFormModal = ({
+    product,
+    onClose,
+    onSave,
+    existingProducts = []
+}) => {
     const isNew = !product;
 
-        const [form, setForm] = useState(
+    const [form, setForm] = useState(
         product
             ? {
                 ...EMPTY_FORM,
                 ...product,
+
                 sku: String(product.sku ?? ''),
-                hsnCode: String(product.hsn_code ?? product.hsnCode ?? ''),
-                sellingPrice: product.price ?? product.sellingPrice ?? '',
-                mrp: product.mrp ?? product.mrp_price ?? '',
+
+                hsnCode: String(
+                    product.hsn_code ??
+                    product.hsnCode ??
+                    ''
+                ),
+
+                sellingPrice:
+                    product.price ??
+                    product.sellingPrice ??
+                    '',
+
+                mrp:
+                    product.mrp ??
+                    product.mrp_price ??
+                    '',
+
                 brand: String(product.brand ?? ''),
+
                 barcode: String(product.barcode ?? ''),
+
                 name: String(product.name ?? ''),
-                description: String(product.description ?? ''),
+
+                description: String(
+                    product.description ?? ''
+                ),
+
                 category:
                     CATEGORY_NAMES[product.category_id] ||
                     product.category ||
                     '',
-                gst: product.gst_rate != null
-                    ? `${Number(product.gst_rate)}%`
-                    : (product.gst || ''),
-                stock: product.stock ?? product.quantity ?? 0,
-                status: product.is_active ?? true,
-                featured: product.featured ?? false,
-                unit: product.unit || 'Pcs',
-                minStock: product.min_stock ?? 10,
+
+                gst:
+                    product.gst_rate != null
+                        ? `${Number(product.gst_rate)}%`
+                        : (product.gst || ''),
+
+                stock:
+                    product.stock ??
+                    product.quantity ??
+                    0,
+
+                status:
+                    product.is_active ??
+                    true,
+
+                featured:
+                    product.featured ??
+                    false,
+
+                unit:
+                    product.unit ||
+                    'Pcs',
+
+                minStock:
+                    product.min_stock ??
+                    10,
+
+                // Existing expiry date support
+                expiryDate:
+                    product.expiry_date ??
+                    product.expiryDate ??
+                    product.expiration_date ??
+                    product.expirationDate ??
+                    '',
             }
             : { ...EMPTY_FORM }
     );
@@ -140,54 +199,66 @@ const ProductFormModal = ({ product, onClose, onSave, existingProducts = [] }) =
     const [saving, setSaving] = useState(false);
 
     const set = (k, v) => {
-        setForm(f => ({ ...f, [k]: v }));
-        setErrors(prev => ({ ...prev, [k]: '' }));
+        setForm(f => ({
+            ...f,
+            [k]: v
+        }));
+
+        setErrors(prev => ({
+            ...prev,
+            [k]: ''
+        }));
     };
+
     const SKU_REGEX = /^SKU-\d{3,6}$/;
 
-const validateSKUFormat = (sku) => {
-    const value = sku.trim().toUpperCase();
+    const validateSKUFormat = (sku) => {
+        const value = sku.trim().toUpperCase();
 
-    if (!value) {
-        return 'SKU is required';
-    }
+        if (!value) {
+            return 'SKU is required';
+        }
 
-    if (!SKU_REGEX.test(value)) {
-        return 'SKU must be in format SKU-001 with 3 to 6 digits';
-    }
+        if (!SKU_REGEX.test(value)) {
+            return 'SKU must be in format SKU-001 with 3 to 6 digits';
+        }
 
-    if (/^SKU-0+$/.test(value)) {
-        return 'SKU cannot be all zeros';
-    }
+        if (/^SKU-0+$/.test(value)) {
+            return 'SKU cannot be all zeros';
+        }
 
-    return '';
-};
+        return '';
+    };
+
     const validateForm = () => {
         const newErrors = {};
 
         if (!form.name.trim()) {
             newErrors.name = 'Product name is required';
         }
+
         const normalizedSKU = form.sku.trim().toUpperCase();
 
-const skuError = validateSKUFormat(normalizedSKU);
+        const skuError = validateSKUFormat(normalizedSKU);
 
-if (skuError) {
-    newErrors.sku = skuError;
-} else {
-   const duplicateSKU = existingProducts.some(p => {
-        const existingSKU = (p.sku || '').trim().toUpperCase();
+        if (skuError) {
+            newErrors.sku = skuError;
+        } else {
+            const duplicateSKU = existingProducts.some(p => {
+                const existingSKU =
+                    (p.sku || '').trim().toUpperCase();
 
-        return (
-            existingSKU === normalizedSKU &&
-            p.id !== product?.id
-        );
-    });
+                return (
+                    existingSKU === normalizedSKU &&
+                    p.id !== product?.id
+                );
+            });
 
-    if (duplicateSKU) {
-        newErrors.sku = 'SKU already exists. Please use a unique SKU.';
-    }
-}
+            if (duplicateSKU) {
+                newErrors.sku =
+                    'SKU already exists. Please use a unique SKU.';
+            }
+        }
 
         if (!form.category) {
             newErrors.category = 'Category is required';
@@ -200,24 +271,31 @@ if (skuError) {
         if (!form.barcode.trim()) {
             newErrors.barcode = 'Barcode is required';
         } else if (!/^\d{13}$/.test(form.barcode.trim())) {
-            newErrors.barcode = 'Barcode must be exactly 13 digits';
+            newErrors.barcode =
+                'Barcode must be exactly 13 digits';
         }
 
         if (!form.hsnCode.trim()) {
             newErrors.hsnCode = 'HSN Code is required';
         } else if (!/^\d{4}$/.test(form.hsnCode.trim())) {
-            newErrors.hsnCode = 'HSN Code must be exactly 4 digits';
+            newErrors.hsnCode =
+                'HSN Code must be exactly 4 digits';
         }
 
         const mrp = Number(form.mrp);
         const sellingPrice = Number(form.sellingPrice);
 
         if (form.mrp === '' || mrp <= 0) {
-            newErrors.mrp = 'MRP must be greater than 0';
+            newErrors.mrp =
+                'MRP must be greater than 0';
         }
 
-        if (form.sellingPrice === '' || sellingPrice <= 0) {
-            newErrors.sellingPrice = 'Selling price must be greater than 0';
+        if (
+            form.sellingPrice === '' ||
+            sellingPrice <= 0
+        ) {
+            newErrors.sellingPrice =
+                'Selling price must be greater than 0';
         }
 
         if (
@@ -225,24 +303,56 @@ if (skuError) {
             form.sellingPrice !== '' &&
             mrp <= sellingPrice
         ) {
-            newErrors.mrp = 'MRP must be greater than selling price';
+            newErrors.mrp =
+                'MRP must be greater than selling price';
         }
 
         if (!form.gst) {
-            newErrors.gst = 'GST rate is required';
+            newErrors.gst =
+                'GST rate is required';
         }
 
-        if (form.stock === '' || Number(form.stock) < 0) {
-            newErrors.stock = 'Stock cannot be negative';
+        if (
+            form.stock === '' ||
+            Number(form.stock) < 0
+        ) {
+            newErrors.stock =
+                'Stock cannot be negative';
         }
 
-        if (form.minStock === '' || Number(form.minStock) < 0) {
-            newErrors.minStock = 'Minimum stock cannot be negative';
+        if (
+            form.minStock === '' ||
+            Number(form.minStock) < 0
+        ) {
+            newErrors.minStock =
+                'Minimum stock cannot be negative';
+        }
+
+        // ==========================================
+        // FOOD / GROCERY EXPIRY VALIDATION
+        // ==========================================
+        if (
+            form.category === 'Groceries' &&
+            !String(form.expiryDate || '').trim()
+        ) {
+            newErrors.expiryDate =
+                'Expiry date is required for food/grocery products.';
+        }
+
+        // Validate expiry date when provided
+        if (form.expiryDate) {
+            const expiry = new Date(form.expiryDate);
+
+            if (Number.isNaN(expiry.getTime())) {
+                newErrors.expiryDate =
+                    'Please enter a valid expiry date.';
+            }
         }
 
         setErrors(newErrors);
+
         return Object.keys(newErrors).length === 0;
-    }; 
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -254,102 +364,206 @@ if (skuError) {
         setSaving(true);
 
         try {
-    await onSave(toPayload(form), product?.id);
-    onClose();
-} catch (err) {
-    const detail = err?.response?.data?.detail;
+            await onSave(
+                toPayload(form),
+                product?.id
+            );
 
-    alert(
-        'Could not save product: ' +
-        (typeof detail === 'string'
-            ? detail
-            : JSON.stringify(detail || err?.message || err))
-    );
-} finally {
-    setSaving(false);
-}
+            onClose();
+        } catch (err) {
+            const detail =
+                err?.response?.data?.detail;
+
+            alert(
+                'Could not save product: ' +
+                (
+                    typeof detail === 'string'
+                        ? detail
+                        : JSON.stringify(
+                            detail ||
+                            err?.message ||
+                            err
+                        )
+                )
+            );
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
-        <div className="ec-modal-overlay" onClick={onClose}>
+        <div
+            className="ec-modal-overlay"
+            onClick={onClose}
+        >
             <div
                 className="ec-modal"
-                style={{ maxWidth: 720, width: '90%' }}
+                style={{
+                    maxWidth: 720,
+                    width: '90%'
+                }}
                 onClick={e => e.stopPropagation()}
             >
                 <div className="ec-modal-header">
                     <div>
-                        <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>
-                            {isNew ? 'Add New Product' : `Edit: ${product.name}`}
+                        <h3
+                            style={{
+                                fontWeight: 700,
+                                fontSize: 16,
+                                color: '#111827'
+                            }}
+                        >
+                            {
+                                isNew
+                                    ? 'Add New Product'
+                                    : `Edit: ${product.name}`
+                            }
                         </h3>
-                        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+
+                        <p
+                            style={{
+                                fontSize: 12,
+                                color: '#9ca3af',
+                                marginTop: 2
+                            }}
+                        >
                             Fill in all required product details
                         </p>
                     </div>
-                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+
+                    <button
+                        className="ec-modal-close"
+                        onClick={onClose}
+                    >
+                        ✕
+                    </button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ padding: 20, display: 'grid', gap: 14 }}>
+                <form
+                    onSubmit={handleSubmit}
+                    style={{
+                        padding: 20,
+                        display: 'grid',
+                        gap: 14
+                    }}
+                >
                     {/* Product Name + SKU */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 14
+                        }}
+                    >
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Product Name <span style={{ color: 'red' }}>*</span>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151'
+                                }}
+                            >
+                                Product Name
+                                <span style={{ color: 'red' }}>
+                                    {' '}*
+                                </span>
                             </label>
+
                             <input
                                 className="adm-search"
                                 value={form.name}
-                                onChange={e => set('name', e.target.value)}
+                                onChange={e =>
+                                    set(
+                                        'name',
+                                        e.target.value
+                                    )
+                                }
                                 placeholder="e.g. Wireless Earbuds Pro"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
+
                             {errors.name && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                <div
+                                    style={{
+                                        color: '#dc2626',
+                                        fontSize: 11,
+                                        marginTop: 3
+                                    }}
+                                >
                                     {errors.name}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                SKU <span style={{ color: 'red' }}>*</span>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151'
+                                }}
+                            >
+                                SKU
+                                <span style={{ color: 'red' }}>
+                                    {' '}*
+                                </span>
                             </label>
+
                             <input
                                 className="adm-search"
                                 value={form.sku}
-                               onChange={e => {
-    let value = e.target.value.toUpperCase();
+                                onChange={e => {
+                                    let value =
+                                        e.target.value.toUpperCase();
 
-    if (!value.startsWith('SKU-')) {
-        value = 'SKU-' + value.replace(/^SKU-?/i, '');
-    }
+                                    if (!value.startsWith('SKU-')) {
+                                        value =
+                                            'SKU-' +
+                                            value.replace(
+                                                /^SKU-?/i,
+                                                ''
+                                            );
+                                    }
 
-    const digits = value
-        .slice(4)
-        .replace(/\D/g, '')
-        .slice(0, 6);
+                                    const digits =
+                                        value
+                                            .slice(4)
+                                            .replace(/\D/g, '')
+                                            .slice(0, 6);
 
-    set('sku', 'SKU-' + digits);
-}}
+                                    set(
+                                        'sku',
+                                        'SKU-' + digits
+                                    );
+                                }}
                                 placeholder="e.g. SKU-001"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
+
                             {errors.sku && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                <div
+                                    style={{
+                                        color: '#dc2626',
+                                        fontSize: 11,
+                                        marginTop: 3
+                                    }}
+                                >
                                     {errors.sku}
                                 </div>
                             )}
@@ -357,49 +571,96 @@ if (skuError) {
                     </div>
 
                     {/* Category + Brand */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 14
+                        }}
+                    >
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Category <span style={{ color: 'red' }}>*</span>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151'
+                                }}
+                            >
+                                Category
+                                <span style={{ color: 'red' }}>
+                                    {' '}*
+                                </span>
                             </label>
+
                             <select
                                 value={form.category}
-                                onChange={e => set('category', e.target.value)}
+                                onChange={e =>
+                                    set(
+                                        'category',
+                                        e.target.value
+                                    )
+                                }
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             >
                                 {CATEGORIES_LIST.map(c => (
-                                    <option key={c} value={c}>{c}</option>
+                                    <option
+                                        key={c}
+                                        value={c}
+                                    >
+                                        {c}
+                                    </option>
                                 ))}
                             </select>
+
                             {errors.category && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                <div
+                                    style={{
+                                        color: '#dc2626',
+                                        fontSize: 11,
+                                        marginTop: 3
+                                    }}
+                                >
                                     {errors.category}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151'
+                                }}
+                            >
                                 Brand
                             </label>
+
                             <input
                                 className="adm-search"
                                 value={form.brand}
-                                onChange={e => set('brand', e.target.value)}
+                                onChange={e =>
+                                    set(
+                                        'brand',
+                                        e.target.value
+                                    )
+                                }
                                 placeholder="Brand name"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
@@ -407,15 +668,36 @@ if (skuError) {
                     </div>
 
                     {/* Barcode + Unit */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 14
+                        }}
+                    >
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#01050c' }}>
-                                Barcode <span style={{ color: 'red' }}>*</span>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#01050c'
+                                }}
+                            >
+                                Barcode
+                                <span style={{ color: 'red' }}>
+                                    {' '}*
+                                </span>
                             </label>
+
                             <input
                                 className="adm-search"
                                 value={form.barcode}
-                                onChange={e => set('barcode', e.target.value)}
+                                onChange={e =>
+                                    set(
+                                        'barcode',
+                                        e.target.value
+                                    )
+                                }
                                 placeholder="EAN/UPC Barcode"
                                 inputMode="numeric"
                                 maxLength={13}
@@ -424,39 +706,72 @@ if (skuError) {
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
+
                             {errors.barcode && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                <div
+                                    style={{
+                                        color: '#dc2626',
+                                        fontSize: 11,
+                                        marginTop: 3
+                                    }}
+                                >
                                     {errors.barcode}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151'
+                                }}
+                            >
                                 Unit
                             </label>
+
                             <select
                                 value={form.unit}
-                                onChange={e => set('unit', e.target.value)}
+                                onChange={e =>
+                                    set(
+                                        'unit',
+                                        e.target.value
+                                    )
+                                }
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             >
                                 {UNITS.map(u => (
-                                    <option key={u} value={u}>{u}</option>
+                                    <option
+                                        key={u}
+                                        value={u}
+                                    >
+                                        {u}
+                                    </option>
                                 ))}
                             </select>
+
                             {errors.unit && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                <div
+                                    style={{
+                                        color: '#dc2626',
+                                        fontSize: 11,
+                                        marginTop: 3
+                                    }}
+                                >
                                     {errors.unit}
                                 </div>
                             )}
@@ -464,15 +779,36 @@ if (skuError) {
                     </div>
 
                     {/* HSN + MRP */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 14
+                        }}
+                    >
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151'
+                                }}
+                            >
                                 HSN Code
+                                <span style={{ color: 'red' }}>
+                                    {' '}*
+                                </span>
                             </label>
+
                             <input
                                 className="adm-search"
                                 value={form.hsnCode}
-                                onChange={e => set('hsnCode', e.target.value)}
+                                onChange={e =>
+                                    set(
+                                        'hsnCode',
+                                        e.target.value
+                                    )
+                                }
                                 placeholder="HSN/SAC Code"
                                 inputMode="numeric"
                                 maxLength={4}
@@ -481,167 +817,369 @@ if (skuError) {
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
+
                             {errors.hsnCode && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                <div
+                                    style={{
+                                        color: '#dc2626',
+                                        fontSize: 11,
+                                        marginTop: 3
+                                    }}
+                                >
                                     {errors.hsnCode}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151'
+                                }}
+                            >
                                 MRP (₹)
                             </label>
+
                             <input
                                 type="number"
                                 min="0"
                                 value={form.mrp}
-                                onChange={e => set('mrp', e.target.value)}
+                                onChange={e =>
+                                    set(
+                                        'mrp',
+                                        e.target.value
+                                    )
+                                }
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
+
                             {errors.mrp && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                <div
+                                    style={{
+                                        color: '#dc2626',
+                                        fontSize: 11,
+                                        marginTop: 3
+                                    }}
+                                >
                                     {errors.mrp}
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Selling Price + GST Rate */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    {/* Selling Price + GST */}
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 14
+                        }}
+                    >
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151'
+                                }}
+                            >
                                 Selling Price (₹)
                             </label>
+
                             <input
                                 className="ec-input"
                                 type="number"
                                 value={form.sellingPrice}
-                                onChange={e => set('sellingPrice', e.target.value)}
+                                onChange={e =>
+                                    set(
+                                        'sellingPrice',
+                                        e.target.value
+                                    )
+                                }
                                 placeholder="0"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
+
                             {errors.sellingPrice && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                <div
+                                    style={{
+                                        color: '#dc2626',
+                                        fontSize: 11,
+                                        marginTop: 3
+                                    }}
+                                >
                                     {errors.sellingPrice}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151'
+                                }}
+                            >
                                 GST Rate
                             </label>
+
                             <select
                                 value={form.gst}
-                                onChange={e => set('gst', e.target.value)}
+                                onChange={e =>
+                                    set(
+                                        'gst',
+                                        e.target.value
+                                    )
+                                }
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             >
                                 {GST_RATES.map(g => (
-                                    <option key={g} value={g}>{g}</option>
+                                    <option
+                                        key={g}
+                                        value={g}
+                                    >
+                                        {g}
+                                    </option>
                                 ))}
                             </select>
+
                             {errors.gst && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                <div
+                                    style={{
+                                        color: '#dc2626',
+                                        fontSize: 11,
+                                        marginTop: 3
+                                    }}
+                                >
                                     {errors.gst}
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Stock + Min Stock Alert */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    {/* Stock + Min Stock */}
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr',
+                            gap: 14
+                        }}
+                    >
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151'
+                                }}
+                            >
                                 Stock
                             </label>
+
                             <input
                                 type="number"
                                 min="0"
                                 value={form.stock}
-                                onChange={e => set('stock', e.target.value)}
+                                onChange={e =>
+                                    set(
+                                        'stock',
+                                        e.target.value
+                                    )
+                                }
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
+
                             {errors.stock && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                <div
+                                    style={{
+                                        color: '#dc2626',
+                                        fontSize: 11,
+                                        marginTop: 3
+                                    }}
+                                >
                                     {errors.stock}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                            <label
+                                style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151'
+                                }}
+                            >
                                 Min Stock Alert
                             </label>
+
                             <input
                                 type="number"
                                 min="0"
                                 value={form.minStock}
-                                onChange={e => set('minStock', e.target.value)}
+                                onChange={e =>
+                                    set(
+                                        'minStock',
+                                        e.target.value
+                                    )
+                                }
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
+                                    border:
+                                        '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
+
                             {errors.minStock && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                <div
+                                    style={{
+                                        color: '#dc2626',
+                                        fontSize: 11,
+                                        marginTop: 3
+                                    }}
+                                >
                                     {errors.minStock}
                                 </div>
                             )}
                         </div>
                     </div>
 
+                    {/* EXPIRY DATE */}
+                    <div>
+                        <label
+                            style={{
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: '#374151'
+                            }}
+                        >
+                            Expiry Date
+
+                            {form.category === 'Groceries' && (
+                                <span style={{ color: 'red' }}>
+                                    {' '}*
+                                </span>
+                            )}
+                        </label>
+
+                        <input
+                            type="date"
+                            value={form.expiryDate}
+                            onChange={e =>
+                                set(
+                                    'expiryDate',
+                                    e.target.value
+                                )
+                            }
+                            style={{
+                                width: '100%',
+                                marginTop: 4,
+                                padding: '10px',
+                                borderRadius: 6,
+                                border:
+                                    '1px solid #e5e7eb',
+                                boxSizing: 'border-box'
+                            }}
+                        />
+
+                        {form.category === 'Groceries' && (
+                            <div
+                                style={{
+                                    fontSize: 11,
+                                    color: '#6b7280',
+                                    marginTop: 3
+                                }}
+                            >
+                                Expiry date is mandatory for
+                                food/grocery products.
+                            </div>
+                        )}
+
+                        {errors.expiryDate && (
+                            <div
+                                style={{
+                                    color: '#dc2626',
+                                    fontSize: 11,
+                                    marginTop: 3
+                                }}
+                            >
+                                {errors.expiryDate}
+                            </div>
+                        )}
+                    </div>
+
                     {/* Description */}
                     <div>
-                        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                        <label
+                            style={{
+                                fontSize: 12,
+                                fontWeight: 600,
+                                color: '#374151'
+                            }}
+                        >
                             Description
                         </label>
+
                         <textarea
                             value={form.description}
-                            onChange={e => set('description', e.target.value)}
+                            onChange={e =>
+                                set(
+                                    'description',
+                                    e.target.value
+                                )
+                            }
                             rows={3}
                             style={{
                                 width: '100%',
                                 marginTop: 4,
                                 padding: '8px 10px',
                                 borderRadius: 6,
-                                border: '1px solid #e5e7eb',
+                                border:
+                                    '1px solid #e5e7eb',
                                 boxSizing: 'border-box',
                                 resize: 'vertical'
                             }}
@@ -649,52 +1187,76 @@ if (skuError) {
                     </div>
 
                     {/* Active + Featured */}
-                    <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-                        <label style={{
+                    <div
+                        style={{
                             display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            fontSize: 13,
-                            color: '#374151',
-                            cursor: 'pointer'
-                        }}>
+                            gap: 20,
+                            alignItems: 'center'
+                        }}
+                    >
+                        <label
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                fontSize: 13,
+                                color: '#374151',
+                                cursor: 'pointer'
+                            }}
+                        >
                             <input
                                 type="checkbox"
                                 checked={form.status}
-                                onChange={e => set('status', e.target.checked)}
+                                onChange={e =>
+                                    set(
+                                        'status',
+                                        e.target.checked
+                                    )
+                                }
                             />
                             Active
                         </label>
 
-                        <label style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            fontSize: 13,
-                            color: '#374151',
-                            cursor: 'pointer'
-                        }}>
+                        <label
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                fontSize: 13,
+                                color: '#374151',
+                                cursor: 'pointer'
+                            }}
+                        >
                             <input
                                 type="checkbox"
                                 checked={form.featured}
-                                onChange={e => set('featured', e.target.checked)}
+                                onChange={e =>
+                                    set(
+                                        'featured',
+                                        e.target.checked
+                                    )
+                                }
                             />
                             Featured
                         </label>
                     </div>
 
                     {/* Footer */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        gap: 10,
-                        marginTop: 10
-                    }}>
+                    <div
+                        style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: 10,
+                            marginTop: 10
+                        }}
+                    >
                         <button
                             type="button"
                             className="adm-btn-secondary"
                             onClick={onClose}
-                            style={{ padding: '8px 16px' }}
+                            style={{
+                                padding: '8px 16px'
+                            }}
                         >
                             Cancel
                         </button>
@@ -703,9 +1265,17 @@ if (skuError) {
                             type="submit"
                             className="adm-btn-primary"
                             disabled={saving}
-                            style={{ padding: '8px 16px' }}
+                            style={{
+                                padding: '8px 16px'
+                            }}
                         >
-                            {saving ? 'Saving…' : (isNew ? 'Create Product' : 'Update Product')}
+                            {saving
+                                ? 'Saving…'
+                                : (
+                                    isNew
+                                        ? 'Create Product'
+                                        : 'Update Product'
+                                )}
                         </button>
                     </div>
                 </form>
@@ -730,27 +1300,41 @@ const Products = () => {
 
             const list = Array.isArray(res)
                 ? res
-                : (res?.data || res?.items || []);
+                : (
+                    res?.data ||
+                    res?.items ||
+                    []
+                );
 
             setProducts(
                 list.map(p => {
-                    const stock = getProductStock(p);
+                    const stock =
+                        getProductStock(p);
 
                     return {
                         ...p,
                         stock,
+
                         category:
                             CATEGORY_NAMES[p.category_id] ||
                             p.category ||
                             '—',
+
                         status:
                             stock > 0 &&
-                            (p.is_active ?? p.status ?? true),
+                            (
+                                p.is_active ??
+                                p.status ??
+                                true
+                            ),
                     };
                 })
             );
         } catch (err) {
-            console.error('Failed to load products', err);
+            console.error(
+                'Failed to load products',
+                err
+            );
         } finally {
             setLoading(false);
         }
@@ -764,62 +1348,137 @@ const Products = () => {
         setPage(1);
     }, [search, selectedCategory]);
 
-    // KPI Metrics calculation
     const kpiStats = useMemo(() => {
         const total = products.length;
-        const active = products.filter(p => Boolean(p.status)).length;
-        const featured = products.filter(p => Boolean(p.featured)).length;
-        const outOfStock = products.filter(p => (Number(p.stock) || 0) === 0).length;
 
-        return { total, active, featured, outOfStock };
+        const active =
+            products.filter(
+                p => Boolean(p.status)
+            ).length;
+
+        const featured =
+            products.filter(
+                p => Boolean(p.featured)
+            ).length;
+
+        const outOfStock =
+            products.filter(
+                p => (Number(p.stock) || 0) === 0
+            ).length;
+
+        return {
+            total,
+            active,
+            featured,
+            outOfStock
+        };
     }, [products]);
 
-    // Filter by Category and Search query
     const filtered = useMemo(() => {
         let list = products;
 
-        if (selectedCategory && selectedCategory !== 'All') {
+        if (
+            selectedCategory &&
+            selectedCategory !== 'All'
+        ) {
             list = list.filter(p => {
-                const cat = (p.category || '').toLowerCase();
-                return cat === selectedCategory.toLowerCase();
+                const cat =
+                    (p.category || '').toLowerCase();
+
+                return (
+                    cat ===
+                    selectedCategory.toLowerCase()
+                );
             });
         }
 
-        const q = search.trim().toLowerCase();
+        const q =
+            search.trim().toLowerCase();
+
         if (q) {
             list = list.filter(p =>
-                (p.name || '').toLowerCase().includes(q) ||
-                (p.sku || '').toLowerCase().includes(q) ||
-                (p.barcode || '').toLowerCase().includes(q) ||
-                (p.brand || '').toLowerCase().includes(q) ||
-                (p.category || '').toLowerCase().includes(q)
+                (p.name || '')
+                    .toLowerCase()
+                    .includes(q) ||
+
+                (p.sku || '')
+                    .toLowerCase()
+                    .includes(q) ||
+
+                (p.barcode || '')
+                    .toLowerCase()
+                    .includes(q) ||
+
+                (p.brand || '')
+                    .toLowerCase()
+                    .includes(q) ||
+
+                (p.category || '')
+                    .toLowerCase()
+                    .includes(q)
             );
         }
 
         return list;
-    }, [products, search, selectedCategory]);
+    }, [
+        products,
+        search,
+        selectedCategory
+    ]);
 
-    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-    const start = (page - 1) * PAGE_SIZE + 1;
-    const end = Math.min(page * PAGE_SIZE, filtered.length);
-    const paginated = filtered.slice(start - 1, end);
+    const totalPages = Math.max(
+        1,
+        Math.ceil(
+            filtered.length / PAGE_SIZE
+        )
+    );
 
-    const handleSave = async (payload, id) => {
+    const start =
+        (page - 1) *
+        PAGE_SIZE +
+        1;
+
+    const end =
+        Math.min(
+            page * PAGE_SIZE,
+            filtered.length
+        );
+
+    const paginated =
+        filtered.slice(
+            start - 1,
+            end
+        );
+
+    const handleSave = async (
+        payload,
+        id
+    ) => {
         if (id) {
-            await productService.update(id, payload);
+            await productService.update(
+                id,
+                payload
+            );
         } else {
-            await productService.create(payload);
+            await productService.create(
+                payload
+            );
         }
 
         await fetchProducts();
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Are you sure you want to delete this product?')) {
+        if (
+            !window.confirm(
+                'Are you sure you want to delete this product?'
+            )
+        ) {
             return;
         }
 
         await productService.delete(id);
+
         await fetchProducts();
     };
 
@@ -829,14 +1488,22 @@ const Products = () => {
         try {
             setProducts(prev =>
                 prev.map(x =>
-                    x.id === p.id ? { ...x, status: next } : x
+                    x.id === p.id
+                        ? {
+                            ...x,
+                            status: next
+                        }
+                        : x
                 )
             );
 
             await productService.update(
                 p.id,
                 {
-                    ...toPayload({ ...p, status: next }),
+                    ...toPayload({
+                        ...p,
+                        status: next
+                    }),
                     is_active: next
                 }
             );
@@ -845,11 +1512,19 @@ const Products = () => {
         } catch (err) {
             setProducts(prev =>
                 prev.map(x =>
-                    x.id === p.id ? { ...x, status: p.status } : x
+                    x.id === p.id
+                        ? {
+                            ...x,
+                            status: p.status
+                        }
+                        : x
                 )
             );
 
-            console.error('Status update failed', err);
+            console.error(
+                'Status update failed',
+                err
+            );
         }
     };
 
@@ -866,44 +1541,78 @@ const Products = () => {
             'Status'
         ];
 
-        const rows = filtered.map(p => [
-            p.name,
-            p.sku,
-            p.barcode,
-            p.category,
-            p.mrp,
-            p.price || p.sellingPrice,
-            p.gst_rate || p.gst,
-            p.stock,
-            p.status ? 'Active' : 'Inactive'
-        ]);
+        const rows =
+            filtered.map(p => [
+                p.name,
+                p.sku,
+                p.barcode,
+                p.category,
+                p.mrp,
+                p.price ||
+                    p.sellingPrice,
+                p.gst_rate ||
+                    p.gst,
+                p.stock,
+                p.status
+                    ? 'Active'
+                    : 'Inactive'
+            ]);
 
-        const csv = [headers, ...rows]
-            .map(row =>
-                row
-                    .map(x => `"${String(x).replace(/"/g, '""')}"`)
-                    .join(',')
-            )
-            .join('\n');
+        const csv =
+            [headers, ...rows]
+                .map(row =>
+                    row
+                        .map(x =>
+                            `"${String(x).replace(
+                                /"/g,
+                                '""'
+                            )}"`
+                        )
+                        .join(',')
+                )
+                .join('\n');
 
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        const blob =
+            new Blob(
+                [csv],
+                {
+                    type: 'text/csv'
+                }
+            );
+
+        const url =
+            URL.createObjectURL(
+                blob
+            );
+
+        const a =
+            document.createElement(
+                'a'
+            );
 
         a.href = url;
-        a.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
+
+        a.download =
+            `products-${new Date()
+                .toISOString()
+                .slice(0, 10)}.csv`;
+
         a.click();
 
-        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(
+            url
+        );
     };
 
     return (
-        <div style={{
-            padding: '24px 32px',
-            background: '#f8f9fb',
-            minHeight: '100vh',
-            fontFamily: 'inherit'
-        }}>
+        <div
+            style={{
+                padding: '24px 32px',
+                background: '#f8f9fb',
+                minHeight: '100vh',
+                fontFamily: 'inherit'
+            }}
+        >
             <style>
                 {`
                 input[type="number"]::-webkit-inner-spin-button,
@@ -975,43 +1684,66 @@ const Products = () => {
                 `}
             </style>
 
-            {/* 1. TOP HEADER */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'space-between',
-                marginBottom: 24,
-                flexWrap: 'wrap',
-                gap: 12
-            }}>
+            {/* HEADER */}
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    marginBottom: 24,
+                    flexWrap: 'wrap',
+                    gap: 12
+                }}
+            >
                 <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 22 }}>🛒</span>
-                        <h2 style={{
-                            fontSize: 22,
-                            fontWeight: 700,
-                            color: '#111827',
-                            margin: 0
-                        }}>
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10
+                        }}
+                    >
+                        <span
+                            style={{
+                                fontSize: 22
+                            }}
+                        >
+                            🛒
+                        </span>
+
+                        <h2
+                            style={{
+                                fontSize: 22,
+                                fontWeight: 700,
+                                color: '#111827',
+                                margin: 0
+                            }}
+                        >
                             Products
                         </h2>
                     </div>
-                    <p style={{
-                        fontSize: 13,
-                        color: '#6b7280',
-                        marginTop: 4,
-                        marginBottom: 0
-                    }}>
-                        Manage your POS product catalog, pricing and tax settings
+
+                    <p
+                        style={{
+                            fontSize: 13,
+                            color: '#6b7280',
+                            marginTop: 4,
+                            marginBottom: 0
+                        }}
+                    >
+                        Manage your POS product catalog,
+                        pricing and tax settings
                     </p>
                 </div>
 
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    flexWrap: 'wrap'
-                }}>
+                <div
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        flexWrap: 'wrap'
+                    }}
+                >
                     <button
                         className="adm-btn-secondary"
                         onClick={exportCSV}
@@ -1021,7 +1753,8 @@ const Products = () => {
                             gap: 6,
                             padding: '8px 16px',
                             background: '#fff',
-                            border: '1px solid #e5e7eb',
+                            border:
+                                '1px solid #e5e7eb',
                             borderRadius: 8,
                             fontSize: 13,
                             fontWeight: 500,
@@ -1035,7 +1768,9 @@ const Products = () => {
 
                     <button
                         className="adm-btn-primary"
-                        onClick={() => setModal('new')}
+                        onClick={() =>
+                            setModal('new')
+                        }
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -1056,137 +1791,266 @@ const Products = () => {
                 </div>
             </div>
 
-            {/* 2. KPI METRIC CARDS (ALL IN 1 SINGLE ROW) */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: 16,
-                marginBottom: 24,
-                width: '100%'
-            }}>
-                {/* Total Products */}
-                <div style={{
-                    background: '#ffffff',
-                    borderRadius: 12,
-                    padding: '16px 20px',
-                    border: '1px solid #edf0f2',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6
-                }}>
-                    <div style={{ fontSize: 20 }}>📦</div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
+            {/* KPI CARDS */}
+            <div
+                style={{
+                    display: 'grid',
+                    gridTemplateColumns:
+                        'repeat(4, 1fr)',
+                    gap: 16,
+                    marginBottom: 24,
+                    width: '100%'
+                }}
+            >
+                <div
+                    style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        padding: '16px 20px',
+                        border:
+                            '1px solid #edf0f2',
+                        boxShadow:
+                            '0 1px 3px rgba(0,0,0,0.02)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6
+                    }}
+                >
+                    <div style={{ fontSize: 20 }}>
+                        📦
+                    </div>
+
+                    <span
+                        style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#9ca3af',
+                            letterSpacing:
+                                '0.04em'
+                        }}
+                    >
                         TOTAL PRODUCTS
                     </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#2563eb' }}>
+
+                    <span
+                        style={{
+                            fontSize: 24,
+                            fontWeight: 700,
+                            color: '#2563eb'
+                        }}
+                    >
                         {kpiStats.total}
                     </span>
                 </div>
 
-                {/* Active */}
-                <div style={{
-                    background: '#ffffff',
-                    borderRadius: 12,
-                    padding: '16px 20px',
-                    border: '1px solid #edf0f2',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6
-                }}>
-                    <div style={{ fontSize: 20, color: '#16a34a' }}>
-                        <BsCheckSquareFill size={20} />
+                <div
+                    style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        padding: '16px 20px',
+                        border:
+                            '1px solid #edf0f2',
+                        boxShadow:
+                            '0 1px 3px rgba(0,0,0,0.02)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: 20,
+                            color: '#16a34a'
+                        }}
+                    >
+                        <BsCheckSquareFill
+                            size={20}
+                        />
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
+
+                    <span
+                        style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#9ca3af',
+                            letterSpacing:
+                                '0.04em'
+                        }}
+                    >
                         ACTIVE
                     </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#16a34a' }}>
+
+                    <span
+                        style={{
+                            fontSize: 24,
+                            fontWeight: 700,
+                            color: '#16a34a'
+                        }}
+                    >
                         {kpiStats.active}
                     </span>
                 </div>
 
-                {/* Featured */}
-                <div style={{
-                    background: '#ffffff',
-                    borderRadius: 12,
-                    padding: '16px 20px',
-                    border: '1px solid #edf0f2',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6
-                }}>
-                    <div style={{ fontSize: 20, color: '#eab308' }}>
+                <div
+                    style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        padding: '16px 20px',
+                        border:
+                            '1px solid #edf0f2',
+                        boxShadow:
+                            '0 1px 3px rgba(0,0,0,0.02)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: 20,
+                            color: '#eab308'
+                        }}
+                    >
                         <BsStarFill size={20} />
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
+
+                    <span
+                        style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#9ca3af',
+                            letterSpacing:
+                                '0.04em'
+                        }}
+                    >
                         FEATURED
                     </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#6366f1' }}>
+
+                    <span
+                        style={{
+                            fontSize: 24,
+                            fontWeight: 700,
+                            color: '#6366f1'
+                        }}
+                    >
                         {kpiStats.featured}
                     </span>
                 </div>
 
-                {/* Out of Stock */}
-                <div style={{
-                    background: '#ffffff',
-                    borderRadius: 12,
-                    padding: '16px 20px',
-                    border: '1px solid #edf0f2',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6
-                }}>
-                    <div style={{ fontSize: 20, color: '#dc2626' }}>
-                        <BsSlashCircleFill size={20} />
+                <div
+                    style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        padding: '16px 20px',
+                        border:
+                            '1px solid #edf0f2',
+                        boxShadow:
+                            '0 1px 3px rgba(0,0,0,0.02)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6
+                    }}
+                >
+                    <div
+                        style={{
+                            fontSize: 20,
+                            color: '#dc2626'
+                        }}
+                    >
+                        <BsSlashCircleFill
+                            size={20}
+                        />
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
+
+                    <span
+                        style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            color: '#9ca3af',
+                            letterSpacing:
+                                '0.04em'
+                        }}
+                    >
                         OUT OF STOCK
                     </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#dc2626' }}>
+
+                    <span
+                        style={{
+                            fontSize: 24,
+                            fontWeight: 700,
+                            color: '#dc2626'
+                        }}
+                    >
                         {kpiStats.outOfStock}
                     </span>
                 </div>
             </div>
 
-            {/* 3. CATEGORY PILL LIST */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                overflowX: 'auto',
-                paddingBottom: 6,
-                marginBottom: 16,
-                scrollbarWidth: 'none'
-            }}>
-                {['All', ...CATEGORIES_LIST].map(cat => (
+            {/* CATEGORY FILTER */}
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    overflowX: 'auto',
+                    paddingBottom: 6,
+                    marginBottom: 16,
+                    scrollbarWidth: 'none'
+                }}
+            >
+                {[
+                    'All',
+                    ...CATEGORIES_LIST
+                ].map(cat => (
                     <button
                         key={cat}
-                        className={`cat-pill ${selectedCategory === cat ? 'active' : ''}`}
-                        onClick={() => setSelectedCategory(cat)}
+                        className={
+                            `cat-pill ${
+                                selectedCategory === cat
+                                    ? 'active'
+                                    : ''
+                            }`
+                        }
+                        onClick={() =>
+                            setSelectedCategory(cat)
+                        }
                     >
                         {cat}
                     </button>
                 ))}
             </div>
 
-            {/* 4. FULL-WIDTH SEARCH BAR */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: 10,
-                padding: '10px 16px',
-                marginBottom: 20,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-            }}>
-                <BsSearch style={{ color: '#9ca3af', marginRight: 12, flexShrink: 0 }} size={16} />
+            {/* SEARCH */}
+            <div
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    background: '#ffffff',
+                    border:
+                        '1px solid #e5e7eb',
+                    borderRadius: 10,
+                    padding: '10px 16px',
+                    marginBottom: 20,
+                    boxShadow:
+                        '0 1px 2px rgba(0,0,0,0.03)'
+                }}
+            >
+                <BsSearch
+                    style={{
+                        color: '#9ca3af',
+                        marginRight: 12,
+                        flexShrink: 0
+                    }}
+                    size={16}
+                />
+
                 <input
                     value={search}
-                    onChange={e => setSearch(e.target.value)}
+                    onChange={e =>
+                        setSearch(
+                            e.target.value
+                        )
+                    }
                     placeholder="Search products, barcode or brand..."
                     style={{
                         border: 'none',
@@ -1194,12 +2058,16 @@ const Products = () => {
                         width: '100%',
                         fontSize: 13,
                         color: '#111827',
-                        background: 'transparent'
+                        background:
+                            'transparent'
                     }}
                 />
+
                 {search && (
                     <button
-                        onClick={() => setSearch('')}
+                        onClick={() =>
+                            setSearch('')
+                        }
                         style={{
                             background: 'none',
                             border: 'none',
@@ -1214,35 +2082,70 @@ const Products = () => {
                 )}
             </div>
 
-            {/* 5. PRODUCT TABLE CONTAINER */}
-            <div style={{
-                background: '#fff',
-                borderRadius: 12,
-                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                overflow: 'hidden',
-                border: '1px solid #edf0f2'
-            }}>
+            {/* TABLE */}
+            <div
+                style={{
+                    background: '#fff',
+                    borderRadius: 12,
+                    boxShadow:
+                        '0 1px 3px rgba(0,0,0,0.05)',
+                    overflow: 'hidden',
+                    border:
+                        '1px solid #edf0f2'
+                }}
+            >
                 <div className="table-scroll">
-                    <table style={{
-                        width: '100%',
-                        minWidth: 1100,
-                        borderCollapse: 'collapse',
-                        fontSize: 13
-                    }}>
+                    <table
+                        style={{
+                            width: '100%',
+                            minWidth: 1100,
+                            borderCollapse:
+                                'collapse',
+                            fontSize: 13
+                        }}
+                    >
                         <thead>
-                            <tr style={{
-                                background: '#f9fafb',
-                                borderBottom: '1px solid #e5e7eb'
-                            }}>
-                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>PRODUCT</th>
-                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>CATEGORY</th>
-                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>BARCODE</th>
-                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>MRP</th>
-                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>PRICE</th>
-                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>GST</th>
-                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>STOCK</th>
-                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>STATUS</th>
-                                <th style={{ padding: '14px 16px', textAlign: 'center', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>ACTIONS</th>
+                            <tr
+                                style={{
+                                    background:
+                                        '#f9fafb',
+                                    borderBottom:
+                                        '1px solid #e5e7eb'
+                                }}
+                            >
+                                {[
+                                    'PRODUCT',
+                                    'CATEGORY',
+                                    'BARCODE',
+                                    'MRP',
+                                    'PRICE',
+                                    'GST',
+                                    'STOCK',
+                                    'STATUS',
+                                    'ACTIONS'
+                                ].map((header, index) => (
+                                    <th
+                                        key={header}
+                                        style={{
+                                            padding:
+                                                '14px 16px',
+                                            textAlign:
+                                                index === 8
+                                                    ? 'center'
+                                                    : 'left',
+                                            color:
+                                                '#6b7280',
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            textTransform:
+                                                'uppercase',
+                                            letterSpacing:
+                                                '0.04em'
+                                        }}
+                                    >
+                                        {header}
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
 
@@ -1253,8 +2156,10 @@ const Products = () => {
                                         colSpan={9}
                                         style={{
                                             padding: 48,
-                                            textAlign: 'center',
-                                            color: '#9ca3af'
+                                            textAlign:
+                                                'center',
+                                            color:
+                                                '#9ca3af'
                                         }}
                                     >
                                         Loading products…
@@ -1262,239 +2167,492 @@ const Products = () => {
                                 </tr>
                             )}
 
-                            {!loading && paginated.map(p => (
-                                <tr
-                                    key={p.id}
-                                    style={{
-                                        borderBottom: '1px solid #f3f4f6'
-                                    }}
-                                >
-                                    <td style={{ padding: '12px 16px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                            <div style={{
-                                                width: 40,
-                                                height: 40,
-                                                borderRadius: 8,
-                                                background: '#f3f4f6',
-                                                display: 'grid',
-                                                placeItems: 'center',
-                                                flexShrink: 0
-                                            }}>
-                                                <BsImage color="#9ca3af" size={18} />
-                                            </div>
-                                            <div>
-                                                <div style={{ fontWeight: 600, color: '#111827' }}>
-                                                    {p.name}
-                                                </div>
-                                                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                                                    {p.sku}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </td>
-
-                                    <td style={{ padding: '12px 16px' }}>
-                                        <span style={{
-                                            padding: '4px 10px',
-                                            borderRadius: 20,
-                                            background: '#eef2ff',
-                                            color: '#6366f1',
-                                            fontSize: 11,
-                                            fontWeight: 600
-                                        }}>
-                                            {p.category}
-                                        </span>
-                                    </td>
-
-                                    <td style={{
-                                        padding: '12px 16px',
-                                        color: '#111827',
-                                        fontWeight: 500,
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        {p.barcode || '—'}
-                                    </td>
-
-                                    <td style={{
-                                        padding: '12px 16px',
-                                        color: '#111827',
-                                        fontWeight: 600,
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        {fmt(p.mrp)}
-                                    </td>
-
-                                    <td style={{
-                                        padding: '12px 16px',
-                                        color: '#111827',
-                                        fontWeight: 600,
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        {fmt(p.price || p.sellingPrice)}
-                                    </td>
-
-                                    <td style={{
-                                        padding: '12px 16px',
-                                        color: '#4b5563',
-                                        fontWeight: 500,
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        {p.gst_rate ? `${p.gst_rate}%` : p.gst || '—'}
-                                    </td>
-
-                                    <td style={{
-                                        padding: '12px 16px',
-                                        color: Number(p.stock) === 0 ? '#dc2626' : '#111827',
-                                        fontWeight: 600,
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        {Number(p.stock) || 0} {p.unit || 'Pcs'}
-                                    </td>
-
-                                    <td style={{ padding: '12px 16px' }}>
-                                        <button
-                                            onClick={() => {
-                                                if (Number(p.stock) === 0) return;
-                                                toggleStatus(p);
-                                            }}
-                                            style={{
-                                                background: 'none',
-                                                border: 'none',
-                                                cursor: Number(p.stock) === 0 ? 'default' : 'pointer',
-                                                verticalAlign: 'middle'
-                                            }}
-                                            title={
-                                                Number(p.stock) === 0
-                                                    ? 'Inactive because stock is 0'
-                                                    : p.status
-                                                        ? 'Active'
-                                                        : 'Inactive'
-                                            }
-                                        >
-                                            {Number(p.stock) === 0 || !p.status ? (
-                                                <BsToggleOff size={26} color="#9ca3af" />
-                                            ) : (
-                                                <BsToggleOn size={26} color="#22c55e" />
-                                            )}
-                                        </button>
-
-                                        <span style={{
-                                            marginLeft: 6,
-                                            fontSize: 12,
-                                            fontWeight: 600,
-                                            color: Number(p.stock) === 0 || !p.status ? '#9ca3af' : '#16a34a'
-                                        }}>
-                                            {Number(p.stock) === 0 || !p.status ? 'Inactive' : 'Active'}
-                                        </span>
-                                    </td>
-
-                                    <td style={{
-                                        padding: '12px 16px',
-                                        textAlign: 'center'
-                                    }}>
-                                        <div style={{
-                                            display: 'flex',
-                                            gap: 8,
-                                            justifyContent: 'center'
-                                        }}>
-                                            <button
-                                                className="adm-btn-secondary"
-                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}
-                                                onClick={() => setModal(p)}
-                                                title="Edit"
-                                            >
-                                                <BsPencilFill size={13} color="#6366f1" />
-                                            </button>
-
-                                            <button
-                                                className="adm-btn-secondary"
-                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}
-                                                onClick={() => handleDelete(p.id)}
-                                                title="Delete"
-                                            >
-                                                <BsTrashFill size={13} color="#ef4444" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-
-                            {!loading && paginated.length === 0 && (
-                                <tr>
-                                    <td
-                                        colSpan={9}
+                            {!loading &&
+                                paginated.map(p => (
+                                    <tr
+                                        key={p.id}
                                         style={{
-                                            padding: 48,
-                                            textAlign: 'center',
-                                            color: '#9ca3af',
-                                            fontSize: 14
+                                            borderBottom:
+                                                '1px solid #f3f4f6'
                                         }}
                                     >
-                                        No products found
-                                    </td>
-                                </tr>
-                            )}
+                                        <td
+                                            style={{
+                                                padding:
+                                                    '12px 16px'
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    display:
+                                                        'flex',
+                                                    alignItems:
+                                                        'center',
+                                                    gap: 12
+                                                }}
+                                            >
+                                                <div
+                                                    style={{
+                                                        width: 40,
+                                                        height: 40,
+                                                        borderRadius: 8,
+                                                        background:
+                                                            '#f3f4f6',
+                                                        display:
+                                                            'grid',
+                                                        placeItems:
+                                                            'center',
+                                                        flexShrink:
+                                                            0
+                                                    }}
+                                                >
+                                                    <BsImage
+                                                        color="#9ca3af"
+                                                        size={18}
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <div
+                                                        style={{
+                                                            fontWeight:
+                                                                600,
+                                                            color:
+                                                                '#111827'
+                                                        }}
+                                                    >
+                                                        {p.name}
+                                                    </div>
+
+                                                    <div
+                                                        style={{
+                                                            fontSize:
+                                                                11,
+                                                            color:
+                                                                '#9ca3af',
+                                                            marginTop:
+                                                                2
+                                                        }}
+                                                    >
+                                                        {p.sku}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding:
+                                                    '12px 16px'
+                                            }}
+                                        >
+                                            <span
+                                                style={{
+                                                    padding:
+                                                        '4px 10px',
+                                                    borderRadius:
+                                                        20,
+                                                    background:
+                                                        '#eef2ff',
+                                                    color:
+                                                        '#6366f1',
+                                                    fontSize:
+                                                        11,
+                                                    fontWeight:
+                                                        600
+                                                }}
+                                            >
+                                                {p.category}
+                                            </span>
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding:
+                                                    '12px 16px',
+                                                color:
+                                                    '#111827',
+                                                fontWeight:
+                                                    500,
+                                                whiteSpace:
+                                                    'nowrap'
+                                            }}
+                                        >
+                                            {p.barcode ||
+                                                '—'}
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding:
+                                                    '12px 16px',
+                                                color:
+                                                    '#111827',
+                                                fontWeight:
+                                                    600,
+                                                whiteSpace:
+                                                    'nowrap'
+                                            }}
+                                        >
+                                            {fmt(p.mrp)}
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding:
+                                                    '12px 16px',
+                                                color:
+                                                    '#111827',
+                                                fontWeight:
+                                                    600,
+                                                whiteSpace:
+                                                    'nowrap'
+                                            }}
+                                        >
+                                            {fmt(
+                                                p.price ||
+                                                p.sellingPrice
+                                            )}
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding:
+                                                    '12px 16px',
+                                                color:
+                                                    '#4b5563',
+                                                fontWeight:
+                                                    500,
+                                                whiteSpace:
+                                                    'nowrap'
+                                            }}
+                                        >
+                                            {p.gst_rate
+                                                ? `${p.gst_rate}%`
+                                                : p.gst ||
+                                                  '—'}
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding:
+                                                    '12px 16px',
+                                                color:
+                                                    Number(
+                                                        p.stock
+                                                    ) === 0
+                                                        ? '#dc2626'
+                                                        : '#111827',
+                                                fontWeight:
+                                                    600,
+                                                whiteSpace:
+                                                    'nowrap'
+                                            }}
+                                        >
+                                            {Number(
+                                                p.stock
+                                            ) || 0}{' '}
+                                            {p.unit ||
+                                                'Pcs'}
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding:
+                                                    '12px 16px'
+                                            }}
+                                        >
+                                            <button
+                                                onClick={() => {
+                                                    if (
+                                                        Number(
+                                                            p.stock
+                                                        ) === 0
+                                                    ) {
+                                                        return;
+                                                    }
+
+                                                    toggleStatus(
+                                                        p
+                                                    );
+                                                }}
+                                                style={{
+                                                    background:
+                                                        'none',
+                                                    border:
+                                                        'none',
+                                                    cursor:
+                                                        Number(
+                                                            p.stock
+                                                        ) === 0
+                                                            ? 'default'
+                                                            : 'pointer',
+                                                    verticalAlign:
+                                                        'middle'
+                                                }}
+                                                title={
+                                                    Number(
+                                                        p.stock
+                                                    ) === 0
+                                                        ? 'Inactive because stock is 0'
+                                                        : p.status
+                                                            ? 'Active'
+                                                            : 'Inactive'
+                                                }
+                                            >
+                                                {
+                                                    Number(
+                                                        p.stock
+                                                    ) === 0 ||
+                                                    !p.status ? (
+                                                        <BsToggleOff
+                                                            size={26}
+                                                            color="#9ca3af"
+                                                        />
+                                                    ) : (
+                                                        <BsToggleOn
+                                                            size={26}
+                                                            color="#22c55e"
+                                                        />
+                                                    )
+                                                }
+                                            </button>
+
+                                            <span
+                                                style={{
+                                                    marginLeft:
+                                                        6,
+                                                    fontSize:
+                                                        12,
+                                                    fontWeight:
+                                                        600,
+                                                    color:
+                                                        Number(
+                                                            p.stock
+                                                        ) === 0 ||
+                                                        !p.status
+                                                            ? '#9ca3af'
+                                                            : '#16a34a'
+                                                }}
+                                            >
+                                                {
+                                                    Number(
+                                                        p.stock
+                                                    ) === 0 ||
+                                                    !p.status
+                                                        ? 'Inactive'
+                                                        : 'Active'
+                                                }
+                                            </span>
+                                        </td>
+
+                                        <td
+                                            style={{
+                                                padding:
+                                                    '12px 16px',
+                                                textAlign:
+                                                    'center'
+                                            }}
+                                        >
+                                            <div
+                                                style={{
+                                                    display:
+                                                        'flex',
+                                                    gap: 8,
+                                                    justifyContent:
+                                                        'center'
+                                                }}
+                                            >
+                                                <button
+                                                    className="adm-btn-secondary"
+                                                    style={{
+                                                        padding:
+                                                            '6px 8px',
+                                                        borderRadius:
+                                                            6,
+                                                        border:
+                                                            '1px solid #e5e7eb',
+                                                        background:
+                                                            '#fff',
+                                                        cursor:
+                                                            'pointer'
+                                                    }}
+                                                    onClick={() =>
+                                                        setModal(
+                                                            p
+                                                        )
+                                                    }
+                                                    title="Edit"
+                                                >
+                                                    <BsPencilFill
+                                                        size={13}
+                                                        color="#6366f1"
+                                                    />
+                                                </button>
+
+                                                <button
+                                                    className="adm-btn-secondary"
+                                                    style={{
+                                                        padding:
+                                                            '6px 8px',
+                                                        borderRadius:
+                                                            6,
+                                                        border:
+                                                            '1px solid #e5e7eb',
+                                                        background:
+                                                            '#fff',
+                                                        cursor:
+                                                            'pointer'
+                                                    }}
+                                                    onClick={() =>
+                                                        handleDelete(
+                                                            p.id
+                                                        )
+                                                    }
+                                                    title="Delete"
+                                                >
+                                                    <BsTrashFill
+                                                        size={13}
+                                                        color="#ef4444"
+                                                    />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+
+                            {!loading &&
+                                paginated.length === 0 && (
+                                    <tr>
+                                        <td
+                                            colSpan={9}
+                                            style={{
+                                                padding: 48,
+                                                textAlign:
+                                                    'center',
+                                                color:
+                                                    '#9ca3af',
+                                                fontSize:
+                                                    14
+                                            }}
+                                        >
+                                            No products found
+                                        </td>
+                                    </tr>
+                                )}
                         </tbody>
                     </table>
                 </div>
 
-                {/* 6. PAGINATION */}
+                {/* PAGINATION */}
                 {filtered.length > 0 && (
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '12px 16px',
-                        borderTop: '1px solid #f3f4f6',
-                        flexWrap: 'wrap',
-                        gap: 10
-                    }}>
-                        <span style={{
-                            fontSize: 12,
-                            color: '#6b7280'
-                        }}>
-                            Showing {start}–{end} of {filtered.length}
-                            &nbsp;|&nbsp; Page {page} of {totalPages}
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems:
+                                'center',
+                            justifyContent:
+                                'space-between',
+                            padding:
+                                '12px 16px',
+                            borderTop:
+                                '1px solid #f3f4f6',
+                            flexWrap: 'wrap',
+                            gap: 10
+                        }}
+                    >
+                        <span
+                            style={{
+                                fontSize: 12,
+                                color:
+                                    '#6b7280'
+                            }}
+                        >
+                            Showing {start}–{end}{' '}
+                            of {filtered.length}
+                            &nbsp;|&nbsp; Page{' '}
+                            {page} of {totalPages}
                         </span>
 
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            flexWrap: 'wrap'
-                        }}>
+                        <div
+                            style={{
+                                display:
+                                    'flex',
+                                alignItems:
+                                    'center',
+                                gap: 6,
+                                flexWrap:
+                                    'wrap'
+                            }}
+                        >
                             <button
                                 className="adm-btn-secondary"
-                                style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: page === 1 ? 'not-allowed' : 'pointer' }}
-                                disabled={page === 1}
-                                onClick={() => setPage(p => p - 1)}
+                                style={{
+                                    padding:
+                                        '5px 10px',
+                                    borderRadius:
+                                        6,
+                                    border:
+                                        '1px solid #e5e7eb',
+                                    background:
+                                        '#fff',
+                                    cursor:
+                                        page === 1
+                                            ? 'not-allowed'
+                                            : 'pointer'
+                                }}
+                                disabled={
+                                    page === 1
+                                }
+                                onClick={() =>
+                                    setPage(
+                                        p => p - 1
+                                    )
+                                }
                             >
-                                <BsChevronLeft size={12} />
+                                <BsChevronLeft
+                                    size={12}
+                                />
                             </button>
 
                             {Array.from(
-                                { length: totalPages },
-                                (_, i) => i + 1
+                                {
+                                    length:
+                                        totalPages
+                                },
+                                (_, i) =>
+                                    i + 1
                             ).map(n => (
                                 <button
                                     key={n}
-                                    onClick={() => setPage(n)}
+                                    onClick={() =>
+                                        setPage(n)
+                                    }
                                     style={{
                                         width: 30,
                                         height: 30,
-                                        borderRadius: 6,
-                                        border: `1.5px solid ${
-                                            n === page ? '#6366f1' : '#e5e7eb'
-                                        }`,
-                                        background: n === page
-                                            ? '#eef2ff'
-                                            : '#fff',
-                                        color: n === page
-                                            ? '#6366f1'
-                                            : '#6b7280',
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
+                                        borderRadius:
+                                            6,
+                                        border:
+                                            `1.5px solid ${
+                                                n === page
+                                                    ? '#6366f1'
+                                                    : '#e5e7eb'
+                                            }`,
+                                        background:
+                                            n === page
+                                                ? '#eef2ff'
+                                                : '#fff',
+                                        color:
+                                            n === page
+                                                ? '#6366f1'
+                                                : '#6b7280',
+                                        fontSize:
+                                            12,
+                                        fontWeight:
+                                            600,
+                                        cursor:
+                                            'pointer'
                                     }}
                                 >
                                     {n}
@@ -1503,28 +2661,58 @@ const Products = () => {
 
                             <button
                                 className="adm-btn-secondary"
-                                style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: page === totalPages ? 'not-allowed' : 'pointer' }}
-                                disabled={page === totalPages}
-                                onClick={() => setPage(p => p + 1)}
+                                style={{
+                                    padding:
+                                        '5px 10px',
+                                    borderRadius:
+                                        6,
+                                    border:
+                                        '1px solid #e5e7eb',
+                                    background:
+                                        '#fff',
+                                    cursor:
+                                        page ===
+                                        totalPages
+                                            ? 'not-allowed'
+                                            : 'pointer'
+                                }}
+                                disabled={
+                                    page ===
+                                    totalPages
+                                }
+                                onClick={() =>
+                                    setPage(
+                                        p => p + 1
+                                    )
+                                }
                             >
-                                <BsChevronRight size={12} />
+                                <BsChevronRight
+                                    size={12}
+                                />
                             </button>
                         </div>
                     </div>
                 )}
             </div>
-{modal && (
-    <ProductFormModal
-        product={modal === 'new' ? null : modal}
-        existingProducts={products}
-        onClose={() => setModal(null)}
-        onSave={handleSave}
-    />
-)}
+
+            {modal && (
+                <ProductFormModal
+                    product={
+                        modal === 'new'
+                            ? null
+                            : modal
+                    }
+                    existingProducts={
+                        products
+                    }
+                    onClose={() =>
+                        setModal(null)
+                    }
+                    onSave={handleSave}
+                />
+            )}
         </div>
     );
 };
-
-
 
 export default Products;

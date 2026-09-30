@@ -7,6 +7,7 @@ import LowStockAlert from "../../components/LowStockAlert";
 import "./Inventory.css";
 
 import category from "../../services/categoryService";
+import { getPurchaseOrders } from "../../api/purchaseOrdersApi";
 
 import {
     BsChevronLeft,
@@ -158,6 +159,21 @@ const normalizeProduct = (product) => {
             nestedProduct?.category_id ??
             nestedProduct?.categoryId ??
             null,
+
+            track_expiry:
+    product?.track_expiry === true ||
+    nestedProduct?.track_expiry === true,
+
+expiry_date:
+    product?.expiry_date ??
+    product?.expiryDate ??
+    product?.variants?.expiry_date ??
+    product?.variants?.expiryDate ??
+    nestedProduct?.expiry_date ??
+    nestedProduct?.expiryDate ??
+    nestedProduct?.variants?.expiry_date ??
+    nestedProduct?.variants?.expiryDate ??
+    null,
 
         price:
             product?.price ??
@@ -321,6 +337,7 @@ const StockUpdateModal = ({
     );
 
     const [reason, setReason] = useState("Purchase");
+    const [purchaseOrders, setPurchaseOrders] = useState([]);
 
     /*
      * Adjustment API requires:
@@ -332,6 +349,9 @@ const StockUpdateModal = ({
         useState("increase");
 
     const [notes, setNotes] = useState("");
+
+    const [expiryDate, setExpiryDate] =
+    useState("");
 
     const [modalLoading, setModalLoading] =
         useState(false);
@@ -368,61 +388,80 @@ const StockUpdateModal = ({
         }
     }, [item]);
 
+    const selectedProductData = products.find(
+        (product) =>
+            Number(product?.id) === Number(selectedProduct)
+    );
+
+    const productCategory = String(
+        selectedProductData?.category ||
+            selectedProductData?.category_name ||
+            ""
+    )
+        .trim()
+        .toLowerCase();
+
+    const FOOD_CATEGORIES = [
+        "food",
+        "grocery",
+        "dairy",
+        "snack",
+        "beverage",
+        "bakery",
+        "fruit",
+        "vegetable",
+        "frozen",
+        "meat",
+    ];
+
+    const isFoodProduct = FOOD_CATEGORIES.some((category) =>
+        productCategory.includes(category)
+    );
+
     const handleSave = async () => {
         const delta = parseInt(qty, 10) || 0;
 
         if (delta <= 0) {
-            setModalError(
-                "Please enter a valid quantity"
-            );
+            setModalError("Please enter a valid quantity");
             return;
         }
 
         if (selectedProduct === 0) {
-            setModalError(
-                "Please select a product"
-            );
+            setModalError("Please select a product");
             return;
         }
 
         if (action === "transfer") {
             if (fromStore === 0) {
-                setModalError(
-                    "Please select From Store"
-                );
+                setModalError("Please select From Store");
                 return;
             }
 
             if (toStore === 0) {
-                setModalError(
-                    "Please select To Store"
-                );
+                setModalError("Please select To Store");
                 return;
             }
 
             if (fromStore === toStore) {
-                setModalError(
-                    "From Store and To Store cannot be same"
-                );
+                setModalError("From Store and To Store cannot be same");
                 return;
             }
-        } else {
-            if (fromStore === 0) {
-                setModalError(
-                    "Please select Store"
-                );
-                return;
-            }
+        } else if (fromStore === 0) {
+            setModalError("Please select Store");
+            return;
         }
 
         if (
             action === "adjustment" &&
-            !["increase", "decrease"].includes(
-                adjustmentType
-            )
+            !["increase", "decrease"].includes(adjustmentType)
         ) {
+            setModalError("Please select adjustment type");
+            return;
+        }
+
+        if (action === "add" && isFoodProduct && !expiryDate) {
             setModalError(
-                "Please select adjustment type"
+                "Expiry date is required for food products."
             );
             return;
         }
@@ -440,15 +479,13 @@ const StockUpdateModal = ({
                 delta,
                 reason,
                 adjustmentType,
-                notes
+                notes,
+                expiryDate
             );
 
             onClose();
         } catch (err) {
-            console.error(
-                "HANDLE SAVE ERROR =>",
-                err
-            );
+            console.error("HANDLE SAVE ERROR =>", err);
 
             setModalError(
                 err?.response?.data?.detail?.[0]?.msg ||
@@ -845,6 +882,47 @@ const StockUpdateModal = ({
                             </select>
                         </div>
                     </div>
+                    {/* =================================================
+   EXPIRY DATE
+================================================= */}
+{action === "add" && (
+    <div className="ec-field">
+        <label>
+            Expiry Date
+            {isFoodProduct && (
+                <span style={{ color: "#dc2626" }}>
+                    {" "}*
+                </span>
+            )}
+        </label>
+
+        <input
+            className="ec-input"
+            type="date"
+            value={expiryDate}
+            min={new Date().toISOString().split("T")[0]}
+            required={isFoodProduct}
+            onChange={(e) => {
+                setExpiryDate(e.target.value);
+                setModalError("");
+            }}
+        />
+
+        {isFoodProduct && (
+            <small
+                style={{
+                    color: "#6b7280",
+                    marginTop: "4px",
+                    display: "block",
+                }}
+            >
+                Expiry date is mandatory for food products.
+            </small>
+        )}
+    </div>
+)}
+
+
 
                     {/* =================================================
                        NOTES
@@ -1198,10 +1276,41 @@ const Inventory = () => {
                                     Number(s?.id) ===
                                     Number(item?.store_id)
                             );
+                            if (!product) {
+    return {
+        ...item,
+        name: `Product #${productId}`,
+        product_name: `Product #${productId}`,
+        sku: `PRODUCT-${productId}`,
+        product_id: productId,
 
-                        if (!product) {
-                            return null;
-                        }
+        price: Number(
+            item?.selling_price ??
+            item?.price ??
+            0
+        ),
+
+        costPrice: Number(
+            item?.cost_price ??
+            item?.unit_cost ??
+            0
+        ),
+
+        barcode: item?.barcode || "",
+        category: item?.category || "",
+        category_id: item?.category_id ?? null,
+        brand: item?.brand || "",
+        image_url: item?.image_url || "",
+        supplier_name: item?.supplier_name || "",
+
+        store_id: Number(item?.store_id),
+
+        store_name:
+            store?.name ||
+            `Store #${item?.store_id}`,
+    };
+}
+                       
 
                         const productName =
                             String(
@@ -1324,6 +1433,19 @@ const Inventory = () => {
                         };
                     })
                     .filter(Boolean);
+                    console.log(
+    "MERGED INVENTORY =>",
+    mergedInventory
+);
+
+console.log(
+    "STORE 12 INVENTORY =>",
+    mergedInventory.filter(
+        (item) => Number(item?.store_id) === 12
+    )
+);
+
+setInventory(mergedInventory);
 
             setInventory(
                 mergedInventory
@@ -1507,9 +1629,66 @@ const fetchValuation = async () => {
                                 )
                             );
 
-                        if (!product) {
-                            return null;
-                        }
+                      if (!product) {
+    return {
+        ...item,
+
+        name: `Product #${productId}`,
+        product_name: `Product #${productId}`,
+        sku: "N/A",
+
+        product_id: productId,
+
+        price: Number(
+            item?.price ??
+            item?.selling_price ??
+            item?.sellingPrice ??
+            0
+        ),
+
+        costPrice: Number(
+            item?.cost_price ??
+            item?.costPrice ??
+            item?.unit_cost ??
+            0
+        ),
+
+        barcode:
+            item?.barcode ||
+            item?.bar_code ||
+            item?.barCode ||
+            "",
+
+        category:
+            item?.category ||
+            item?.category_name ||
+            "",
+
+        category_id:
+            item?.category_id ??
+            item?.categoryId ??
+            null,
+
+        brand:
+            item?.brand || "",
+
+        image_url:
+            item?.image_url || "",
+
+        supplier_name:
+            item?.supplier_name ||
+            item?.supplierName ||
+            "",
+
+        store_id: Number(item?.store_id),
+
+        store_name:
+            store?.name ||
+            store?.store_name ||
+            store?.storeName ||
+            `Store #${item?.store_id}`,
+    };
+}
 
                         const productName =
                             String(
@@ -1674,17 +1853,18 @@ const fetchValuation = async () => {
     /* =====================================================
        FETCH INVENTORY AFTER PRODUCTS + STORES
     ===================================================== */
-
     useEffect(() => {
-        if (
-            products.length > 0 &&
-            stores.length > 0
-        ) {
-            fetchInventory();
-        } else {
-            setInventory([]);
-        }
-    }, [products, stores]);
+    if (
+        products.length > 0 &&
+        stores.length > 0
+    ) {
+        fetchInventory();
+    } else {
+        setInventory([]);
+    }
+}, [products, stores]);
+ 
+
 
     /* =====================================================
        LOW STOCK AFTER PRODUCTS + STORES
@@ -1751,16 +1931,10 @@ const fetchValuation = async () => {
                         searchValue
                     );
 
-            const warehouse =
-                `Store #${
-                    item?.store_id || ""
-                }`;
-
-            const matchWarehouse =
-                filterWarehouse ===
-                    "All Warehouses" ||
-                warehouse ===
-                    filterWarehouse;
+           const matchWarehouse =
+    filterWarehouse === "All Warehouses" ||
+    String(item?.store_id ?? "") ===
+        String(filterWarehouse);
 
             const matchCat =
                 filterCat ===
@@ -1874,43 +2048,24 @@ const fetchValuation = async () => {
             delta,
             reason,
             adjustmentType,
-            notes
+            notes,
+            expiryDate
         ) => {
             let payload;
 
             /* =================================================
                TRANSFER
             ================================================= */
-
-            if (
-                action ===
-                "transfer"
-            ) {
-                payload = {
-                    from_store_id:
-                        Number(
-                            fromStore
-                        ),
-
-                    to_store_id:
-                        Number(
-                            toStore
-                        ),
-
-                    product_id:
-                        Number(
-                            selectedProduct
-                        ),
-
-                    quantity:
-                        Number(delta),
-
-                    notes:
-                        notes ||
-                        reason,
-                };
-            }
-
+if (action === "transfer") {
+    payload = {
+        from_store_id: Number(fromStore),
+        to_store_id: Number(toStore),
+        product_id: Number(selectedProduct),
+        quantity: Number(delta),
+        notes: notes || reason,
+    };
+}
+            
             /* =================================================
                ADJUSTMENT
 
@@ -1963,26 +2118,25 @@ const fetchValuation = async () => {
                STOCK IN / STOCK OUT
             ================================================= */
 
-            else {
-                payload = {
-                    store_id:
-                        Number(
-                            fromStore
-                        ),
+           else {
+    payload = {
+        store_id: Number(fromStore),
 
-                    product_id:
-                        Number(
-                            selectedProduct
-                        ),
+        product_id: Number(selectedProduct),
 
-                    quantity:
-                        Number(delta),
+        quantity: Number(delta),
 
-                    notes:
-                        notes ||
-                        reason,
-                };
-            }
+        notes: notes || reason,
+
+        ...(action === "add" && expiryDate
+            ? {
+                  expiry_date: expiryDate,
+              }
+            : {}),
+    };
+} 
+
+    
 
             console.log(
                 "FINAL STOCK PAYLOAD =>",

@@ -1,5 +1,7 @@
 /* =========================================================
+
    INVENTORY HEADER - PROFESSIONAL COMPACT UI
+
 ========================================================= */
 
 .inventory-header {
@@ -11,7 +13,9 @@
   background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03), 0 4px 12px rgba(15, 23, 42, 0.035);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.03),
+    0 4px 12px rgba(15, 23, 42, 0.035);
   box-sizing: border-box;
 }
 
@@ -85,6 +89,10 @@
   flex-shrink: 0;
 }
 
+/* =========================================================
+   HEADER ACTION BUTTONS
+========================================================= */
+
 .header-btn {
   width: 34px;
   height: 34px;
@@ -98,7 +106,16 @@
   border-radius: 7px;
   cursor: pointer;
   box-sizing: border-box;
-  transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.15s ease;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.15s ease;
+
+  /* Explicitly prevent the button from being hidden */
+  visibility: visible;
+  opacity: 1;
 }
 
 .header-btn svg {
@@ -106,6 +123,36 @@
   height: 15px;
   pointer-events: none;
 }
+
+/* =========================================================
+   ADD PRODUCT
+========================================================= */
+
+.add-product-btn {
+  color: #4f46e5;
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  visibility: visible;
+  opacity: 1;
+}
+
+.add-product-btn:hover {
+  color: #4338ca;
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+  box-shadow: 0 3px 8px rgba(79, 70, 229, 0.12);
+  transform: translateY(-1px);
+}
+
+.add-product-btn:active {
+  color: #4338ca;
+  background: #e0e7ff;
+  transform: translateY(0);
+}
+
+/* =========================================================
+   STOCK IN
+========================================================= */
 
 .stock-in-btn {
   color: #059669;
@@ -121,6 +168,10 @@
   transform: translateY(-1px);
 }
 
+/* =========================================================
+   STOCK OUT
+========================================================= */
+
 .stock-out-btn {
   color: #dc2626;
   background: #ffffff;
@@ -134,6 +185,10 @@
   box-shadow: 0 3px 8px rgba(220, 38, 38, 0.1);
   transform: translateY(-1px);
 }
+
+/* =========================================================
+   TRANSFER
+========================================================= */
 
 .transfer-btn {
   color: #4f46e5;
@@ -149,9 +204,29 @@
   transform: translateY(-1px);
 }
 
-.header-btn:active { transform: translateY(0); }
-.header-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12); }
-.header-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+/* =========================================================
+   COMMON BUTTON STATES
+========================================================= */
+
+.header-btn:active {
+  transform: translateY(0);
+}
+
+.header-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.header-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* =========================================================
+   INVENTORY TABS
+========================================================= */
 
 .inventory-tabs {
   width: 100%;
@@ -167,7 +242,9 @@
   scrollbar-width: none;
 }
 
-.inventory-tabs::-webkit-scrollbar { display: none; }
+.inventory-tabs::-webkit-scrollbar {
+  display: none;
+}
 
 .inventory-tabs button {
   position: relative;
@@ -189,7 +266,10 @@
   white-space: nowrap;
   cursor: pointer;
   box-sizing: border-box;
-  transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+  transition:
+    color 0.18s ease,
+    background-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .inventory-tabs button:hover:not(.active-tab) {
@@ -231,8 +311,15 @@
   box-sizing: border-box;
 }
 
-.tab-count.low { color: #b45309; background: #fff7ed; }
-.tab-count.out { color: #dc2626; background: #fef2f2; }
+.tab-count.low {
+  color: #b45309;
+  background: #fff7ed;
+}
+
+.tab-count.out {
+  color: #dc2626;
+  background: #fef2f2;
+}
 
 .inventory-tabs button.active-tab .tab-count {
   color: #4f46e5;
@@ -240,41 +327,149 @@
   box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12);
 }
 
-.inventory-tabs button.active-tab .tab-count.low { color: #b45309; }
-.inventory-tabs button.active-tab .tab-count.out { color: #dc2626; }
+.inventory-tabs button.active-tab .tab-count.low {
+  color: #b45309;
+}
+
+.inventory-tabs button.active-tab .tab-count.out {
+  color: #dc2626;
+}
+
+/* =========================================================
+   TABLET
+========================================================= */
 
 @media (max-width: 768px) {
-  .inventory-header { padding: 16px 16px 0; border-radius: 10px; }
-  .inventory-header-top { gap: 14px; padding-bottom: 14px; }
-  .inventory-header-left h1 { font-size: 19px; line-height: 26px; }
-  .inventory-header-subtitle { font-size: 11px; }
-  .header-btn { width: 32px; height: 32px; flex-basis: 32px; }
-  .header-btn svg { width: 14px; height: 14px; }
-  .inventory-tabs { padding-top: 9px; }
+  .inventory-header {
+    padding: 16px 16px 0;
+    border-radius: 10px;
+  }
+
+  .inventory-header-top {
+    gap: 14px;
+    padding-bottom: 14px;
+  }
+
+  .inventory-header-left h1 {
+    font-size: 19px;
+    line-height: 26px;
+  }
+
+  .inventory-header-subtitle {
+    font-size: 11px;
+  }
+
+  .header-btn {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+
+  .header-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .inventory-tabs {
+    padding-top: 9px;
+  }
 }
+
+/* =========================================================
+   MOBILE
+========================================================= */
 
 @media (max-width: 576px) {
-  .inventory-header { margin-bottom: 14px; padding: 14px 14px 0; }
-  .inventory-header-top { align-items: flex-start; flex-direction: column; gap: 12px; }
-  .inventory-header-left { width: 100%; }
-  .inventory-header-label { font-size: 9px; }
-  .inventory-header-left h1 { font-size: 18px; line-height: 25px; }
-  .inventory-header-subtitle { max-width: 100%; font-size: 10px; line-height: 16px; }
-  .inventory-header-right { width: 100%; justify-content: flex-start; }
-  .inventory-tabs { gap: 3px; padding-bottom: 8px; }
-  .inventory-tabs button { min-height: 32px; gap: 5px; padding: 6px 9px; font-size: 10px; }
-  .inventory-tabs button.active-tab::after { bottom: -9px; }
-  .tab-count { min-width: 18px; height: 18px; padding: 0 4px; font-size: 8px; }
+  .inventory-header {
+    margin-bottom: 14px;
+    padding: 14px 14px 0;
+  }
+
+  .inventory-header-top {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .inventory-header-left {
+    width: 100%;
+  }
+
+  .inventory-header-label {
+    font-size: 9px;
+  }
+
+  .inventory-header-left h1 {
+    font-size: 18px;
+    line-height: 25px;
+  }
+
+  .inventory-header-subtitle {
+    max-width: 100%;
+    font-size: 10px;
+    line-height: 16px;
+  }
+
+  .inventory-header-right {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .inventory-tabs {
+    gap: 3px;
+    padding-bottom: 8px;
+  }
+
+  .inventory-tabs button {
+    min-height: 32px;
+    gap: 5px;
+    padding: 6px 9px;
+    font-size: 10px;
+  }
+
+  .inventory-tabs button.active-tab::after {
+    bottom: -9px;
+  }
+
+  .tab-count {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    font-size: 8px;
+  }
 }
 
+/* =========================================================
+   VERY SMALL MOBILE
+========================================================= */
+
 @media (max-width: 400px) {
-  .inventory-header { padding-left: 12px; padding-right: 12px; }
-  .inventory-header-right { gap: 6px; }
-  .inventory-tabs button { padding-left: 8px; padding-right: 8px; }
+  .inventory-header {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .inventory-header-right {
+    gap: 6px;
+  }
+
+  .inventory-tabs button {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
 }
+
+/* =========================================================
+   REDUCED MOTION
+========================================================= */
 
 @media (prefers-reduced-motion: reduce) {
   .header-btn,
-  .inventory-tabs button { transition: none; }
-  .header-btn:hover { transform: none; }
+  .inventory-tabs button {
+    transition: none;
+  }
+
+  .header-btn:hover {
+    transform: none;
+  }
 }

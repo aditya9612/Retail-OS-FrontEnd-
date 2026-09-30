@@ -4,6 +4,7 @@ import {
     BsBoxArrowInDown,
     BsBoxArrowUp,
     BsArrowLeftRight,
+    BsPlus,
 } from "react-icons/bs";
 
 import "./InventoryHeader.css";
@@ -15,7 +16,18 @@ const InventoryHeader = ({
     activeTab,
     setActiveTab,
     setStockModal,
+    onAddProduct,
 }) => {
+    const handleAddProduct = () => {
+        if (typeof onAddProduct === "function") {
+            onAddProduct();
+        } else {
+            console.error(
+                "InventoryHeader: onAddProduct function is not provided."
+            );
+        }
+    };
+
     return (
         <div className="inventory-header">
 
@@ -35,24 +47,46 @@ const InventoryHeader = ({
                 <div className="inventory-header-right">
 
                     {/* =========================
-                        STOCK IN
+                        ADD PRODUCT
                     ========================= */}
                     <button
                         type="button"
-                        className="header-btn stock-in-btn"
-                        title="Stock In"
-                        aria-label="Stock In"
-                        onClick={() =>
-                            setStockModal({
-                                name: "Stock In",
-                                quantity: 0,
-                                unit: "Pcs",
-                                action: "add",
-                            })
-                        }
+                        className="header-btn add-product-btn"
+                        title="Add Product"
+                        aria-label="Add Product"
+                        onClick={handleAddProduct}
                     >
-                        <BsBoxArrowInDown />
+                        <BsPlus
+                            className="add-product-icon"
+                            size={18}
+                            aria-hidden="true"
+                        />
                     </button>
+
+                    {/* =========================
+                        STOCK IN
+                    ========================= */}
+                   <button
+    type="button"
+    className="header-btn stock-in-btn"
+    title="Stock In"
+    aria-label="Stock In"
+    onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        console.log("STOCK IN CLICK WORKING");
+
+        setStockModal({
+            name: "Stock In",
+            quantity: 0,
+            unit: "Pcs",
+            action: "add",
+        });
+    }}
+>
+    <BsBoxArrowInDown />
+</button>
 
                     {/* =========================
                         STOCK OUT

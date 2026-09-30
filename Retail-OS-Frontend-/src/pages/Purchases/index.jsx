@@ -139,13 +139,53 @@ const formatDateForInput = (date) => {
 const formatDisplayDate = (date) => {
   if (!date) return "-";
 
-  const parsed = new Date(date);
+  const value = String(date).trim();
 
-  if (Number.isNaN(parsed.getTime())) {
-    return date;
+  // Handle YYYY-MM-DD and ISO dates without timezone shifting.
+  // Examples:
+  // 2026-08-13
+  // 2026-08-13T10:30:00
+  // 2026-08-13T10:30:00.000Z
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})/
+  );
+
+  if (match) {
+    const [, year, month, day] = match;
+
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    const monthIndex = Number(month) - 1;
+
+    if (
+      monthIndex >= 0 &&
+      monthIndex < 12
+    ) {
+      return `${day} ${monthNames[monthIndex]} ${year}`;
+    }
   }
 
-  return parsed.toLocaleDateString("en-IN", {
+  // Fallback for other valid date formats.
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -843,9 +883,13 @@ const PurchaseDetailsModal = ({
                       "-";
 
                     const quantity = Number(item?.quantity || 0);
+
                     const unitPrice = Number(
-                      item?.unit_price ?? item?.unitPrice ?? 0
+                      item?.unit_price ??
+                        item?.unitPrice ??
+                        0
                     );
+
                     const lineTotal = Number(
                       item?.total ??
                         item?.total_amount ??
@@ -855,20 +899,53 @@ const PurchaseDetailsModal = ({
                     return (
                       <tr
                         key={item?.id ?? index}
-                        style={{ borderTop: "1px solid #f3f4f6" }}
+                        style={{
+                          borderTop:
+                            "1px solid #f3f4f6",
+                        }}
                       >
-                        <td style={{ padding: "8px 10px", fontSize: 11, color: "#374151" }}>
-                          {item?.product_id ?? product?.id ?? "-"}
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            fontSize: 11,
+                            color: "#374151",
+                          }}
+                        >
+                          {item?.product_id ??
+                            product?.id ??
+                            "-"}
                         </td>
-                        <td style={{ padding: "8px 10px", fontSize: 11, color: "#374151" }}>
+
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            fontSize: 11,
+                            color: "#374151",
+                          }}
+                        >
                           {productName}
                         </td>
-                        <td style={{ padding: "8px 10px", fontSize: 11, color: "#374151" }}>
+
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            fontSize: 11,
+                            color: "#374151",
+                          }}
+                        >
                           {sku}
                         </td>
-                        <td style={{ padding: "8px 10px", fontSize: 11, color: "#374151" }}>
+
+                        <td
+                          style={{
+                            padding: "8px 10px",
+                            fontSize: 11,
+                            color: "#374151",
+                          }}
+                        >
                           {quantity}
                         </td>
+
                         <td
                           style={{
                             padding: "8px 10px",
@@ -879,6 +956,7 @@ const PurchaseDetailsModal = ({
                         >
                           {fmt(unitPrice)}
                         </td>
+
                         <td
                           style={{
                             padding: "8px 10px",

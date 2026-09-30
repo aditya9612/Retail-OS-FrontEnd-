@@ -36,27 +36,10 @@ const InventoryTable = ({
       };
     }
 
-    /*
-     * API date format:
-     * YYYY-MM-DD
-     *
-     * Example:
-     * 2026-08-31
-     */
-
     const today = new Date();
 
-    /*
-     * Remove time part from today's date.
-     */
     today.setHours(0, 0, 0, 0);
 
-    /*
-     * Create expiry date safely.
-     *
-     * Using YYYY-MM-DD manually avoids
-     * timezone issues.
-     */
     const parts = String(expiryDate).split("-");
 
     let expiry;
@@ -71,9 +54,6 @@ const InventoryTable = ({
       expiry = new Date(expiryDate);
     }
 
-    /*
-     * Invalid date
-     */
     if (Number.isNaN(expiry.getTime())) {
       return {
         label: "Invalid Date",
@@ -84,11 +64,6 @@ const InventoryTable = ({
 
     expiry.setHours(0, 0, 0, 0);
 
-    /*
-     * EXPIRED
-     *
-     * Expiry date is before today.
-     */
     if (expiry < today) {
       return {
         label: "Expired",
@@ -97,9 +72,6 @@ const InventoryTable = ({
       };
     }
 
-    /*
-     * DAYS UNTIL EXPIRY
-     */
     const diffMs =
       expiry.getTime() - today.getTime();
 
@@ -107,11 +79,6 @@ const InventoryTable = ({
       diffMs / (1000 * 60 * 60 * 24)
     );
 
-    /*
-     * EXPIRING SOON
-     *
-     * Today -> 30 days
-     */
     if (diffDays <= 30) {
       return {
         label: "Expiring Soon",
@@ -120,9 +87,6 @@ const InventoryTable = ({
       };
     }
 
-    /*
-     * VALID
-     */
     return {
       label: "Valid",
       color: "#059669",
@@ -141,17 +105,10 @@ const InventoryTable = ({
 
     const parts = String(expiryDate).split("-");
 
-    /*
-     * API format:
-     * YYYY-MM-DD
-     */
     if (parts.length === 3) {
       return `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
 
-    /*
-     * Fallback
-     */
     const date = new Date(expiryDate);
 
     if (Number.isNaN(date.getTime())) {
@@ -173,13 +130,7 @@ const InventoryTable = ({
             <th>Store ID</th>
             <th>Available Qty</th>
             <th>Reorder Level</th>
-
-            {/* =================================================
-               NEW EXPIRY COLUMN
-            ================================================= */}
-
             <th>Expiry Date</th>
-
             <th>Cost Price</th>
             <th>Selling Price</th>
             <th>Margin</th>
@@ -322,6 +273,25 @@ const InventoryTable = ({
             const unit = item.unit || "Pcs";
 
             /* =====================================================
+               QUANTITY UNIT FORMAT
+               1 Pcs -> 1 Pc
+               5 Pcs -> 5 Pcs
+            ===================================================== */
+
+            const formatQuantityUnit = (value) => {
+              const numericValue = Number(value);
+
+              if (numericValue === 1) {
+                if (unit === "Pcs") return "Pc";
+                if (unit === "pcs") return "pc";
+                if (unit === "Pieces") return "Piece";
+                if (unit === "pieces") return "piece";
+              }
+
+              return unit;
+            };
+
+            /* =====================================================
                BRAND
             ===================================================== */
 
@@ -337,6 +307,34 @@ const InventoryTable = ({
               item.expiration_date ||
               item.expirationDate ||
               null;
+
+const normalizedCategory = String(
+    category || ""
+)
+    .trim()
+    .toLowerCase();
+
+const FOOD_CATEGORIES = [
+    "food",
+    "grocery",
+    "dairy",
+    "snack",
+    "beverage",
+    "bakery",
+    "fruit",
+    "vegetable",
+    "frozen",
+    "meat",
+];
+
+const isFoodProduct = FOOD_CATEGORIES.some(
+    (foodCategory) =>
+        normalizedCategory.includes(foodCategory)
+);
+
+const isMissingRequiredExpiry =
+    isFoodProduct && !expiryDate;
+
 
             /* =====================================================
                BATCH NUMBER
@@ -389,7 +387,7 @@ const InventoryTable = ({
                 color: "#dc2626",
                 bg: "#fef2f2",
               };
-            } else if (qty < minStock) {
+     } else if (minStock > 0 && qty <= minStock) {
               st = {
                 label: "Low Stock",
                 color: "#d97706",
@@ -518,6 +516,11 @@ const InventoryTable = ({
 
                 {/* =================================================
                    AVAILABLE STOCK
+                   
+                   IMPORTANT:
+                   Do NOT display minStock here.
+                   Reorder Level column is the only place
+                   where the threshold value is displayed.
                 ================================================= */}
 
                 <td>
@@ -528,18 +531,19 @@ const InventoryTable = ({
                         color: st.color,
                       }}
                     >
-                      {qty} {unit}
+                      {qty}{" "}
+                      {formatQuantityUnit(qty)}
                     </div>
 
                     {qty > 0 &&
-                      qty < minStock && (
+                      qty <= minStock && (
                         <div
                           style={{
                             fontSize: 11,
                             color: "#f59e0b",
                           }}
                         >
-                          Below Min ({minStock})
+                          Below Min
                         </div>
                       )}
 
@@ -560,10 +564,14 @@ const InventoryTable = ({
 
                 {/* =================================================
                    REORDER LEVEL
+                   
+                   The minimum/reorder threshold is displayed
+                   ONLY here.
                 ================================================= */}
 
                 <td>
-                  {minStock} {unit}
+                  {minStock}{" "}
+                  {formatQuantityUnit(minStock)}
                 </td>
 
                 {/* =================================================
@@ -571,76 +579,25 @@ const InventoryTable = ({
                 ================================================= */}
 
                 <td>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 4,
-                      minWidth: 120,
-                    }}
-                  >
-                    {/* DATE */}
-
-                    <span
-                      style={{
-                        fontWeight: 600,
-                        color:
-                          expiryStatus.color,
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {formatExpiryDate(
-                        expiryDate
-                      )}
-                    </span>
-
-                    {/* EXPIRY STATUS */}
-
-                    <span
-                      style={{
-                        display:
-                          "inline-flex",
-                        alignItems:
-                          "center",
-                        width: "fit-content",
-                        padding:
-                          "3px 8px",
-                        borderRadius: 20,
-                        background:
-                          expiryStatus.bg,
-                        color:
-                          expiryStatus.color,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        whiteSpace:
-                          "nowrap",
-                      }}
-                    >
-                      {expiryStatus.label}
-                    </span>
-
-                    {/* BATCH NUMBER */}
-
-                    {batchNumber && (
-                      <span
-                        style={{
-                          fontSize: 10,
-                          color: "#6b7280",
-                          maxWidth: 150,
-                          overflow:
-                            "hidden",
-                          textOverflow:
-                            "ellipsis",
-                          whiteSpace:
-                            "nowrap",
-                        }}
-                        title={batchNumber}
-                      >
-                        Batch: {batchNumber}
-                      </span>
-                    )}
-                  </div>
-                </td>
+  <span
+    style={{
+      fontWeight: 600,
+      color: isMissingRequiredExpiry
+        ? "#dc2626"
+        : expiryDate
+        ? expiryStatus.color
+        : "#6b7280",
+      whiteSpace: "nowrap",
+    }}
+  >
+    {isMissingRequiredExpiry
+      ? "Expiry Required"
+      : expiryDate
+      ? formatExpiryDate(expiryDate)
+      : "No Expiry"}
+  </span>
+</td>
+             
 
                 {/* =================================================
                    COST PRICE
@@ -713,47 +670,21 @@ const InventoryTable = ({
                 {/* =================================================
                    ACTION
                 ================================================= */}
+<td>
+  <span
+    style={{
+      color:
+        margin >= 20
+          ? "#10b981"
+          : "#ef4444",
+      fontWeight: 700,
+    }}
+  >
+    {formattedMargin}%
+  </span>
+</td>
+               
 
-                <td>
-                  <button
-                    type="button"
-                    className="adm-btn-primary"
-                    onClick={() => {
-                      console.log(
-                        "UPDATE BUTTON CLICKED"
-                      );
-
-                      console.log(
-                        "ITEM =>",
-                        item
-                      );
-
-                      console.log(
-                        "PRODUCT ID =>",
-                        item.product_id
-                      );
-
-                      console.log(
-                        "STORE ID =>",
-                        item.store_id
-                      );
-
-                      console.log(
-                        "EXPIRY DATE =>",
-                        item.expiry_date
-                      );
-
-                      console.log(
-                        "BATCH NUMBER =>",
-                        item.batch_number
-                      );
-
-                      setStockModal(item);
-                    }}
-                  >
-                    Update
-                  </button>
-                </td>
               </tr>
             );
           })}

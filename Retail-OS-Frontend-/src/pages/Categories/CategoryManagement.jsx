@@ -126,20 +126,14 @@ const CategoryManagement = () => {
          * If backend does not send explicit status,
          * derive status from product count.
          */
-        if (!status) {
-          status =
-            productCount > 0
-              ? "active"
-              : "inactive";
-        }
-
+     
+if (!status) {
+  status = "active";
+}
         /*
          * Inactive category must display 0 products.
          */
-        const displayProducts =
-          status === "inactive"
-            ? 0
-            : productCount;
+     const displayProducts = productCount;
 
         return {
           id: item.id,
@@ -354,6 +348,62 @@ const CategoryManagement = () => {
       setLoading(false);
     }
   };
+  /* =========================================================
+   CHANGE CATEGORY STATUS
+========================================================= */
+
+const handleStatusChange = async (
+  item,
+  nextIsActive
+) => {
+  if (!item?.id) {
+    return;
+  }
+
+  try {
+    setLoading(true);
+    setError("");
+
+    const nextStatus =
+      nextIsActive
+        ? "Active"
+        : "Inactive";
+
+    /*
+     * Update UI immediately.
+     *
+     * NOTE:
+     * Current backend category schema does not expose
+     * a confirmed status/is_active field, so we do not
+     * send an unsupported field to the API here.
+     */
+    setCategories((previousCategories) =>
+      previousCategories.map((categoryItem) =>
+        categoryItem.id === item.id
+          ? {
+              ...categoryItem,
+              status: nextStatus,
+            }
+          : categoryItem
+      )
+    );
+
+    console.log(
+      `Category ${item.id} status changed to ${nextStatus}`
+    );
+  } catch (error) {
+    console.error(
+      "Category Status Change Error:",
+      error
+    );
+
+    setError(
+      "Failed to change category status."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   /* =========================================================
      CREATE / UPDATE
@@ -528,12 +578,13 @@ const CategoryManagement = () => {
           CATEGORY TABLE
           Horizontal scrolling is handled inside CategoryTable
       ===================================================== */}
-
-      <CategoryTable
-        categories={paginatedCategories}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
+<CategoryTable
+  categories={paginatedCategories}
+  onEdit={handleEdit}
+  onDelete={handleDelete}
+  onStatusChange={handleStatusChange}
+/>
+   
 
       {/* =====================================================
           PAGINATION
