@@ -17,6 +17,8 @@
   justify-content: center;
   vertical-align: middle;
 
+  position: relative;
+
   background: #ffffff;
   border: 1px solid #dfe3e8;
   border-radius: 8px;
@@ -31,8 +33,10 @@
     border-color 0.18s ease,
     color 0.18s ease,
     box-shadow 0.18s ease,
-    transform 0.18s ease;
+    transform 0.18s ease,
+    opacity 0.18s ease;
 }
+
 
 /* =====================================================
    ACTION ICON
@@ -47,7 +51,10 @@
 
   margin: 0;
   padding: 0;
+
+  pointer-events: none;
 }
+
 
 /* =====================================================
    ACTION BUTTON HOVER
@@ -65,6 +72,126 @@
   box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
 }
 
+
+/* =====================================================
+   CUSTOM TOOLTIP
+   Uses aria-label="View", "Edit", "Receive"
+===================================================== */
+
+.purchase-page-content
+  td:last-child
+  .adm-btn-secondary[aria-label]::after {
+  content: attr(aria-label);
+
+  position: absolute;
+
+  left: 50%;
+  bottom: calc(100% + 8px);
+
+  transform: translateX(-50%) translateY(4px);
+
+  padding: 5px 8px;
+
+  background: #111827;
+  color: #ffffff;
+
+  border-radius: 6px;
+
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+
+  white-space: nowrap;
+
+  opacity: 0;
+  visibility: hidden;
+
+  pointer-events: none;
+
+  z-index: 9999;
+
+  transition:
+    opacity 0.15s ease,
+    visibility 0.15s ease,
+    transform 0.15s ease;
+}
+
+
+/* =====================================================
+   TOOLTIP ARROW
+===================================================== */
+
+.purchase-page-content
+  td:last-child
+  .adm-btn-secondary[aria-label]::before {
+  content: "";
+
+  position: absolute;
+
+  left: 50%;
+  bottom: calc(100% + 3px);
+
+  transform: translateX(-50%);
+
+  border-width: 5px 5px 0 5px;
+  border-style: solid;
+  border-color: #111827 transparent transparent transparent;
+
+  opacity: 0;
+  visibility: hidden;
+
+  pointer-events: none;
+
+  z-index: 9999;
+
+  transition:
+    opacity 0.15s ease,
+    visibility 0.15s ease;
+}
+
+
+/* =====================================================
+   SHOW TOOLTIP ON HOVER
+===================================================== */
+
+.purchase-page-content
+  td:last-child
+  .adm-btn-secondary[aria-label]:hover::after,
+.purchase-page-content
+  td:last-child
+  .adm-btn-secondary[aria-label]:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+.purchase-page-content
+  td:last-child
+  .adm-btn-secondary[aria-label]:hover::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+
+/* =====================================================
+   SHOW TOOLTIP ON KEYBOARD FOCUS
+===================================================== */
+
+.purchase-page-content
+  td:last-child
+  .adm-btn-secondary[aria-label]:focus-visible::after,
+.purchase-page-content
+  td:last-child
+  .adm-btn-secondary[aria-label]:focus-visible::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+.purchase-page-content
+  td:last-child
+  .adm-btn-secondary[aria-label]:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+
 /* =====================================================
    KEYBOARD FOCUS
 ===================================================== */
@@ -80,8 +207,10 @@
     0 0 0 3px rgba(99, 102, 241, 0.12);
 }
 
+
 /* =====================================================
-   DISABLED RECEIVE BUTTON
+   DISABLED ACTION BUTTON
+   Used for non-draft Edit + unavailable Receive
 ===================================================== */
 
 .purchase-page-content
@@ -92,14 +221,16 @@
   color: #9ca3af;
 
   opacity: 0.5;
+
   cursor: not-allowed;
 
   transform: none;
   box-shadow: none;
 }
 
+
 /* =====================================================
-   DISABLED RECEIVE - NO HOVER EFFECT
+   DISABLED ACTION - NO HOVER EFFECT
 ===================================================== */
 
 .purchase-page-content
@@ -113,6 +244,30 @@
   box-shadow: none;
 }
 
+
+/* =====================================================
+   DISABLED ACTION TOOLTIP
+
+   aria-label can explain why Edit/Receive is unavailable.
+===================================================== */
+
+.purchase-page-content
+  td:last-child
+  .adm-btn-secondary:disabled[aria-label]:hover::after,
+.purchase-page-content
+  td:last-child
+  .adm-btn-secondary:disabled[aria-label]:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+.purchase-page-content
+  td:last-child
+  .adm-btn-secondary:disabled[aria-label]:hover::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+
 /* =====================================================
    ACTION COLUMN
 ===================================================== */
@@ -120,7 +275,20 @@
 .purchase-page-content tbody td:last-child {
   white-space: nowrap;
   vertical-align: middle;
+  overflow: visible;
 }
+
+
+/* =====================================================
+   TABLE TOOLTIP VISIBILITY
+===================================================== */
+
+.purchase-page-content table,
+.purchase-page-content tbody,
+.purchase-page-content tr {
+  overflow: visible;
+}
+
 
 /* =====================================================
    SMALL SCREEN
@@ -139,5 +307,12 @@
   .purchase-page-content td:last-child .adm-btn-secondary svg {
     width: 14px;
     height: 14px;
+  }
+
+  .purchase-page-content
+    td:last-child
+    .adm-btn-secondary[aria-label]::after {
+    font-size: 10px;
+    padding: 5px 7px;
   }
 }

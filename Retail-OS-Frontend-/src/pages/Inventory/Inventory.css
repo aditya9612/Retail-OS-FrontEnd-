@@ -1312,3 +1312,112 @@ input:focus-visible {
         padding: 11px;
     }
 }
+/* =========================================================
+   INVENTORY TABLE PROFESSIONAL RESPONSIVE FIX
+========================================================= */
+
+.inv-card {
+    min-width: 0;
+}
+
+.inv-table-wrap {
+    position: relative;
+
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+
+    overflow-x: auto;
+    overflow-y: visible;
+
+    border-top: 1px solid #e9edf3;
+
+    -webkit-overflow-scrolling: touch;
+
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f8fafc;
+}
+
+.inv-table-wrap::-webkit-scrollbar {
+    height: 8px;
+}
+
+.inv-table-wrap::-webkit-scrollbar-track {
+    background: #f8fafc;
+    border-radius: 999px;
+}
+
+.inv-table-wrap::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border: 2px solid #f8fafc;
+    border-radius: 999px;
+}
+
+.inv-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+
+/* Prevent inventory table from being squeezed */
+
+.inv-table-wrap .inventory-table-container {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+
+    overflow-x: auto;
+}
+
+.inv-table-wrap .inventory-table {
+    width: 100%;
+    min-width: 1580px;
+
+    table-layout: auto;
+}
+
+
+/* Laptop */
+
+@media (max-width: 1200px) {
+    .inv-table-wrap .inventory-table {
+        min-width: 1540px;
+    }
+}
+
+
+/* Tablet */
+
+@media (max-width: 992px) {
+    .inv-table-wrap {
+        border-radius: 0 0 9px 9px;
+    }
+
+    .inv-table-wrap .inventory-table {
+        min-width: 1500px;
+    }
+}
+
+
+/* Mobile */
+
+@media (max-width: 640px) {
+    .inv-table-wrap {
+        width: 100%;
+        max-width: 100%;
+
+        overflow-x: auto;
+    }
+
+    .inv-table-wrap .inventory-table {
+        min-width: 1450px;
+    }
+}
+
+
+/* Very small mobile */
+
+@media (max-width: 420px) {
+    .inv-table-wrap .inventory-table {
+        min-width: 1420px;
+    }
+}

@@ -332,7 +332,7 @@ const toPayload = (form) => {
     };
 };
 
-const ProductFormModal = ({ product, onClose, onSave, existingProducts = [] }) => {
+export const ProductFormModal = ({ product, onClose, onSave, existingProducts = [] }) => {
     const isNew = !product;
 
     // Build edit-form state — mapped from actual API response fields
@@ -369,7 +369,7 @@ const ProductFormModal = ({ product, onClose, onSave, existingProducts = [] }) =
         ),
         imageUrl: normalizeImageUrl(product.imageUrl ?? product.image_url ?? variants.image_url ?? localMeta.imageUrl ?? '') || '',
         manufacturingDate: product.manufacturing_date ?? product.manufacturingDate ?? variants.manufacturing_date ?? localMeta.manufacturingDate ?? '',
-        expiryDate: product.expiry_date ?? product.expiryDate ?? variants.expiry_date ?? localMeta.expiryDate ?? '',
+        expiryDate: product.expiry_date ?? product.expiryDate ?? product.expiration_date ?? product.expirationDate ?? variants.expiry_date ?? localMeta.expiryDate ?? '',
         variants: variants,
     } : { ...EMPTY_FORM };
 
@@ -389,14 +389,27 @@ const ProductFormModal = ({ product, onClose, onSave, existingProducts = [] }) =
 
             if (k === 'brand') {
                 next.brand = validateBrandField(v);
+            } else if (k === 'category') {
+                next.category = '';
+                if (v === 'Groceries' && !String(form.expiryDate || '').trim()) {
+                    next.expiryDate = 'Expiry date is required for food/grocery products.';
+                } else if (form.category === 'Groceries' && v !== 'Groceries' && next.expiryDate === 'Expiry date is required for food/grocery products.') {
+                    next.expiryDate = '';
+                }
             } else if (k === 'manufacturingDate') {
                 const { mfgError, expError } = validateDates(v, form.expiryDate);
                 next.manufacturingDate = mfgError;
-                next.expiryDate = expError;
+                next.expiryDate = (form.category === 'Groceries' && !String(form.expiryDate || '').trim())
+                    ? 'Expiry date is required for food/grocery products.'
+                    : expError;
             } else if (k === 'expiryDate') {
-                const { mfgError, expError } = validateDates(form.manufacturingDate, v);
-                next.manufacturingDate = mfgError;
-                next.expiryDate = expError;
+                if (form.category === 'Groceries' && !String(v || '').trim()) {
+                    next.expiryDate = 'Expiry date is required for food/grocery products.';
+                } else {
+                    const { mfgError, expError } = validateDates(form.manufacturingDate, v);
+                    next.manufacturingDate = mfgError;
+                    next.expiryDate = expError;
+                }
             } else {
                 next[k] = '';
             }
@@ -498,12 +511,20 @@ if (skuError) {
             newErrors.gst = 'GST rate is required';
         }
 
+        // Food / Grocery expiry validation
+        if (
+            form.category === 'Groceries' &&
+            !String(form.expiryDate || '').trim()
+        ) {
+            newErrors.expiryDate = 'Expiry date is required for food/grocery products.';
+        }
+
         // Manufacturing Date & Expiry Date validation
         const { mfgError, expError } = validateDates(form.manufacturingDate, form.expiryDate);
         if (mfgError) {
             newErrors.manufacturingDate = mfgError;
         }
-        if (expError) {
+        if (expError && !newErrors.expiryDate) {
             newErrors.expiryDate = expError;
         }
 
@@ -927,6 +948,9 @@ if (skuError) {
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
                                 Expiry Date
+                                {form.category === 'Groceries' && (
+                                    <span style={{ color: 'red' }}> *</span>
+                                )}
                             </label>
                             <input
                                 type="date"
@@ -943,6 +967,11 @@ if (skuError) {
                                     color: '#111827'
                                 }}
                             />
+                            {form.category === 'Groceries' && (
+                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
+                                    Expiry date is mandatory for food/grocery products.
+                                </div>
+                            )}
                             {errors.expiryDate && (
                                 <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.expiryDate}
