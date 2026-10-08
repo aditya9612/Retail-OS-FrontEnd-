@@ -5,20 +5,13 @@ import {
     BsToggleOff, BsCheckCircleFill, BsXCircleFill, BsGeoAlt,
     BsBoxSeam, BsArrowRight, BsExclamationTriangle,
 } from 'react-icons/bs';
+import apiClient from '../../services/api';
 
 const DELIVERY_METHODS = [
     { id: 1, type: 'Home Delivery', icon: '🏠', partner: 'Dunzo', minDays: 2, maxDays: 5, charge: 60, freeAbove: 500, enabled: true, zones: ['Bangalore', 'Mumbai', 'Delhi', 'Chennai'] },
     { id: 2, type: 'Same Day Delivery', icon: '⚡', partner: 'Swiggy Genie', minDays: 0, maxDays: 0, charge: 99, freeAbove: 999, enabled: true, zones: ['Bangalore', 'Mumbai'] },
     { id: 3, type: 'Express Delivery', icon: '🚀', partner: 'Delhivery', minDays: 1, maxDays: 2, charge: 79, freeAbove: 799, enabled: true, zones: ['All India'] },
     { id: 4, type: 'Store Pickup', icon: '🏪', partner: 'Self', minDays: 0, maxDays: 0, charge: 0, freeAbove: 0, enabled: true, zones: ['In-store Only'] },
-];
-
-const ACTIVE_DELIVERIES = [
-    { id: 'DEL-8821', order: 'ONL-10041', customer: 'Aarav Mehta', city: 'Bangalore', address: '12 MG Road, Indiranagar', type: 'Express Delivery', partner: 'Delhivery', tracking: 'DL94820384', status: 'Out for Delivery', estimatedDate: '26 Jun 2026', updatedAt: '10:42 AM' },
-    { id: 'DEL-8820', order: 'ONL-10040', customer: 'Priya Sharma', city: 'Mumbai', address: '5B Andheri West, Lokhandwala', type: 'Home Delivery', partner: 'Dunzo', tracking: 'DZ73981239', status: 'Shipped', estimatedDate: '28 Jun 2026', updatedAt: 'Yesterday' },
-    { id: 'DEL-8819', order: 'ONL-10039', customer: 'Rohan Das', city: 'Delhi', address: '34 Lajpat Nagar, Block B', type: 'Same Day Delivery', partner: 'Swiggy Genie', tracking: 'SG20938477', status: 'Packed', estimatedDate: '26 Jun 2026', updatedAt: '9:20 AM' },
-    { id: 'DEL-8818', order: 'ONL-10037', customer: 'Vikram Singh', city: 'Chennai', address: '18 Anna Nagar, E Block', type: 'Express Delivery', partner: 'Delhivery', tracking: 'DL84738291', status: 'Delivered', estimatedDate: '25 Jun 2026', updatedAt: '25 Jun' },
-    { id: 'DEL-8817', order: 'ONL-10035', customer: 'Arjun Kumar', city: 'Kolkata', address: '23 Park Street', type: 'Home Delivery', partner: 'Dunzo', tracking: 'DZ84792038', status: 'Confirmed', estimatedDate: '29 Jun 2026', updatedAt: 'Yesterday' },
 ];
 
 const statusConfig = {
@@ -34,7 +27,40 @@ const fmt = (n) => '₹' + n.toLocaleString('en-IN');
 
 const DeliveryManagement = () => {
     const [methods, setMethods] = useState(DELIVERY_METHODS);
-    const [deliveries, setDeliveries] = useState(ACTIVE_DELIVERIES);
+    const [deliveries, setDeliveries] = useState([]);
+    const [loadingDeliveries, setLoadingDeliveries] = useState(true);
+
+    const fetchDeliveries = React.useCallback(async () => {
+        setLoadingDeliveries(true);
+        try {
+            const res = await apiClient.get('/delivery');
+            const list = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.items || []);
+            const mapped = list.map(d => ({
+                id: d.id ? `DEL-${d.id}` : d.delivery_number || `DEL-${Date.now()}`,
+                rawId: d.id,
+                order: d.order_number || (d.order_id ? `ONL-${d.order_id}` : '—'),
+                customer: d.customer_name || d.recipient_name || 'Customer',
+                city: d.city || d.destination_city || '—',
+                address: d.address || d.shipping_address || '—',
+                type: d.delivery_type || 'Home Delivery',
+                partner: d.carrier_name || d.partner || 'Delhivery',
+                tracking: d.tracking_number || d.tracking || '—',
+                status: d.status ? (d.status.charAt(0).toUpperCase() + d.status.slice(1).toLowerCase()) : 'Confirmed',
+                estimatedDate: d.estimated_delivery ? new Date(d.estimated_delivery).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (d.estimated_date || '—'),
+                updatedAt: d.updated_at ? new Date(d.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—',
+            }));
+            setDeliveries(mapped);
+        } catch (err) {
+            console.warn('[DeliveryManagement] Failed to fetch deliveries:', err.message);
+        } finally {
+            setLoadingDeliveries(false);
+        }
+    }, []);
+
+    React.useEffect(() => {
+        fetchDeliveries();
+    }, [fetchDeliveries]);
+
     const [activeTab, setActiveTab] = useState('Active Deliveries');
     const [search, setSearch] = useState('');
     const [showModal, setShowModal] = useState(false);
@@ -139,7 +165,14 @@ const DeliveryManagement = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredDeliveries.map((d, i) => {
+                                {loadingDeliveries && (
+                                    <tr>
+                                        <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                                            Loading real-time deliveries…
+                                        </td>
+                                    </tr>
+                                )}
+                                {!loadingDeliveries && filteredDeliveries.map((d, i) => {
                                     const sc = statusConfig[d.status] || { color: '#6b7280', bg: '#f9fafb' };
                                     return (
                                         <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}
@@ -167,6 +200,13 @@ const DeliveryManagement = () => {
                                         </tr>
                                     );
                                 })}
+                                {!loadingDeliveries && filteredDeliveries.length === 0 && (
+                                    <tr>
+                                        <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 14 }}>
+                                            No active deliveries found
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>

@@ -12,26 +12,7 @@ import {
 import { getGstRates, createGstRate, updateGstRate, getInvoices } from '../../services/billingService';
 import { getPurchaseOrders } from '../../api/purchaseOrdersApi';
 
-/* ── Seed GST invoices (shown when no real invoices have been created yet) ── */
-const SEED_INVOICES = [
-    { id: 'INV-2024001', customer: 'Rahul Sharma', gstin: '27AAPFU0939F1ZV', date: '2026-06-24', taxable: 3893, cgst: 350.37, sgst: 350.37, igst: 0, total: 4593.74, rate: 18 },
-    { id: 'INV-869823', customer: 'Pooja Verma', gstin: '27AABCV1234F1Z5', date: '2026-06-24', taxable: 2250, cgst: 202.50, sgst: 202.50, igst: 0, total: 2655, rate: 18 },
-    { id: 'INV-2024002', customer: 'Priya Patel', gstin: '—', date: '2026-06-24', taxable: 1919, cgst: 47.98, sgst: 47.97, igst: 0, total: 2014.95, rate: 5 },
-    { id: 'INV-2024003', customer: 'Amit Kumar', gstin: '07BCEPK4283R1ZJ', date: '2026-06-23', taxable: 7315, cgst: 0, sgst: 0, igst: 1316.70, total: 8631.70, rate: 18 },
-    { id: 'INV-2024004', customer: 'Akshay Deore', gstin: '27AAPFU0939F1ZV', date: '2026-06-23', taxable: 3200, cgst: 288, sgst: 288, igst: 0, total: 3776, rate: 18 },
-    { id: 'INV-2024005', customer: 'Vikram Mehta', gstin: '—', date: '2026-06-22', taxable: 5560, cgst: 500.40, sgst: 500.40, igst: 0, total: 6560.80, rate: 18 },
-    { id: 'INV-2024006', customer: 'Anjali Gupta', gstin: '29BCEPK4283R1ZJ', date: '2026-06-22', taxable: 2829, cgst: 0, sgst: 0, igst: 339.48, total: 3168.48, rate: 12 },
-    { id: 'INV-2024007', customer: 'Rohit Verma', gstin: '—', date: '2026-06-21', taxable: 9184, cgst: 826.56, sgst: 826.56, igst: 0, total: 10837.12, rate: 18 },
-    { id: 'INV-2024008', customer: 'Kavya Nair', gstin: '—', date: '2026-06-21', taxable: 890, cgst: 0, sgst: 0, igst: 0, total: 890, rate: 0 },
-    { id: 'INV-2024009', customer: 'Suresh Reddy', gstin: '36BCEPK4283R1ZJ', date: '2026-06-20', taxable: 4990, cgst: 0, sgst: 0, igst: 598.80, total: 5588.80, rate: 12 },
-    { id: 'INV-2024010', customer: 'Meera Joshi', gstin: '—', date: '2026-06-20', taxable: 1722, cgst: 154.98, sgst: 154.98, igst: 0, total: 2031.96, rate: 18 },
-];
-
-/* ── Seed Inward Purchases (Used to establish baseline Input Tax Credit - ITC) ── */
-const SEED_PURCHASES = [
-    { id: 'PO-2024001', supplier: 'Apex Tech Solutions', gstin: '27AABCU9603R1ZM', date: '2026-06-15', taxable: 7100, cgst: 639, sgst: 639, igst: 0, total: 8378, status: 'Received' },
-    { id: 'PO-2024002', supplier: 'Bharat Wholesale Distributors', gstin: '27AACCB2189P1Z8', date: '2026-06-18', taxable: 7100, cgst: 639, sgst: 639, igst: 0, total: 8378, status: 'Received' },
-];
+/* ── Statutory GST Configuration ── */
 
 const slabColors = {
     0: '#94a3b8',
@@ -459,19 +440,11 @@ const loadInvoices = () => {
         if (stored) {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                const normalized = parsed.map(normalizeInvoice).filter(Boolean);
-                try {
-                    localStorage.setItem('gst_invoices', JSON.stringify(normalized));
-                } catch (_) {}
-                return normalized;
+                return parsed.map(normalizeInvoice).filter(Boolean);
             }
         }
     } catch (_) { }
-    const seeded = SEED_INVOICES.map(normalizeInvoice).filter(Boolean);
-    try {
-        localStorage.setItem('gst_invoices', JSON.stringify(seeded));
-    } catch (_) {}
-    return seeded;
+    return [];
 };
 
 /** Load purchases from localStorage (saved by Purchases module) */
@@ -481,19 +454,11 @@ const loadPurchases = () => {
         if (stored) {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                const normalized = parsed.map(normalizePurchase).filter(Boolean);
-                try {
-                    localStorage.setItem('purchases', JSON.stringify(normalized));
-                } catch (_) {}
-                return normalized;
+                return parsed.map(normalizePurchase).filter(Boolean);
             }
         }
     } catch (_) { }
-    const seeded = SEED_PURCHASES.map(normalizePurchase).filter(Boolean);
-    try {
-        localStorage.setItem('purchases', JSON.stringify(seeded));
-    } catch (_) {}
-    return seeded;
+    return [];
 };
 
 const GSTManagement = () => {
@@ -1048,52 +1013,91 @@ const GSTManagement = () => {
 
     /* ── Export CSV Utilities ── */
     const downloadGstr1 = () => {
-        const headers = ['Invoice ID', 'Customer Name', 'GSTIN', 'GSTIN Status', 'State', 'Date', 'Taxable Value', 'GST Rate (%)', 'CGST', 'SGST', 'IGST', 'Total GST', 'Invoice Total'];
-        const rows = filtered.map(inv => [
-            inv.id,
-            `"${(inv.customer || '').replace(/"/g, '""')}"`,
-            inv.gstin,
-            inv.gstin_valid ? 'Valid (15 chars)' : (inv.gstin_is_b2c ? 'B2C (Unregistered)' : 'INVALID (15 chars required)'),
-            `"${inv.state_name || 'Maharashtra'}"`,
-            inv.date,
-            Number(inv.taxable || 0).toFixed(2),
-            inv.rate,
-            Number(inv.cgst || 0).toFixed(2),
-            Number(inv.sgst || 0).toFixed(2),
-            Number(inv.igst || 0).toFixed(2),
-            (Number(inv.cgst || 0) + Number(inv.sgst || 0) + Number(inv.igst || 0)).toFixed(2),
-            Number(inv.total || 0).toFixed(2),
-        ]);
-        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `GSTR1_Report_${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+        try {
+            const listToExport = filtered && filtered.length > 0 ? filtered : normalizedInvoices;
+            const headers = ['Invoice ID', 'Customer Name', 'GSTIN', 'GSTIN Status', 'State', 'Date', 'Taxable Value', 'GST Rate (%)', 'CGST', 'SGST', 'IGST', 'Total GST', 'Invoice Total'];
+            const rows = listToExport.map(inv => [
+                `"${String(inv.id || '').replace(/"/g, '""')}"`,
+                `"${String(inv.customer || '').replace(/"/g, '""')}"`,
+                `"${String(inv.gstin || '—').replace(/"/g, '""')}"`,
+                `"${inv.gstin_valid ? 'Valid (15 chars)' : (inv.gstin_is_b2c ? 'B2C (Unregistered)' : 'INVALID (15 chars required)')}"`,
+                `"${String(inv.state_name || 'Maharashtra').replace(/"/g, '""')}"`,
+                `"${String(inv.date || '').replace(/"/g, '""')}"`,
+                Number(inv.taxable || 0).toFixed(2),
+                Number(inv.rate || 0),
+                Number(inv.cgst || 0).toFixed(2),
+                Number(inv.sgst || 0).toFixed(2),
+                Number(inv.igst || 0).toFixed(2),
+                (Number(inv.cgst || 0) + Number(inv.sgst || 0) + Number(inv.igst || 0)).toFixed(2),
+                Number(inv.total || 0).toFixed(2),
+            ]);
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.setAttribute('download', `GSTR1_Report_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 250);
+            setSyncStatus({
+                success: true,
+                message: `GSTR-1 report downloaded successfully (${listToExport.length} invoices)`
+            });
+            setTimeout(() => setSyncStatus(prev => ({ ...prev, message: '' })), 4000);
+        } catch (err) {
+            console.error('Error downloading GSTR-1:', err);
+            setSyncStatus({
+                success: false,
+                message: 'Failed to download GSTR-1 report. Please try again.'
+            });
+            setTimeout(() => setSyncStatus(prev => ({ ...prev, message: '' })), 4000);
+        }
     };
 
     const downloadGstr3b = () => {
-        const headers = ['Nature of Supply / Description', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Total Tax'];
-        const rows = [
-            ['Outward Taxable Supplies (B2B)', gstr3bCalculations.b2b.taxable.toFixed(2), gstr3bCalculations.b2b.cgst.toFixed(2), gstr3bCalculations.b2b.sgst.toFixed(2), gstr3bCalculations.b2b.igst.toFixed(2), (gstr3bCalculations.b2b.cgst + gstr3bCalculations.b2b.sgst + gstr3bCalculations.b2b.igst).toFixed(2)],
-            ['Outward Taxable Supplies (B2C)', gstr3bCalculations.b2c.taxable.toFixed(2), gstr3bCalculations.b2c.cgst.toFixed(2), gstr3bCalculations.b2c.sgst.toFixed(2), gstr3bCalculations.b2c.igst.toFixed(2), (gstr3bCalculations.b2c.cgst + gstr3bCalculations.b2c.sgst + gstr3bCalculations.b2c.igst).toFixed(2)],
-            ['Zero-Rated Supplies (Export / SEZ)', gstr3bCalculations.zero.taxable.toFixed(2), '0.00', '0.00', '0.00', '0.00'],
-            ['Nil-Rated & Exempted Supplies', gstr3bCalculations.nil.taxable.toFixed(2), '0.00', '0.00', '0.00', '0.00'],
-            ['Total Outward Liability', gstr3bCalculations.totalOutwardTaxable.toFixed(2), gstr3bCalculations.outwardCGST.toFixed(2), gstr3bCalculations.outwardSGST.toFixed(2), gstr3bCalculations.outwardIGST.toFixed(2), gstr3bCalculations.totalOutwardTax.toFixed(2)],
-            ['Eligible Input Tax Credit (ITC)', gstr3bCalculations.itc.taxable.toFixed(2), gstr3bCalculations.itc.cgst.toFixed(2), gstr3bCalculations.itc.sgst.toFixed(2), gstr3bCalculations.itc.igst.toFixed(2), gstr3bCalculations.totalITC.toFixed(2)],
-            ['Net Tax Payable (Cash Ledger)', '—', gstr3bCalculations.netCgstPayable.toFixed(2), gstr3bCalculations.netSgstPayable.toFixed(2), gstr3bCalculations.netIgstPayable.toFixed(2), gstr3bCalculations.totalNetTaxPayable.toFixed(2)],
-            ['ITC Credit Balance Carried Forward', '—', '—', '—', '—', gstr3bCalculations.closingItcBalance.toFixed(2)],
-        ];
-        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `GSTR3B_Summary_${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+        try {
+            const headers = ['Nature of Supply / Description', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Total Tax'];
+            const rows = [
+                ['"Outward Taxable Supplies (B2B)"', gstr3bCalculations.b2b.taxable.toFixed(2), gstr3bCalculations.b2b.cgst.toFixed(2), gstr3bCalculations.b2b.sgst.toFixed(2), gstr3bCalculations.b2b.igst.toFixed(2), (gstr3bCalculations.b2b.cgst + gstr3bCalculations.b2b.sgst + gstr3bCalculations.b2b.igst).toFixed(2)],
+                ['"Outward Taxable Supplies (B2C)"', gstr3bCalculations.b2c.taxable.toFixed(2), gstr3bCalculations.b2c.cgst.toFixed(2), gstr3bCalculations.b2c.sgst.toFixed(2), gstr3bCalculations.b2c.igst.toFixed(2), (gstr3bCalculations.b2c.cgst + gstr3bCalculations.b2c.sgst + gstr3bCalculations.b2c.igst).toFixed(2)],
+                ['"Zero-Rated Supplies (Export / SEZ)"', gstr3bCalculations.zero.taxable.toFixed(2), '0.00', '0.00', '0.00', '0.00'],
+                ['"Nil-Rated & Exempted Supplies"', gstr3bCalculations.nil.taxable.toFixed(2), '0.00', '0.00', '0.00', '0.00'],
+                ['"Total Outward Liability"', gstr3bCalculations.totalOutwardTaxable.toFixed(2), gstr3bCalculations.outwardCGST.toFixed(2), gstr3bCalculations.outwardSGST.toFixed(2), gstr3bCalculations.outwardIGST.toFixed(2), gstr3bCalculations.totalOutwardTax.toFixed(2)],
+                ['"Eligible Input Tax Credit (ITC)"', gstr3bCalculations.itc.taxable.toFixed(2), gstr3bCalculations.itc.cgst.toFixed(2), gstr3bCalculations.itc.sgst.toFixed(2), gstr3bCalculations.itc.igst.toFixed(2), gstr3bCalculations.totalITC.toFixed(2)],
+                ['"Net Tax Payable (Cash Ledger)"', '—', gstr3bCalculations.netCgstPayable.toFixed(2), gstr3bCalculations.netSgstPayable.toFixed(2), gstr3bCalculations.netIgstPayable.toFixed(2), gstr3bCalculations.totalNetTaxPayable.toFixed(2)],
+                ['"ITC Credit Balance Carried Forward"', '—', '—', '—', '—', gstr3bCalculations.closingItcBalance.toFixed(2)],
+            ];
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.setAttribute('download', `GSTR3B_Summary_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 250);
+            setSyncStatus({
+                success: true,
+                message: 'GSTR-3B summary downloaded successfully'
+            });
+            setTimeout(() => setSyncStatus(prev => ({ ...prev, message: '' })), 4000);
+        } catch (err) {
+            console.error('Error downloading GSTR-3B:', err);
+            setSyncStatus({
+                success: false,
+                message: 'Failed to download GSTR-3B summary. Please try again.'
+            });
+            setTimeout(() => setSyncStatus(prev => ({ ...prev, message: '' })), 4000);
+        }
     };
 
     return (

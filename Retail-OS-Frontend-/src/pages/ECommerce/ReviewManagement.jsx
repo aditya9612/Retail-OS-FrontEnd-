@@ -5,19 +5,17 @@ import {
     BsEye, BsShieldFill, BsFlag, BsArrowUpRight,
 } from 'react-icons/bs';
 
-/* ── Mock Data ─────────────────────────── */
-const REVIEWS = [
-    { id: 'REV-001', product: 'Wireless Earbuds Pro', productId: 'PRD-001', customer: 'Aarav Mehta', date: '24 Jun 2026', rating: 5, title: 'Absolutely love it!', comment: 'Crystal clear sound, great bass. Battery life is amazing – lasts all day. Would highly recommend!', status: 'Approved', images: 1, helpful: 42 },
-    { id: 'REV-002', product: 'Organic Green Tea', productId: 'PRD-002', customer: 'Priya Sharma', date: '23 Jun 2026', rating: 4, title: 'Good quality tea', comment: 'Nice aroma and fresh flavor. The packaging could be better to preserve freshness longer.', status: 'Approved', images: 0, helpful: 18 },
-    { id: 'REV-003', product: 'Leather Crossbody Bag', productId: 'PRD-003', customer: 'Rohan Das', date: '22 Jun 2026', rating: 1, title: 'Terrible quality', comment: 'The strap broke within a week of use. Very poor build quality. Not worth the price at all. Requesting refund.', status: 'Pending', images: 2, helpful: 5 },
-    { id: 'REV-004', product: 'Smart Fitness Band X2', productId: 'PRD-004', customer: 'Nisha Patel', date: '21 Jun 2026', rating: 4, title: 'Great fitness tracker', comment: 'Heart rate monitoring is accurate. Steps counter works well. Sleep tracking could be improved.', status: 'Approved', images: 1, helpful: 31 },
-    { id: 'REV-005', product: "Men's Cotton Kurta", productId: 'PRD-005', customer: 'Vikram Singh', date: '21 Jun 2026', rating: 5, title: 'Perfect for festivals', comment: 'Great fabric quality and the fit is perfect. Colors are vibrant as shown. Will order more.', status: 'Approved', images: 0, helpful: 22 },
-    { id: 'REV-006', product: 'Matte Lipstick Set', productId: 'PRD-007', customer: 'Kavya Reddy', date: '20 Jun 2026', rating: 2, title: 'Not long-lasting', comment: 'Fades within 2 hours. Packaging is nice but quality is disappointing for the price.', status: 'Pending', images: 0, helpful: 8 },
-    { id: 'REV-007', product: 'Running Shoes Pro', productId: 'PRD-009', customer: 'Arjun Kumar', date: '19 Jun 2026', rating: 5, title: 'Best running shoes I have owned', comment: 'Super comfortable and lightweight. Great grip on wet surfaces. Size runs true to size.', status: 'Approved', images: 3, helpful: 56 },
-    { id: 'REV-008', product: 'Bluetooth Speaker Mini', productId: 'PRD-010', customer: 'Divya Iyer', date: '18 Jun 2026', rating: 3, title: 'Average performance', comment: 'Decent sound for the price. Bass is lacking at higher volumes. Build feels cheap but waterproofing works.', status: 'Pending', images: 0, helpful: 12 },
-    { id: 'REV-009', product: 'Non-Stick Cookware Set', productId: 'PRD-008', customer: 'Suresh Rao', date: '17 Jun 2026', rating: 4, title: 'Good value for money', comment: 'Excellent non-stick coating. Heats evenly. Handles are sturdy. Looks great in the kitchen.', status: 'Approved', images: 2, helpful: 28 },
-    { id: 'REV-010', product: 'Wireless Earbuds Pro', productId: 'PRD-001', customer: 'Tanvi Joshi', date: '16 Jun 2026', rating: 2, title: 'Connectivity issues', comment: 'Keeps disconnecting every 10 minutes. Very frustrating. Customer support was unhelpful.', status: 'Flagged', images: 0, helpful: 3 },
-];
+/* ── Helper to load real or stored reviews ── */
+const loadStoredReviews = () => {
+    try {
+        const stored = localStorage.getItem('product_reviews');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) return parsed;
+        }
+    } catch (_) {}
+    return [];
+};
 
 const PAGE_SIZE = 6;
 
@@ -102,7 +100,7 @@ const ReviewDetail = ({ review, onClose, onAction }) => {
 
 /* ── Main Component ──────────────────── */
 const ReviewManagement = () => {
-    const [reviews, setReviews] = useState(REVIEWS);
+    const [reviews, setReviews] = useState(loadStoredReviews);
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
     const [filterRating, setFilterRating] = useState('All');
@@ -124,11 +122,11 @@ const ReviewManagement = () => {
     };
 
     const filtered = reviews.filter(r => {
-        const matchSearch = r.product.toLowerCase().includes(search.toLowerCase()) ||
-            r.customer.toLowerCase().includes(search.toLowerCase()) ||
-            r.title.toLowerCase().includes(search.toLowerCase()) ||
-            (r.comment && r.comment.toLowerCase().includes(search.toLowerCase())) ||
-            (r.id && r.id.toLowerCase().includes(search.toLowerCase()));
+        const matchSearch = String(r.product || '').toLowerCase().includes(search.toLowerCase()) ||
+            String(r.customer || '').toLowerCase().includes(search.toLowerCase()) ||
+            String(r.title || '').toLowerCase().includes(search.toLowerCase()) ||
+            String(r.comment || '').toLowerCase().includes(search.toLowerCase()) ||
+            String(r.id || '').toLowerCase().includes(search.toLowerCase());
         const matchStatus = filterStatus === 'All' || r.status === filterStatus;
         const matchRating = filterRating === 'All' || r.rating === parseInt(filterRating, 10);
         return matchSearch && matchStatus && matchRating;
@@ -139,14 +137,22 @@ const ReviewManagement = () => {
     const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
     const handleAction = (id, newStatus) => {
-        setReviews(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
+        setReviews(prev => {
+            const next = prev.map(r => r.id === id ? { ...r, status: newStatus } : r);
+            try { localStorage.setItem('product_reviews', JSON.stringify(next)); } catch (_) {}
+            return next;
+        });
         if (selected && selected.id === id) {
             setSelected(prev => prev ? { ...prev, status: newStatus } : null);
         }
     };
 
     const handleDelete = (id) => {
-        setReviews(prev => prev.filter(r => r.id !== id));
+        setReviews(prev => {
+            const next = prev.filter(r => r.id !== id);
+            try { localStorage.setItem('product_reviews', JSON.stringify(next)); } catch (_) {}
+            return next;
+        });
         if (selected && selected.id === id) {
             setSelected(null);
         }
@@ -157,12 +163,12 @@ const ReviewManagement = () => {
         : (reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length).toFixed(1);
 
     const kpis = [
-        { label: 'Total Reviews', value: counts.all, color: '#6366f1', bg: '#eef2ff', icon: '💬', status: 'All' },
-        { label: 'Approved Reviews', value: counts.approved, color: '#10b981', bg: '#ecfdf5', icon: '✅', status: 'Approved' },
-        { label: 'Pending Review', value: counts.pending, color: '#f59e0b', bg: '#fffbeb', icon: '⏳', status: 'Pending' },
-        { label: 'Flagged Reviews', value: counts.flagged, color: '#ef4444', bg: '#fef2f2', icon: '🚩', status: 'Flagged' },
-        { label: 'Rejected Reviews', value: counts.rejected, color: '#6b7280', bg: '#f3f4f6', icon: '❌', status: 'Rejected' },
-        { label: 'Avg. Rating', value: `${avgRating} ★`, color: '#f59e0b', bg: '#fffbeb', icon: '⭐', status: null },
+        { label: 'Total Reviews', value: counts.all, color: '#6366f1', bg: '#eef2ff', icon: '💬', badge: 'Total' },
+        { label: 'Approved Reviews', value: counts.approved, color: '#10b981', bg: '#ecfdf5', icon: '✅', badge: 'Approved' },
+        { label: 'Pending Review', value: counts.pending, color: '#f59e0b', bg: '#fffbeb', icon: '⏳', badge: 'Pending' },
+        { label: 'Flagged Reviews', value: counts.flagged, color: '#ef4444', bg: '#fef2f2', icon: '🚩', badge: 'Flagged' },
+        { label: 'Rejected Reviews', value: counts.rejected, color: '#6b7280', bg: '#f3f4f6', icon: '❌', badge: 'Rejected' },
+        { label: 'Avg. Rating', value: `${avgRating} ★`, color: '#f59e0b', bg: '#fffbeb', icon: '⭐', badge: 'Score' },
     ];
 
     const resetFilters = () => {
@@ -186,45 +192,30 @@ const ReviewManagement = () => {
                 </div>
             </div>
 
-            {/* KPIs */}
+            {/* KPI Metric Overview Cards (Informational) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
-                {kpis.map((k, i) => {
-                    const isActive = k.status && filterStatus === k.status;
-                    return (
-                        <div
-                            key={i}
-                            className="adm-kpi-card"
-                            style={{
-                                padding: '14px 18px',
-                                cursor: k.status ? 'pointer' : 'default',
-                                border: isActive ? `2px solid ${k.color}` : '1.5px solid transparent',
-                                transition: 'all 0.15s ease',
-                                boxShadow: isActive ? `0 4px 12px ${k.color}25` : undefined,
-                            }}
-                            onClick={() => {
-                                if (k.status) {
-                                    setFilterStatus(k.status);
-                                    setPage(1);
-                                }
-                            }}
-                            title={k.status ? `Filter by ${k.label}` : undefined}
-                        >
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                <span style={{ fontSize: 22 }}>{k.icon}</span>
-                                {k.status && (
-                                    <span style={{
-                                        fontSize: 10, fontWeight: 700, color: k.color, background: k.bg,
-                                        padding: '2px 8px', borderRadius: 20
-                                    }}>
-                                        {isActive ? '✓ Active' : 'Filter'}
-                                    </span>
-                                )}
-                            </div>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k.label}</p>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: k.color, marginTop: 4 }}>{k.value}</p>
+                {kpis.map((k, i) => (
+                    <div
+                        key={i}
+                        className="adm-kpi-card"
+                        style={{
+                            padding: '14px 18px',
+                            border: '1.5px solid transparent',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <span style={{ fontSize: 22 }}>{k.icon}</span>
+                            <span style={{
+                                fontSize: 10, fontWeight: 700, color: k.color, background: k.bg,
+                                padding: '2px 8px', borderRadius: 20
+                            }}>
+                                {k.badge}
+                            </span>
                         </div>
-                    );
-                })}
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k.label}</p>
+                        <p style={{ fontSize: 24, fontWeight: 800, color: k.color, marginTop: 4 }}>{k.value}</p>
+                    </div>
+                ))}
             </div>
 
             {/* Status Quick-Tabs */}

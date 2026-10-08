@@ -9,36 +9,7 @@ import {
     BsPrinter, BsArrowUpRight, BsCurrencyRupee, BsReceiptCutoff, BsCartCheck,
     BsBoxArrowUpRight, BsX, BsExclamationTriangleFill, BsListUl,
 } from 'react-icons/bs';
-import { getCart, getInvoiceByOrderId, downloadInvoicePdf, returnOrder, returnInvoiceItem } from '../../services/billingService';
-
-/* ── Helper to calculate standard Indian GST slabs (0%, 5%, 12%, 18%, 28%) ── */
-const calculateGST = (taxable, rate, isInterState = false) => {
-    const gst = Math.round((taxable * rate) / 100 * 100) / 100;
-    const cgst = isInterState ? 0 : Math.round((gst / 2) * 100) / 100;
-    const sgst = isInterState ? 0 : Math.round((gst - cgst) * 100) / 100;
-    const igst = isInterState ? gst : 0;
-    const amount = Math.round((taxable + gst) * 100) / 100;
-    return { gst, cgst, sgst, igst, amount };
-};
-
-const createMockInvoice = ({ id, customer, date, taxable, gstRate, hsn, status, mode, isInterState = false }) => {
-    const calc = calculateGST(taxable, gstRate, isInterState);
-    return { id, customer, date, taxable, gstRate, ...calc, hsn, status, mode };
-};
-
-/* ── Mock invoice data with standard Indian GST rates (0%, 5%, 12%, 18%) ── */
-const ALL_INVOICES = [
-    createMockInvoice({ id: 'INV-2026001', customer: 'Rahul Sharma', date: '2026-06-24', taxable: 3900, gstRate: 18, hsn: '8518', status: 'Paid', mode: 'UPI' }),
-    createMockInvoice({ id: 'INV-2026002', customer: 'Priya Patel', date: '2026-06-24', taxable: 1920, gstRate: 5, hsn: '6109', status: 'Paid', mode: 'Cash' }),
-    createMockInvoice({ id: 'INV-2026003', customer: 'Amit Kumar', date: '2026-06-23', taxable: 7300, gstRate: 18, hsn: '8517', status: 'Pending', mode: 'Card', isInterState: true }),
-    createMockInvoice({ id: 'INV-2026004', customer: 'Sneha Singh', date: '2026-06-23', taxable: 1050, gstRate: 12, hsn: '4202', status: 'Cancelled', mode: 'UPI' }),
-    createMockInvoice({ id: 'INV-2026005', customer: 'Vikram Mehta', date: '2026-06-22', taxable: 5500, gstRate: 18, hsn: '8517', status: 'Paid', mode: 'Cash' }),
-    createMockInvoice({ id: 'INV-2026006', customer: 'Anjali Gupta', date: '2026-06-22', taxable: 2850, gstRate: 12, hsn: '6203', status: 'Paid', mode: 'UPI' }),
-    createMockInvoice({ id: 'INV-2026007', customer: 'Rohit Verma', date: '2026-06-21', taxable: 9200, gstRate: 18, hsn: '8518', status: 'Paid', mode: 'Card' }),
-    createMockInvoice({ id: 'INV-2026008', customer: 'Kavya Nair', date: '2026-06-21', taxable: 890, gstRate: 12, hsn: '6109', status: 'Paid', mode: 'Cash' }),
-    createMockInvoice({ id: 'INV-2026009', customer: 'Suresh Reddy', date: '2026-06-20', taxable: 5000, gstRate: 12, hsn: '7323', status: 'Pending', mode: 'UPI' }),
-    createMockInvoice({ id: 'INV-2026010', customer: 'Meera Joshi', date: '2026-06-20', taxable: 1800, gstRate: 18, hsn: '8504', status: 'Paid', mode: 'Card' }),
-];
+import { getCart, getInvoiceByOrderId, downloadInvoicePdf, returnOrder, returnInvoiceItem, getInvoices } from '../../services/billingService';
 
 const statusConfig = {
     Paid: { color: '#10b981', bg: '#ecfdf5', icon: <BsCheckCircleFill size={11} /> },
@@ -47,21 +18,35 @@ const statusConfig = {
     Returned: { color: '#ef4444', bg: '#fef2f2', icon: <BsXCircleFill size={11} /> },
 };
 
-const fmt = (n) => '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-/* ── Derive June totals directly from ALL_INVOICES so chart matches table ── */
-const junInvoices = ALL_INVOICES.filter(inv => inv.date.startsWith('2026-06'));
-const junActiveInvoices = ALL_INVOICES.filter(inv => inv.date.startsWith('2026-06') && inv.status !== 'Cancelled' && inv.status !== 'Returned');
-const junGst = Math.round(junActiveInvoices.reduce((s, inv) => s + (inv.gst || 0), 0) * 100) / 100;
-
-const monthlyTrend = [
-    { month: 'Jan', invoices: 240, gst: 36000 },
-    { month: 'Feb', invoices: 285, gst: 42750 },
-    { month: 'Mar', invoices: 310, gst: 46500 },
-    { month: 'Apr', invoices: 275, gst: 41250 },
-    { month: 'May', invoices: 340, gst: 51000 },
-    { month: 'Jun', invoices: junInvoices.length, gst: junGst },
-];
+/* ── Load local storage invoices generated from POS billing ── */
+const loadLocalInvoices = () => {
+    try {
+        const stored = localStorage.getItem('gst_invoices');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                return parsed.map(inv => ({
+                    id: inv.id || inv.invoice_number || `INV-${inv.order_id || Date.now()}`,
+                    customer: inv.customer || inv.customer_name || 'Walk-in Customer',
+                    date: inv.date || (inv.created_at ? inv.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+                    taxable: Number(inv.taxable || inv.taxable_amount || 0),
+                    gstRate: Number(inv.rate || inv.gst_rate || 18),
+                    gst: Number(inv.gst != null ? inv.gst : ((inv.cgst || 0) + (inv.sgst || 0) + (inv.igst || 0))),
+                    cgst: Number(inv.cgst || 0),
+                    sgst: Number(inv.sgst || 0),
+                    igst: Number(inv.igst || 0),
+                    amount: Number(inv.amount || inv.total || inv.grand_total || 0),
+                    hsn: inv.hsn || inv.hsn_code || '—',
+                    status: inv.status || 'Paid',
+                    mode: inv.mode || inv.payment_mode || 'Cash',
+                }));
+            }
+        }
+    } catch (_) { }
+    return [];
+};
 
 const BillingManagement = () => {
     const [search, setSearch] = useState('');
@@ -90,6 +75,85 @@ const BillingManagement = () => {
         return () => { cancelled = true; };
     }, []);
     // ────────────────────────────────────────────────────────────────────────
+
+    // ── Live Invoices from API & Local POS Sales ────────────────────────────
+    const [invoices, setInvoices] = useState(loadLocalInvoices);
+    const [invoicesLoading, setInvoicesLoading] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        const fetchInvoices = async () => {
+            setInvoicesLoading(true);
+            try {
+                const apiRes = await getInvoices();
+                const list = Array.isArray(apiRes) ? apiRes : (apiRes?.data || apiRes?.items || []);
+                if (!cancelled) {
+                    const apiMapped = list.map(inv => ({
+                        id: inv.id || inv.invoice_number || `INV-${inv.order_id || ''}`,
+                        customer: inv.customer_name || inv.customer || 'Walk-in Customer',
+                        date: inv.date || (inv.created_at ? inv.created_at.split('T')[0] : ''),
+                        taxable: Number(inv.subtotal || inv.taxable || inv.taxable_amount || 0),
+                        gstRate: Number(inv.gst_rate || inv.rate || (inv.taxable ? Math.round(((inv.gst_amount || inv.gst || 0) / inv.taxable) * 100) : 18)),
+                        gst: Number(inv.gst_amount != null ? inv.gst_amount : (inv.gst != null ? inv.gst : ((inv.cgst_amount || 0) + (inv.sgst_amount || 0) + (inv.igst_amount || 0)))),
+                        cgst: Number(inv.cgst_amount || inv.cgst || 0),
+                        sgst: Number(inv.sgst_amount || inv.sgst || 0),
+                        igst: Number(inv.igst_amount || inv.igst || 0),
+                        amount: Number(inv.grand_total || inv.amount || inv.total || 0),
+                        hsn: inv.hsn || inv.hsn_code || '—',
+                        status: inv.status ? (inv.status.charAt(0).toUpperCase() + inv.status.slice(1).toLowerCase()) : 'Paid',
+                        mode: inv.payment_mode || inv.mode || 'Cash',
+                    }));
+
+                    const local = loadLocalInvoices();
+                    const merged = [...apiMapped];
+                    local.forEach(loc => {
+                        const exists = merged.some(m => String(m.id).toLowerCase() === String(loc.id).toLowerCase());
+                        if (!exists) {
+                            merged.unshift(loc);
+                        }
+                    });
+                    setInvoices(merged);
+                }
+            } catch (err) {
+                console.warn('[BillingManagement] getInvoices failed, using local storage:', err.message);
+                if (!cancelled) setInvoices(loadLocalInvoices());
+            } finally {
+                if (!cancelled) setInvoicesLoading(false);
+            }
+        };
+        fetchInvoices();
+        return () => { cancelled = true; };
+    }, []);
+
+    // Dynamic 6-month trend from real invoices
+    const monthlyTrend = useMemo(() => {
+        const months = [];
+        const now = new Date();
+        for (let i = 5; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const key = d.toISOString().slice(0, 7);
+            const label = d.toLocaleString('en-US', { month: 'short' });
+            months.push({ key, month: label, invoices: 0, gst: 0 });
+        }
+
+        invoices.forEach(inv => {
+            if (!inv.date) return;
+            const key = String(inv.date).slice(0, 7);
+            const m = months.find(item => item.key === key);
+            if (m) {
+                m.invoices += 1;
+                if (inv.status !== 'Cancelled' && inv.status !== 'Returned') {
+                    m.gst += Number(inv.gst || 0);
+                }
+            }
+        });
+
+        return months.map(m => ({
+            month: m.month,
+            invoices: m.invoices,
+            gst: Math.round(m.gst * 100) / 100
+        }));
+    }, [invoices]);
 
     // ── Invoice lookup by Order ID ──────────────────────────────────────────
     const [orderLookupId, setOrderLookupId] = useState('');
@@ -152,7 +216,7 @@ const BillingManagement = () => {
         try {
             await returnOrder(id);
             alert(`Successfully processed return for Order #${id}.`);
-            // Update local state if it's the currently viewed one
+            setInvoices(prev => prev.map(inv => String(inv.id) === String(id) ? { ...inv, status: 'Returned' } : inv));
             if (invoiceDetail && (invoiceDetail.order_id === id || invoiceDetail.id === id)) {
                 setInvoiceDetail(prev => ({ ...prev, status: 'Returned' }));
             }
@@ -183,7 +247,6 @@ const BillingManagement = () => {
             await returnInvoiceItem(payload);
             alert(`Successfully processed partial return for product #${productId}.`);
 
-            // Optionally update UI local state (e.g., mark item as returned)
             if (invoiceDetail) {
                 setInvoiceDetail(prev => {
                     const cloned = { ...prev };
@@ -204,41 +267,40 @@ const BillingManagement = () => {
     // ────────────────────────────────────────────────────────────────────────
 
     const filtered = useMemo(() => {
-        return ALL_INVOICES.filter(inv =>
+        return invoices.filter(inv =>
             (status === 'All' || inv.status === status) &&
             (mode === 'All' || inv.mode === mode) &&
-            (inv.id.toLowerCase().includes(search.toLowerCase()) ||
-                inv.customer.toLowerCase().includes(search.toLowerCase()))
+            (String(inv.id).toLowerCase().includes(search.toLowerCase()) ||
+                String(inv.customer).toLowerCase().includes(search.toLowerCase()))
         );
-    }, [search, status, mode]);
+    }, [invoices, search, status, mode]);
 
-    const totalPages = Math.ceil(filtered.length / perPage);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
     const paginated = filtered.slice((page - 1) * perPage, page * perPage);
 
     const summary = useMemo(() => {
-        // Exclude Cancelled / Returned invoices from revenue and GST collection totals
-        const activeInvoices = ALL_INVOICES.filter(i => i.status !== 'Cancelled' && i.status !== 'Returned');
-        const cancelledInvoices = ALL_INVOICES.filter(i => i.status === 'Cancelled' || i.status === 'Returned');
+        const activeInvoices = invoices.filter(i => i.status !== 'Cancelled' && i.status !== 'Returned');
+        const cancelledInvoices = invoices.filter(i => i.status === 'Cancelled' || i.status === 'Returned');
 
-        const cash = ALL_INVOICES.filter(i => i.mode === 'Cash').length;
-        const upi  = ALL_INVOICES.filter(i => i.mode === 'UPI').length;
-        const card = ALL_INVOICES.filter(i => i.mode === 'Card').length;
-        // Top customer by invoice count
+        const cash = invoices.filter(i => i.mode === 'Cash').length;
+        const upi  = invoices.filter(i => i.mode === 'UPI').length;
+        const card = invoices.filter(i => i.mode === 'Card').length;
+        
         const custMap = {};
-        ALL_INVOICES.forEach(i => { custMap[i.customer] = (custMap[i.customer] || 0) + 1; });
+        invoices.forEach(i => { custMap[i.customer] = (custMap[i.customer] || 0) + 1; });
         const topCustomer = Object.entries(custMap).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
         const topCustomerCount = custMap[topCustomer] || 0;
 
-        const revenue = Math.round(activeInvoices.reduce((s, i) => s + i.amount, 0) * 100) / 100;
-        const gstTotal = Math.round(activeInvoices.reduce((s, i) => s + i.gst, 0) * 100) / 100;
-        const cancelledRevenue = Math.round(cancelledInvoices.reduce((s, i) => s + i.amount, 0) * 100) / 100;
-        const cancelledGst = Math.round(cancelledInvoices.reduce((s, i) => s + i.gst, 0) * 100) / 100;
+        const revenue = Math.round(activeInvoices.reduce((s, i) => s + (i.amount || 0), 0) * 100) / 100;
+        const gstTotal = Math.round(activeInvoices.reduce((s, i) => s + (i.gst || 0), 0) * 100) / 100;
+        const cancelledRevenue = Math.round(cancelledInvoices.reduce((s, i) => s + (i.amount || 0), 0) * 100) / 100;
+        const cancelledGst = Math.round(cancelledInvoices.reduce((s, i) => s + (i.gst || 0), 0) * 100) / 100;
 
         return {
-            total:            ALL_INVOICES.length,
-            paid:             ALL_INVOICES.filter(i => i.status === 'Paid').length,
-            pending:          ALL_INVOICES.filter(i => i.status === 'Pending').length,
-            cancelled:        ALL_INVOICES.filter(i => i.status === 'Cancelled').length,
+            total:            invoices.length,
+            paid:             invoices.filter(i => i.status === 'Paid').length,
+            pending:          invoices.filter(i => i.status === 'Pending').length,
+            cancelled:        invoices.filter(i => i.status === 'Cancelled').length,
             revenue,
             gstTotal,
             cancelledRevenue,
@@ -249,7 +311,7 @@ const BillingManagement = () => {
             topCustomer,
             topCustomerCount,
         };
-    }, []);
+    }, [invoices]);
 
     return (
         <div className="dash-page">
@@ -285,21 +347,21 @@ const BillingManagement = () => {
                         value: summary.paid,
                         icon: <BsCheckCircleFill size={18} />,
                         color: '#10b981', bg: '#ecfdf5',
-                        note: `${Math.round(summary.paid / summary.total * 100)}% of total invoices`,
+                        note: `${summary.total > 0 ? Math.round(summary.paid / summary.total * 100) : 0}% of total invoices`,
                     },
                     {
                         label: 'Status: Pending',
                         value: summary.pending,
                         icon: <BsHourglassSplit size={18} />,
                         color: '#f59e0b', bg: '#fffbeb',
-                        note: `${Math.round(summary.pending / summary.total * 100)}% of total invoices`,
+                        note: `${summary.total > 0 ? Math.round(summary.pending / summary.total * 100) : 0}% of total invoices`,
                     },
                     {
                         label: 'Status: Cancelled',
                         value: summary.cancelled,
                         icon: <BsXCircleFill size={18} />,
                         color: '#ef4444', bg: '#fef2f2',
-                        note: `${Math.round(summary.cancelled / summary.total * 100)}% of total · ${fmt(summary.cancelledRevenue)} voided`,
+                        note: `${summary.total > 0 ? Math.round(summary.cancelled / summary.total * 100) : 0}% of total · ${fmt(summary.cancelledRevenue)} voided`,
                     },
                     {
                         label: 'Mode: Payment Split',
@@ -860,7 +922,20 @@ const BillingManagement = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {paginated.map((inv, i) => {
+                        {invoicesLoading ? (
+                            <tr>
+                                <td colSpan={10} style={{ textAlign: 'center', padding: '36px 0', color: '#64748b', fontSize: 13 }}>
+                                    Loading real-time invoices…
+                                </td>
+                            </tr>
+                        ) : paginated.length === 0 ? (
+                            <tr>
+                                <td colSpan={10} style={{ textAlign: 'center', padding: '36px 0', color: '#94a3b8', fontSize: 13 }}>
+                                    No invoices found. Complete checkout in POS Billing to view generated invoices.
+                                </td>
+                            </tr>
+                        ) : (
+                            paginated.map((inv, i) => {
                             const s = statusConfig[inv.status];
                             const modeIcon = inv.mode === 'Cash' ? '💵' : inv.mode === 'UPI' ? '📱' : '💳';
                             return (
@@ -998,7 +1073,8 @@ const BillingManagement = () => {
                                     </td>
                                 </tr>
                             );
-                        })}
+                        })
+                    )}
                     </tbody>
                 </table>
 
