@@ -1,25 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-    BsSearch, BsEye, BsDownload, BsArrowReturnLeft, BsChevronLeft,
-    BsChevronRight, BsCheckCircleFill, BsXCircleFill, BsClockHistory,
-    BsBoxSeam, BsTruck, BsCurrencyRupee, BsExclamationTriangleFill,
-    BsFilter,
+    BsClockHistory, BsCheckCircleFill, BsTruck, BsCurrencyRupee,
+    BsXCircleFill, BsDownload, BsSearch, BsEye,
+    BsChevronLeft, BsChevronRight,
 } from 'react-icons/bs';
-
-/* ── Mock Data ─────────────────────────── */
-const RETURN_REQUESTS = [
-    { id: 'RET-001', orderId: 'ONL-10036', customer: 'Kavya Reddy', email: 'kavya@email.com', date: '25 Jun 2026', product: 'Wireless Earbuds Pro', qty: 1, amount: 2499, reason: 'Defective Product', description: 'One earbud stopped working after 3 days of use. Sound comes only from the right side.', status: 'Approved', pickupDate: '27 Jun 2026', refundMethod: 'Original Payment', refundStatus: 'Pending' },
-    { id: 'RET-002', orderId: 'ONL-10029', customer: 'Rohan Das', email: 'rohan@email.com', date: '24 Jun 2026', product: 'Leather Crossbody Bag', qty: 1, amount: 2079, reason: 'Wrong Product', description: 'Received a brown bag but ordered black. Complete color mismatch.', status: 'Pending', pickupDate: null, refundMethod: 'Wallet Credit', refundStatus: 'N/A' },
-    { id: 'RET-003', orderId: 'ONL-10015', customer: 'Nisha Patel', email: 'nisha@email.com', date: '24 Jun 2026', product: 'Smart Fitness Band X2', qty: 1, amount: 1999, reason: 'Damaged Product', description: 'Package was completely damaged on arrival. Screen has cracks.', status: 'Pickup Scheduled', pickupDate: '26 Jun 2026', refundMethod: 'Original Payment', refundStatus: 'Pending' },
-    { id: 'RET-004', orderId: 'ONL-10041', customer: 'Aarav Mehta', email: 'aarav@email.com', date: '23 Jun 2026', product: "Men's Cotton Kurta", qty: 2, amount: 1398, reason: 'Wrong Product', description: 'Size L was ordered but received size XL. Does not fit properly.', status: 'Refunded', pickupDate: '24 Jun 2026', refundMethod: 'Original Payment', refundStatus: 'Completed' },
-    { id: 'RET-005', orderId: 'ONL-10038', customer: 'Vikram Singh', email: 'vikram@email.com', date: '22 Jun 2026', product: 'Running Shoes Pro', qty: 1, amount: 4499, reason: 'Defective Product', description: 'Sole started detaching after first use. Manufacturing defect.', status: 'Pending', pickupDate: null, refundMethod: 'Original Payment', refundStatus: 'N/A' },
-    { id: 'RET-006', orderId: 'ONL-10022', customer: 'Divya Iyer', email: 'divya@email.com', date: '21 Jun 2026', product: 'Matte Lipstick Set', qty: 1, amount: 599, reason: 'Damaged Product', description: 'Lipstick was broken inside the packaging.', status: 'Rejected', pickupDate: null, refundMethod: 'N/A', refundStatus: 'N/A' },
-    { id: 'RET-007', orderId: 'ONL-10011', customer: 'Suresh Rao', email: 'suresh@email.com', date: '20 Jun 2026', product: 'Non-Stick Cookware Set', qty: 1, amount: 3499, reason: 'Wrong Product', description: 'Ordered 5-piece set but only received 3 pieces.', status: 'Pickup Scheduled', pickupDate: '22 Jun 2026', refundMethod: 'Wallet Credit', refundStatus: 'Pending' },
-    { id: 'RET-008', orderId: 'ONL-10003', customer: 'Tanvi Joshi', email: 'tanvi@email.com', date: '19 Jun 2026', product: 'Bluetooth Speaker Mini', qty: 1, amount: 1299, reason: 'Defective Product', description: 'Speaker produces static noise. Volume control not working.', status: 'Refunded', pickupDate: '20 Jun 2026', refundMethod: 'Wallet Credit', refundStatus: 'Completed' },
-];
+import apiClient from '../../services/api';
 
 const PAGE_SIZE = 6;
-const fmt = (n) => '₹' + n.toLocaleString('en-IN');
+const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
 
 const statusCfg = {
     Pending: { color: '#f59e0b', bg: '#fffbeb', icon: <BsClockHistory size={10} /> },
@@ -150,26 +138,67 @@ const ReturnModal = ({ request, onClose, onAction }) => {
 
 /* ── Main Component ──────────────────── */
 const ReturnManagement = () => {
-    const [requests, setRequests] = useState(RETURN_REQUESTS);
+    const [requests, setRequests] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
     const [filterReason, setFilterReason] = useState('All Reasons');
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState(null);
 
+    const fetchReturns = React.useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await apiClient.get('/order-returns');
+            const list = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.items || []);
+            const mapped = list.map(item => ({
+                id: item.id ? `RET-${String(item.id).padStart(3, '0')}` : item.return_number || `RET-${Date.now()}`,
+                rawId: item.id,
+                orderId: item.order_number || (item.order_id ? `ONL-${item.order_id}` : '—'),
+                customer: item.customer_name || item.customer || 'Customer',
+                email: item.customer_email || item.email || '—',
+                date: item.created_at ? new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : (item.date || '—'),
+                product: item.product_name || item.product || 'Product',
+                qty: item.quantity || item.qty || 1,
+                amount: Number(item.refund_amount || item.amount || 0),
+                reason: item.reason || 'Wrong Product',
+                description: item.notes || item.description || '—',
+                status: item.status ? (item.status.charAt(0).toUpperCase() + item.status.slice(1)) : 'Pending',
+                pickupDate: item.pickup_date || null,
+                refundMethod: item.refund_method || 'Original Payment',
+                refundStatus: item.refund_status || (item.status === 'Refunded' ? 'Completed' : 'Pending'),
+            }));
+            setRequests(mapped);
+        } catch (err) {
+            console.warn('[ReturnManagement] Failed to fetch returns:', err.message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    React.useEffect(() => {
+        fetchReturns();
+    }, [fetchReturns]);
+
     const filtered = requests.filter(r => {
-        const matchSearch = r.id.toLowerCase().includes(search.toLowerCase()) ||
-            r.customer.toLowerCase().includes(search.toLowerCase()) ||
-            r.product.toLowerCase().includes(search.toLowerCase());
+        const matchSearch = String(r.id).toLowerCase().includes(search.toLowerCase()) ||
+            String(r.customer).toLowerCase().includes(search.toLowerCase()) ||
+            String(r.product).toLowerCase().includes(search.toLowerCase());
         const matchStatus = filterStatus === 'All' || r.status === filterStatus;
         const matchReason = filterReason === 'All Reasons' || r.reason === filterReason;
         return matchSearch && matchStatus && matchReason;
     });
 
-    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    const handleAction = (id, newStatus) => {
+    const handleAction = async (id, newStatus) => {
+        const target = requests.find(r => r.id === id);
+        if (target && target.rawId) {
+            try {
+                await apiClient.put(`/order-returns/${target.rawId}`, { status: newStatus.toLowerCase() }).catch(() => {});
+            } catch (_) {}
+        }
         setRequests(prev => prev.map(r => r.id === id ? { ...r, status: newStatus } : r));
     };
 
@@ -232,7 +261,14 @@ const ReturnManagement = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {paginated.map((r, i) => {
+                        {loading && (
+                            <tr>
+                                <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                                    Loading real-time return requests…
+                                </td>
+                            </tr>
+                        )}
+                        {!loading && paginated.map((r, i) => {
                             const sc = statusCfg[r.status];
                             const rc = reasonCfg[r.reason];
                             return (
@@ -276,7 +312,7 @@ const ReturnManagement = () => {
                                 </tr>
                             );
                         })}
-                        {paginated.length === 0 && (
+                        {!loading && paginated.length === 0 && (
                             <tr><td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 14 }}>No return requests found</td></tr>
                         )}
                     </tbody>

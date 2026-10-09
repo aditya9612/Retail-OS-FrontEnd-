@@ -29,4 +29,6 @@ const productService = {
     },
 };
 
+export const product = productService;
+export { productService };
 export default productService;
