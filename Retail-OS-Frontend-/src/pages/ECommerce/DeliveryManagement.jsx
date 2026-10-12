@@ -66,6 +66,37 @@ const formatDateTime = (dateStr) => {
 
 const fmtCurrency = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
 
+const TERMINAL_DELIVERY_STATUSES = ['cancelled', 'delivered'];
+
+const isTerminalDeliveryStatus = (status) => TERMINAL_DELIVERY_STATUSES.includes(status);
+
+/** Table/drawer display for delivered_at — cancelled must not show Pending. */
+const getDeliveredAtDisplay = (delivery) => {
+    if (!delivery) return { text: 'N/A', italic: false };
+    if (delivery.status === 'cancelled') return { text: 'N/A', italic: false };
+    if (delivery.delivered_at) return { text: formatDateTime(delivery.delivered_at), italic: false };
+    if (delivery.status === 'delivered') return { text: 'N/A', italic: false };
+    return { text: 'Pending', italic: true };
+};
+
+const getDeliveryTypeLabel = (delivery) => {
+    if (!delivery) return null;
+    return (
+        delivery.delivery_method_name
+        || delivery.method_name
+        || delivery.delivery_type
+        || delivery.delivery_method?.name
+        || null
+    );
+};
+
+const getDeliveryChargeLabel = (delivery) => {
+    if (!delivery) return null;
+    const charge = delivery.delivery_charge ?? delivery.shipping_charge ?? delivery.delivery_charges;
+    if (charge === null || charge === undefined || charge === '') return null;
+    return fmtCurrency(charge);
+};
+
 // ==========================================
 // MODAL 1: CREATE DELIVERY SHIPMENT
 // ==========================================
@@ -214,9 +245,17 @@ const AssignPartnerModal = ({ delivery, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    if (isTerminalDeliveryStatus(delivery?.status)) {
+        return null;
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        if (isTerminalDeliveryStatus(delivery?.status)) {
+            setError('Partner cannot be assigned to a finalized delivery.');
+            return;
+        }
         if (!deliveryPerson.trim()) {
             setError('Delivery Person / Partner name is required.');
             return;
@@ -299,9 +338,17 @@ const UpdateAddressModal = ({ delivery, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    if (isTerminalDeliveryStatus(delivery?.status)) {
+        return null;
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        if (isTerminalDeliveryStatus(delivery?.status)) {
+            setError('Address cannot be updated for a finalized delivery.');
+            return;
+        }
         if (!deliveryAddress.trim()) {
             setError('Delivery address is required.');
             return;
@@ -371,9 +418,17 @@ const CancelDeliveryModal = ({ delivery, onClose, onSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    if (isTerminalDeliveryStatus(delivery?.status)) {
+        return null;
+    }
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        if (isTerminalDeliveryStatus(delivery?.status)) {
+            setError('This delivery cannot be cancelled.');
+            return;
+        }
         if (!reason.trim()) {
             setError('Cancellation reason is required.');
             return;
@@ -598,28 +653,40 @@ const DeliveryDetailDrawer = ({ deliveryId, onClose, onStatusChanged, onOpenAssi
     const fetchDrawerDetails = useCallback(async () => {
         setLoading(true);
         setError('');
+        setTracking(null);
         try {
-            const [delRes, trackRes, histRes] = await Promise.allSettled([
-                getDeliveryById(deliveryId),
-                getDeliveryTracking(deliveryId),
-                getDeliveryHistory(deliveryId),
-            ]);
+            const delRes = await getDeliveryById(deliveryId);
+            const deliveryData = delRes?.data || delRes;
+            if (!deliveryData) {
+                throw new Error('Failed to load delivery');
+            }
+            setDelivery(deliveryData);
 
-            if (delRes.status === 'fulfilled') {
-                setDelivery(delRes.value?.data || delRes.value);
-            } else {
-                throw new Error(delRes.reason?.response?.data?.detail || delRes.reason?.message || 'Failed to load delivery');
+            const historyPromise = getDeliveryHistory(deliveryId);
+            if (deliveryData.status !== 'cancelled') {
+                try {
+                    const trackRes = await getDeliveryTracking(deliveryId);
+                    setTracking(trackRes?.data || trackRes);
+                } catch (trackErr) {
+                    console.warn('Delivery tracking unavailable:', trackErr?.message || trackErr);
+                }
             }
 
-            if (trackRes.status === 'fulfilled') {
-                setTracking(trackRes.value?.data || trackRes.value);
-            }
-            if (histRes.status === 'fulfilled') {
-                const histData = histRes.value?.data;
+            try {
+                const histRes = await historyPromise;
+                const histData = histRes?.data;
                 setHistory(Array.isArray(histData) ? histData : (histData?.items || []));
+            } catch (histErr) {
+                console.warn('Delivery history unavailable:', histErr?.message || histErr);
+                setHistory([]);
             }
         } catch (err) {
-            setError(err.message || 'Failed to load full delivery details.');
+            setError(
+                err.response?.data?.detail
+                || err.response?.data?.message
+                || err.message
+                || 'Failed to load full delivery details.'
+            );
         } finally {
             setLoading(false);
         }
@@ -646,6 +713,11 @@ const DeliveryDetailDrawer = ({ deliveryId, onClose, onStatusChanged, onOpenAssi
 
     if (!deliveryId) return null;
     const sc = statusConfig[delivery?.status] || { label: delivery?.status || 'Unknown', color: '#6b7280', bg: '#f9fafb' };
+    const isTerminal = isTerminalDeliveryStatus(delivery?.status);
+    const isCancelled = delivery?.status === 'cancelled';
+    const deliveredAtFooter = getDeliveredAtDisplay(delivery);
+    const typeLabel = getDeliveryTypeLabel(delivery);
+    const chargeLabel = getDeliveryChargeLabel(delivery);
 
     return (
         <div className="ec-modal-overlay" onClick={onClose} style={{ zIndex: 1100, display: 'flex', justifyContent: 'flex-end' }}>
@@ -678,7 +750,7 @@ const DeliveryDetailDrawer = ({ deliveryId, onClose, onStatusChanged, onOpenAssi
                     {loading ? (
                         <div style={{ padding: 40, textAlign: 'center', color: '#6366f1' }}>
                             <BsArrowClockwise size={22} className="spin" style={{ marginRight: 8, display: 'inline-block' }} />
-                            Fetching real-time tracking data...
+                            Fetching delivery details...
                         </div>
                     ) : error ? (
                         <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', padding: '12px 14px', borderRadius: 8, fontSize: 12 }}>
@@ -715,59 +787,80 @@ const DeliveryDetailDrawer = ({ deliveryId, onClose, onStatusChanged, onOpenAssi
                                 )}
                             </div>
 
+                            {(typeLabel || chargeLabel) && (
+                                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '12px 18px', display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12 }}>
+                                    {typeLabel && (
+                                        <span><span style={{ color: '#9ca3af', fontWeight: 700 }}>Delivery Type: </span>{typeLabel}</span>
+                                    )}
+                                    {chargeLabel && (
+                                        <span><span style={{ color: '#9ca3af', fontWeight: 700 }}>Delivery Charges: </span>{chargeLabel}</span>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Tracking & Carrier Information */}
                             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px' }}>
                                 <h4 style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <BsTruck style={{ color: '#6366f1' }} /> Live Tracking & Logistics Partner
+                                    <BsTruck style={{ color: '#6366f1' }} /> {isCancelled ? 'Logistics Partner' : 'Live Tracking & Logistics Partner'}
                                 </h4>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                                    <div style={{ background: '#f9fafb', padding: '10px 12px', borderRadius: 8 }}>
-                                        <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase' }}>Assigned Partner / Rider</span>
-                                        <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', margin: '2px 0 0 0' }}>
-                                            {delivery.delivery_person || 'Not Assigned'}
-                                        </p>
-                                    </div>
-                                    <div style={{ background: '#f9fafb', padding: '10px 12px', borderRadius: 8 }}>
-                                        <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase' }}>AWB Tracking No.</span>
-                                        <p style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: '#6366f1', margin: '2px 0 0 0' }}>
-                                            {delivery.tracking_number || 'N/A'}
-                                        </p>
-                                    </div>
-                                </div>
-                                {tracking?.remarks && (
-                                    <div style={{ marginTop: 10, background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#0369a1' }}>
-                                        <strong>Live Remarks:</strong> {tracking.remarks}
-                                    </div>
+                                {isCancelled ? (
+                                    <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+                                        Tracking unavailable — shipment cancelled
+                                    </p>
+                                ) : (
+                                    <>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                            <div style={{ background: '#f9fafb', padding: '10px 12px', borderRadius: 8 }}>
+                                                <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase' }}>Assigned Partner / Rider</span>
+                                                <p style={{ fontSize: 13, fontWeight: 700, color: '#111827', margin: '2px 0 0 0' }}>
+                                                    {delivery.delivery_person || 'Not Assigned'}
+                                                </p>
+                                            </div>
+                                            <div style={{ background: '#f9fafb', padding: '10px 12px', borderRadius: 8 }}>
+                                                <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase' }}>AWB Tracking No.</span>
+                                                <p style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color: '#6366f1', margin: '2px 0 0 0' }}>
+                                                    {delivery.tracking_number || 'N/A'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {tracking?.remarks && (
+                                            <div style={{ marginTop: 10, background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#0369a1' }}>
+                                                <strong>Remarks:</strong> {tracking.remarks}
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
 
                             {/* Quick Actions Bar */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                                <button
-                                    type="button"
-                                    className="adm-btn-secondary"
-                                    style={{ fontSize: 11, padding: '8px 6px', justifyContent: 'center' }}
-                                    onClick={() => onOpenAssignPartner(delivery)}
-                                >
-                                    <BsPerson size={12} /> Assign Partner
-                                </button>
-                                <button
-                                    type="button"
-                                    className="adm-btn-secondary"
-                                    style={{ fontSize: 11, padding: '8px 6px', justifyContent: 'center' }}
-                                    onClick={() => onOpenUpdateAddress(delivery)}
-                                >
-                                    <BsGeoAlt size={12} /> Update Address
-                                </button>
-                                <button
-                                    type="button"
-                                    className="adm-btn-secondary"
-                                    style={{ fontSize: 11, padding: '8px 6px', justifyContent: 'center', color: '#dc2626' }}
-                                    onClick={() => onOpenCancel(delivery)}
-                                >
-                                    <BsXCircleFill size={12} /> Cancel
-                                </button>
-                            </div>
+                            {!isTerminal && (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        style={{ fontSize: 11, padding: '8px 6px', justifyContent: 'center' }}
+                                        onClick={() => onOpenAssignPartner(delivery)}
+                                    >
+                                        <BsPerson size={12} /> Assign Partner
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        style={{ fontSize: 11, padding: '8px 6px', justifyContent: 'center' }}
+                                        onClick={() => onOpenUpdateAddress(delivery)}
+                                    >
+                                        <BsGeoAlt size={12} /> Update Address
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        style={{ fontSize: 11, padding: '8px 6px', justifyContent: 'center', color: '#dc2626' }}
+                                        onClick={() => onOpenCancel(delivery)}
+                                    >
+                                        <BsXCircleFill size={12} /> Cancel
+                                    </button>
+                                </div>
+                            )}
 
                             {/* Status History / Audit Trail */}
                             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px' }}>
@@ -802,7 +895,9 @@ const DeliveryDetailDrawer = ({ deliveryId, onClose, onStatusChanged, onOpenAssi
                             {/* Timestamps & ID Record */}
                             <div style={{ background: '#f9fafb', borderRadius: 10, padding: '12px 14px', fontSize: 11, color: '#6b7280', display: 'flex', justifyContent: 'space-between' }}>
                                 <span>Created: {formatDateTime(delivery.created_at)}</span>
-                                <span>Delivered: {delivery.delivered_at ? formatDateTime(delivery.delivered_at) : 'In transit'}</span>
+                                <span>
+                                    Delivered At: {deliveredAtFooter.text}
+                                </span>
                             </div>
                         </>
                     ) : null}
@@ -813,13 +908,15 @@ const DeliveryDetailDrawer = ({ deliveryId, onClose, onStatusChanged, onOpenAssi
                     <button onClick={onClose} className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }}>
                         Close
                     </button>
-                    <button
-                        onClick={() => onOpenShippingLabel(deliveryId)}
-                        className="adm-btn-primary"
-                        style={{ flex: 1, justifyContent: 'center', gap: 6 }}
-                    >
-                        <BsPrinter size={14} /> Shipping Label
-                    </button>
+                    {!isCancelled && (
+                        <button
+                            onClick={() => onOpenShippingLabel(deliveryId)}
+                            className="adm-btn-primary"
+                            style={{ flex: 1, justifyContent: 'center', gap: 6 }}
+                        >
+                            <BsPrinter size={14} /> Shipping Label
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
@@ -857,7 +954,18 @@ const ExportDeliveryModal = ({ onClose }) => {
                 window.URL.revokeObjectURL(url);
                 document.body.removeChild(a);
             } else {
-                const jsonStr = JSON.stringify(data, null, 2);
+                let payload = data;
+                if (data instanceof Blob) {
+                    const text = await data.text();
+                    try {
+                        payload = JSON.parse(text);
+                    } catch {
+                        payload = text;
+                    }
+                } else if (data && typeof data === 'object' && Object.prototype.hasOwnProperty.call(data, 'data')) {
+                    payload = data.data;
+                }
+                const jsonStr = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
                 const blob = new Blob([jsonStr], { type: 'application/json' });
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
@@ -1667,7 +1775,7 @@ const DeliveryManagement = () => {
                     <p style={{ fontSize: 22, fontWeight: 800, color: '#ef4444', marginTop: 4, margin: 0 }}>
                         {stats?.cancelled_deliveries ?? deliveries.filter(d => d.status === 'cancelled').length}
                     </p>
-                    <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 600 }}>Cancelled / RTO</span>
+                    <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 600 }}>Cancelled</span>
                 </div>
             </div>
 
@@ -1775,6 +1883,10 @@ const DeliveryManagement = () => {
                                     filteredDeliveries.map(d => {
                                         const sc = statusConfig[d.status] || { label: d.status, color: '#6b7280', bg: '#f9fafb' };
                                         const isSelected = selectedIds.includes(d.id);
+                                        const rowTerminal = isTerminalDeliveryStatus(d.status);
+                                        const deliveredAtCell = getDeliveredAtDisplay(d);
+                                        const rowTypeLabel = getDeliveryTypeLabel(d);
+                                        const rowChargeLabel = getDeliveryChargeLabel(d);
 
                                         return (
                                             <tr key={d.id} style={{ borderBottom: '1px solid #f3f4f6', background: isSelected ? '#f5f3ff' : 'transparent' }} className="table-row-hover">
@@ -1794,10 +1906,19 @@ const DeliveryManagement = () => {
                                                         <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>
                                                             Order: <strong style={{ color: '#111827' }}>#{d.order_id}</strong>
                                                         </span>
+                                                        {(rowTypeLabel || rowChargeLabel) && (
+                                                            <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600 }}>
+                                                                {rowTypeLabel}{rowTypeLabel && rowChargeLabel ? ' · ' : ''}{rowChargeLabel || ''}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td style={{ padding: '14px 16px' }}>
-                                                    {d.delivery_person ? (
+                                                    {rowTerminal ? (
+                                                        <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 600 }}>
+                                                            {d.delivery_person || 'Not Assigned'}
+                                                        </span>
+                                                    ) : d.delivery_person ? (
                                                         <span
                                                             onClick={() => setAssignPartnerTarget(d)}
                                                             style={{ fontSize: 12, background: '#eef2ff', color: '#4338ca', padding: '3px 9px', borderRadius: 12, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
@@ -1852,15 +1973,26 @@ const DeliveryManagement = () => {
                                                     {formatDateTime(d.created_at)}
                                                 </td>
                                                 <td style={{ padding: '14px 16px', fontSize: 11, color: '#4b5563' }}>
-                                                    {d.delivered_at ? formatDateTime(d.delivered_at) : <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>Pending</span>}
+                                                    {deliveredAtCell.italic ? (
+                                                        <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>{deliveredAtCell.text}</span>
+                                                    ) : (
+                                                        deliveredAtCell.text
+                                                    )}
                                                 </td>
                                                 <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                                                         <button
                                                             type="button"
-                                                            title="Print Shipping Label"
-                                                            onClick={() => setPrintLabelDeliveryId(d.id)}
-                                                            style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer' }}
+                                                            title={d.status === 'cancelled' ? 'Shipping label unavailable for cancelled delivery' : 'Print Shipping Label'}
+                                                            disabled={d.status === 'cancelled'}
+                                                            onClick={() => {
+                                                                if (d.status !== 'cancelled') setPrintLabelDeliveryId(d.id);
+                                                            }}
+                                                            style={{
+                                                                padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151',
+                                                                cursor: d.status === 'cancelled' ? 'not-allowed' : 'pointer',
+                                                                opacity: d.status === 'cancelled' ? 0.45 : 1,
+                                                            }}
                                                         >
                                                             <BsPrinter size={13} />
                                                         </button>
@@ -2236,6 +2368,7 @@ const DeliveryManagement = () => {
                     onSuccess={(msg) => {
                         showNotification(msg);
                         loadDeliveries();
+                        loadStats();
                     }}
                 />
             )}
@@ -2271,14 +2404,17 @@ const DeliveryManagement = () => {
                         loadStats();
                     }}
                     onOpenAssignPartner={(del) => {
+                        if (isTerminalDeliveryStatus(del?.status)) return;
                         setDrawerDeliveryId(null);
                         setAssignPartnerTarget(del);
                     }}
                     onOpenUpdateAddress={(del) => {
+                        if (isTerminalDeliveryStatus(del?.status)) return;
                         setDrawerDeliveryId(null);
                         setUpdateAddressTarget(del);
                     }}
                     onOpenCancel={(del) => {
+                        if (isTerminalDeliveryStatus(del?.status)) return;
                         setDrawerDeliveryId(null);
                         setCancelDeliveryTarget(del);
                     }}
