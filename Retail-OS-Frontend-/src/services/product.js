@@ -27,6 +27,10 @@ const productService = {
     createCategory: (data) => {
         return apiClient.post("/api/v1/products/categories", data);
     },
+
+    getCategories: () => {
+        return apiClient.get("/api/v1/products/categories/list");
+    },
 };
 
 export const product = productService;

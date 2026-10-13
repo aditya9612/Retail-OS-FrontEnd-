@@ -5,31 +5,55 @@ import {
     BsStarFill
 } from 'react-icons/bs';
 import productService from "../../services/product";
+import categoryService from "../../services/categoryService";
 import apiClient from "../../api/axios";
 
-const CATEGORIES_LIST = [
-    'Electronics', 'Groceries', 'Apparel', 'Accessories',
-    'Home & Kitchen', 'Beauty', 'Sports', 'Books', 'Toys'
-];
+export const fetchDatabaseCategories = async () => {
+    try {
+        const res = await categoryService.getAll();
+        const body = res?.data ?? res;
+        const list = Array.isArray(body)
+            ? body
+            : Array.isArray(body?.data)
+                ? body.data
+                : Array.isArray(body?.items)
+                    ? body.items
+                    : [];
+        if (list.length > 0) {
+            return list
+                .map(c => ({
+                    id: Number(c.id ?? c.category_id),
+                    name: String(c.name ?? c.category_name ?? '').trim()
+                }))
+                .filter(c => Number.isInteger(c.id) && c.id > 0 && c.name);
+        }
+    } catch {
+        // Fallback to product categories endpoint
+    }
+
+    try {
+        const res = await productService.getCategories();
+        const body = res?.data ?? res;
+        const list = Array.isArray(body)
+            ? body
+            : Array.isArray(body?.data)
+                ? body.data
+                : Array.isArray(body?.items)
+                    ? body.items
+                    : [];
+        return list
+            .map(c => ({
+                id: Number(c.id ?? c.category_id),
+                name: String(c.name ?? c.category_name ?? '').trim()
+            }))
+            .filter(c => Number.isInteger(c.id) && c.id > 0 && c.name);
+    } catch {
+        return [];
+    }
+};
 
 const GST_RATES = ['0%', '5%', '12%', '18%', '28%'];
 const UNITS = ['Pcs', 'Kg', 'Ltr', 'Box', 'Set', 'Pair', 'Bag', 'Dozen'];
-
-const CATEGORY_IDS = {
-    Electronics: 1,
-    Groceries: 2,
-    Apparel: 3,
-    Accessories: 4,
-    "Home & Kitchen": 5,
-    Beauty: 6,
-    Sports: 7,
-    Books: 8,
-    Toys: 9,
-};
-
-const CATEGORY_NAMES = Object.fromEntries(
-    Object.entries(CATEGORY_IDS).map(([name, id]) => [id, name])
-);
 
 const PAGE_SIZE = 10;
 
@@ -198,7 +222,8 @@ const validateDates = (mfgDateStr, expDateStr) => {
 const EMPTY_FORM = {
     name: '',
     sku: '',
-    category: 'Electronics',
+    category: '',
+    category_id: null,
     brand: '',
     barcode: '',
     unit: 'Pcs',
@@ -299,7 +324,7 @@ const getProductImageUrl = (p) => {
 };
 
 // Fields accepted by the API (from ProductCreate / ProductUpdate schema)
-const toPayload = (form) => {
+const toPayload = (form, categories = []) => {
     const cleanImageUrl = normalizeImageUrl(form.imageUrl);
     const metaVariants = {
         ...((typeof form.variants === 'object' && form.variants !== null) ? form.variants : {}),
@@ -310,11 +335,24 @@ const toPayload = (form) => {
         expiry_date: form.expiryDate || null,
     };
 
+    let resolvedCategoryId = null;
+    if (form.category_id != null && Number.isInteger(Number(form.category_id)) && Number(form.category_id) > 0) {
+        resolvedCategoryId = Number(form.category_id);
+    } else if (form.category && Array.isArray(categories)) {
+        const matched = categories.find(c =>
+            String(c.id) === String(form.category) ||
+            (c.name && String(c.name).trim().toLowerCase() === String(form.category).trim().toLowerCase())
+        );
+        if (matched && Number.isInteger(Number(matched.id)) && Number(matched.id) > 0) {
+            resolvedCategoryId = Number(matched.id);
+        }
+    }
+
     return {
         name: form.name?.trim() || '',
         sku: form.sku?.trim().toUpperCase() || '',
         barcode: form.barcode?.trim() || '',
-        category_id: CATEGORY_IDS[form.category] || form.category_id || 1,
+        category_id: resolvedCategoryId,
         brand: form.brand?.trim() || '',
         unit: form.unit || 'Pcs',
         mrp: String(Number(form.mrp) || 0),
@@ -332,12 +370,24 @@ const toPayload = (form) => {
     };
 };
 
-export const ProductFormModal = ({ product, onClose, onSave, existingProducts = [] }) => {
+export const ProductFormModal = ({ product, onClose, onSave, existingProducts = [], categories = [] }) => {
     const isNew = !product;
 
     // Build edit-form state — mapped from actual API response fields
     const localMeta = product ? getLocalProductMeta(product.id, product.sku) : {};
     const variants = (typeof product?.variants === 'object' && product?.variants !== null) ? product.variants : {};
+
+    const initialCatObj = product
+        ? (categories.find(c => c.id === product.category_id) || categories.find(c => c.name?.toLowerCase() === product.category?.toLowerCase()))
+        : (categories[0] || null);
+
+    const initialCategoryId = product
+        ? (product.category_id ?? initialCatObj?.id ?? null)
+        : (initialCatObj?.id ?? null);
+
+    const initialCategoryName = product
+        ? (initialCatObj?.name || product.category || '')
+        : (initialCatObj?.name || '');
 
     const editInit = product ? {
         ...EMPTY_FORM,
@@ -349,10 +399,8 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
         brand: String(product.brand ?? product.brand_name ?? variants.brand ?? localMeta.brand ?? ''),
         barcode: String(product.barcode ?? ''),
         description: String(product.description ?? ''),
-        category:
-            CATEGORY_NAMES[product.category_id] ||
-            product.category ||
-            'Electronics',
+        category: initialCategoryName,
+        category_id: initialCategoryId,
         gst: product.gst_rate != null
             ? `${Number(product.gst_rate)}%`
             : (product.gst || '18%'),
@@ -371,11 +419,25 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
         manufacturingDate: product.manufacturing_date ?? product.manufacturingDate ?? variants.manufacturing_date ?? localMeta.manufacturingDate ?? '',
         expiryDate: product.expiry_date ?? product.expiryDate ?? product.expiration_date ?? product.expirationDate ?? variants.expiry_date ?? localMeta.expiryDate ?? '',
         variants: variants,
-    } : { ...EMPTY_FORM };
+    } : {
+        ...EMPTY_FORM,
+        category: initialCategoryName,
+        category_id: initialCategoryId,
+    };
 
     const [form, setForm] = useState(editInit);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (!product && !form.category_id && categories.length > 0) {
+            setForm(f => ({
+                ...f,
+                category_id: categories[0].id,
+                category: categories[0].name
+            }));
+        }
+    }, [categories, product]);
 
     const set = (k, v) => {
         setForm(f => {
@@ -391,19 +453,22 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
                 next.brand = validateBrandField(v);
             } else if (k === 'category') {
                 next.category = '';
-                if (v === 'Groceries' && !String(form.expiryDate || '').trim()) {
+                const isGroceries = String(v || '').trim().toLowerCase() === 'groceries';
+                if (isGroceries && !String(form.expiryDate || '').trim()) {
                     next.expiryDate = 'Expiry date is required for food/grocery products.';
-                } else if (form.category === 'Groceries' && v !== 'Groceries' && next.expiryDate === 'Expiry date is required for food/grocery products.') {
+                } else if (!isGroceries && next.expiryDate === 'Expiry date is required for food/grocery products.') {
                     next.expiryDate = '';
                 }
             } else if (k === 'manufacturingDate') {
                 const { mfgError, expError } = validateDates(v, form.expiryDate);
                 next.manufacturingDate = mfgError;
-                next.expiryDate = (form.category === 'Groceries' && !String(form.expiryDate || '').trim())
+                const isGroceries = String(form.category || '').trim().toLowerCase() === 'groceries';
+                next.expiryDate = (isGroceries && !String(form.expiryDate || '').trim())
                     ? 'Expiry date is required for food/grocery products.'
                     : expError;
             } else if (k === 'expiryDate') {
-                if (form.category === 'Groceries' && !String(v || '').trim()) {
+                const isGroceries = String(form.category || '').trim().toLowerCase() === 'groceries';
+                if (isGroceries && !String(v || '').trim()) {
                     next.expiryDate = 'Expiry date is required for food/grocery products.';
                 } else {
                     const { mfgError, expError } = validateDates(form.manufacturingDate, v);
@@ -463,7 +528,7 @@ if (skuError) {
     }
 }
 
-        if (!form.category) {
+        if (!form.category && form.category_id == null && categories.length > 0) {
             newErrors.category = 'Category is required';
         }
 
@@ -513,7 +578,7 @@ if (skuError) {
 
         // Food / Grocery expiry validation
         if (
-            form.category === 'Groceries' &&
+            String(form.category || '').trim().toLowerCase() === 'groceries' &&
             !String(form.expiryDate || '').trim()
         ) {
             newErrors.expiryDate = 'Expiry date is required for food/grocery products.';
@@ -554,7 +619,7 @@ if (skuError) {
     const doSave = async () => {
         setSaving(true);
         try {
-            await onSave(toPayload(form), product?.id, form);
+            await onSave(toPayload(form, categories), product?.id, form);
             onClose();
         } catch (err) {
             const detail = err?.response?.data?.detail;
@@ -692,8 +757,15 @@ if (skuError) {
                                 Category <span style={{ color: 'red' }}>*</span>
                             </label>
                             <select
-                                value={form.category}
-                                onChange={e => set('category', e.target.value)}
+                                value={form.category_id != null ? String(form.category_id) : (categories.find(c => c.name === form.category)?.id != null ? String(categories.find(c => c.name === form.category).id) : '')}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    const selId = val ? Number(val) : null;
+                                    const selCat = categories.find(c => String(c.id) === String(val));
+                                    const catName = selCat ? selCat.name : val;
+                                    setForm(f => ({ ...f, category: catName, category_id: selId }));
+                                    set('category', catName);
+                                }}
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
@@ -703,9 +775,13 @@ if (skuError) {
                                     boxSizing: 'border-box'
                                 }}
                             >
-                                {CATEGORIES_LIST.map(c => (
-                                    <option key={c} value={c}>{c}</option>
-                                ))}
+                                {categories.length === 0 ? (
+                                    <option value="" disabled>No categories available</option>
+                                ) : (
+                                    categories.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))
+                                )}
                             </select>
                             {errors.category && (
                                 <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
@@ -1236,6 +1312,7 @@ const getExpiryBadge = (p) => {
 
 const Products = () => {
     const [products, setProducts] = useState([]);
+    const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
@@ -1257,7 +1334,17 @@ const Products = () => {
         setPreviewError(false);
     };
 
-    const fetchProducts = async () => {
+    const categoryMap = useMemo(() => {
+        const map = {};
+        categories.forEach(c => {
+            if (c.id != null) {
+                map[c.id] = c.name;
+            }
+        });
+        return map;
+    }, [categories]);
+
+    const fetchProducts = async (currentCatMap = null) => {
         setLoading(true);
 
         try {
@@ -1298,6 +1385,8 @@ const Products = () => {
             } catch {
                 // Silently fallback if endpoint is not enabled or requires store_id
             }
+
+            const activeCatMap = currentCatMap || categoryMap;
 
             setProducts(
                 list.map(p => {
@@ -1379,12 +1468,16 @@ const Products = () => {
                     );
                     const imageUrl = normalizeImageUrl(rawImg);
 
+                    const catName = (
+                        activeCatMap[p.category_id] ||
+                        p.category_name ||
+                        (typeof p.category === 'object' ? p.category?.name : p.category) ||
+                        '—'
+                    );
+
                     return {
                         ...p,
-                        category:
-                            CATEGORY_NAMES[p.category_id] ||
-                            p.category ||
-                            '—',
+                        category: catName,
                         status: Boolean(p.is_active ?? p.status ?? true),
                         sellingPrice: priceVal,
                         price: priceVal,
@@ -1408,7 +1501,16 @@ const Products = () => {
     };
 
     useEffect(() => {
-        fetchProducts();
+        const loadInitialData = async () => {
+            const loadedCats = await fetchDatabaseCategories();
+            setCategories(loadedCats);
+            const map = {};
+            loadedCats.forEach(c => {
+                if (c.id != null) map[c.id] = c.name;
+            });
+            await fetchProducts(map);
+        };
+        loadInitialData();
     }, []);
 
     useEffect(() => {
@@ -1422,13 +1524,19 @@ const Products = () => {
         const categorySet = new Set(
             products.map(p => p.category).filter(c => c && c !== '—')
         );
-        const categories = categorySet.size;
+        const categoriesCount = categories.length > 0 ? categories.length : categorySet.size;
 
         // Expiry Soon: products expiring within the next 30 days, excluding already expired
         const expirySoon = products.filter(isNearlyExpiry).length;
 
-        return { total, featured, categories, expirySoon };
-    }, [products]);
+        return { total, featured, categories: categoriesCount, expirySoon };
+    }, [products, categories]);
+
+    const categoryFilterList = useMemo(() => {
+        const dbNames = categories.map(c => c.name).filter(Boolean);
+        if (dbNames.length > 0) return dbNames;
+        return Array.from(new Set(products.map(p => p.category).filter(c => c && c !== '—')));
+    }, [categories, products]);
 
     // Filter by KPI filter, Category, and Search query
     const filtered = useMemo(() => {
@@ -1525,7 +1633,7 @@ const Products = () => {
             await productService.update(
                 p.id,
                 {
-                    ...toPayload({ ...p, status: next }),
+                    ...toPayload({ ...p, status: next }, categories),
                     is_active: next
                 }
             );
@@ -1919,7 +2027,7 @@ const Products = () => {
                 marginBottom: 16,
                 scrollbarWidth: 'none'
             }}>
-                {['All', ...CATEGORIES_LIST].map(cat => (
+                {['All', ...categoryFilterList].map(cat => (
                     <button
                         key={cat}
                         className={`cat-pill ${selectedCategory === cat ? 'active' : ''}`}
@@ -2406,6 +2514,7 @@ const Products = () => {
     <ProductFormModal
         product={modal === 'new' ? null : modal}
         existingProducts={products}
+        categories={categories}
         onClose={() => setModal(null)}
         onSave={handleSave}
     />
