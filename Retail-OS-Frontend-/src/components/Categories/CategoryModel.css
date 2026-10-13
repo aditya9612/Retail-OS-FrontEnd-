@@ -1,4 +1,4 @@
-﻿/* =========================================================
+/* =========================================================
    CATEGORY MODAL
    Add / Edit Category
 ========================================================= */
@@ -267,6 +267,7 @@
 ========================================================= */
 
 .category-modal .form-group input,
+.category-modal .form-group select,
 .category-modal .form-group textarea {
   width: 100%;
   max-width: 100%;
@@ -298,7 +299,8 @@
    CATEGORY NAME INPUT
 ========================================================= */
 
-.category-modal .form-group input {
+.category-modal .form-group input,
+.category-modal .form-group select {
   height: 42px;
 
   padding: 0 12px;
@@ -340,6 +342,7 @@
 ========================================================= */
 
 .category-modal .form-group input:hover,
+.category-modal .form-group select:hover,
 .category-modal .form-group textarea:hover {
   border-color: #b8c1cc;
 }
@@ -350,6 +353,7 @@
 ========================================================= */
 
 .category-modal .form-group input:focus,
+.category-modal .form-group select:focus,
 .category-modal .form-group textarea:focus {
   border-color: #6366f1;
 
@@ -365,6 +369,7 @@
 ========================================================= */
 
 .category-modal .form-group input:disabled,
+.category-modal .form-group select:disabled,
 .category-modal .form-group textarea:disabled {
   color: #94a3b8;
 
@@ -606,7 +611,8 @@
     margin-bottom: 15px;
   }
 
-  .category-modal .form-group input {
+  .category-modal .form-group input,
+  .category-modal .form-group select {
     height: 40px;
 
     padding: 0 11px;

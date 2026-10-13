@@ -1,9 +1,9 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 
 import category from "../../services/categoryService";
 
 import CategoryCards from "../../components/Categories/CategoryCards";
-import CategoryTable from "../../components/Categories/CategoryTable";
+import CategoryTable, { formatCategoryName } from "../../components/Categories/CategoryTable";
 import CategoryModel from "../../components/Categories/CategoryModel";
 import CategoryHeader from "../../components/Categories/CategoryHeader";
 import CategoryFilters from "../../components/Categories/CategoryFilters";
@@ -18,6 +18,7 @@ const CategoryManagement = () => {
 
   const [showModal, setShowModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [isViewMode, setIsViewMode] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -137,7 +138,7 @@ if (!status) {
 
         return {
           id: item.id,
-          name: item.name,
+          name: formatCategoryName(item.name),
 
           products: displayProducts,
 
@@ -160,7 +161,10 @@ if (!status) {
             : "-",
 
           description:
-            item.description || "",
+            item.description ??
+            item.category_description ??
+            item.desc ??
+            "",
 
           parent_id:
             item.parent_id ?? null,
@@ -172,7 +176,15 @@ if (!status) {
         apiCategories
       );
 
-      setCategories(apiCategories);
+      setCategories((previousCategories) =>
+        apiCategories.map((apiCat) => {
+          const prev = previousCategories.find((p) => p.id === apiCat.id);
+          return {
+            ...apiCat,
+            description: apiCat.description || (prev?.description || ""),
+          };
+        })
+      );
 
       /* =====================================================
          KEEP PAGINATION VALID
@@ -266,11 +278,27 @@ if (!status) {
     );
 
   /* =========================================================
+     VIEW
+  ========================================================= */
+
+  const handleView = (item) => {
+    console.log(
+      "👁️ Viewing Category:",
+      item
+    );
+
+    setSelectedCategory(item);
+    setIsViewMode(true);
+    setShowModal(true);
+  };
+
+  /* =========================================================
      ADD
   ========================================================= */
 
   const handleAdd = () => {
     setSelectedCategory(null);
+    setIsViewMode(false);
     setShowModal(true);
   };
 
@@ -285,6 +313,7 @@ if (!status) {
     );
 
     setSelectedCategory(item);
+    setIsViewMode(false);
     setShowModal(true);
   };
 
@@ -298,7 +327,7 @@ if (!status) {
     }
 
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${item.name}"?`
+      `Are you sure you want to delete "${formatCategoryName(item.name)}"?`
     );
 
     if (!confirmed) {
@@ -369,13 +398,24 @@ const handleStatusChange = async (
         ? "Active"
         : "Inactive";
 
+    const payload = {
+      name: formatCategoryName(item.name),
+      description:
+        item.description || "",
+      parent_id:
+        item.parent_id ??
+        null,
+      status: nextStatus,
+      is_active: nextIsActive,
+    };
+
     /*
-     * Update UI immediately.
-     *
-     * NOTE:
-     * Current backend category schema does not expose
-     * a confirmed status/is_active field, so we do not
-     * send an unsupported field to the API here.
+     * Call existing category update API
+     */
+    await category.update(item.id, payload);
+
+    /*
+     * Update UI with the new status.
      */
     setCategories((previousCategories) =>
       previousCategories.map((categoryItem) =>
@@ -383,6 +423,7 @@ const handleStatusChange = async (
           ? {
               ...categoryItem,
               status: nextStatus,
+              is_active: nextIsActive,
             }
           : categoryItem
       )
@@ -411,14 +452,44 @@ const handleStatusChange = async (
 
   const handleSave = async (data) => {
     try {
+      const formattedName = formatCategoryName(data?.name);
+      const trimmedName = formattedName.trim();
+      if (!trimmedName) {
+        alert("Please enter category name");
+        return;
+      }
+      if (trimmedName.length < 2) {
+        alert("Category name must be at least 2 characters");
+        return;
+      }
+      if (trimmedName.length > 255) {
+        alert("Category name cannot exceed 255 characters");
+        return;
+      }
+
+      if (selectedCategory && !data?.description?.trim()) {
+        alert("Please enter category description");
+        return;
+      }
+
+      const nextStatus =
+        data.status ||
+        selectedCategory?.status ||
+        "Active";
+
+      const nextIsActive =
+        nextStatus.toLowerCase() === "active";
+
       const payload = {
-        name: data.name,
+        name: formattedName,
         description:
           data.description || "",
         parent_id:
           data.parent_id ??
           selectedCategory?.parent_id ??
           null,
+        status: nextStatus,
+        is_active: nextIsActive,
       };
 
       console.log(
@@ -471,6 +542,22 @@ const handleStatusChange = async (
       ===================================================== */
 
       await loadCategories();
+
+      if (selectedCategory) {
+        setCategories((previousCategories) =>
+          previousCategories.map((categoryItem) =>
+            categoryItem.id === selectedCategory.id
+              ? {
+                  ...categoryItem,
+                  name: payload.name,
+                  description: payload.description,
+                  status: nextStatus,
+                  is_active: nextIsActive,
+                }
+              : categoryItem
+          )
+        );
+      }
 
       /* =====================================================
          CLOSE MODAL
@@ -580,6 +667,7 @@ const handleStatusChange = async (
       ===================================================== */}
 <CategoryTable
   categories={paginatedCategories}
+  onView={handleView}
   onEdit={handleEdit}
   onDelete={handleDelete}
   onStatusChange={handleStatusChange}
@@ -670,10 +758,12 @@ const handleStatusChange = async (
       {showModal && (
         <CategoryModel
           category={selectedCategory}
+          isView={isViewMode}
           onSave={handleSave}
           onClose={() => {
             setShowModal(false);
             setSelectedCategory(null);
+            setIsViewMode(false);
           }}
         />
       )}

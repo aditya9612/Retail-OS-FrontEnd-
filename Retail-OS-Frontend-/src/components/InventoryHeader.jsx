@@ -17,10 +17,20 @@ const InventoryHeader = ({
     setActiveTab,
     setStockModal,
     onAddProduct,
+    onAddInventory,
 }) => {
     const handleAddProduct = () => {
-        if (typeof onAddProduct === "function") {
+        if (typeof onAddInventory === "function") {
+            onAddInventory();
+        } else if (typeof onAddProduct === "function") {
             onAddProduct();
+        } else if (typeof setStockModal === "function") {
+            setStockModal({
+                name: "Add Inventory",
+                quantity: 0,
+                unit: "Pcs",
+                action: "add",
+            });
         } else {
             console.error(
                 "InventoryHeader: onAddProduct function is not provided."
@@ -47,13 +57,13 @@ const InventoryHeader = ({
                 <div className="inventory-header-right">
 
                     {/* =========================
-                        ADD PRODUCT
+                        ADD INVENTORY
                     ========================= */}
                     <button
                         type="button"
                         className="header-btn add-product-btn"
-                        title="Add Product"
-                        aria-label="Add Product"
+                        title="Add Inventory"
+                        aria-label="Add Inventory"
                         onClick={handleAddProduct}
                     >
                         <BsPlus

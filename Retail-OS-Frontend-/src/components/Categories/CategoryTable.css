@@ -1,4 +1,4 @@
-﻿/* =========================================================
+/* =========================================================
    CATEGORY TABLE
    Professional Responsive UI
 ========================================================= */
@@ -408,6 +408,7 @@
    ACTION BUTTON COMMON
 ========================================================= */
 
+.category-table .view-btn,
 .category-table .edit-btn,
 .category-table .delete-btn {
   width: 31px;
@@ -439,12 +440,36 @@
     transform 0.15s ease;
 }
 
+.category-table .view-btn svg,
 .category-table .edit-btn svg,
 .category-table .delete-btn svg {
   width: 13px;
   height: 13px;
 
   pointer-events: none;
+}
+
+
+/* =========================================================
+   VIEW BUTTON
+========================================================= */
+
+.category-table .view-btn {
+  color: #0284c7;
+
+  border: 1px solid #bae6fd;
+}
+
+.category-table .view-btn:hover {
+  color: #0369a1;
+  background: #f0f9ff;
+
+  border-color: #7dd3fc;
+
+  box-shadow:
+    0 2px 6px rgba(2, 132, 199, 0.1);
+
+  transform: translateY(-1px);
 }
 
 
@@ -498,6 +523,7 @@
    ACTION ACTIVE
 ========================================================= */
 
+.category-table .view-btn:active,
 .category-table .edit-btn:active,
 .category-table .delete-btn:active {
   transform: translateY(0);
@@ -508,6 +534,7 @@
    ACTION FOCUS
 ========================================================= */
 
+.category-table .view-btn:focus-visible,
 .category-table .edit-btn:focus-visible,
 .category-table .delete-btn:focus-visible {
   outline: none;
@@ -650,6 +677,7 @@
     flex-basis: 30px;
   }
 
+  .category-table .view-btn,
   .category-table .edit-btn,
   .category-table .delete-btn {
     width: 30px;
@@ -721,6 +749,7 @@
     font-size: 10px;
   }
 
+  .category-table .view-btn,
   .category-table .edit-btn,
   .category-table .delete-btn {
     width: 29px;
@@ -729,6 +758,7 @@
     flex-basis: 29px;
   }
 
+  .category-table .view-btn svg,
   .category-table .edit-btn svg,
   .category-table .delete-btn svg {
     width: 13px;
@@ -748,12 +778,14 @@
 @media (prefers-reduced-motion: reduce) {
   .category-table tbody tr,
   .category-table .category-icon,
+  .category-table .view-btn,
   .category-table .edit-btn,
   .category-table .delete-btn {
     transition: none;
   }
 
   .category-table tbody tr:hover .category-icon,
+  .category-table .view-btn:hover,
   .category-table .edit-btn:hover,
   .category-table .delete-btn:hover {
     transform: none;

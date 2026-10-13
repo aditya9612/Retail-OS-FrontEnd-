@@ -1,4 +1,5 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import LowStockAlert from "../../components/LowStockAlert";
 import {
@@ -39,39 +40,60 @@ const normalizeProduct = (product) => {
     const nestedProduct =
         product?.product ||
         product?.product_details ||
+        product?.productDetail ||
         product?.details ||
         {};
 
     const id =
         product?.id ??
         product?.product_id ??
+        product?.productId ??
         nestedProduct?.id ??
         nestedProduct?.product_id ??
+        nestedProduct?.productId ??
         null;
+
+    const name =
+        product?.name ??
+        product?.product_name ??
+        product?.productName ??
+        product?.title ??
+        nestedProduct?.name ??
+        nestedProduct?.product_name ??
+        nestedProduct?.productName ??
+        nestedProduct?.title ??
+        "";
+
+    const sku =
+        product?.sku ??
+        product?.SKU ??
+        product?.Sku ??
+        product?.product_sku ??
+        product?.productSku ??
+        product?.sku_code ??
+        product?.skuCode ??
+        product?.code ??
+        nestedProduct?.sku ??
+        nestedProduct?.SKU ??
+        nestedProduct?.Sku ??
+        nestedProduct?.product_sku ??
+        nestedProduct?.productSku ??
+        nestedProduct?.sku_code ??
+        nestedProduct?.skuCode ??
+        nestedProduct?.code ??
+        "";
 
     return {
         ...product,
 
         id:
-            id !== null && id !== undefined
+            id !== null && id !== undefined && Number.isFinite(Number(id))
                 ? Number(id)
                 : null,
 
-        name: String(
-            product?.name ??
-                product?.product_name ??
-                nestedProduct?.name ??
-                nestedProduct?.product_name ??
-                ""
-        ).trim(),
+        name: String(name || "").trim(),
 
-        sku: String(
-            product?.sku ??
-                product?.product_sku ??
-                nestedProduct?.sku ??
-                nestedProduct?.product_sku ??
-                ""
-        ).trim(),
+        sku: String(sku || "").trim(),
 
         category:
             product?.category ??
@@ -126,9 +148,9 @@ const getCleanStoreName = (store) => {
 
 /* =========================================================
    STOCK STATUS
-   Same rule as Inventory Management:
-   0 qty                  -> Out of Stock
-   positive qty <= min    -> Critical
+   0 qty or negative      -> Out of Stock
+   positive qty < min     -> Critical
+   positive qty == min    -> Low Stock
    qty > min              -> In Stock
 ========================================================= */
 
@@ -144,17 +166,23 @@ const getStockStatus = (item) => {
     const minStock = Number(
         item?.low_stock_threshold ??
         item?.minimum_stock ??
+        item?.reorderLevel ??
         item?.reorder_level ??
+        item?.minStock ??
         item?.min_stock ??
         0
     ) || 0;
 
-    if (stock === 0) {
+    if (stock <= 0) {
         return "Out of Stock";
     }
 
-    if (minStock > 0 && stock <= minStock) {
+    if (minStock > 0 && stock < minStock) {
         return "Critical";
+    }
+
+    if (minStock > 0 && stock === minStock) {
+        return "Low Stock";
     }
 
     return "In Stock";
@@ -165,6 +193,7 @@ const getStockStatus = (item) => {
 ========================================================= */
 
 const LowStockAlerts = () => {
+    const navigate = useNavigate();
     const [products, setProducts] = useState([]);
     const [stores, setStores] = useState([]);
 
@@ -182,6 +211,18 @@ const LowStockAlerts = () => {
     const [storeFilter, setStoreFilter] = useState("All Stores");
     const [statusFilter, setStatusFilter] = useState("All Status");
 
+    const handleReorder = (item) => {
+        navigate("/purchases", {
+            state: {
+                reorderItem: item,
+                productId: item?.product_id || item?.id,
+                productName: item?.product_name || item?.name,
+                sku: item?.sku,
+                supplier: item?.supplier_name || item?.supplierName,
+            },
+        });
+    };
+
     /* =====================================================
        PRODUCT MAP
     ===================================================== */
@@ -190,14 +231,24 @@ const LowStockAlerts = () => {
         const map = new Map();
 
         products.forEach((product) => {
+            const rawId =
+                product?.id ??
+                product?.product_id ??
+                product?.productId;
+
             if (
-                product?.id !== null &&
-                product?.id !== undefined
+                rawId !== null &&
+                rawId !== undefined &&
+                Number.isFinite(Number(rawId))
             ) {
-                map.set(
-                    Number(product.id),
-                    product
-                );
+                const numId = Number(rawId);
+                map.set(numId, product);
+                map.set(String(numId), product);
+            }
+
+            const rawSku = String(product?.sku || "").trim();
+            if (rawSku) {
+                map.set(`sku:${rawSku.toLowerCase()}`, product);
             }
         });
 
@@ -240,33 +291,70 @@ const LowStockAlerts = () => {
     const lowStockItems = useMemo(() => {
         return rawLowStockItems
             .map((item) => {
+                const nestedItemProduct =
+                    item?.product ||
+                    item?.product_details ||
+                    item?.productDetail ||
+                    item?.details ||
+                    {};
+
+                const rawProductId =
+                    item?.product_id ??
+                    item?.productId ??
+                    nestedItemProduct?.id ??
+                    nestedItemProduct?.product_id ??
+                    nestedItemProduct?.productId ??
+                    item?.id;
+
+                const numericId =
+                    rawProductId !== null &&
+                    rawProductId !== undefined &&
+                    Number.isFinite(Number(rawProductId))
+                        ? Number(rawProductId)
+                        : null;
+
+                const itemSku = String(
+                    item?.sku ??
+                    item?.product_sku ??
+                    nestedItemProduct?.sku ??
+                    nestedItemProduct?.product_sku ??
+                    ""
+                ).trim();
+
                 const product =
-                    productMap.get(
-                        Number(item?.product_id)
-                    );
+                    (numericId !== null ? productMap.get(numericId) : null) ||
+                    (itemSku ? productMap.get(`sku:${itemSku.toLowerCase()}`) : null) ||
+                    null;
 
                 const storeName =
                     storeMap.get(
                         Number(item?.store_id)
                     );
 
+                const canonicalProductName =
+                    product?.name ||
+                    nestedItemProduct?.name ||
+                    nestedItemProduct?.product_name ||
+                    nestedItemProduct?.productName ||
+                    nestedItemProduct?.title ||
+                    item?.product_name ||
+                    item?.productName ||
+                    item?.title ||
+                    item?.name ||
+                    (numericId !== null ? `Product #${numericId}` : "-");
+
                 return {
                     ...item,
 
-                    product_name:
-                        product?.name ||
-                        item?.product_name ||
-                        item?.name ||
-                        `Product #${item?.product_id}`,
+                    product_id: numericId ?? item?.product_id ?? item?.id,
 
-                    name:
-                        product?.name ||
-                        item?.product_name ||
-                        item?.name ||
-                        `Product #${item?.product_id}`,
+                    product_name: canonicalProductName,
+
+                    name: canonicalProductName,
 
                     sku:
                         product?.sku ||
+                        itemSku ||
                         item?.sku ||
                         item?.product_sku ||
                         "",
@@ -555,7 +643,7 @@ const LowStockAlerts = () => {
                 <section className="low-stock-header">
                     <div>
                         <h1 style={{ marginBottom: 6 }}>
-                            Low Stock Alert
+                            Low Stock Alerts
                         </h1>
 
                         <p>
@@ -629,6 +717,7 @@ const LowStockAlerts = () => {
                     >
                         <option value="All Status">All Status</option>
                         <option value="Critical">Critical</option>
+                        <option value="Low Stock">Low Stock</option>
                         <option value="Out of Stock">Out of Stock</option>
                     </select>
 
@@ -657,6 +746,7 @@ const LowStockAlerts = () => {
                         error={error}
                         items={filteredLowStockItems}
                         stockStatus={getStockStatus}
+                        onReorder={handleReorder}
                     />
                 </section>
             </div>
