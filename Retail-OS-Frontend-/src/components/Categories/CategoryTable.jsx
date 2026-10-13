@@ -1,5 +1,6 @@
-﻿import React from "react";
+import React from "react";
 import {
+  BsEye,
   BsPencil,
   BsTrash,
   BsFolder,
@@ -9,6 +10,33 @@ import {
 } from "react-icons/bs";
 
 import "./CategoryTable.css";
+
+/* =========================================================
+   CATEGORY NAME CASING HELPER (TITLE CASE)
+========================================================= */
+
+export const formatCategoryName = (name) => {
+  if (!name || typeof name !== "string") return "";
+  const trimmed = name.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+
+  return trimmed
+    .split(" ")
+    .map((word) =>
+      word
+        .split("-")
+        .map((part) => {
+          if (!part) return "";
+          if (/^\d+[a-zA-Z]+$/.test(part)) {
+            return part.toUpperCase();
+          }
+          return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+        })
+        .join("-")
+    )
+    .join(" ");
+};
+
 
 const formatCategoryDate = (value) => {
   if (!value) return "-";
@@ -137,6 +165,7 @@ const getCategoryStatus = (item) => {
 
 const CategoryTable = ({
   categories = [],
+  onView,
   onEdit,
   onDelete,
   onStatusChange,
@@ -251,7 +280,7 @@ const CategoryTable = ({
                       </div>
 
                       <span className="category-name-text">
-                        {item.name ||
+                        {formatCategoryName(item.name) ||
                           "Unnamed Category"}
                       </span>
                     </div>
@@ -312,6 +341,30 @@ const CategoryTable = ({
                     <div className="table-actions">
 
                       {/* =================
+                          VIEW
+                      ================= */}
+
+                      <button
+                        type="button"
+                        className="view-btn"
+                        onClick={() => {
+                          if (
+                            typeof onView ===
+                            "function"
+                          ) {
+                            onView(item);
+                          }
+                        }}
+                        aria-label={`View ${
+                          formatCategoryName(item.name) ||
+                          "category"
+                        }`}
+                        title="View"
+                      >
+                        <BsEye />
+                      </button>
+
+                      {/* =================
                           EDIT
                       ================= */}
 
@@ -327,7 +380,7 @@ const CategoryTable = ({
                           }
                         }}
                         aria-label={`Edit ${
-                          item.name ||
+                          formatCategoryName(item.name) ||
                           "category"
                         }`}
                         title="Edit"
@@ -362,11 +415,11 @@ const CategoryTable = ({
                           aria-label={
                             isActive
                               ? `Deactivate ${
-                                  item.name ||
+                                  formatCategoryName(item.name) ||
                                   "category"
                                 }`
                               : `Activate ${
-                                  item.name ||
+                                  formatCategoryName(item.name) ||
                                   "category"
                                 }`
                           }
@@ -404,7 +457,7 @@ const CategoryTable = ({
                           }
                         }}
                         aria-label={`Delete ${
-                          item.name ||
+                          formatCategoryName(item.name) ||
                           "category"
                         }`}
                         title="Delete"
