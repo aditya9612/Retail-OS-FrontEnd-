@@ -323,18 +323,35 @@ const getProductImageUrl = (p) => {
     return normalizeImageUrl(trimmed) || trimmed;
 };
 
-// Fields accepted by the API (from ProductCreate / ProductUpdate schema)
-const toPayload = (form, categories = []) => {
-    const cleanImageUrl = normalizeImageUrl(form.imageUrl);
-    const metaVariants = {
-        ...((typeof form.variants === 'object' && form.variants !== null) ? form.variants : {}),
-        featured: Boolean(form.featured),
-        brand: form.brand?.trim() || '',
-        image_url: cleanImageUrl,
-        manufacturing_date: form.manufacturingDate || null,
-        expiry_date: form.expiryDate || null,
-    };
+// Validate whether a string is a valid remote/server image URL (<= 500 chars)
+// Base64 data URLs and Blob URLs must NEVER be sent to the backend API as image_url
+const getValidRemoteImageUrl = (url) => {
+    if (!url || typeof url !== 'string') return null;
+    const trimmed = url.trim().replace(/^["']+|["']+$/g, '');
+    if (!trimmed) return null;
+    if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+        return null;
+    }
+    if (trimmed.length > 500) {
+        return null;
+    }
+    const lower = trimmed.toLowerCase();
+    if (
+        lower === 'null' ||
+        lower === 'undefined' ||
+        lower === '[object object]' ||
+        lower === 'none' ||
+        lower === 'n/a' ||
+        lower === 'false' ||
+        lower === 'true'
+    ) {
+        return null;
+    }
+    return trimmed;
+};
 
+// Payload builder for POST /api/v1/products (ProductCreate schema)
+const toCreatePayload = (form, categories = []) => {
     let resolvedCategoryId = null;
     if (form.category_id != null && Number.isInteger(Number(form.category_id)) && Number(form.category_id) > 0) {
         resolvedCategoryId = Number(form.category_id);
@@ -348,26 +365,97 @@ const toPayload = (form, categories = []) => {
         }
     }
 
+    const validImageUrl = getValidRemoteImageUrl(form.imageUrl);
+
+    const metaVariants = {
+        ...((typeof form.variants === 'object' && form.variants !== null) ? form.variants : {}),
+        featured: Boolean(form.featured),
+        brand: form.brand?.trim() || '',
+        unit: form.unit || 'Pcs',
+        mrp: Number(form.mrp) || 0,
+        selling_price: Number(form.sellingPrice) || 0,
+        manufacturing_date: form.manufacturingDate || null,
+        expiry_date: form.expiryDate || null,
+    };
+
     return {
         name: form.name?.trim() || '',
         sku: form.sku?.trim().toUpperCase() || '',
-        barcode: form.barcode?.trim() || '',
+        barcode: form.barcode?.trim() || null,
+        description: form.description?.trim() || null,
         category_id: resolvedCategoryId,
+        hsn_code: form.hsnCode?.trim() || null,
+        gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
+        price: String(Number(form.sellingPrice) || 0),
+        cost_price: String(Number(form.mrp) || 0),
+        variants: metaVariants,
+        track_batch: false,
+        track_expiry: Boolean(form.expiryDate),
+        image_url: validImageUrl,
+    };
+};
+
+// Payload builder for PATCH /api/v1/products/{product_id} (ProductUpdate schema)
+const toUpdatePayload = (form, categories = [], existingProduct = null) => {
+    let resolvedCategoryId = null;
+    if (form.category_id != null && Number.isInteger(Number(form.category_id)) && Number(form.category_id) > 0) {
+        resolvedCategoryId = Number(form.category_id);
+    } else if (form.category && Array.isArray(categories)) {
+        const matched = categories.find(c =>
+            String(c.id) === String(form.category) ||
+            (c.name && String(c.name).trim().toLowerCase() === String(form.category).trim().toLowerCase())
+        );
+        if (matched && Number.isInteger(Number(matched.id)) && Number(matched.id) > 0) {
+            resolvedCategoryId = Number(matched.id);
+        }
+    }
+
+    // Determine final image_url:
+    // 1. If user clicked remove image: null
+    // 2. If user entered a valid remote URL: valid remote URL
+    // 3. If user selected a new local file (Base64 preview): NEVER send Base64; send null
+    // 4. If image was unchanged: preserve existing remote server URL if present
+    let finalImageUrl = null;
+    if (form.imageRemoved) {
+        finalImageUrl = null;
+    } else if (form.imageUrl && getValidRemoteImageUrl(form.imageUrl)) {
+        finalImageUrl = getValidRemoteImageUrl(form.imageUrl);
+    } else if (!form.hasNewFile && existingProduct) {
+        finalImageUrl = getValidRemoteImageUrl(existingProduct.image_url || existingProduct.imageUrl);
+    }
+
+    const metaVariants = {
+        ...((typeof form.variants === 'object' && form.variants !== null) ? form.variants : {}),
+        featured: Boolean(form.featured),
         brand: form.brand?.trim() || '',
         unit: form.unit || 'Pcs',
-        mrp: String(Number(form.mrp) || 0),
-        cost_price: String(Number(form.mrp) || 0),
-        price: String(Number(form.sellingPrice) || 0),
-        selling_price: String(Number(form.sellingPrice) || 0),
-        gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
-        hsn_code: form.hsnCode?.trim() || null,
-        image_url: cleanImageUrl,
-        is_active: Boolean(form.status),
-        featured: Boolean(form.featured),
-        description: form.description?.trim() || null,
-        track_expiry: Boolean(form.expiryDate),
-        variants: metaVariants,
+        mrp: Number(form.mrp) || 0,
+        selling_price: Number(form.sellingPrice) || 0,
+        manufacturing_date: form.manufacturingDate || null,
+        expiry_date: form.expiryDate || null,
     };
+
+    return {
+        name: form.name?.trim() || null,
+        barcode: form.barcode?.trim() || null,
+        description: form.description?.trim() || null,
+        category_id: resolvedCategoryId,
+        hsn_code: form.hsnCode?.trim() || null,
+        gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
+        price: String(Number(form.sellingPrice) || 0),
+        cost_price: String(Number(form.mrp) || 0),
+        variants: metaVariants,
+        track_batch: false,
+        track_expiry: Boolean(form.expiryDate),
+        image_url: finalImageUrl,
+        is_active: Boolean(form.status),
+    };
+};
+
+const toPayload = (form, categories = [], existingProduct = null) => {
+    return existingProduct
+        ? toUpdatePayload(form, categories, existingProduct)
+        : toCreatePayload(form, categories);
 };
 
 export const ProductFormModal = ({ product, onClose, onSave, existingProducts = [], categories = [] }) => {
@@ -388,6 +476,9 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
     const initialCategoryName = product
         ? (initialCatObj?.name || product.category || '')
         : (initialCatObj?.name || '');
+
+    const existingServerImage = getValidRemoteImageUrl(product?.image_url || product?.imageUrl || variants.image_url || localMeta.imageUrl);
+    const initialPreview = normalizeImageUrl(product?.imageUrl ?? product?.image_url ?? variants.image_url ?? localMeta.imageUrl ?? '') || '';
 
     const editInit = product ? {
         ...EMPTY_FORM,
@@ -415,7 +506,11 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
             variants.featured === 'true' ||
             localMeta.featured === true
         ),
-        imageUrl: normalizeImageUrl(product.imageUrl ?? product.image_url ?? variants.image_url ?? localMeta.imageUrl ?? '') || '',
+        imageUrl: existingServerImage || '',
+        imagePreview: initialPreview,
+        selectedFile: null,
+        hasNewFile: false,
+        imageRemoved: false,
         manufacturingDate: product.manufacturing_date ?? product.manufacturingDate ?? variants.manufacturing_date ?? localMeta.manufacturingDate ?? '',
         expiryDate: product.expiry_date ?? product.expiryDate ?? product.expiration_date ?? product.expirationDate ?? variants.expiry_date ?? localMeta.expiryDate ?? '',
         variants: variants,
@@ -423,6 +518,11 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
         ...EMPTY_FORM,
         category: initialCategoryName,
         category_id: initialCategoryId,
+        imageUrl: '',
+        imagePreview: '',
+        selectedFile: null,
+        hasNewFile: false,
+        imageRemoved: false,
     };
 
     const [form, setForm] = useState(editInit);
@@ -619,7 +719,10 @@ if (skuError) {
     const doSave = async () => {
         setSaving(true);
         try {
-            await onSave(toPayload(form, categories), product?.id, form);
+            const payload = isNew
+                ? toCreatePayload(form, categories)
+                : toUpdatePayload(form, categories, product);
+            await onSave(payload, product?.id, form, product);
             onClose();
         } catch (err) {
             const detail = err?.response?.data?.detail;
@@ -1065,7 +1168,17 @@ if (skuError) {
                             <input
                                 className="adm-search"
                                 value={form.imageUrl || ''}
-                                onChange={e => set('imageUrl', e.target.value)}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setForm(f => ({
+                                        ...f,
+                                        imageUrl: val,
+                                        imagePreview: val,
+                                        selectedFile: null,
+                                        hasNewFile: false,
+                                        imageRemoved: false
+                                    }));
+                                }}
                                 placeholder="Paste image URL (https://...)"
                                 style={{
                                     flex: 1,
@@ -1113,7 +1226,14 @@ if (skuError) {
                                         const reader = new FileReader();
                                         reader.onload = (ev) => {
                                             if (ev.target?.result) {
-                                                set('imageUrl', ev.target.result);
+                                                setForm(f => ({
+                                                    ...f,
+                                                    imagePreview: ev.target.result,
+                                                    selectedFile: file,
+                                                    hasNewFile: true,
+                                                    imageRemoved: false,
+                                                    imageUrl: ''
+                                                }));
                                             }
                                         };
                                         reader.readAsDataURL(file);
@@ -1121,10 +1241,10 @@ if (skuError) {
                                 />
                             </label>
                         </div>
-                        {Boolean(form.imageUrl && normalizeImageUrl(form.imageUrl)) && (
+                        {Boolean(form.imagePreview) && (
                             <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
                                 <img
-                                    src={normalizeImageUrl(form.imageUrl)}
+                                    src={normalizeImageUrl(form.imagePreview) || form.imagePreview}
                                     alt="Selected preview"
                                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                     style={{
@@ -1138,7 +1258,16 @@ if (skuError) {
                                 />
                                 <button
                                     type="button"
-                                    onClick={() => set('imageUrl', '')}
+                                    onClick={() => {
+                                        setForm(f => ({
+                                            ...f,
+                                            imageUrl: '',
+                                            imagePreview: '',
+                                            selectedFile: null,
+                                            hasNewFile: false,
+                                            imageRemoved: true
+                                        }));
+                                    }}
                                     style={{
                                         background: 'none',
                                         border: 'none',
@@ -1314,19 +1443,41 @@ const Products = () => {
     const [products, setProducts] = useState([]);
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [kpiFilter, setKpiFilter] = useState('all'); // 'all' | 'featured' | 'categories' | 'expirySoon'
     const [page, setPage] = useState(1);
     const [modal, setModal] = useState(null);
+    const [editLoadingId, setEditLoadingId] = useState(null);
+    const [togglingId, setTogglingId] = useState(null);
+    const [deletingId, setDeletingId] = useState(null);
     const [previewImage, setPreviewImage] = useState(null);
     const [previewError, setPreviewError] = useState(false);
     const [brokenImages, setBrokenImages] = useState(new Set());
+    const [backendExpiringIds, setBackendExpiringIds] = useState(new Set());
+    const isInitialMount = React.useRef(true);
 
-    const openImagePreview = (imgData) => {
+    const openImagePreview = async (imgData, productId = null) => {
         if (!imgData) return;
         setPreviewError(false);
         setPreviewImage(imgData);
+
+        if (productId) {
+            try {
+                const res = await productService.getImages(productId);
+                const imgs = res?.data ?? res;
+                if (Array.isArray(imgs) && imgs.length > 0) {
+                    const first = imgs[0]?.image_url || imgs[0]?.url;
+                    if (first && !imgData.url) {
+                        setPreviewImage(prev => ({ ...prev, url: normalizeImageUrl(first) }));
+                    }
+                }
+            } catch {
+                // Silently fallback to current preview
+            }
+        }
     };
 
     const closeImagePreview = () => {
@@ -1344,14 +1495,19 @@ const Products = () => {
         return map;
     }, [categories]);
 
-    const fetchProducts = async (currentCatMap = null) => {
+    const fetchProducts = async (currentCatMap = null, searchQuery = '') => {
         setLoading(true);
+        setError(null);
 
         try {
-            const res = await productService.getAll();
+            let res;
+            const trimmedQuery = (searchQuery || '').trim();
+            if (trimmedQuery && trimmedQuery.length >= 2) {
+                res = await productService.search(trimmedQuery);
+            } else {
+                res = await productService.getAll();
+            }
 
-            // API returns a flat array directly (confirmed from openapi.json schema)
-            // res is an axios response, so actual data is in res.data
             const body = res?.data ?? res;
             const list = Array.isArray(body)
                 ? body
@@ -1405,12 +1561,6 @@ const Products = () => {
                         localMeta.featured === true
                     );
 
-                    // Robust extraction of expiry date across all API representations:
-                    // 1. Direct fields: p.expiry_date, p.expiry, p.expire_date, p.expiryDate, p.exp_date
-                    // 2. Nested variants: variants.expiry_date, variants.expiry, variants.expiryDate, etc.
-                    // 3. Batches array: p.batches[].expiry_date
-                    // 4. Inventory expiry endpoint map
-                    // 5. Local synced meta
                     let batchExpiry = null;
                     if (Array.isArray(p.batches) && p.batches.length > 0) {
                         const batchExps = p.batches
@@ -1495,6 +1645,8 @@ const Products = () => {
             );
         } catch (err) {
             console.error('Failed to load products', err);
+            const detail = err?.response?.data?.detail;
+            setError(typeof detail === 'string' ? detail : (err?.message || 'Failed to load products from server.'));
         } finally {
             setLoading(false);
         }
@@ -1508,10 +1660,44 @@ const Products = () => {
             loadedCats.forEach(c => {
                 if (c.id != null) map[c.id] = c.name;
             });
-            await fetchProducts(map);
+            await fetchProducts(map, '');
         };
         loadInitialData();
     }, []);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search]);
+
+    useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+        fetchProducts(categoryMap, debouncedSearch);
+    }, [debouncedSearch]);
+
+    useEffect(() => {
+        if (kpiFilter === 'expirySoon') {
+            const fetchBackendExpiring = async () => {
+                try {
+                    const u = JSON.parse(localStorage.getItem('user') || '{}');
+                    const storeId = u.store_id || u.storeId || 1;
+                    const res = await productService.getExpiringSoon(storeId, 30);
+                    const list = res?.data ?? res;
+                    if (Array.isArray(list) && list.length > 0) {
+                        setBackendExpiringIds(new Set(list.map(x => x.id)));
+                    }
+                } catch {
+                    // Fall back to client-side date inspection
+                }
+            };
+            fetchBackendExpiring();
+        }
+    }, [kpiFilter]);
 
     useEffect(() => {
         setPage(1);
@@ -1527,10 +1713,10 @@ const Products = () => {
         const categoriesCount = categories.length > 0 ? categories.length : categorySet.size;
 
         // Expiry Soon: products expiring within the next 30 days, excluding already expired
-        const expirySoon = products.filter(isNearlyExpiry).length;
+        const expirySoon = products.filter(p => backendExpiringIds.has(p.id) || isNearlyExpiry(p)).length;
 
         return { total, featured, categories: categoriesCount, expirySoon };
-    }, [products, categories]);
+    }, [products, categories, backendExpiringIds]);
 
     const categoryFilterList = useMemo(() => {
         const dbNames = categories.map(c => c.name).filter(Boolean);
@@ -1546,7 +1732,7 @@ const Products = () => {
         if (kpiFilter === 'featured') {
             list = list.filter(p => Boolean(p.featured));
         } else if (kpiFilter === 'expirySoon') {
-            list = list.filter(isNearlyExpiry);
+            list = list.filter(p => backendExpiringIds.has(p.id) || isNearlyExpiry(p));
         } else if (kpiFilter === 'categories') {
             if (selectedCategory && selectedCategory !== 'All') {
                 list = list.filter(p => (p.category || '').toLowerCase() === selectedCategory.toLowerCase());
@@ -1563,7 +1749,7 @@ const Products = () => {
             });
         }
 
-        // 3. Search query
+        // 3. Search query (client-side fallback/refinement)
         const q = search.trim().toLowerCase();
         if (q) {
             list = list.filter(p =>
@@ -1583,11 +1769,23 @@ const Products = () => {
     const end = Math.min(page * PAGE_SIZE, filtered.length);
     const paginated = filtered.slice(start - 1, end);
 
-    const handleSave = async (payload, id, originalForm) => {
+    const handleSave = async (payload, id, originalForm, originalProduct) => {
         let savedProduct = null;
         if (id) {
             const res = await productService.update(id, payload);
             savedProduct = res?.data ?? res;
+            // If image was removed and product had server images:
+            if (originalForm?.imageRemoved && Array.isArray(originalProduct?.images) && originalProduct.images.length > 0) {
+                for (const img of originalProduct.images) {
+                    if (img?.id) {
+                        try {
+                            await productService.deleteImage(id, img.id);
+                        } catch (e) {
+                            console.warn('Failed to delete image', img.id, e);
+                        }
+                    }
+                }
+            }
         } else {
             const res = await productService.create(payload);
             savedProduct = res?.data ?? res;
@@ -1602,51 +1800,70 @@ const Products = () => {
                 brand: originalForm.brand?.trim() || null,
                 manufacturingDate: originalForm.manufacturingDate || null,
                 expiryDate: originalForm.expiryDate || null,
-                imageUrl: normalizeImageUrl(originalForm.imageUrl) || null,
+                imageUrl: originalForm.imagePreview || originalForm.imageUrl || null,
             });
         }
 
-        await fetchProducts();
+        await fetchProducts(categoryMap, debouncedSearch);
+    };
+
+    const handleOpenEditModal = async (p) => {
+        if (editLoadingId === p.id) return;
+        setEditLoadingId(p.id);
+        try {
+            const res = await productService.getById(p.id);
+            const detailed = res?.data ?? res;
+            setModal(detailed || p);
+        } catch (err) {
+            console.warn('Failed to fetch detailed product, falling back to cached item', err);
+            setModal(p);
+        } finally {
+            setEditLoadingId(null);
+        }
     };
 
     const handleDelete = async (id) => {
+        if (deletingId === id) return;
         if (!window.confirm('Are you sure you want to delete this product?')) {
             return;
         }
 
-        const prod = products.find(p => p.id === id);
-        await productService.delete(id);
-        removeLocalProductMeta(id, prod?.sku);
-        await fetchProducts();
+        setDeletingId(id);
+        try {
+            await productService.delete(id);
+            const prod = products.find(p => p.id === id);
+            removeLocalProductMeta(id, prod?.sku);
+            await fetchProducts(categoryMap, debouncedSearch);
+        } catch (err) {
+            const detail = err?.response?.data?.detail;
+            alert(
+                'Could not delete product: ' +
+                (typeof detail === 'string'
+                    ? detail
+                    : JSON.stringify(detail || err?.message || err))
+            );
+        } finally {
+            setDeletingId(null);
+        }
     };
 
     const toggleStatus = async (p) => {
-        const next = !p.status;
+        if (togglingId === p.id) return;
+        setTogglingId(p.id);
 
         try {
-            setProducts(prev =>
-                prev.map(x =>
-                    x.id === p.id ? { ...x, status: next } : x
-                )
-            );
-
-            await productService.update(
-                p.id,
-                {
-                    ...toPayload({ ...p, status: next }, categories),
-                    is_active: next
-                }
-            );
-
-            await fetchProducts();
+            await productService.toggleStatus(p.id);
+            await fetchProducts(categoryMap, debouncedSearch);
         } catch (err) {
-            setProducts(prev =>
-                prev.map(x =>
-                    x.id === p.id ? { ...x, status: p.status } : x
-                )
+            const detail = err?.response?.data?.detail;
+            alert(
+                'Status update failed: ' +
+                (typeof detail === 'string'
+                    ? detail
+                    : JSON.stringify(detail || err?.message || err))
             );
-
-            console.error('Status update failed', err);
+        } finally {
+            setTogglingId(null);
         }
     };
 
@@ -2185,7 +2402,38 @@ const Products = () => {
                                 </tr>
                             )}
 
-                            {!loading && paginated.map(p => (
+                            {error && !loading && (
+                                <tr>
+                                    <td
+                                        colSpan={8}
+                                        style={{
+                                            padding: 48,
+                                            textAlign: 'center',
+                                            color: '#ef4444'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                                            <span>⚠️ {error}</span>
+                                            <button
+                                                onClick={() => fetchProducts(categoryMap, debouncedSearch)}
+                                                style={{
+                                                    padding: '6px 14px',
+                                                    background: '#6366f1',
+                                                    color: '#fff',
+                                                    border: 'none',
+                                                    borderRadius: 6,
+                                                    cursor: 'pointer',
+                                                    fontSize: 12
+                                                }}
+                                            >
+                                                Retry
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+
+                            {!loading && !error && paginated.map(p => (
                                 <tr
                                     key={p.id}
                                     style={{
@@ -2208,7 +2456,7 @@ const Products = () => {
                                                                 url: isBroken ? null : imgUrl,
                                                                 name: p.name || 'Product Image',
                                                                 sku: p.sku || ''
-                                                            });
+                                                            }, p.id);
                                                         }}
                                                         onKeyDown={(e) => {
                                                             if (e.key === 'Enter' || e.key === ' ') {
@@ -2217,7 +2465,7 @@ const Products = () => {
                                                                     url: isBroken ? null : imgUrl,
                                                                     name: p.name || 'Product Image',
                                                                     sku: p.sku || ''
-                                                                });
+                                                                }, p.id);
                                                             }
                                                         }}
                                                         className="prod-thumb-clickable"
@@ -2249,7 +2497,7 @@ const Products = () => {
                                                                         url: imgUrl,
                                                                         name: p.name || 'Product Image',
                                                                         sku: p.sku || ''
-                                                                    });
+                                                                    }, p.id);
                                                                 }}
                                                                 onError={() => {
                                                                     setBrokenImages(prev => {
@@ -2320,7 +2568,32 @@ const Products = () => {
                                         fontWeight: 500,
                                         whiteSpace: 'nowrap'
                                     }}>
-                                        {p.barcode || '—'}
+                                        {p.barcode ? (
+                                            <span
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    try {
+                                                        const res = await productService.getBarcodeImage(p.id, 'download');
+                                                        const blob = res.data;
+                                                        const url = URL.createObjectURL(blob);
+                                                        const a = document.createElement('a');
+                                                        a.href = url;
+                                                        a.download = `barcode-${p.barcode}.png`;
+                                                        a.click();
+                                                        URL.revokeObjectURL(url);
+                                                    } catch (err) {
+                                                        console.warn('Barcode download failed', err);
+                                                        alert(`Barcode: ${p.barcode}`);
+                                                    }
+                                                }}
+                                                title="Click to download barcode image"
+                                                style={{ cursor: 'pointer', color: '#4f46e5', textDecoration: 'underline dotted' }}
+                                            >
+                                                {p.barcode}
+                                            </span>
+                                        ) : (
+                                            '—'
+                                        )}
                                     </td>
 
                                     <td style={{
@@ -2392,12 +2665,28 @@ const Products = () => {
                                         <div style={{
                                             display: 'flex',
                                             gap: 8,
-                                            justifyContent: 'center'
+                                            justifyContent: 'center',
+                                            alignItems: 'center'
                                         }}>
                                             <button
                                                 className="adm-btn-secondary"
-                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}
-                                                onClick={() => setModal(p)}
+                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: togglingId === p.id ? 'wait' : 'pointer' }}
+                                                onClick={() => toggleStatus(p)}
+                                                disabled={togglingId === p.id}
+                                                title={p.status ? "Active (Click to deactivate)" : "Inactive (Click to activate)"}
+                                            >
+                                                {p.status ? (
+                                                    <BsToggleOn size={16} color="#10b981" />
+                                                ) : (
+                                                    <BsToggleOff size={16} color="#9ca3af" />
+                                                )}
+                                            </button>
+
+                                            <button
+                                                className="adm-btn-secondary"
+                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: editLoadingId === p.id ? 'wait' : 'pointer' }}
+                                                onClick={() => handleOpenEditModal(p)}
+                                                disabled={editLoadingId === p.id}
                                                 title="Edit"
                                             >
                                                 <BsPencilFill size={13} color="#6366f1" />
@@ -2405,8 +2694,9 @@ const Products = () => {
 
                                             <button
                                                 className="adm-btn-secondary"
-                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}
+                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: deletingId === p.id ? 'wait' : 'pointer' }}
                                                 onClick={() => handleDelete(p.id)}
+                                                disabled={deletingId === p.id}
                                                 title="Delete"
                                             >
                                                 <BsTrashFill size={13} color="#ef4444" />
@@ -2416,7 +2706,7 @@ const Products = () => {
                                 </tr>
                             ))}
 
-                            {!loading && paginated.length === 0 && (
+                            {!loading && !error && paginated.length === 0 && (
                                 <tr>
                                     <td
                                         colSpan={8}
