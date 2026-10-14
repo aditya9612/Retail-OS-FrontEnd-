@@ -6,22 +6,29 @@ const ACCESS_MAX_AGE = 60 * 60 * 24;
 const REFRESH_MAX_AGE = 60 * 60 * 24 * 30;
 
 const setCookie = (name, value, maxAgeSeconds) => {
-    document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
+    if (typeof document !== 'undefined') {
+        document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAgeSeconds}; SameSite=Lax`;
+    }
 };
 
 const getCookie = (name) => {
+    if (typeof document === 'undefined') return null;
     const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
     return match ? decodeURIComponent(match[2]) : null;
 };
 
 const deleteCookie = (name) => {
-    document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
+    if (typeof document !== 'undefined') {
+        document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
+    }
 };
 
 const clearLegacyStorage = () => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
-    localStorage.removeItem(TOKEN_TYPE_KEY);
+    if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(ACCESS_TOKEN_KEY);
+        localStorage.removeItem(REFRESH_TOKEN_KEY);
+        localStorage.removeItem(TOKEN_TYPE_KEY);
+    }
 };
 
 const isTokenValid = (token) => {
@@ -42,7 +49,9 @@ const isTokenValid = (token) => {
     }
 };
 
-clearLegacyStorage();
+if (typeof localStorage !== 'undefined') {
+    clearLegacyStorage();
+}
 
 export const setTokens = ({ access_token, refresh_token, token_type = 'bearer' }) => {
     if (access_token) {

@@ -27,7 +27,11 @@ const Profile = () => {
     });
 
     const [showPinModal, setShowPinModal] = useState(false);
+    const [currentPin, setCurrentPin] = useState('');
     const [newPin, setNewPin] = useState('');
+    const [pinLoading, setPinLoading] = useState(false);
+    const [pinError, setPinError] = useState('');
+    const [pinSuccess, setPinSuccess] = useState('');
     const [saveSuccess, setSaveSuccess] = useState(false);
 
     const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -56,15 +60,54 @@ const Profile = () => {
         setTimeout(() => setSaveSuccess(false), 3000);
     };
 
-    const handleChangePin = (e) => {
+    const handleChangePin = async (e) => {
         e.preventDefault();
-        if (newPin.length < 4) {
-            alert('PIN must be at least 4 digits');
+        setPinError('');
+        setPinSuccess('');
+
+        const formattedNewPin = newPin.trim().replace(/\D/g, '');
+        const formattedCurrentPin = currentPin.trim().replace(/\D/g, '');
+
+        if (formattedNewPin.length !== 4) {
+            setPinError('Security PIN must be exactly 4 digits.');
             return;
         }
-        setShowPinModal(false);
-        setNewPin('');
-        alert('Security PIN updated successfully!');
+
+        setPinLoading(true);
+        try {
+            if (formattedCurrentPin && formattedCurrentPin.length === 4) {
+                await auth.changePin(formattedCurrentPin, formattedNewPin);
+                setPinSuccess('Security PIN changed successfully!');
+            } else {
+                try {
+                    await auth.setupPin(formattedNewPin);
+                    setPinSuccess('Security PIN setup successfully!');
+                } catch (setupErr) {
+                    const msg = setupErr.response?.data?.message || setupErr.response?.data?.detail;
+                    if (typeof msg === 'string' && msg.toLowerCase().includes('already')) {
+                        setPinError('Security PIN is already set. Please provide your Current PIN to change it.');
+                        setPinLoading(false);
+                        return;
+                    }
+                    throw setupErr;
+                }
+            }
+
+            setTimeout(() => {
+                setShowPinModal(false);
+                setNewPin('');
+                setCurrentPin('');
+                setPinSuccess('');
+            }, 1800);
+        } catch (err) {
+            const errorMsg =
+                err.response?.data?.message ||
+                err.response?.data?.detail ||
+                'Failed to update security PIN. Please verify your current PIN.';
+            setPinError(typeof errorMsg === 'string' ? errorMsg : 'Failed to update PIN.');
+        } finally {
+            setPinLoading(false);
+        }
     };
 
     const handleChangePasswordSubmit = async (e) => {
@@ -417,28 +460,61 @@ const Profile = () => {
                     <div className="ec-modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
                         <div className="ec-modal-header">
                             <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>Update Security PIN</h3>
-                            <button className="ec-modal-close" onClick={() => setShowPinModal(false)}>✕</button>
+                            <button className="ec-modal-close" onClick={() => setShowPinModal(false)} disabled={pinLoading}>✕</button>
                         </div>
+
+                        {pinError && (
+                            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, marginTop: 12 }}>
+                                {pinError}
+                            </div>
+                        )}
+
+                        {pinSuccess && (
+                            <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#16a34a', padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600, marginTop: 12 }}>
+                                {pinSuccess}
+                            </div>
+                        )}
+
                         <form onSubmit={handleChangePin} style={{ marginTop: 16 }}>
-                            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6, display: 'block' }}>
-                                Enter New Security PIN (Min 4 digits)
-                            </label>
-                            <input
-                                type="password"
-                                maxLength={6}
-                                placeholder="****"
-                                value={newPin}
-                                onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
-                                className="ec-input"
-                                style={{ width: '100%', padding: '10px 14px', fontSize: 16, textAlign: 'center', letterSpacing: '4px', height: 40 }}
-                                required
-                            />
+                            <div style={{ marginBottom: 12 }}>
+                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                                    Current PIN (leave blank if first time setup)
+                                </label>
+                                <input
+                                    type="password"
+                                    maxLength={4}
+                                    placeholder="Enter current 4-digit PIN"
+                                    value={currentPin}
+                                    onChange={e => setCurrentPin(e.target.value.replace(/\D/g, ''))}
+                                    className="ec-input"
+                                    style={{ width: '100%', padding: '10px 14px', fontSize: 16, textAlign: 'center', letterSpacing: '4px', height: 40 }}
+                                    disabled={pinLoading}
+                                />
+                            </div>
+
+                            <div style={{ marginBottom: 14 }}>
+                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                                    New Security PIN (4 digits) *
+                                </label>
+                                <input
+                                    type="password"
+                                    maxLength={4}
+                                    placeholder="Enter new 4-digit PIN"
+                                    value={newPin}
+                                    onChange={e => setNewPin(e.target.value.replace(/\D/g, ''))}
+                                    className="ec-input"
+                                    style={{ width: '100%', padding: '10px 14px', fontSize: 16, textAlign: 'center', letterSpacing: '4px', height: 40 }}
+                                    required
+                                    disabled={pinLoading}
+                                />
+                            </div>
+
                             <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-                                <button type="button" className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowPinModal(false)}>
+                                <button type="button" className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setShowPinModal(false)} disabled={pinLoading}>
                                     Cancel
                                 </button>
-                                <button type="submit" className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
-                                    Update PIN
+                                <button type="submit" className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center' }} disabled={pinLoading}>
+                                    {pinLoading ? 'Updating...' : 'Update PIN'}
                                 </button>
                             </div>
                         </form>

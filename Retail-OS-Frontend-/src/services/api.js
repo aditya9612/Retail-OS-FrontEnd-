@@ -67,13 +67,19 @@ apiClient.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
+        const isPublicAuthUrl =
+            originalRequest?.url?.includes("/auth/login") ||
+            originalRequest?.url?.includes("/auth/refresh") ||
+            originalRequest?.url?.includes("/auth/forgot-password") ||
+            originalRequest?.url?.includes("/auth/verify-otp") ||
+            originalRequest?.url?.includes("/auth/reset-password") ||
+            originalRequest?.url?.includes("/auth/pin/reset");
+
         if (
             error.response?.status === 401 &&
             originalRequest &&
             !originalRequest._retry &&
-            !originalRequest.url?.includes("/auth/login") &&
-            !originalRequest.url?.includes("/auth/refresh") &&
-            !originalRequest.url?.includes("/auth/refresh-token")
+            !isPublicAuthUrl
         ) {
             if (isRefreshing) {
                 return new Promise((resolve, reject) => {
@@ -102,7 +108,7 @@ apiClient.interceptors.response.use(
 
             try {
                 const response = await axios.post(
-                    "https://api-testing.myretailos.com/api/v1/auth/refresh-token",
+                    "https://api-testing.myretailos.com/api/v1/auth/refresh",
                     { refresh_token: refreshToken },
                     { headers: { "Content-Type": "application/json" } }
                 );
