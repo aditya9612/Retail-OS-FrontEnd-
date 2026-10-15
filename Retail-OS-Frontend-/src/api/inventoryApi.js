@@ -20,7 +20,11 @@ export const getInventory = async (params = {}) => {
  * GET /inventory/low-stock
  */
 export const getLowStock = async (params = {}) => {
-  return await lowStock(params?.store_id || params?.storeId);
+  const storeId =
+    typeof params === "object" && params !== null
+      ? (params.store_id || params.storeId || params.id)
+      : params;
+  return await lowStock(storeId);
 };
 
 /**

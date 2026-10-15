@@ -69,7 +69,7 @@ const LowStockAlert = ({
     navigate("/purchases", {
       state: {
         reorderItem: item,
-        productId: item?.product_id || item?.id,
+        productId: item?.product_id ?? item?.productId ?? null,
         productName:
           item?.product_name ||
           item?.name ||
@@ -78,7 +78,13 @@ const LowStockAlert = ({
           item?.productName ||
           item?.title ||
           "-",
-        sku: item?.sku,
+        sku:
+          item?.sku ||
+          item?.SKU ||
+          item?.product_sku ||
+          item?.productSku ||
+          item?.product?.sku ||
+          "",
         supplier: item?.supplier_name || item?.supplierName,
       },
     });
@@ -125,20 +131,47 @@ const LowStockAlert = ({
         </thead>
 
         <tbody>
-          {!loading && items.length === 0 ? (
+          {loading && items.length === 0 ? (
             <tr>
               <td
                 colSpan="9"
                 style={{
                   textAlign: "center",
-                  padding: "20px",
+                  padding: "24px",
+                  color: "#6b7280",
+                }}
+              >
+                Loading low stock items...
+              </td>
+            </tr>
+          ) : error && items.length === 0 ? (
+            <tr>
+              <td
+                colSpan="9"
+                style={{
+                  textAlign: "center",
+                  padding: "24px",
+                  color: "#ef4444",
+                }}
+              >
+                {error}
+              </td>
+            </tr>
+          ) : items.length === 0 ? (
+            <tr>
+              <td
+                colSpan="9"
+                style={{
+                  textAlign: "center",
+                  padding: "24px",
+                  color: "#6b7280",
                 }}
               >
                 No Low Stock Items
               </td>
             </tr>
           ) : (
-            items.map((item) => {
+            items.map((item, index) => {
               /* =========================
                  AVAILABLE QUANTITY
               ========================= */
@@ -206,11 +239,16 @@ const LowStockAlert = ({
                  STATUS
               ========================= */
 
-              const resolvedStatus =
+              const rawStatus =
                 item?.stock_status ||
                 (typeof stockStatus === "function"
                   ? stockStatus(item)
                   : null);
+
+              const resolvedStatus =
+                typeof rawStatus === "object" && rawStatus !== null
+                  ? (rawStatus.label || rawStatus.status || rawStatus.text || "")
+                  : (rawStatus ? String(rawStatus) : "");
 
               let statusClass =
                 "low-stock-badge";
@@ -273,7 +311,7 @@ const LowStockAlert = ({
                 );
 
               return (
-                <tr key={item?.id}>
+                <tr key={item?.id ? `${item?.store_id || 0}-${item.id}` : index}>
                   {/* PRODUCT */}
                   <td>
                     {item?.product_name ||
@@ -287,7 +325,16 @@ const LowStockAlert = ({
 
                   {/* SKU */}
                   <td>
-                    {item?.sku || "-"}
+                    {item?.sku ||
+                      item?.SKU ||
+                      item?.product_sku ||
+                      item?.productSku ||
+                      item?.product?.sku ||
+                      item?.product?.SKU ||
+                      item?.product?.product_sku ||
+                      item?.product_details?.sku ||
+                      item?.productDetail?.sku ||
+                      "-"}
                   </td>
 
                   {/* SUPPLIER */}

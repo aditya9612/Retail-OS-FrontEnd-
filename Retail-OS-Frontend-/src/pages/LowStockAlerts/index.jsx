@@ -6,6 +6,7 @@ import {
     lowStock,
     listProducts,
     listStores,
+    getProductById,
 } from "../../services/inventoryService";
 
 import "./LowStockAlerts.css";
@@ -30,6 +31,60 @@ const getArrayFromResponse = (response) => {
     ];
 
     return candidates.find(Array.isArray) || [];
+};
+
+/* =========================================================
+   SKU HELPER
+========================================================= */
+
+const extractSku = (obj) => {
+    if (!obj || typeof obj !== "object") return "";
+
+    const directSku =
+        obj.sku ??
+        obj.SKU ??
+        obj.Sku ??
+        obj.product_sku ??
+        obj.productSku ??
+        obj.sku_code ??
+        obj.skuCode ??
+        obj.code ??
+        obj.variant_sku ??
+        obj.variantSku;
+
+    if (
+        directSku !== null &&
+        directSku !== undefined &&
+        String(directSku).trim() &&
+        String(directSku).trim() !== "-" &&
+        String(directSku).trim() !== "N/A"
+    ) {
+        return String(directSku).trim();
+    }
+
+    const nested =
+        obj.product ||
+        obj.product_details ||
+        obj.productDetail ||
+        obj.details;
+
+    if (nested && typeof nested === "object") {
+        const nestedSku = extractSku(nested);
+        if (nestedSku) return nestedSku;
+    }
+
+    const variants = obj.variants ?? obj.variant;
+    if (Array.isArray(variants) && variants.length > 0) {
+        for (const v of variants) {
+            const vSku = extractSku(v);
+            if (vSku) return vSku;
+        }
+    } else if (variants && typeof variants === "object") {
+        const vSku = extractSku(variants);
+        if (vSku) return vSku;
+    }
+
+    return "";
 };
 
 /* =========================================================
@@ -64,24 +119,7 @@ const normalizeProduct = (product) => {
         nestedProduct?.title ??
         "";
 
-    const sku =
-        product?.sku ??
-        product?.SKU ??
-        product?.Sku ??
-        product?.product_sku ??
-        product?.productSku ??
-        product?.sku_code ??
-        product?.skuCode ??
-        product?.code ??
-        nestedProduct?.sku ??
-        nestedProduct?.SKU ??
-        nestedProduct?.Sku ??
-        nestedProduct?.product_sku ??
-        nestedProduct?.productSku ??
-        nestedProduct?.sku_code ??
-        nestedProduct?.skuCode ??
-        nestedProduct?.code ??
-        "";
+    const sku = extractSku(product) || extractSku(nestedProduct);
 
     return {
         ...product,
@@ -212,10 +250,16 @@ const LowStockAlerts = () => {
     const [statusFilter, setStatusFilter] = useState("All Status");
 
     const handleReorder = (item) => {
+        const resolvedProductId =
+            item?.product_id ??
+            item?.productId ??
+            item?.product?.id ??
+            null;
+
         navigate("/purchases", {
             state: {
                 reorderItem: item,
-                productId: item?.product_id || item?.id,
+                productId: resolvedProductId,
                 productName: item?.product_name || item?.name,
                 sku: item?.sku,
                 supplier: item?.supplier_name || item?.supplierName,
@@ -246,9 +290,24 @@ const LowStockAlerts = () => {
                 map.set(String(numId), product);
             }
 
-            const rawSku = String(product?.sku || "").trim();
+            const rawSku = String(product?.sku || extractSku(product) || "").trim();
             if (rawSku) {
                 map.set(`sku:${rawSku.toLowerCase()}`, product);
+            }
+
+            const variants = product?.variants ?? product?.variant;
+            if (Array.isArray(variants)) {
+                variants.forEach((v) => {
+                    const vSku = extractSku(v);
+                    if (vSku) {
+                        map.set(`sku:${vSku.toLowerCase()}`, product);
+                    }
+                });
+            } else if (variants && typeof variants === "object") {
+                const vSku = extractSku(variants);
+                if (vSku) {
+                    map.set(`sku:${vSku.toLowerCase()}`, product);
+                }
             }
         });
 
@@ -263,15 +322,16 @@ const LowStockAlerts = () => {
         const map = new Map();
 
         stores.forEach((store) => {
+            const rawId = store?.id ?? store?.store_id;
             if (
-                store?.id !== null &&
-                store?.id !== undefined
+                rawId !== null &&
+                rawId !== undefined
             ) {
                 const cleanName =
                     getCleanStoreName(store);
 
                 map.set(
-                    Number(store.id),
+                    Number(rawId),
                     cleanName
                 );
             }
@@ -301,10 +361,10 @@ const LowStockAlerts = () => {
                 const rawProductId =
                     item?.product_id ??
                     item?.productId ??
-                    nestedItemProduct?.id ??
                     nestedItemProduct?.product_id ??
                     nestedItemProduct?.productId ??
-                    item?.id;
+                    nestedItemProduct?.id ??
+                    null;
 
                 const numericId =
                     rawProductId !== null &&
@@ -313,13 +373,7 @@ const LowStockAlerts = () => {
                         ? Number(rawProductId)
                         : null;
 
-                const itemSku = String(
-                    item?.sku ??
-                    item?.product_sku ??
-                    nestedItemProduct?.sku ??
-                    nestedItemProduct?.product_sku ??
-                    ""
-                ).trim();
+                const itemSku = extractSku(item) || extractSku(nestedItemProduct);
 
                 const product =
                     (numericId !== null ? productMap.get(numericId) : null) ||
@@ -343,21 +397,23 @@ const LowStockAlerts = () => {
                     item?.name ||
                     (numericId !== null ? `Product #${numericId}` : "-");
 
+                const canonicalSku =
+                    product?.sku ||
+                    extractSku(product) ||
+                    itemSku ||
+                    extractSku(item) ||
+                    "";
+
                 return {
                     ...item,
 
-                    product_id: numericId ?? item?.product_id ?? item?.id,
+                    product_id: numericId ?? item?.product_id ?? item?.productId ?? null,
 
                     product_name: canonicalProductName,
 
                     name: canonicalProductName,
 
-                    sku:
-                        product?.sku ||
-                        itemSku ||
-                        item?.sku ||
-                        item?.product_sku ||
-                        "",
+                    sku: canonicalSku,
 
                     category:
                         product?.category ||
@@ -417,7 +473,7 @@ const LowStockAlerts = () => {
             const data =
                 getArrayFromResponse(response);
 
-            const normalizedProducts = data
+            const normalizedProducts = (Array.isArray(data) ? data : [])
                 .map(normalizeProduct)
                 .filter(
                     (product) =>
@@ -432,10 +488,6 @@ const LowStockAlerts = () => {
                 err
             );
 
-            /*
-              Do NOT set page-level error here.
-              Product API failure should not break Low Stock.
-            */
             setProducts([]);
         }
     };
@@ -453,21 +505,20 @@ const LowStockAlerts = () => {
             const data =
                 getArrayFromResponse(response);
 
-            setStores(
-                Array.isArray(data)
-                    ? data
-                    : []
-            );
+            const storeList = Array.isArray(data)
+                ? data
+                : [];
+
+            setStores(storeList);
+            return storeList;
         } catch (err) {
             console.error(
                 "STORES API ERROR =>",
                 err
             );
 
-            /*
-              Keep Low Stock working even if stores fail.
-            */
             setStores([]);
+            throw err;
         }
     };
 
@@ -475,29 +526,71 @@ const LowStockAlerts = () => {
        FETCH LOW STOCK
 
        IMPORTANT:
-       This API is completely independent.
+       Requires valid store_id as mandated by backend contract.
     ===================================================== */
 
-    const fetchLowStock = async () => {
+    const fetchLowStock = async (storeList) => {
         try {
             setError("");
 
-            const response =
-                await lowStock();
+            const availableStores = storeList || stores;
+            const validStoreIds = Array.from(
+                new Set(
+                    (availableStores || [])
+                        .map((s) => Number(s?.id ?? s?.store_id))
+                        .filter((id) => Number.isFinite(id) && id > 0)
+                )
+            );
+
+            if (validStoreIds.length === 0) {
+                setRawLowStockItems([]);
+                if (!availableStores || availableStores.length === 0) {
+                    setError("No stores available to load low stock alerts.");
+                }
+                return;
+            }
+
+            const results = await Promise.allSettled(
+                validStoreIds.map((storeId) => lowStock(storeId))
+            );
+
+            const combinedItems = [];
+            const errors = [];
+
+            results.forEach((res, index) => {
+                if (res.status === "fulfilled") {
+                    const data = getArrayFromResponse(res.value);
+                    if (Array.isArray(data)) {
+                        data.forEach((item) => {
+                            combinedItems.push({
+                                ...item,
+                                store_id: item?.store_id ?? validStoreIds[index],
+                            });
+                        });
+                    }
+                } else {
+                    errors.push(res.reason);
+                }
+            });
+
+            if (errors.length > 0 && combinedItems.length === 0) {
+                const firstError = errors[0];
+                const msg =
+                    firstError?.message ||
+                    (typeof firstError === "string"
+                        ? firstError
+                        : "Failed to load low stock alerts");
+                setError(msg);
+                setRawLowStockItems([]);
+                return;
+            }
 
             console.log(
                 "LOW STOCK API RESPONSE =>",
-                response
+                combinedItems
             );
 
-            const data =
-                getArrayFromResponse(response);
-
-            setRawLowStockItems(
-                Array.isArray(data)
-                    ? data
-                    : []
-            );
+            setRawLowStockItems(combinedItems);
         } catch (err) {
             console.error(
                 "LOW STOCK API ERROR =>",
@@ -507,7 +600,7 @@ const LowStockAlerts = () => {
             setRawLowStockItems([]);
 
             setError(
-                "Failed to load low stock alerts"
+                err?.message || "Failed to load low stock alerts"
             );
         }
     };
@@ -523,26 +616,34 @@ const LowStockAlerts = () => {
         let mounted = true;
 
         const loadData = async () => {
-            setLoading(true);
-            setError("");
+            try {
+                setLoading(true);
+                setError("");
 
-            /*
-              Run all APIs independently.
+                let storeList = [];
+                try {
+                    storeList = await fetchStores();
+                } catch (storeErr) {
+                    console.error("Stores fetch failed =>", storeErr);
+                    if (mounted) {
+                        setError(storeErr?.message || "Failed to load stores");
+                    }
+                    return;
+                }
 
-              Promise.allSettled means:
-              - Products fail -> Low Stock still runs
-              - Stores fail -> Low Stock still runs
-              - Low Stock fails -> page remains usable
-            */
-
-            await Promise.allSettled([
-                fetchProducts(),
-                fetchStores(),
-                fetchLowStock(),
-            ]);
-
-            if (mounted) {
-                setLoading(false);
+                await Promise.allSettled([
+                    fetchProducts(),
+                    fetchLowStock(storeList),
+                ]);
+            } catch (err) {
+                console.error("LOAD DATA ERROR =>", err);
+                if (mounted) {
+                    setError(err?.message || "Failed to load low stock alerts");
+                }
+            } finally {
+                if (mounted) {
+                    setLoading(false);
+                }
             }
         };
 
@@ -564,10 +665,18 @@ const LowStockAlerts = () => {
             setLoading(true);
             setError("");
 
+            let storeList = [];
+            try {
+                storeList = await fetchStores();
+            } catch (storeErr) {
+                console.error("Stores fetch failed =>", storeErr);
+                setError(storeErr?.message || "Failed to load stores");
+                return;
+            }
+
             await Promise.allSettled([
                 fetchProducts(),
-                fetchStores(),
-                fetchLowStock(),
+                fetchLowStock(storeList),
             ]);
         } catch (err) {
             console.error(
@@ -576,7 +685,7 @@ const LowStockAlerts = () => {
             );
 
             setError(
-                "Failed to refresh low stock alerts"
+                err?.message || "Failed to refresh low stock alerts"
             );
         } finally {
             setLoading(false);
@@ -585,13 +694,12 @@ const LowStockAlerts = () => {
 
     const storeOptions = useMemo(() => {
         return Array.from(
-            new Set(
-                lowStockItems
-                    .map((item) => item?.store_name)
-                    .filter(Boolean)
-            )
+            new Set([
+                ...stores.map((s) => getCleanStoreName(s)),
+                ...lowStockItems.map((item) => item?.store_name),
+            ].filter(Boolean))
         ).sort();
-    }, [lowStockItems]);
+    }, [stores, lowStockItems]);
 
 
 
@@ -616,13 +724,51 @@ const LowStockAlerts = () => {
                 storeFilter === "All Stores" ||
                 item?.store_name === storeFilter;
 
+            const stock = Number(
+                item?.quantity ??
+                item?.available_quantity ??
+                item?.stock ??
+                item?.current_stock ??
+                0
+            ) || 0;
+
+            const minStock = Number(
+                item?.low_stock_threshold ??
+                item?.minimum_stock ??
+                item?.reorderLevel ??
+                item?.reorder_level ??
+                item?.minStock ??
+                item?.min_stock ??
+                0
+            ) || 0;
+
             const itemStatus =
                 item?.stock_status ||
                 getStockStatus(item);
 
+            const isLowStockMatch =
+                statusFilter === "Low Stock" &&
+                (itemStatus === "Low Stock" ||
+                    itemStatus === "Critical" ||
+                    item?.is_low_stock === true ||
+                    (minStock > 0 && stock <= minStock) ||
+                    stock <= 0);
+
+            const isCriticalMatch =
+                statusFilter === "Critical" &&
+                (itemStatus === "Critical" ||
+                    (minStock > 0 && stock < minStock));
+
+            const isOutOfStockMatch =
+                statusFilter === "Out of Stock" &&
+                (itemStatus === "Out of Stock" || stock <= 0);
+
             const matchStatus =
                 statusFilter === "All Status" ||
-                itemStatus === statusFilter;
+                itemStatus === statusFilter ||
+                isLowStockMatch ||
+                isCriticalMatch ||
+                isOutOfStockMatch;
 
             return matchSearch && matchStore && matchStatus;
         });

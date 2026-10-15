@@ -215,20 +215,18 @@ const InventoryTable = ({
             ===================================================== */
 
             const minStock =
-              item.low_stock_threshold !==
-                undefined &&
-              item.low_stock_threshold !== null
-                ? Number(
-                    item.low_stock_threshold
-                  )
-                : item.minStock !==
-                      undefined &&
-                    item.minStock !== null
+              Number(item.low_stock_threshold) > 0
+                ? Number(item.low_stock_threshold)
+                : Number(item.minStock) > 0
                 ? Number(item.minStock)
-                : item.minimum_stock !==
-                      undefined &&
-                    item.minimum_stock !== null
+                : Number(item.minimum_stock) > 0
                 ? Number(item.minimum_stock)
+                : Number(item.min_stock) > 0
+                ? Number(item.min_stock)
+                : Number(item.reorder_level) > 0
+                ? Number(item.reorder_level)
+                : Number(item.reorderLevel) > 0
+                ? Number(item.reorderLevel)
                 : 0;
 
             /* =====================================================
@@ -374,24 +372,19 @@ const isMissingRequiredExpiry =
             ===================================================== */
 
             let st;
-
-            if (isZeroPrice) {
-              st = {
-                label: "Out of Stock",
-                color: "#dc2626",
-                bg: "#fef2f2",
-              };
-            } else if (qty <= 0) {
-              st = {
-                label: "Out of Stock",
-                color: "#dc2626",
-                bg: "#fef2f2",
-              };
-     } else if (minStock > 0 && qty <= minStock) {
+            if (typeof stockStatus === "function") {
+              st = stockStatus(item);
+            } else if (item?.is_low_stock || (minStock > 0 && qty <= minStock)) {
               st = {
                 label: "Low Stock",
                 color: "#d97706",
                 bg: "#fffbeb",
+              };
+            } else if (isZeroPrice || qty <= 0) {
+              st = {
+                label: "Out of Stock",
+                color: "#dc2626",
+                bg: "#fef2f2",
               };
             } else {
               st = {

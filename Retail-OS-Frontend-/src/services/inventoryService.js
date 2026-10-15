@@ -80,9 +80,19 @@ export const inventoryService = {
         return response.data;
     },
 
-    getLowStock: async () => {
+    getLowStock: async (storeId) => {
+        const rawId =
+            typeof storeId === "object" && storeId !== null
+                ? (storeId.store_id ?? storeId.storeId)
+                : storeId;
+        const validId = Number(rawId);
+
+        if (!validId || Number.isNaN(validId) || validId <= 0) {
+            throw new Error("getLowStock requires a valid positive store_id");
+        }
+
         const response = await apiClient.get(
-            "/inventory/low-stock"
+            `/inventory/low-stock?store_id=${validId}`
         );
 
         return response.data;
@@ -517,9 +527,19 @@ export const lowStock = async (
     storeId
 ) => {
     try {
-        const url = storeId
-            ? `${API_BASE}/inventory/low-stock?store_id=${storeId}`
-            : `${API_BASE}/inventory/low-stock`;
+        const rawId =
+            typeof storeId === "object" && storeId !== null
+                ? (storeId.store_id ?? storeId.storeId ?? storeId.id)
+                : storeId;
+        const validId = Number(rawId);
+
+        if (!validId || Number.isNaN(validId) || validId <= 0) {
+            throw new Error(
+                `lowStock requires a valid positive store_id. Received: ${JSON.stringify(storeId)}`
+            );
+        }
+
+        const url = `${API_BASE}/inventory/low-stock?store_id=${validId}`;
 
         console.log(
             "LOW STOCK API REQUEST =>",
@@ -670,14 +690,25 @@ export const getInventoryByProductId = async (
    12. LIST PRODUCTS
 ========================================================= */
 
-export const listProducts = async () => {
+export const listProducts = async (params = {}) => {
     try {
         console.log(
-            "PRODUCTS API REQUEST"
+            "PRODUCTS API REQUEST",
+            params
         );
 
+        let url = `${API_BASE}/products`;
+        if (params && typeof params === "object") {
+            const query = new URLSearchParams();
+            if (params.page !== undefined) query.append("page", String(params.page));
+            if (params.page_size !== undefined) query.append("page_size", String(params.page_size));
+            if (params.include_inactive !== undefined) query.append("include_inactive", String(params.include_inactive));
+            const qs = query.toString();
+            if (qs) url += `?${qs}`;
+        }
+
         const response = await fetch(
-            `${API_BASE}/products`,
+            url,
             {
                 method: "GET",
                 headers: getHeaders(),
@@ -701,6 +732,37 @@ export const listProducts = async () => {
         );
 
         throw error;
+    }
+};
+
+/* =========================================================
+   12A. GET PRODUCT BY ID
+========================================================= */
+
+export const getProductById = async (id) => {
+    try {
+        if (!id) return null;
+
+        const response = await fetch(
+            `${API_BASE}/products/${id}`,
+            {
+                method: "GET",
+                headers: getHeaders(),
+            }
+        );
+
+        const data = await handleResponse(
+            response
+        );
+
+        return data;
+    } catch (error) {
+        console.error(
+            "Get Product By ID Error =>",
+            error
+        );
+
+        return null;
     }
 };
 
