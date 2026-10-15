@@ -13,46 +13,32 @@ import {
     BsClockHistory, BsCheckCircleFill, BsXCircleFill, BsHourglassSplit,
 } from 'react-icons/bs';
 
-/* ── Mock Data ─────────────────────────── */
+/* ── Baseline / Fallback Data ─────────────────────────── */
 const revenueData = [
-    { month: 'Jan', online: 82000, offline: 142000 },
-    { month: 'Feb', online: 95000, offline: 168000 },
-    { month: 'Mar', online: 110000, offline: 195000 },
-    { month: 'Apr', online: 98000, offline: 178000 },
-    { month: 'May', online: 135000, offline: 220000 },
-    { month: 'Jun', online: 148000, offline: 205000 },
-    { month: 'Jul', online: 172000, offline: 245000 },
-    { month: 'Aug', online: 163000, offline: 232000 },
-    { month: 'Sep', online: 195000, offline: 268000 },
-    { month: 'Oct', online: 188000, offline: 255000 },
-    { month: 'Nov', online: 220000, offline: 290000 },
-    { month: 'Dec', online: 258000, offline: 318000 },
+    { month: 'Jan', online: 0, offline: 0 },
+    { month: 'Feb', online: 0, offline: 0 },
+    { month: 'Mar', online: 0, offline: 0 },
+    { month: 'Apr', online: 0, offline: 0 },
+    { month: 'May', online: 0, offline: 0 },
+    { month: 'Jun', online: 0, offline: 0 },
+    { month: 'Jul', online: 0, offline: 0 },
+    { month: 'Aug', online: 0, offline: 0 },
+    { month: 'Sep', online: 0, offline: 0 },
+    { month: 'Oct', online: 0, offline: 0 },
+    { month: 'Nov', online: 0, offline: 0 },
+    { month: 'Dec', online: 0, offline: 0 },
 ];
 
 const orderStatusData = [
-    { name: 'Delivered', value: 42, color: '#10b981' },
-    { name: 'Shipped', value: 22, color: '#6366f1' },
-    { name: 'Processing', value: 18, color: '#f59e0b' },
-    { name: 'Cancelled', value: 10, color: '#ef4444' },
-    { name: 'Returned', value: 8, color: '#8b5cf6' },
+    { name: 'Delivered', value: 0, color: '#10b981' },
+    { name: 'Shipped', value: 0, color: '#6366f1' },
+    { name: 'Processing', value: 0, color: '#f59e0b' },
+    { name: 'Cancelled', value: 0, color: '#ef4444' },
+    { name: 'Returned', value: 0, color: '#8b5cf6' },
 ];
 
-const recentOrders = [
-    { id: 'ONL-10041', customer: 'Aarav Mehta', date: '26 Jun 2026', amount: 3240, items: 3, status: 'Delivered', payment: 'UPI' },
-    { id: 'ONL-10040', customer: 'Priya Sharma', date: '26 Jun 2026', amount: 1850, items: 1, status: 'Shipped', payment: 'Card' },
-    { id: 'ONL-10039', customer: 'Rohan Das', date: '25 Jun 2026', amount: 5600, items: 5, status: 'Processing', payment: 'UPI' },
-    { id: 'ONL-10038', customer: 'Nisha Patel', date: '25 Jun 2026', amount: 990, items: 2, status: 'Cancelled', payment: 'Cash' },
-    { id: 'ONL-10037', customer: 'Vikram Singh', date: '24 Jun 2026', amount: 7400, items: 4, status: 'Delivered', payment: 'Card' },
-    { id: 'ONL-10036', customer: 'Kavya Reddy', date: '24 Jun 2026', amount: 2100, items: 2, status: 'Returned', payment: 'UPI' },
-];
-
-const topProducts = [
-    { name: 'Wireless Earbuds Pro', category: 'Electronics', orders: 218, revenue: 544000, rating: 4.7 },
-    { name: 'Organic Green Tea', category: 'Groceries', orders: 410, revenue: 185000, rating: 4.5 },
-    { name: 'Leather Crossbody Bag', category: 'Accessories', orders: 175, revenue: 363000, rating: 4.8 },
-    { name: 'Smart Fitness Band', category: 'Electronics', orders: 195, revenue: 390000, rating: 4.6 },
-    { name: 'Men\'s Cotton Kurta', category: 'Apparel', orders: 340, revenue: 238000, rating: 4.3 },
-];
+const recentOrders = [];
+const topProducts = [];
 
 const statusConfig = {
     Delivered: { color: '#10b981', bg: '#ecfdf5', icon: <BsCheckCircleFill size={11} /> },
@@ -81,24 +67,93 @@ const CustomTooltip = ({ active, payload, label }) => {
     );
 };
 
+/* ── Helpers ───────────────────────── */
+const parseAmount = (val) => {
+    if (val === null || val === undefined) return 0;
+    if (typeof val === 'number') return isNaN(val) ? 0 : val;
+    const cleaned = String(val).replace(/[^0-9.-]+/g, '');
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
+};
+
+const getOrderTotal = (o) => {
+    if (!o) return 0;
+    let total = parseAmount(o.total_amount || o.total || o.grand_total || o.amount || o.net_amount || o.final_amount);
+    if (total > 0) return total;
+
+    const sub = parseAmount(o.subtotal);
+    const tax = parseAmount(o.tax_amount || o.tax);
+    const disc = parseAmount(o.discount_amount || o.discount);
+    if (sub > 0) {
+        total = Math.max(0, sub + tax - disc);
+        if (total > 0) return total;
+    }
+
+    if (Array.isArray(o.items) && o.items.length > 0) {
+        total = o.items.reduce((sum, it) => {
+            const price = parseAmount(it.unit_price || it.price || it.rate || it.cost);
+            const qty = Number(it.quantity || it.qty || 1);
+            const itemDisc = parseAmount(it.discount || it.discount_amount || 0);
+            return sum + Math.max(0, (price * qty) - itemDisc);
+        }, 0);
+        if (disc > 0) total = Math.max(0, total - disc);
+        if (tax > 0) total += tax;
+    }
+    return total;
+};
+
+const filterOrdersByPeriod = (orderList, selectedPeriod) => {
+    if (!Array.isArray(orderList) || orderList.length === 0) return [];
+    const now = new Date();
+    if (selectedPeriod === 'This Year') {
+        const thisYear = now.getFullYear();
+        return orderList.filter(o => {
+            const dateStr = o.created_at || o.createdAt || o.date || o.order_date;
+            const d = dateStr ? new Date(dateStr) : now;
+            return isNaN(d.getFullYear()) || d.getFullYear() === thisYear;
+        });
+    }
+    if (selectedPeriod === 'This Month') {
+        return orderList.filter(o => {
+            const dateStr = o.created_at || o.createdAt || o.date || o.order_date;
+            const d = dateStr ? new Date(dateStr) : now;
+            return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+        });
+    }
+    if (selectedPeriod === 'Last Month') {
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        return orderList.filter(o => {
+            const dateStr = o.created_at || o.createdAt || o.date || o.order_date;
+            const d = dateStr ? new Date(dateStr) : null;
+            if (!d || isNaN(d.getTime())) return false;
+            return d.getFullYear() === lastMonth.getFullYear() && d.getMonth() === lastMonth.getMonth();
+        });
+    }
+    if (selectedPeriod === 'Last 7 Days') {
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        return orderList.filter(o => {
+            const dateStr = o.created_at || o.createdAt || o.date || o.order_date;
+            const d = dateStr ? new Date(dateStr) : now;
+            return d.getTime() >= sevenDaysAgo;
+        });
+    }
+    return orderList;
+};
+
 /* ── Component ───────────────────────── */
 const ECommerceDashboard = () => {
     const navigate = useNavigate();
     const [period, setPeriod] = useState('This Year');
-    const [realData, setRealData] = useState({
-        revenue: 0,
-        orders: 0,
-        fulfilled: 0,
-        aov: 0,
-        conversionRate: '—',
-        pendingDeliveries: 0,
-        cartAbandonment: '—',
-        activeProducts: '—',
+    const [chartYear, setChartYear] = useState('This Year');
+    const [liveData, setLiveData] = useState({
+        allOrders: [],
+        allInvoices: [],
+        activeProducts: 0,
         onlineCustomers: 0,
         newCustomersThisMonth: 0,
         recentOrders: null,
+        topProducts: null,
         orderStatusData: null,
-        revenueChartData: null,
         loading: true
     });
 
@@ -115,54 +170,19 @@ const ECommerceDashboard = () => {
                 } catch (e) {
                     ordersData = await getOrders({ page: 1, page_size: 500 }).catch(() => []);
                 }
-                let orders = Array.isArray(ordersData) ? ordersData : (ordersData?.items || ordersData?.data || []);
+                let orders = Array.isArray(ordersData) ? ordersData : (ordersData?.items || ordersData?.data || ordersData?.orders || []);
 
                 // If store-specific query returned 0 orders, fallback to fetching without store filter
                 if (!orders.length) {
                     try {
                         const allOrdersData = await getOrders({ page: 1, page_size: 500 });
-                        const allOrders = Array.isArray(allOrdersData) ? allOrdersData : (allOrdersData?.items || allOrdersData?.data || []);
+                        const allOrders = Array.isArray(allOrdersData) ? allOrdersData : (allOrdersData?.items || allOrdersData?.data || allOrdersData?.orders || []);
                         if (allOrders.length > 0) {
                             ordersData = allOrdersData;
                             orders = allOrders;
                         }
                     } catch (_) {}
                 }
-
-                // Helper to safely parse numbers/currency strings
-                const parseAmount = (val) => {
-                    if (val === null || val === undefined) return 0;
-                    if (typeof val === 'number') return isNaN(val) ? 0 : val;
-                    const cleaned = String(val).replace(/[^0-9.-]+/g, '');
-                    const parsed = parseFloat(cleaned);
-                    return isNaN(parsed) ? 0 : parsed;
-                };
-
-                // Comprehensive order revenue parser
-                const getOrderTotal = (o) => {
-                    let total = parseAmount(o.total_amount || o.total || o.grand_total || o.amount || o.net_amount || o.final_amount);
-                    if (total > 0) return total;
-
-                    const sub = parseAmount(o.subtotal);
-                    const tax = parseAmount(o.tax_amount || o.tax);
-                    const disc = parseAmount(o.discount_amount || o.discount);
-                    if (sub > 0) {
-                        total = Math.max(0, sub + tax - disc);
-                        if (total > 0) return total;
-                    }
-
-                    if (Array.isArray(o.items) && o.items.length > 0) {
-                        total = o.items.reduce((sum, it) => {
-                            const price = parseAmount(it.unit_price || it.price || it.rate || it.cost);
-                            const qty = Number(it.quantity || it.qty || 1);
-                            const itemDisc = parseAmount(it.discount || it.discount_amount || 0);
-                            return sum + Math.max(0, (price * qty) - itemDisc);
-                        }, 0);
-                        if (disc > 0) total = Math.max(0, total - disc);
-                        if (tax > 0) total += tax;
-                    }
-                    return total;
-                };
 
                 // Fetch invoices for offline revenue in chart
                 let invoices = [];
@@ -175,11 +195,7 @@ const ECommerceDashboard = () => {
                     invoices = Array.isArray(invRaw) ? invRaw : (invRaw?.items || invRaw?.invoices || []);
                 } catch (_) { /* invoices optional */ }
 
-                let revenue = 0;
-                let fulfilledCount = 0;    // non-cancelled/returned
-                let totalCount = 0;        // all online orders
-                let pendingCount = 0;      // pending + processing + confirmed + packed + shipped
-                let cancelledCount = 0;    // cancelled + returned
+                let totalCount = 0;
                 const uniqueCustomerIds = new Set();
                 const statusCounts = { Delivered: 0, Shipped: 0, Processing: 0, Cancelled: 0, Returned: 0 };
 
@@ -187,7 +203,7 @@ const ECommerceDashboard = () => {
                     totalCount++;
                     const status = o.status ? o.status.toLowerCase() : 'pending';
 
-                    // Track unique customer ids from orders as fallback
+                    // Track unique customer ids from orders
                     const cid = o.customer_id || o.customerId;
                     if (cid) uniqueCustomerIds.add(String(cid));
 
@@ -196,25 +212,7 @@ const ECommerceDashboard = () => {
                     else if (['processing', 'pending', 'confirmed', 'packed'].includes(status)) statusCounts.Processing++;
                     else if (status === 'cancelled') statusCounts.Cancelled++;
                     else if (status === 'returned') statusCounts.Returned++;
-
-                    if (status === 'cancelled' || status === 'returned') {
-                        cancelledCount++;
-                    } else {
-                        const orderTotal = getOrderTotal(o);
-                        revenue += orderTotal;
-                        fulfilledCount++;
-                        if (['pending', 'processing', 'confirmed', 'packed', 'shipped'].includes(status)) {
-                            pendingCount++;
-                        }
-                    }
                 });
-
-                // Server-side total count if paginated API response contains total/count
-                const apiTotal = typeof ordersData?.total === 'number' ? ordersData.total
-                    : typeof ordersData?.count === 'number' ? ordersData.count
-                    : typeof ordersData?.total_count === 'number' ? ordersData.total_count
-                    : null;
-                const totalOnlineOrders = apiTotal !== null ? apiTotal : (orders.length || totalCount);
 
                 // Build live 12-month revenue chart data
                 const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -242,25 +240,8 @@ const ECommerceDashboard = () => {
                     }
                 });
 
-                // Check if live orders exist
-                const hasLiveOrders = orders.length > 0;
-                const fallbackOnlineRevenue = revenueData.reduce((sum, d) => sum + d.online, 0); // 1,863,000
-                const finalRevenue = hasLiveOrders ? revenue : fallbackOnlineRevenue;
-                const finalOrders = hasLiveOrders ? totalOnlineOrders : 4218;
-                const finalFulfilled = hasLiveOrders ? fulfilledCount : 3940;
-
-                // Conversion Rate: fulfilled orders / total orders × 100
-                const convRate = finalOrders > 0
-                    ? (finalFulfilled / finalOrders * 100).toFixed(1) + '%'
-                    : '—';
-
-                // Cart Abandonment: cancelled+returned / total × 100
-                const abandonment = finalOrders > 0
-                    ? (cancelledCount / finalOrders * 100).toFixed(1) + '%'
-                    : (hasLiveOrders ? '—' : '62.4%');
-
                 // Fetch products for active count
-                let activeProducts = '—';
+                let activeProducts = 0;
                 try {
                     const { default: apiClient } = await import('../../services/api');
                     const prodRes = await apiClient.get('/products');
@@ -270,15 +251,8 @@ const ECommerceDashboard = () => {
                         const s = String((p.status || p.is_active) ?? 'active').toLowerCase();
                         return s === 'active' || s === 'true' || s === '1';
                     }).length;
-                    activeProducts = activeProdCount > 0
-                        ? activeProdCount.toLocaleString('en-IN')
-                        : prods.length.toLocaleString('en-IN');
+                    activeProducts = activeProdCount > 0 ? activeProdCount : prods.length;
                 } catch (_) { /* products optional */ }
-
-                // AOV = total revenue / number of fulfilled orders
-                const aov = finalFulfilled > 0 && finalRevenue > 0
-                    ? Math.round(finalRevenue / finalFulfilled)
-                    : 0;
 
                 // Fetch online customers count from /customers API
                 let onlineCustomers = 0;
@@ -300,16 +274,15 @@ const ECommerceDashboard = () => {
                         return d.getFullYear() === thisYear && d.getMonth() === thisMonth;
                     }).length;
                 } catch (_) {
-                    // Fallback: count unique customer IDs seen in orders
-                    onlineCustomers = uniqueCustomerIds.size || 28340;
+                    onlineCustomers = uniqueCustomerIds.size;
                 }
 
                 // Map recent orders from live orders if present
-                const dynamicRecentOrders = orders.slice(0, 6).map(o => ({
+                const dynamicRecentOrders = orders.filter(o => o && (o.id || o.order_number)).slice(0, 6).map(o => ({
                     id: o.order_number || `ORD-${o.id}`,
                     customer: o.customer_name || (o.customer_id ? `Customer ${o.customer_id}` : 'Customer'),
                     amount: getOrderTotal(o),
-                    items: Array.isArray(o.items) ? o.items.reduce((acc, it) => acc + (it.quantity || 1), 0) : (o.item_count || 1),
+                    items: Array.isArray(o.items) && o.items.length > 0 ? o.items.reduce((acc, it) => acc + (it.quantity || 1), 0) : (o.item_count || 1),
                     payment: o.order_type === 'pos' ? 'POS' : (o.order_type ? String(o.order_type).toUpperCase() : 'UPI'),
                     status: o.status ? o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase() : 'Pending',
                 }));
@@ -322,28 +295,50 @@ const ECommerceDashboard = () => {
                     { name: 'Returned', value: Math.round((statusCounts.Returned / totalCount) * 100), color: '#8b5cf6' },
                 ] : null;
 
+                // Derive top products from live orders if present
+                const prodSalesMap = {};
+                orders.forEach(o => {
+                    const st = String(o.status || '').toLowerCase();
+                    if (st === 'cancelled') return;
+                    const items = o.items || o.order_items || [];
+                    if (Array.isArray(items)) {
+                        items.forEach(it => {
+                            const name = it.product_name || it.name || it.title || (it.product_id ? `Product #${it.product_id}` : 'Product');
+                            const cat = it.category || 'General';
+                            const qty = Number(it.quantity || it.qty || 1);
+                            const price = parseAmount(it.unit_price || it.price || 0);
+                            const rev = price > 0 ? price * qty : parseAmount(it.total || 0);
+                            if (!prodSalesMap[name]) {
+                                prodSalesMap[name] = { name, category: cat, orders: 0, revenue: 0, rating: 5.0 };
+                            }
+                            prodSalesMap[name].orders += qty;
+                            prodSalesMap[name].revenue += rev;
+                        });
+                    }
+                });
+                const dynamicTopProducts = Object.values(prodSalesMap)
+                    .sort((a, b) => b.revenue - a.revenue)
+                    .slice(0, 5);
+
+                const hasLiveMonthlyRevenue = liveMonthlyRevenue.some(m => m.online > 0 || m.offline > 0);
+
                 if (active) {
-                    setRealData({
-                        revenue: finalRevenue,
-                        orders: finalOrders,
-                        fulfilled: finalFulfilled,
-                        aov,
-                        conversionRate: convRate,
-                        pendingDeliveries: pendingCount,
-                        cartAbandonment: abandonment,
+                    setLiveData({
+                        allOrders: orders,
+                        allInvoices: invoices,
                         activeProducts,
                         onlineCustomers,
                         newCustomersThisMonth,
-                        recentOrders: dynamicRecentOrders.length > 0 ? dynamicRecentOrders : null,
+                        recentOrders: dynamicRecentOrders,
+                        topProducts: dynamicTopProducts.length > 0 ? dynamicTopProducts : null,
                         orderStatusData: dynamicStatusData,
-                        revenueChartData: hasLiveOrders ? liveMonthlyRevenue : revenueData,
                         loading: false
                     });
                 }
             } catch (err) {
                 console.error("EC Dashboard fetch error:", err);
                 if (active) {
-                    setRealData(prev => ({ ...prev, loading: false }));
+                    setLiveData(prev => ({ ...prev, loading: false }));
                 }
             }
         };
@@ -351,15 +346,211 @@ const ECommerceDashboard = () => {
         return () => { active = false; };
     }, []);
 
+    // Filter orders by active period
+    const currentOrders = filterOrdersByPeriod(liveData.allOrders || [], period);
+
+    let currentRevenue = 0;
+    let currentFulfilled = 0;
+    let currentDelivered = 0;
+    let currentShipped = 0;
+    let currentProcessing = 0;
+    let currentCancelled = 0;
+    let currentReturned = 0;
+    let currentPending = 0;
+
+    currentOrders.forEach(o => {
+        const status = String(o.status || '').toLowerCase();
+        if (status === 'cancelled') {
+            currentCancelled++;
+        } else if (status === 'returned') {
+            currentReturned++;
+        } else {
+            currentRevenue += getOrderTotal(o);
+            if (['delivered', 'completed', 'fulfilled'].includes(status)) {
+                currentFulfilled++;
+                currentDelivered++;
+            } else if (['shipped', 'out for delivery'].includes(status)) {
+                currentShipped++;
+                currentPending++;
+            } else if (['processing', 'pending', 'confirmed', 'packed'].includes(status)) {
+                currentProcessing++;
+                currentPending++;
+            } else {
+                currentPending++;
+            }
+        }
+    });
+
+    const totalOrders = currentOrders.length;
+    const revenue = currentRevenue;
+    const fulfilledCount = currentFulfilled;
+    const pendingDeliveries = totalOrders === 0 ? 0 : currentPending;
+    const validOrders = totalOrders - currentCancelled - currentReturned;
+    const aov = (validOrders > 0 && revenue > 0)
+        ? Math.round(revenue / validOrders)
+        : (totalOrders > 0 && revenue > 0 ? Math.round(revenue / totalOrders) : 0);
+
+    // Conversion rate: fulfilled orders / total orders * 100 (0.0% when total orders is 0)
+    const conversionRate = totalOrders > 0
+        ? (fulfilledCount / totalOrders * 100).toFixed(1) + '%'
+        : '0.0%';
+
+    // Cart Abandonment: 100% when total orders is 0, else cancelled+returned / total orders
+    const cartAbandonment = totalOrders === 0
+        ? '100%'
+        : (currentCancelled + currentReturned > 0
+            ? (((currentCancelled + currentReturned) / totalOrders) * 100).toFixed(1) + '%'
+            : '0.0%');
+
+    // Dynamic order status breakdown based on active period's orders
+    const statusBreakdownData = [
+        {
+            name: 'Delivered',
+            value: totalOrders > 0 ? Math.round((currentDelivered / totalOrders) * 100) : 0,
+            color: '#10b981'
+        },
+        {
+            name: 'Shipped',
+            value: totalOrders > 0 ? Math.round((currentShipped / totalOrders) * 100) : 0,
+            color: '#6366f1'
+        },
+        {
+            name: 'Processing',
+            value: totalOrders > 0 ? Math.round((currentProcessing / totalOrders) * 100) : 0,
+            color: '#f59e0b'
+        },
+        {
+            name: 'Cancelled',
+            value: totalOrders > 0 ? Math.round((currentCancelled / totalOrders) * 100) : 0,
+            color: '#ef4444'
+        },
+        {
+            name: 'Returned',
+            value: totalOrders > 0 ? Math.round((currentReturned / totalOrders) * 100) : 0,
+            color: '#8b5cf6'
+        },
+    ];
+
+    // Calculate Monthly Revenue based on chartYear selection
+    const currentYear = new Date().getFullYear();
+    const targetChartYear = chartYear === 'Last Year' ? currentYear - 1 : currentYear;
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const chartRevenueData = monthNames.map(m => ({ month: m, online: 0, offline: 0 }));
+
+    (liveData.allOrders || []).forEach(o => {
+        const status = String(o.status || '').toLowerCase();
+        if (status === 'cancelled' || status === 'returned') return;
+        const dateStr = o.created_at || o.createdAt || o.date || o.order_date;
+        const d = dateStr ? new Date(dateStr) : null;
+        if (d && !isNaN(d.getTime()) && d.getFullYear() === targetChartYear) {
+            const mIdx = d.getMonth();
+            if (chartRevenueData[mIdx]) {
+                chartRevenueData[mIdx].online += getOrderTotal(o);
+            }
+        }
+    });
+
+    (liveData.allInvoices || []).forEach(inv => {
+        const status = String(inv.status || '').toLowerCase();
+        if (status === 'cancelled' || status === 'returned' || status === 'void') return;
+        const dateStr = inv.created_at || inv.createdAt || inv.invoice_date || inv.date;
+        const d = dateStr ? new Date(dateStr) : null;
+        if (d && !isNaN(d.getTime()) && d.getFullYear() === targetChartYear) {
+            const mIdx = d.getMonth();
+            if (chartRevenueData[mIdx]) {
+                chartRevenueData[mIdx].offline += parseAmount(inv.total_amount || inv.total || inv.grand_total || inv.amount);
+            }
+        }
+    });
+
+    const totalChartOnline = chartRevenueData.reduce((acc, it) => acc + it.online, 0);
+    const totalChartOffline = chartRevenueData.reduce((acc, it) => acc + it.offline, 0);
+
+    const onlineCustomers = liveData.onlineCustomers || 0;
+    const newCustomersThisMonth = liveData.newCustomersThisMonth || 0;
+    const activeProducts = liveData.activeProducts || 0;
+
     const kpis = [
-        { label: 'Online Revenue', value: realData.loading ? '...' : fmt(realData.revenue), change: '+24.3%', up: true, icon: <BsCurrencyRupee size={18} />, color: '#6366f1', bg: '#eef2ff', sub: 'vs last year' },
-        { label: 'Total Online Orders', value: realData.loading ? '...' : realData.orders.toLocaleString('en-IN'), change: '+19.8%', up: true, icon: <BsCartCheck size={18} />, color: '#10b981', bg: '#ecfdf5', sub: realData.loading ? '...' : `${realData.fulfilled.toLocaleString('en-IN')} fulfilled` },
-        { label: 'Active Products', value: realData.loading ? '...' : realData.activeProducts, change: '+8.2%', up: true, icon: <BsBoxSeam size={18} />, color: '#f59e0b', bg: '#fffbeb', sub: 'In product catalog' },
-        { label: 'Conversion Rate', value: realData.loading ? '...' : realData.conversionRate, change: '+0.4%', up: true, icon: <BsShopWindow size={18} />, color: '#22d3ee', bg: '#ecfeff', sub: 'Fulfilled ÷ Total Orders' },
-        { label: 'Cart Abandonment', value: realData.loading ? '...' : realData.cartAbandonment, change: '-3.1%', up: true, icon: <BsTagFill size={18} />, color: '#8b5cf6', bg: '#f5f3ff', sub: 'Cancelled / Returned rate' },
-        { label: 'Avg. Order Value', value: realData.loading ? '...' : fmt(realData.aov), change: '+12.5%', up: true, icon: <BsBagCheck size={18} />, color: '#ec4899', bg: '#fdf2f8', sub: realData.aov > 0 ? `${fmt(realData.aov)} per order` : 'Per online order' },
-        { label: 'Online Customers', value: realData.loading ? '...' : realData.onlineCustomers.toLocaleString('en-IN'), change: '+31.2%', up: true, icon: <BsPeopleFill size={18} />, color: '#0ea5e9', bg: '#f0f9ff', sub: realData.loading ? '...' : `${realData.newCustomersThisMonth.toLocaleString('en-IN')} new this month` },
-        { label: 'Pending Deliveries', value: realData.loading ? '...' : realData.pendingDeliveries.toLocaleString('en-IN'), change: '+5.2%', up: false, icon: <BsTruck size={18} />, color: '#f97316', bg: '#fff7ed', sub: 'Awaiting dispatch' },
+        {
+            label: 'Online Revenue',
+            value: fmt(revenue),
+            change: revenue > 0 ? '+24.3%' : '0.0%',
+            up: revenue > 0,
+            icon: <BsCurrencyRupee size={18} />,
+            color: '#6366f1',
+            bg: '#eef2ff',
+            sub: period === 'This Year' ? 'vs last year' : `in ${period.toLowerCase()}`
+        },
+        {
+            label: 'Total Online Orders',
+            value: totalOrders.toLocaleString('en-IN'),
+            change: totalOrders > 0 ? '+19.8%' : '0.0%',
+            up: totalOrders > 0,
+            icon: <BsCartCheck size={18} />,
+            color: '#10b981',
+            bg: '#ecfdf5',
+            sub: `${fulfilledCount.toLocaleString('en-IN')} fulfilled`
+        },
+        {
+            label: 'Active Products',
+            value: typeof activeProducts === 'number' ? activeProducts.toLocaleString('en-IN') : String(activeProducts),
+            change: activeProducts > 0 ? '+8.2%' : '0.0%',
+            up: activeProducts > 0,
+            icon: <BsBoxSeam size={18} />,
+            color: '#f59e0b',
+            bg: '#fffbeb',
+            sub: 'In product catalog'
+        },
+        {
+            label: 'Conversion Rate',
+            value: conversionRate,
+            change: parseFloat(conversionRate) > 0 ? '+0.4%' : '0.0%',
+            up: parseFloat(conversionRate) > 0,
+            icon: <BsShopWindow size={18} />,
+            color: '#22d3ee',
+            bg: '#ecfeff',
+            sub: totalOrders > 0 ? 'Fulfilled ÷ Total Orders' : '0 orders placed'
+        },
+        {
+            label: 'Cart Abandonment',
+            value: cartAbandonment,
+            change: cartAbandonment === '100%' ? '+0.0%' : '-3.1%',
+            up: cartAbandonment !== '100%',
+            icon: <BsTagFill size={18} />,
+            color: '#8b5cf6',
+            bg: '#f5f3ff',
+            sub: totalOrders === 0 ? '100% when 0 orders' : 'Cancelled / Returned rate'
+        },
+        {
+            label: 'Avg. Order Value',
+            value: fmt(aov),
+            change: aov > 0 ? '+12.5%' : '0.0%',
+            up: aov > 0,
+            icon: <BsBagCheck size={18} />,
+            color: '#ec4899',
+            bg: '#fdf2f8',
+            sub: aov > 0 ? `${fmt(aov)} per order` : 'Per online order'
+        },
+        {
+            label: 'Online Customers',
+            value: onlineCustomers.toLocaleString('en-IN'),
+            change: onlineCustomers > 0 ? '+31.2%' : '0.0%',
+            up: onlineCustomers > 0,
+            icon: <BsPeopleFill size={18} />,
+            color: '#0ea5e9',
+            bg: '#f0f9ff',
+            sub: `${newCustomersThisMonth.toLocaleString('en-IN')} new this month`
+        },
+        {
+            label: 'Pending Deliveries',
+            value: pendingDeliveries.toLocaleString('en-IN'),
+            change: pendingDeliveries > 0 ? '+5.2%' : '0.0%',
+            up: false,
+            icon: <BsTruck size={18} />,
+            color: '#f97316',
+            bg: '#fff7ed',
+            sub: 'Awaiting dispatch'
+        },
     ];
 
     const quickActions = [
@@ -428,13 +619,19 @@ const ECommerceDashboard = () => {
                 {/* Revenue Trend */}
                 <div className="chart-card">
                     <div className="chart-card-header">
-                        <h2 className="chart-title">Online vs Offline Revenue</h2>
-                        <select className="chart-period-select" defaultValue="This Year">
-                            <option>This Year</option><option>Last Year</option>
+                        <div>
+                            <h2 className="chart-title">Online vs Offline Revenue</h2>
+                            <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280' }}>
+                                Online: <strong style={{ color: '#6366f1' }}>{fmt(totalChartOnline)}</strong> · Offline: <strong style={{ color: '#10b981' }}>{fmt(totalChartOffline)}</strong>
+                            </p>
+                        </div>
+                        <select className="chart-period-select" value={chartYear} onChange={e => setChartYear(e.target.value)}>
+                            <option>This Year</option>
+                            <option>Last Year</option>
                         </select>
                     </div>
                     <ResponsiveContainer width="100%" height={240}>
-                        <AreaChart data={realData.revenueChartData || revenueData} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
+                        <AreaChart data={chartRevenueData} margin={{ top: 10, right: 10, bottom: 0, left: -10 }}>
                             <defs>
                                 <linearGradient id="gradOnline" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#6366f1" stopOpacity={0.18} />
@@ -447,7 +644,13 @@ const ECommerceDashboard = () => {
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                             <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                            <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
+                            <YAxis
+                                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                axisLine={false}
+                                tickLine={false}
+                                domain={[0, (max) => max > 0 ? max : 1000]}
+                                tickFormatter={v => v === 0 ? '₹0' : `${(v / 1000).toFixed(0)}k`}
+                            />
                             <Tooltip content={<CustomTooltip />} />
                             <Area type="monotone" dataKey="online" name="Online" stroke="#6366f1" strokeWidth={2} fill="url(#gradOnline)" dot={false} />
                             <Area type="monotone" dataKey="offline" name="Offline" stroke="#10b981" strokeWidth={2} fill="url(#gradOffline)" dot={false} />
@@ -462,16 +665,23 @@ const ECommerceDashboard = () => {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
                         <ResponsiveContainer width="55%" height={220}>
-                            <PieChart>
-                                <Pie data={realData.orderStatusData || orderStatusData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
-                                    paddingAngle={3} dataKey="value">
-                                    {(realData.orderStatusData || orderStatusData).map((e, i) => <Cell key={i} fill={e.color} />)}
-                                </Pie>
-                                <Tooltip formatter={v => `${v}%`} />
-                            </PieChart>
+                            {totalOrders === 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 13 }}>
+                                    <span style={{ fontSize: 26, marginBottom: 4 }}>📦</span>
+                                    <span>0 orders placed</span>
+                                </div>
+                            ) : (
+                                <PieChart>
+                                    <Pie data={statusBreakdownData} cx="50%" cy="50%" innerRadius={55} outerRadius={85}
+                                        paddingAngle={3} dataKey="value">
+                                        {statusBreakdownData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                                    </Pie>
+                                    <Tooltip formatter={v => `${v}%`} />
+                                </PieChart>
+                            )}
                         </ResponsiveContainer>
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                            {(realData.orderStatusData || orderStatusData).map((p, i) => (
+                            {statusBreakdownData.map((p, i) => (
                                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                     <span style={{ width: 10, height: 10, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
                                     <span style={{ fontSize: 12, color: '#6b7280', flex: 1 }}>{p.name}</span>
@@ -503,23 +713,31 @@ const ECommerceDashboard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {(realData.recentOrders || recentOrders).map((order, i) => {
-                                const s = statusConfig[order.status] || { color: '#6b7280', bg: '#f9fafb', icon: null };
-                                return (
-                                    <tr key={i}>
-                                        <td className="dash-table-id">{order.id}</td>
-                                        <td style={{ fontWeight: 500 }}>{order.customer}</td>
-                                        <td className="dash-table-amount">{fmt(order.amount)}</td>
-                                        <td style={{ color: '#6b7280' }}>{order.items} items</td>
-                                        <td><span className="adm-mode-tag">{order.payment}</span></td>
-                                        <td>
-                                            <span className="dash-badge adm-status-badge" style={{ background: s.bg, color: s.color }}>
-                                                {s.icon}&nbsp;{order.status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
+                            {!liveData.loading && liveData.allOrders && liveData.allOrders.length === 0 ? (
+                                <tr>
+                                    <td colSpan="6" style={{ textAlign: 'center', padding: '32px 16px', color: '#9ca3af' }}>
+                                        No recent online orders found
+                                    </td>
+                                </tr>
+                            ) : (
+                                (liveData.recentOrders && liveData.recentOrders.length > 0 ? liveData.recentOrders : recentOrders).map((order, i) => {
+                                    const s = statusConfig[order.status] || { color: '#6b7280', bg: '#f9fafb', icon: null };
+                                    return (
+                                        <tr key={i}>
+                                            <td className="dash-table-id">{order.id}</td>
+                                            <td style={{ fontWeight: 500 }}>{order.customer}</td>
+                                            <td className="dash-table-amount">{fmt(order.amount)}</td>
+                                            <td style={{ color: '#6b7280' }}>{order.items} items</td>
+                                            <td><span className="adm-mode-tag">{order.payment}</span></td>
+                                            <td>
+                                                <span className="dash-badge adm-status-badge" style={{ background: s.bg, color: s.color }}>
+                                                    {s.icon}&nbsp;{order.status}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -531,21 +749,30 @@ const ECommerceDashboard = () => {
                         <button className="chart-view-all" onClick={() => navigate('/products')}>View All</button>
                     </div>
                     <div className="top-products-list">
-                        {topProducts.map((p, i) => (
-                            <div key={i} className="top-product-item">
-                                <div className="top-product-rank">{i + 1}</div>
-                                <div className="top-product-info">
-                                    <p className="top-product-name">{p.name}</p>
-                                    <p className="top-product-cat">
-                                        {p.category} · {p.orders} orders · <BsStarFill size={9} color="#f59e0b" /> {p.rating}
-                                    </p>
-                                    <div className="top-product-bar-track">
-                                        <div className="top-product-bar-fill" style={{ width: `${Math.round((p.revenue / 545000) * 100)}%` }} />
-                                    </div>
-                                </div>
-                                <p className="top-product-rev">{fmt(p.revenue)}</p>
+                        {!liveData.loading && liveData.allOrders && liveData.allOrders.length === 0 ? (
+                            <div style={{ textAlign: 'center', padding: '36px 16px', color: '#9ca3af', fontSize: 13 }}>
+                                No top selling products yet
                             </div>
-                        ))}
+                        ) : (
+                            (liveData.topProducts && liveData.topProducts.length > 0 ? liveData.topProducts : topProducts).map((p, i) => {
+                                const maxRev = (liveData.topProducts && liveData.topProducts.length > 0 ? liveData.topProducts : topProducts)[0]?.revenue || 1;
+                                return (
+                                    <div key={i} className="top-product-item">
+                                        <div className="top-product-rank">{i + 1}</div>
+                                        <div className="top-product-info">
+                                            <p className="top-product-name">{p.name}</p>
+                                            <p className="top-product-cat">
+                                                {p.category} · {p.orders} orders · <BsStarFill size={9} color="#f59e0b" /> {p.rating || 5.0}
+                                            </p>
+                                            <div className="top-product-bar-track">
+                                                <div className="top-product-bar-fill" style={{ width: `${Math.min(100, Math.round((p.revenue / Math.max(1, maxRev)) * 100))}%` }} />
+                                            </div>
+                                        </div>
+                                        <p className="top-product-rev">{fmt(p.revenue)}</p>
+                                    </div>
+                                );
+                            })
+                        )}
                     </div>
                 </div>
             </div>

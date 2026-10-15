@@ -5,28 +5,6 @@ import {
   BsTrash,
 } from "react-icons/bs";
 
-const getStatusStyle = (status) => {
-  switch (status) {
-    case "In Stock":
-      return {
-        background: "#ECFDF5",
-        color: "#10B981",
-      };
-
-    case "Low Stock":
-      return {
-        background: "#FEF3C7",
-        color: "#D97706",
-      };
-
-    default:
-      return {
-        background: "#FEE2E2",
-        color: "#DC2626",
-      };
-  }
-};
-
 const ProductTable = ({
   products,
   search,
@@ -105,9 +83,7 @@ const ProductTable = ({
             <th>SKU</th>
             <th>Barcode</th>
             <th>Category</th>
-            <th>Stock</th>
             <th>Price</th>
-            <th>Status</th>
             <th align="center">Action</th>
           </tr>
         </thead>
@@ -116,7 +92,7 @@ const ProductTable = ({
           {filteredProducts.length === 0 ? (
             <tr>
               <td
-                colSpan="8"
+                colSpan="6"
                 style={{
                   textAlign: "center",
                   padding: "40px",
@@ -133,17 +109,7 @@ const ProductTable = ({
                 <td>{item.sku}</td>
                 <td>{item.barcode}</td>
                 <td>{item.category}</td>
-                <td>{item.stock}</td>
                 <td>₹{item.price}</td>
-
-                <td>
-                  <span
-                    className="adm-status-badge"
-                    style={getStatusStyle(item.status)}
-                  >
-                    {item.status}
-                  </span>
-                </td>
 
                 <td>
                   <button className="adm-action-btn">

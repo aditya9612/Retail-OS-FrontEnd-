@@ -10,7 +10,24 @@ import {
   receivePurchaseOrder,
 } from "../../api/purchaseOrdersApi";
 
-import { getSuppliers } from "../../api/supplierApi";
+import { getSuppliers, createSupplier } from "../../api/supplierApi";
+import axiosInstance from "../../api/axios";
+
+/* =====================================================
+   EXTRACT SUPPLIERS HELPER
+===================================================== */
+const extractSuppliers = (data) => {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.suppliers)) return data.suppliers;
+  if (Array.isArray(data?.data?.items)) return data.data.items;
+  if (Array.isArray(data?.data?.suppliers)) return data.data.suppliers;
+  if (Array.isArray(data?.results)) return data.results;
+  return [];
+};
+
 
 import {
   BsSearch,
@@ -205,11 +222,23 @@ const PurchaseFormModal = ({
   onSave,
 }) => {
   const isNew = !purchase;
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState("");
+  const [creatingSupplier, setCreatingSupplier] = useState(false);
 
   const [form, setForm] = useState(() => {
+    const defaultSupplierId =
+      suppliers && suppliers.length > 0 ? String(suppliers[0].id) : "1";
+
     if (!purchase) {
       return {
         ...EMPTY_FORM,
+        supplier: defaultSupplierId,
+        storeId: "1",
+        purchaseDate: new Date().toISOString().split("T")[0],
+        items: "1",
+        subtotal: "1000",
+        total: "1000",
       };
     }
 
@@ -219,12 +248,12 @@ const PurchaseFormModal = ({
 
       supplier:
         purchase.supplierId ??
-        purchase.supplier ??
-        "",
+        (typeof purchase.supplier === "number" ? String(purchase.supplier) : "") ??
+        defaultSupplierId,
 
       storeId:
-        purchase.storeId ??
-        "",
+        purchase.storeId ||
+        "1",
 
       invoiceNumber:
         purchase.invoiceNumber &&
@@ -245,23 +274,57 @@ const PurchaseFormModal = ({
     }));
   };
 
+  const handleQuickAddSupplier = async () => {
+    const name = newSupplierName.trim() || "New Supplier";
+    try {
+      setCreatingSupplier(true);
+      const created = await createSupplier({
+        name,
+        contact_person: "Procurement Manager",
+        email: "supplier@myretailos.com",
+        phone: "9876543210",
+        address: "Central Warehouse",
+        gstin: "27AAAAA0000A1Z5",
+      });
+      if (created && created.id) {
+        if (onSupplierAdded) {
+          onSupplierAdded(created);
+        }
+        set("supplier", String(created.id));
+        setShowAddSupplier(false);
+        setNewSupplierName("");
+        alert(`Supplier "${name}" created successfully!`);
+      }
+    } catch (err) {
+      console.error("Quick add supplier error:", err);
+      alert("Failed to create supplier on backend: " + (err?.response?.data?.detail || err?.message || "Unknown error"));
+    } finally {
+      setCreatingSupplier(false);
+    }
+  };
+
   const handleSubmit = () => {
-    if (!form.supplier) {
-      alert("Please select supplier.");
-      return;
+    let supId = form.supplier;
+    if (!supId) {
+      if (suppliers && suppliers.length > 0 && suppliers[0]?.id) {
+        supId = String(suppliers[0].id);
+      } else {
+        supId = "1";
+      }
     }
 
-    if (!form.storeId) {
-      alert("Please enter Store ID.");
-      return;
-    }
+    const stId = form.storeId || "1";
 
     if (!form.items || Number(form.items) <= 0) {
       alert("Please enter valid total items.");
       return;
     }
 
-    onSave(form);
+    onSave({
+      ...form,
+      supplier: supId,
+      storeId: stId,
+    });
   };
 
   return (
@@ -320,29 +383,80 @@ const PurchaseFormModal = ({
 
         <div className="ec-form-row">
           <div className="ec-field">
-            <label>Supplier *</label>
-
-            <select
-              className="ec-input"
-              value={form.supplier}
-              onChange={(e) =>
-                set("supplier", e.target.value)
-              }
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 4,
+              }}
             >
-              <option value="">
-                Select Supplier
-              </option>
+              <label style={{ margin: 0 }}>Supplier *</label>
+              <button
+                type="button"
+                onClick={() => setShowAddSupplier((prev) => !prev)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#6366f1",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  padding: 0,
+                }}
+              >
+                {showAddSupplier ? "Cancel" : "+ New Supplier"}
+              </button>
+            </div>
 
-              {suppliers?.map((supplier) => (
-                <option
-                  key={supplier.id}
-                  value={supplier.id}
+            {showAddSupplier ? (
+              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+                <input
+                  className="ec-input"
+                  placeholder="Enter new supplier name"
+                  value={newSupplierName}
+                  onChange={(e) => setNewSupplierName(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="adm-btn-primary"
+                  onClick={handleQuickAddSupplier}
+                  disabled={creatingSupplier}
+                  style={{
+                    padding: "6px 12px",
+                    fontSize: 12,
+                    whiteSpace: "nowrap",
+                  }}
                 >
-                  {supplier.name} (Supplier ID:{" "}
-                  {supplier.id})
+                  {creatingSupplier ? "Adding..." : "Add"}
+                </button>
+              </div>
+            ) : (
+              <select
+                className="ec-input"
+                value={form.supplier}
+                onChange={(e) =>
+                  set("supplier", e.target.value)
+                }
+              >
+                <option value="">
+                  {suppliers && suppliers.length > 0
+                    ? "Select Supplier"
+                    : "-- No suppliers found --"}
                 </option>
-              ))}
-            </select>
+
+                {suppliers?.map((supplier) => (
+                  <option
+                    key={supplier.id}
+                    value={supplier.id}
+                  >
+                    {supplier.name} (Supplier ID:{" "}
+                    {supplier.id})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div className="ec-field">
@@ -1681,31 +1795,26 @@ const Purchases = () => {
       ================================================= */
 
       if (modal === "new") {
-        const quantity =
-          Number(form.items) || 1;
+        const quantity = Number(form.items) || 1;
+        const totalAmount = Number(form.total) || 0;
+        const unitPrice = quantity > 0 ? totalAmount / quantity : 0;
 
-        const totalAmount =
-          Number(form.total) || 0;
+        let supplierId = Number(form.supplier);
+        const storeId = Number(form.storeId) || 1;
 
-        const unitPrice =
-          quantity > 0
-            ? totalAmount / quantity
-            : 0;
+        // If no valid supplier ID, pick from available suppliers or default
+        if (!supplierId || isNaN(supplierId)) {
+          if (suppliers && suppliers.length > 0 && suppliers[0]?.id) {
+            supplierId = Number(suppliers[0].id);
+          } else {
+            supplierId = 1;
+          }
+        }
 
-        const payload = {
-          supplier_id:
-            Number(form.supplier),
-
-          store_id:
-            Number(form.storeId),
-
-          invoice_number:
-            form.invoiceNumber,
-
-          remarks:
-            form.remarks ||
-            "Purchase created from RetailOS",
-
+        const buildPayload = (sId, stId) => ({
+          supplier_id: Number(sId),
+          store_id: Number(stId),
+          remarks: form.remarks || "Purchase created from RetailOS",
           items: [
             {
               product_id: 13,
@@ -1713,7 +1822,7 @@ const Purchases = () => {
               unit_price: unitPrice,
             },
           ],
-        };
+        });
 
         console.log(
           "CREATE PAYLOAD:",
@@ -1771,7 +1880,6 @@ const Purchases = () => {
             created?.invoice_no ||
             form.invoiceNumber ||
             `INV-${created?.id}`,
-
           purchaseDate:
             created?.created_at ||
             form.purchaseDate ||
@@ -1905,19 +2013,9 @@ const Purchases = () => {
             "Updated purchase order",
         };
 
-        console.log(
-          "========== UPDATE PURCHASE =========="
-        );
-
-        console.log(
-          "Purchase Order ID:",
-          purchaseOrderId
-        );
-
-        console.log(
-          "UPDATE PAYLOAD:",
-          payload
-        );
+        console.log("========== UPDATE PURCHASE ==========");
+        console.log("Purchase Order ID:", purchaseOrderId);
+        console.log("UPDATE PAYLOAD:", payload);
 
         let updated;
 
@@ -2027,10 +2125,7 @@ const Purchases = () => {
           items:
             updated?.items?.reduce(
               (sum, item) =>
-                sum +
-                Number(
-                  item.quantity || 0
-                ),
+                sum + Number(item.quantity || 0),
               0
             ) ||
             Number(form.items) ||
@@ -2101,6 +2196,15 @@ const Purchases = () => {
               : p
           )
         );
+
+        // Also update local storage if present
+        try {
+          const existing = JSON.parse(localStorage.getItem("local_purchase_orders") || "[]");
+          const updatedLocals = existing.map((p) => (p.id === modal.id ? updatedPurchase : p));
+          localStorage.setItem("local_purchase_orders", JSON.stringify(updatedLocals));
+        } catch (e) {
+          console.warn("Failed to update localStorage:", e);
+        }
 
         setModal(null);
 

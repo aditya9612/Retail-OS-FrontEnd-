@@ -7,30 +7,8 @@ import {
     BsSlashCircleFill,
 } from 'react-icons/bs';
 
-/* ── Mock Data ─────────────────────────── */
-const CATEGORIES = ['All Categories', 'Electronics', 'Groceries', 'Apparel', 'Accessories', 'Home & Kitchen', 'Beauty'];
-const BRANDS = ['All Brands', 'Apple', 'Samsung', 'Organic Valley', 'Levi\'s', 'Nike', 'Lakme'];
-
-const PRODUCTS = [
-    { id: 'PRD-001', name: 'Wireless Earbuds Pro', sku: 'ELEC-WEP-001', category: 'Electronics', brand: 'Samsung', price: 2499, mrp: 3499, stock: 145, sold: 218, rating: 4.7, reviews: 84, status: 'Active', featured: true, image: null },
-    { id: 'PRD-002', name: 'Organic Green Tea (100g)', sku: 'GRO-OGT-002', category: 'Groceries', brand: 'Organic Valley', price: 449, mrp: 599, stock: 320, sold: 410, rating: 4.5, reviews: 156, status: 'Active', featured: false, image: null },
-    { id: 'PRD-003', name: 'Leather Crossbody Bag', sku: 'ACC-LCB-003', category: 'Accessories', brand: 'Nike', price: 2079, mrp: 2999, stock: 42, sold: 175, rating: 4.8, reviews: 62, status: 'Active', featured: true, image: null },
-    { id: 'PRD-004', name: 'Smart Fitness Band X2', sku: 'ELEC-SFB-004', category: 'Electronics', brand: 'Samsung', price: 1999, mrp: 2799, stock: 78, sold: 195, rating: 4.6, reviews: 98, status: 'Active', featured: false, image: null },
-    { id: 'PRD-005', name: "Men's Cotton Kurta", sku: 'APP-MCK-005', category: 'Apparel', brand: "Levi's", price: 699, mrp: 999, stock: 210, sold: 340, rating: 4.3, reviews: 210, status: 'Active', featured: false, image: null },
-    { id: 'PRD-006', name: 'iPhone 15 Pro Case', sku: 'ACC-IPC-006', category: 'Accessories', brand: 'Apple', price: 999, mrp: 1499, stock: 0, sold: 88, rating: 4.2, reviews: 34, status: 'Out of Stock', featured: false, image: null },
-    { id: 'PRD-007', name: 'Matte Lipstick Set', sku: 'BEA-MLS-007', category: 'Beauty', brand: 'Lakme', price: 599, mrp: 799, stock: 180, sold: 265, rating: 4.4, reviews: 122, status: 'Active', featured: true, image: null },
-    { id: 'PRD-008', name: 'Non-Stick Cookware Set', sku: 'HOM-NCS-008', category: 'Home & Kitchen', brand: 'Samsung', price: 3499, mrp: 4999, stock: 25, sold: 67, rating: 4.6, reviews: 43, status: 'Inactive', featured: false, image: null },
-    { id: 'PRD-009', name: 'Running Shoes Pro', sku: 'APP-RSP-009', category: 'Apparel', brand: 'Nike', price: 4499, mrp: 6499, stock: 60, sold: 142, rating: 4.7, reviews: 78, status: 'Active', featured: false, image: null },
-    { id: 'PRD-010', name: 'Bluetooth Speaker Mini', sku: 'ELEC-BSM-010', category: 'Electronics', brand: 'Samsung', price: 1299, mrp: 1999, stock: 95, sold: 188, rating: 4.3, reviews: 67, status: 'Active', featured: false, image: null },
-    { id: 'PRD-011', name: 'Vintage Denim Jacket', sku: 'APP-VDJ-011', category: 'Apparel', brand: "Levi's", price: 3299, mrp: 4999, stock: 0, sold: 54, rating: 4.1, reviews: 29, status: 'Out of Stock', featured: false, image: null },
-    { id: 'PRD-012', name: 'Rose Face Serum', sku: 'BEA-RFS-012', category: 'Beauty', brand: 'Lakme', price: 899, mrp: 1199, stock: 0, sold: 310, rating: 4.6, reviews: 201, status: 'Out of Stock', featured: false, image: null },
-    { id: 'PRD-013', name: 'Bamboo Cutting Board', sku: 'HOM-BCB-013', category: 'Home & Kitchen', brand: 'Samsung', price: 549, mrp: 799, stock: 0, sold: 22, rating: 3.9, reviews: 11, status: 'Inactive', featured: false, image: null },
-    { id: 'PRD-014', name: 'Protein Shaker Bottle', sku: 'HOM-PSB-014', category: 'Home & Kitchen', brand: 'Nike', price: 399, mrp: 599, stock: 50, sold: 98, rating: 4.0, reviews: 45, status: 'Inactive', featured: false, image: null },
-    { id: 'PRD-015', name: 'Stainless Steel Watch', sku: 'ACC-SSW-015', category: 'Accessories', brand: 'Apple', price: 8999, mrp: 12999, stock: 12, sold: 38, rating: 4.5, reviews: 19, status: 'Inactive', featured: false, image: null },
-    { id: 'PRD-016', name: 'Aloe Vera Gel (200ml)', sku: 'BEA-AVG-016', category: 'Beauty', brand: 'Lakme', price: 149, mrp: 199, stock: 500, sold: 720, rating: 4.8, reviews: 340, status: 'Active', featured: false, image: null },
-    { id: 'PRD-017', name: '4K Action Camera', sku: 'ELEC-ACA-017', category: 'Electronics', brand: 'Samsung', price: 12499, mrp: 17999, stock: 8, sold: 30, rating: 4.5, reviews: 17, status: 'Active', featured: true, image: null },
-    { id: 'PRD-018', name: 'Yoga Mat Premium', sku: 'APP-YMP-018', category: 'Apparel', brand: 'Nike', price: 1299, mrp: 1799, stock: 75, sold: 112, rating: 4.4, reviews: 66, status: 'Active', featured: false, image: null },
-];
+import productService from '../../services/product';
+import categoryService from '../../services/categoryService';
 
 const PAGE_SIZE = 10;
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
@@ -44,10 +22,10 @@ const statusCfg = {
 };
 
 /* ── Product Modal ─────────────────────── */
-const ProductModal = ({ product, onClose, onSave }) => {
+const ProductModal = ({ product, categories = [], onClose, onSave }) => {
     const isNew = !product;
     const [form, setForm] = useState(product || {
-        name: '', sku: '', category: 'Electronics', brand: '', price: '', mrp: '',
+        name: '', sku: '', category: categories[1] || 'General', brand: '', price: '', mrp: '',
         stock: '', status: 'Active', featured: false,
     });
     const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -79,7 +57,7 @@ const ProductModal = ({ product, onClose, onSave }) => {
                     <div className="ec-field">
                         <label>Category</label>
                         <select className="ec-input" value={form.category} onChange={e => set('category', e.target.value)}>
-                            {CATEGORIES.filter(c => c !== 'All Categories').map(c => <option key={c}>{c}</option>)}
+                            {categories.filter(c => c !== 'All Categories').map(c => <option key={c}>{c}</option>)}
                         </select>
                     </div>
                     <div className="ec-field">
@@ -135,56 +113,152 @@ const ProductModal = ({ product, onClose, onSave }) => {
 
 /* ── Main Component ──────────────────── */
 const ProductCatalog = () => {
-    const [products, setProducts] = useState(PRODUCTS);
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [categories, setCategories] = useState(['All Categories']);
+    const [brands, setBrands] = useState(['All Brands']);
     const [search, setSearch] = useState('');
     const [filterCat, setFilterCat] = useState('All Categories');
     const [filterStatus, setFilterStatus] = useState('All');
     const [page, setPage] = useState(1);
     const [modal, setModal] = useState(null); // null | 'new' | product object
 
+    const fetchProducts = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [prodRes, catRes] = await Promise.allSettled([
+                productService.getAll(),
+                categoryService.getAll(),
+            ]);
+
+            let prodList = [];
+            if (prodRes.status === 'fulfilled') {
+                const data = prodRes.value;
+                prodList = Array.isArray(data) ? data : (data?.data || data?.items || []);
+            }
+
+            let catNames = [];
+            if (catRes.status === 'fulfilled') {
+                const data = catRes.value;
+                const catList = Array.isArray(data) ? data : (data?.data || data?.items || []);
+                catNames = catList.map(c => c.name || c.category_name).filter(Boolean);
+            }
+
+            const mapped = prodList.map(p => {
+                const stock = Number(p.stock ?? p.current_stock ?? p.quantity ?? 0);
+                const status = (p.is_active === false || p.status === 'Inactive') ? 'Inactive' : (stock <= 0 ? 'Out of Stock' : 'Active');
+                const catName = p.category_name || p.category?.name || p.category || 'General';
+                return {
+                    id: p.id,
+                    name: p.name || p.title || 'Product #' + p.id,
+                    sku: p.sku || p.barcode || `SKU-${p.id}`,
+                    category: catName,
+                    brand: p.brand || '—',
+                    price: Number(p.price || p.unit_price || 0),
+                    mrp: Number(p.mrp || p.price || 0),
+                    stock,
+                    sold: Number(p.sold || p.sales_count || 0),
+                    rating: Number(p.rating || 0),
+                    reviews: Number(p.reviews_count || p.reviews || 0),
+                    status,
+                    featured: Boolean(p.featured || p.is_featured),
+                    image: p.image_url || p.image || null,
+                };
+            });
+
+            setProducts(mapped);
+
+            const extractedCats = Array.from(new Set([...catNames, ...mapped.map(p => p.category).filter(Boolean)]));
+            setCategories(['All Categories', ...(extractedCats.length > 0 ? extractedCats : ['General'])]);
+
+            const extractedBrands = Array.from(new Set(mapped.map(p => p.brand).filter(b => b && b !== '—')));
+            setBrands(['All Brands', ...extractedBrands]);
+        } catch (err) {
+            console.error('[ProductCatalog] Failed to load products:', err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchProducts();
+    }, [fetchProducts]);
+
     const filtered = products.filter(p => {
         const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
             p.sku.toLowerCase().includes(search.toLowerCase()) ||
             p.brand.toLowerCase().includes(search.toLowerCase());
         const matchCat = filterCat === 'All Categories' || p.category === filterCat;
-        const matchStatus = filterStatus === 'All' || p.status === filterStatus;
+        const matchStatus = filterStatus === 'All' ? true
+            : filterStatus === 'Featured' ? Boolean(p.featured)
+            : p.status === filterStatus;
         return matchSearch && matchCat && matchStatus;
     });
 
-    const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    const handleSave = (form) => {
-        if (form.id) {
-            setProducts(prev => prev.map(p => p.id === form.id ? { ...p, ...form } : p));
-        } else {
-            setProducts(prev => [...prev, { ...form, id: `PRD-${String(prev.length + 1).padStart(3, '0')}`, sold: 0, rating: 0, reviews: 0 }]);
+    const handleSave = async (form) => {
+        try {
+            const payload = {
+                name: form.name,
+                sku: form.sku,
+                category: form.category,
+                brand: form.brand,
+                price: Number(form.price || 0),
+                mrp: Number(form.mrp || 0),
+                stock: Number(form.stock || 0),
+                is_active: form.status !== 'Inactive',
+                featured: form.featured,
+            };
+            if (form.id) {
+                await productService.update(form.id, payload).catch(() => {});
+                setProducts(prev => prev.map(p => p.id === form.id ? { ...p, ...form } : p));
+            } else {
+                const res = await productService.create(payload).catch(() => {});
+                const newId = res?.id || `PRD-${Date.now().toString().slice(-4)}`;
+                setProducts(prev => [...prev, { ...form, id: newId, sold: 0, rating: 0, reviews: 0 }]);
+            }
+        } catch (err) {
+            console.error('[ProductCatalog] Save failed:', err);
         }
         setPage(1);
     };
 
-    const handleDelete = (id) => {
+    const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this product?')) {
+            try {
+                await productService.delete(id).catch(() => {});
+            } catch (err) {
+                console.error('[ProductCatalog] Delete failed:', err);
+            }
             setProducts(prev => prev.filter(p => p.id !== id));
         }
     };
 
-    // Cycles through Active → Inactive → Out of Stock → Active
-    const cycleStatus = (id) => {
-        setProducts(prev => prev.map(p => {
-            if (p.id !== id) return p;
-            const next = p.status === 'Active' ? 'Inactive'
-                : p.status === 'Inactive' ? 'Out of Stock'
-                : 'Active';
-            return { ...p, status: next };
-        }));
+    const cycleStatus = async (id) => {
+        const target = products.find(p => p.id === id);
+        if (!target) return;
+        const next = target.status === 'Active' ? 'Inactive'
+            : target.status === 'Inactive' ? 'Out of Stock'
+            : 'Active';
+        try {
+            await productService.update(id, { is_active: next === 'Active' }).catch(() => {});
+        } catch (_) {}
+        setProducts(prev => prev.map(p => p.id === id ? { ...p, status: next } : p));
     };
 
-    const activateProduct = (id) => {
+    const activateProduct = async (id) => {
+        try {
+            await productService.update(id, { is_active: true }).catch(() => {});
+        } catch (_) {}
         setProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'Active' } : p));
     };
 
-    const deactivateProduct = (id) => {
+    const deactivateProduct = async (id) => {
+        try {
+            await productService.update(id, { is_active: false }).catch(() => {});
+        } catch (_) {}
         setProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'Inactive' } : p));
     };
 
@@ -197,17 +271,12 @@ const ProductCatalog = () => {
     };
 
     const kpis = [
-        { label: 'Total Products', value: counts.all, color: '#6366f1', bg: '#eef2ff', icon: '📦', status: 'All' },
-        { label: 'Active Listings', value: counts.active, color: '#10b981', bg: '#ecfdf5', icon: '✅', status: 'Active' },
-        { label: 'Inactive Listings', value: counts.inactive, color: '#6b7280', bg: '#f3f4f6', icon: '⏸️', status: 'Inactive' },
-        { label: 'Out of Stock', value: counts.outOfStock, color: '#f59e0b', bg: '#fffbeb', icon: '⚠️', status: 'Out of Stock' },
-        { label: 'Featured Products', value: counts.featured, color: '#8b5cf6', bg: '#f5f3ff', icon: '⭐', status: 'All' },
+        { label: 'Total Products', value: counts.all, color: '#6366f1', bg: '#eef2ff', icon: '📦', badge: 'Total' },
+        { label: 'Active Listings', value: counts.active, color: '#10b981', bg: '#ecfdf5', icon: '✅', badge: 'Live' },
+        { label: 'Inactive Listings', value: counts.inactive, color: '#6b7280', bg: '#f3f4f6', icon: '⏸️', badge: 'Disabled' },
+        { label: 'Out of Stock', value: counts.outOfStock, color: '#f59e0b', bg: '#fffbeb', icon: '⚠️', badge: 'Alert' },
+        { label: 'Featured Products', value: counts.featured, color: '#8b5cf6', bg: '#f5f3ff', icon: '⭐', badge: 'Spotlight' },
     ];
-
-    const handleKpiClick = (status) => {
-        setFilterStatus(status);
-        setPage(1);
-    };
 
     const handleTabClick = (status) => {
         setFilterStatus(status);
@@ -252,35 +321,27 @@ const ProductCatalog = () => {
                 </div>
             </div>
 
-            {/* KPIs — clickable to filter */}
+            {/* KPI Metric Overview Cards (Informational) */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
-                {kpis.map((k, i) => {
-                    const isActive = filterStatus === k.status && k.status !== 'All';
-                    return (
-                        <div
-                            key={i}
-                            className="adm-kpi-card"
-                            style={{
-                                padding: '14px 18px',
-                                cursor: 'pointer',
-                                border: isActive ? `2px solid ${k.color}` : '1.5px solid transparent',
-                                transition: 'border 0.15s, box-shadow 0.15s',
-                                boxShadow: isActive ? `0 4px 12px ${k.color}22` : undefined,
-                            }}
-                            onClick={() => handleKpiClick(k.status)}
-                            title={`Filter by ${k.label}`}
-                        >
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                <span style={{ fontSize: 22 }}>{k.icon}</span>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: k.color, background: k.bg, padding: '2px 8px', borderRadius: 20 }}>
-                                    {isActive ? '✓ Active' : 'Click to filter'}
-                                </span>
-                            </div>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k.label}</p>
-                            <p style={{ fontSize: 26, fontWeight: 800, color: k.color, marginTop: 4 }}>{k.value}</p>
+                {kpis.map((k, i) => (
+                    <div
+                        key={i}
+                        className="adm-kpi-card"
+                        style={{
+                            padding: '14px 18px',
+                            border: '1.5px solid transparent',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <span style={{ fontSize: 22 }}>{k.icon}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: k.color, background: k.bg, padding: '2px 8px', borderRadius: 20 }}>
+                                {k.badge}
+                            </span>
                         </div>
-                    );
-                })}
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k.label}</p>
+                        <p style={{ fontSize: 26, fontWeight: 800, color: k.color, marginTop: 4 }}>{k.value}</p>
+                    </div>
+                ))}
             </div>
 
             {/* Status Quick-Tabs */}
@@ -332,7 +393,7 @@ const ProductCatalog = () => {
                 </div>
                 <select className="ec-input" style={{ minWidth: 160 }} value={filterCat}
                     onChange={e => { setFilterCat(e.target.value); setPage(1); }}>
-                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                    {categories.map(c => <option key={c}>{c}</option>)}
                 </select>
                 <select className="ec-input" style={{ minWidth: 140 }} value={filterStatus}
                     onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
@@ -360,7 +421,14 @@ const ProductCatalog = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {paginated.map((p, i) => {
+                        {loading && (
+                            <tr>
+                                <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                                    Loading real-time products catalog…
+                                </td>
+                            </tr>
+                        )}
+                        {!loading && paginated.map((p, i) => {
                             const sc = statusCfg[p.status] || statusCfg['Active'];
                             const discount = p.mrp > 0 ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
                             const rowStyle = getRowStyle(p);
@@ -379,7 +447,16 @@ const ProductCatalog = () => {
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                                 position: 'relative',
                                             }}>
-                                                <BsImage size={16} color={p.status === 'Inactive' ? '#9ca3af' : '#d1d5db'} />
+                                                {p.image ? (
+                                                    <img
+                                                        src={p.image}
+                                                        alt={p.name}
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
+                                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                                    />
+                                                ) : (
+                                                    <BsImage size={16} color={p.status === 'Inactive' ? '#9ca3af' : '#d1d5db'} />
+                                                )}
                                                 {p.status === 'Inactive' && (
                                                     <div style={{
                                                         position: 'absolute', top: -4, right: -4,
@@ -488,7 +565,7 @@ const ProductCatalog = () => {
                                 </tr>
                             );
                         })}
-                        {paginated.length === 0 && (
+                        {!loading && paginated.length === 0 && (
                             <tr>
                                 <td colSpan={9} style={{ padding: 60, textAlign: 'center' }}>
                                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
@@ -562,6 +639,7 @@ const ProductCatalog = () => {
             {modal && (
                 <ProductModal
                     product={modal === 'new' ? null : modal}
+                    categories={categories}
                     onClose={() => setModal(null)}
                     onSave={handleSave}
                 />

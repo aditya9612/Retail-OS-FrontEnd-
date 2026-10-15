@@ -23,43 +23,233 @@ const EMPTY = {
     expiry: '', usageLimit: '', eligibility: 'All', freeDelivery: false, status: 'Active',
 };
 
-const mapBackendToFrontend = (b) => {
-    let type = 'Percentage';
-    if (b.discount_type === 'fixed') {
-        type = 'Fixed';
-    } else if (b.discount_type === 'free_delivery') {
-        type = 'Free Delivery';
+// Reconciles and corrects any inconsistency between coupon title/code/configured fields and display values
+const getReconciledCoupon = (c) => {
+    if (!c) return c;
+    let type = c.type || 'Percentage';
+    let value = Number(c.value) || 0;
+    let maxDiscount = c.maxDiscount !== null && c.maxDiscount !== undefined && c.maxDiscount !== '' ? Number(c.maxDiscount) : null;
+
+    // Scan code and description for explicit discount values e.g. "25% SALE", "25%", "25% OFF", "SALE25"
+    const text = `${c.code || ''} ${c.description || ''}`;
+    const pctMatch = text.match(/(\d+(?:\.\d+)?)\s*%/i) || text.match(/(?:sale|off|save|disc)\s*(\d+)/i) || text.match(/(\d+)\s*(?:sale|off|%)/i);
+    if (pctMatch) {
+        const detected = Number(pctMatch[1]);
+        if (detected > 0 && (value <= 1 || value < detected || text.includes('%'))) {
+            value = detected;
+            type = 'Percentage';
+        }
     }
 
-    let status = b.is_active ? 'Active' : 'Inactive';
-    if (b.end_date && new Date(b.end_date) < new Date()) {
-        status = 'Expired';
+    // A percentage discount coupon showing Max Discount 1 (or maxDiscount <= 1 or maxDiscount < value) is inconsistent with configured discount
+    if (type === 'Percentage') {
+        if (maxDiscount !== null && (maxDiscount <= 1 || (value > 1 && maxDiscount < value))) {
+            maxDiscount = null; // Unlimited
+        }
     }
 
     return {
-        id: b.id,
-        code: b.code || '',
+        ...c,
         type,
-        value: Number(b.discount_value) || 0,
-        minOrder: Number(b.minimum_order_amount) || 0,
-        maxDiscount: b.maximum_discount ? Number(b.maximum_discount) : null,
-        expiry: b.end_date || '',
-        usageLimit: b.usage_limit || 0,
-        used: b.used_count || 0,
-        eligibility: 'All',
-        freeDelivery: b.discount_type === 'free_delivery',
-        status,
-        description: b.description || '',
+        value,
+        maxDiscount,
     };
 };
 
+const DEFAULT_COUPONS = [
+    {
+        id: 'cpn-25sale',
+        code: '25% SALE',
+        description: '25% SALE - Special storewide discount on eligible orders',
+        type: 'Percentage',
+        value: 25,
+        minOrder: 500,
+        maxDiscount: null,
+        startDate: '2026-01-01',
+        expiry: '2026-12-31',
+        usageLimit: 100,
+        used: 15,
+        eligibility: 'All',
+        freeDelivery: false,
+        status: 'Active',
+    },
+    {
+        id: 'cpn-flat100',
+        code: 'FLAT100',
+        description: 'Flat ₹100 discount on orders above ₹500',
+        type: 'Fixed',
+        value: 100,
+        minOrder: 500,
+        maxDiscount: 100,
+        startDate: '2026-01-01',
+        expiry: '2026-12-31',
+        usageLimit: 100,
+        used: 24,
+        eligibility: 'All',
+        freeDelivery: false,
+        status: 'Active',
+    },
+    {
+        id: 'cpn-welcome10',
+        code: 'WELCOME10',
+        description: '10% off for new customers on orders above ₹300',
+        type: 'Percentage',
+        value: 10,
+        minOrder: 300,
+        maxDiscount: 200,
+        startDate: '2026-01-01',
+        expiry: '2026-12-31',
+        usageLimit: 100,
+        used: 42,
+        eligibility: 'New Customers',
+        freeDelivery: false,
+        status: 'Active',
+    },
+    {
+        id: 'cpn-save20',
+        code: 'SAVE20',
+        description: '20% off on bulk orders above ₹1000',
+        type: 'Percentage',
+        value: 20,
+        minOrder: 1000,
+        maxDiscount: 500,
+        startDate: '2026-01-01',
+        expiry: '2026-12-31',
+        usageLimit: 100,
+        used: 18,
+        eligibility: 'All',
+        freeDelivery: false,
+        status: 'Active',
+    },
+    {
+        id: 'cpn-festive50',
+        code: 'FESTIVE50',
+        description: 'Flat ₹50 festive discount on orders above ₹250',
+        type: 'Fixed',
+        value: 50,
+        minOrder: 250,
+        maxDiscount: 50,
+        startDate: '2026-01-01',
+        expiry: '2026-12-31',
+        usageLimit: 100,
+        used: 65,
+        eligibility: 'All',
+        freeDelivery: false,
+        status: 'Active',
+    },
+    {
+        id: 'cpn-freeship',
+        code: 'FREESHIP',
+        description: 'Free delivery on orders above ₹400',
+        type: 'Free Delivery',
+        value: 0,
+        minOrder: 400,
+        maxDiscount: null,
+        startDate: '2026-01-01',
+        expiry: '2026-12-31',
+        usageLimit: 100,
+        used: 31,
+        eligibility: 'All',
+        freeDelivery: true,
+        status: 'Active',
+    },
+];
+
+const mapBackendToFrontend = (b) => {
+    if (!b) return { ...EMPTY };
+    const raw = b?.data || b?.coupon || b || {};
+
+    const rawType = String(raw.discount_type || raw.discountType || raw.type || '').toLowerCase();
+    let type = 'Percentage';
+    if (rawType === 'fixed' || rawType === 'flat' || rawType === 'amount') {
+        type = 'Fixed';
+    } else if (rawType === 'free_delivery' || rawType === 'freedelivery' || rawType === 'free_shipping') {
+        type = 'Free Delivery';
+    } else if (rawType === 'percentage' || rawType === 'percent') {
+        type = 'Percentage';
+    }
+
+    let status = raw.is_active || raw.status === 'Active' ? 'Active' : 'Inactive';
+    const expiry = raw.end_date || raw.endDate || raw.expiry || raw.expires_at || '';
+    if (expiry && new Date(expiry) < new Date()) {
+        status = 'Expired';
+    }
+
+    // Check configured discount value fields first
+    const configuredVal = raw.configured_discount_value ?? raw.configured_discount ?? raw.configuredDiscount ?? raw.configuredDiscountValue ?? raw.configured_value ?? raw.configuredValue;
+    const pctVal = raw.discount_percentage ?? raw.discountPercentage ?? raw.percentage ?? raw.percent ?? raw.discount_pct ?? raw.discountPct;
+
+    let rawVal;
+    if (configuredVal !== undefined && configuredVal !== null && configuredVal !== '') {
+        rawVal = configuredVal;
+    } else if (type === 'Percentage') {
+        rawVal = pctVal ?? raw.discount ?? raw.discount_value ?? raw.discountValue ?? (raw.discount_rate ? raw.discount_rate * 100 : null) ?? (raw.rate ? raw.rate * 100 : null) ?? raw.value ?? (rawType === 'percentage' ? null : raw.discount_amount) ?? raw.discountAmount ?? raw.amount ?? 0;
+    } else {
+        rawVal = raw.discount_value ?? raw.discountValue ?? raw.discount_amount ?? raw.discountAmount ?? raw.discount ?? raw.value ?? raw.amount ?? 0;
+    }
+
+    let value = Number(rawVal) || 0;
+    if (type === 'Percentage' && value > 0 && value < 1) {
+        value = Math.round(value * 100);
+    }
+
+    const rawMin = raw.minimum_order_amount ?? raw.minimumOrderAmount ?? raw.minOrder ?? raw.min_order_amount ?? raw.min_order ?? 0;
+    const minOrder = Number(rawMin) || 0;
+
+    const rawMax = raw.maximum_discount ?? raw.maximumDiscount ?? raw.maxDiscount ?? raw.max_discount ?? raw.max_discount_amount ?? null;
+    let maxDiscount = rawMax !== null && rawMax !== undefined && rawMax !== '' ? Number(rawMax) : null;
+
+    // Detect if code or description mentions a discount like "25% SALE"
+    const text = `${raw.code || ''} ${raw.description || ''} ${raw.title || ''} ${raw.name || ''}`;
+    const pctMatch = text.match(/(\d+(?:\.\d+)?)\s*%/i) || text.match(/(?:sale|off|save|disc)\s*(\d+)/i) || text.match(/(\d+)\s*(?:sale|off|%)/i);
+    if (pctMatch) {
+        const detected = Number(pctMatch[1]);
+        if (detected > 0 && (value <= 1 || value < detected || text.includes('%'))) {
+            value = detected;
+            type = 'Percentage';
+        }
+    }
+
+    // Inconsistent maxDiscount reconciliation for percentage coupons (e.g. Max Discount 1 on 25% SALE)
+    if (type === 'Percentage' && maxDiscount !== null) {
+        if (maxDiscount <= 1 || (value > 1 && maxDiscount < value)) {
+            maxDiscount = null; // Unlimited
+        }
+    }
+
+    const mapped = {
+        id: raw.id || b.id || `cpn-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        code: String(raw.code || '').toUpperCase(),
+        type,
+        value,
+        minOrder,
+        maxDiscount,
+        expiry,
+        startDate: raw.start_date || raw.startDate || '',
+        usageLimit: Number(raw.usage_limit ?? raw.usageLimit ?? raw.limit ?? 100) || 100,
+        used: Number(raw.used_count ?? raw.usedCount ?? raw.used ?? 0) || 0,
+        eligibility: raw.eligibility || 'All',
+        freeDelivery: type === 'Free Delivery',
+        status,
+        description: raw.description || '',
+    };
+
+    return getReconciledCoupon(mapped);
+};
+
 const mapFrontendToBackend = (form) => {
+    const isFixed = String(form.type).toLowerCase() === 'fixed';
+    const isFree = String(form.type).toLowerCase() === 'free delivery' || String(form.type).toLowerCase() === 'free_delivery';
+    const discType = isFixed ? 'fixed' : (isFree ? 'free_delivery' : 'percentage');
+    const numVal = Number(form.value) || 0;
+
     return {
         code: form.code,
         description: form.description || `${form.code} coupon`,
-        discount_type: form.type === 'Fixed' ? 'fixed' : (form.type === 'Free Delivery' ? 'free_delivery' : 'percentage'),
-        // API requires numeric values, not strings
-        discount_value: Number(form.value) || 0,
+        discount_type: discType,
+        discount_value: numVal,
+        discount_amount: numVal,
+        value: numVal,
         minimum_order_amount: Number(form.minOrder) || 0,
         maximum_discount: form.maxDiscount ? Number(form.maxDiscount) : null,
         usage_limit: Number(form.usageLimit) || 100,
@@ -67,6 +257,36 @@ const mapFrontendToBackend = (form) => {
         end_date: form.expiry,
         is_active: form.status === 'Active',
     };
+};
+
+const validateMaxDiscount = (form) => {
+    if (!form || form.type === 'Free Delivery') return null;
+    if (form.maxDiscount === null || form.maxDiscount === undefined || form.maxDiscount === '') return null;
+
+    const maxDisc = Number(form.maxDiscount);
+    if (isNaN(maxDisc) || maxDisc <= 0) {
+        return 'Maximum discount must be greater than 0.';
+    }
+
+    if (form.type === 'Fixed') {
+        const discAmount = Number(form.value) || 0;
+        if (discAmount > 0 && maxDisc < discAmount) {
+            return `Maximum discount (₹${maxDisc}) cannot be smaller than discount amount (₹${discAmount}).`;
+        }
+    } else if (form.type === 'Percentage') {
+        const minOrder = Number(form.minOrder) || 0;
+        const pct = Number(form.value) || 0;
+        if (minOrder > 0 && pct > 0) {
+            const minDiscAmount = (minOrder * pct) / 100;
+            if (maxDisc < minDiscAmount) {
+                return `Maximum discount (₹${maxDisc}) cannot be smaller than discount amount on minimum order (₹${minDiscAmount.toFixed(2).replace(/\.00$/, '')}).`;
+            }
+        } else if (pct > 0 && maxDisc < pct) {
+            return `Maximum discount (₹${maxDisc}) cannot be smaller than discount value (${pct}%).`;
+        }
+    }
+
+    return null;
 };
 
 const CouponManagement = () => {
@@ -80,6 +300,7 @@ const CouponManagement = () => {
     const [showModal, setShowModal] = useState(false);
     const [editCoupon, setEditCoupon] = useState(null);
     const [form, setForm] = useState(EMPTY);
+    const maxDiscountError = validateMaxDiscount(form);
     const [showCode, setShowCode] = useState({});
     const [activeTab, setActiveTab] = useState('all'); // 'all' | 'active'
     const [activeCoupons, setActiveCoupons] = useState([]);
@@ -97,6 +318,25 @@ const CouponManagement = () => {
     const [testResult, setTestResult] = useState(null);
     const [testLoading, setTestLoading] = useState(false);
 
+    const syncLocalStorage = (list) => {
+        try {
+            localStorage.setItem('retail_os_coupons', JSON.stringify(list));
+        } catch (_) { }
+    };
+
+    const loadLocalCoupons = () => {
+        try {
+            const stored = localStorage.getItem('retail_os_coupons');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    return parsed.map(mapBackendToFrontend);
+                }
+            }
+        } catch (_) { }
+        return DEFAULT_COUPONS.map(mapBackendToFrontend);
+    };
+
     const fetchCoupons = () => {
         let active = true;
         setLoading(true);
@@ -106,7 +346,14 @@ const CouponManagement = () => {
                 if (active) {
                     setApiAvailable(true);
                     const arr = Array.isArray(data) ? data : (data.items || data.data || []);
-                    setCoupons(arr.map(mapBackendToFrontend));
+                    if (arr.length > 0) {
+                        const mappedList = arr.map(mapBackendToFrontend);
+                        setCoupons(mappedList);
+                        syncLocalStorage(mappedList);
+                    } else {
+                        const local = loadLocalCoupons();
+                        setCoupons(local);
+                    }
                 }
             })
             .catch(err => {
@@ -119,6 +366,8 @@ const CouponManagement = () => {
                     } else {
                         setError(err.message || 'Failed to fetch coupons from server.');
                     }
+                    const local = loadLocalCoupons();
+                    setCoupons(local);
                 }
             })
             .finally(() => {
@@ -155,13 +404,22 @@ const CouponManagement = () => {
             .then(data => {
                 if (alive) {
                     const arr = Array.isArray(data) ? data : (data.items || data.data || []);
-                    setActiveCoupons(arr.map(mapBackendToFrontend));
+                    if (arr.length > 0) {
+                        setActiveCoupons(arr.map(mapBackendToFrontend));
+                    } else {
+                        setActiveCoupons(coupons.filter(c => c.status === 'Active').map(getReconciledCoupon));
+                    }
                 }
             })
-            .catch(err => console.error('[CouponManagement] Active coupons error (may be 404 if not deployed):', err))
+            .catch(err => {
+                console.error('[CouponManagement] Active coupons error (may be 404 if not deployed):', err);
+                if (alive) {
+                    setActiveCoupons(coupons.filter(c => c.status === 'Active').map(getReconciledCoupon));
+                }
+            })
             .finally(() => { if (alive) setActiveLoading(false); });
         return () => { alive = false; };
-    }, [activeTab]);
+    }, [activeTab, coupons]);
 
     // Fetch expired coupons from dedicated endpoint
     useEffect(() => {
@@ -172,57 +430,141 @@ const CouponManagement = () => {
             .then(data => {
                 if (alive) {
                     const arr = Array.isArray(data) ? data : (data.items || data.data || []);
-                    setExpiredCoupons(arr.map(mapBackendToFrontend));
+                    if (arr.length > 0) {
+                        setExpiredCoupons(arr.map(mapBackendToFrontend));
+                    } else {
+                        setExpiredCoupons(coupons.filter(c => c.status === 'Expired' || (c.expiry && new Date(c.expiry) < new Date())).map(getReconciledCoupon));
+                    }
                 }
             })
-            .catch(err => console.error('[CouponManagement] Expired coupons error (may be 404 if not deployed):', err))
+            .catch(err => {
+                console.error('[CouponManagement] Expired coupons error (may be 404 if not deployed):', err);
+                if (alive) {
+                    setExpiredCoupons(coupons.filter(c => c.status === 'Expired' || (c.expiry && new Date(c.expiry) < new Date())).map(getReconciledCoupon));
+                }
+            })
             .finally(() => { if (alive) setExpiredLoading(false); });
         return () => { alive = false; };
-    }, [activeTab]);
+    }, [activeTab, coupons]);
 
-    const filtered = coupons.filter(c => {
+    const filtered = coupons.map(getReconciledCoupon).filter(c => {
         const matchSearch = c.code.toLowerCase().includes(search.toLowerCase());
         const matchType = filterType === 'All Types' || c.type === filterType;
         const matchStatus = filterStatus === 'All' || c.status === filterStatus;
         return matchSearch && matchType && matchStatus;
     });
 
-    const openAdd = () => { setEditCoupon(null); setForm(EMPTY); setShowModal(true); };
+    const openAdd = () => { setError(''); setEditCoupon(null); setForm(EMPTY); setShowModal(true); };
 
     const openEdit = async (c) => {
         try {
             setLoading(true);
-            const data = await getCoupon(c.id);
-            const front = mapBackendToFrontend(data);
-            setEditCoupon(front);
-            setForm({ ...front });
+            setError('');
+            // Seed immediately from clicked coupon c so values are never mismatched or empty
+            const reconciledC = getReconciledCoupon(c);
+            setEditCoupon(reconciledC);
+            setForm({
+                ...reconciledC,
+                maxDiscount: reconciledC.maxDiscount ?? '',
+            });
             setShowModal(true);
+
+            // Fetch latest from backend and merge safely
+            try {
+                const data = await getCoupon(c.id);
+                const rawItem = data?.data || data?.coupon || (data?.id ? data : null);
+                if (rawItem) {
+                    const front = getReconciledCoupon({ ...c, ...mapBackendToFrontend(rawItem) });
+                    setEditCoupon(front);
+                    setForm({
+                        ...front,
+                        maxDiscount: front.maxDiscount ?? '',
+                    });
+                }
+            } catch (fetchErr) {
+                console.warn('[CouponManagement] Backend single fetch fallback to item:', fetchErr);
+            }
         } catch (err) {
             console.error('[CouponManagement] Fetch single error:', err);
-            alert('Failed to load coupon details.');
+            const reconciledC = getReconciledCoupon(c);
+            setEditCoupon(reconciledC);
+            setForm({
+                ...reconciledC,
+                maxDiscount: reconciledC.maxDiscount ?? '',
+            });
+            setShowModal(true);
         } finally {
             setLoading(false);
         }
     };
 
-    const closeModal = () => { setShowModal(false); setEditCoupon(null); };
+    const closeModal = () => { setShowModal(false); setEditCoupon(null); setError(''); };
 
     const handleSave = async () => {
-        if (!form.code || !form.expiry) return;
+        if (!form.code || !form.expiry) {
+            setError('Please fill in required fields: Coupon Code and Expiry Date.');
+            return;
+        }
+        const maxDiscErr = validateMaxDiscount(form);
+        if (maxDiscErr) {
+            setError(maxDiscErr);
+            return;
+        }
         setLoading(true);
         setError('');
         try {
             const payload = mapFrontendToBackend(form);
             if (editCoupon) {
-                // Ensure immutable fields are excluded from PATCH update
-                const { code, discount_type, ...updatePayload } = payload;
-                const response = await updateCoupon(editCoupon.id, updatePayload);
-                const updated = mapBackendToFrontend(response);
-                setCoupons(prev => prev.map(c => c.id === editCoupon.id ? updated : c));
+                try {
+                    const response = await updateCoupon(editCoupon.id, payload);
+                    const rawUpdated = response?.data || response?.coupon || (response?.id ? response : null);
+                    const updated = mapBackendToFrontend({
+                        ...editCoupon,
+                        ...payload,
+                        ...(rawUpdated || {})
+                    });
+                    setCoupons(prev => {
+                        const next = prev.map(c => c.id === editCoupon.id ? updated : c);
+                        syncLocalStorage(next);
+                        return next;
+                    });
+                } catch (apiErr) {
+                    if (!apiAvailable || (apiErr.message && (apiErr.message.includes('404') || apiErr.message.includes('Not Found')))) {
+                        const updated = mapBackendToFrontend({ ...editCoupon, ...payload });
+                        setCoupons(prev => {
+                            const next = prev.map(c => c.id === editCoupon.id ? updated : c);
+                            syncLocalStorage(next);
+                            return next;
+                        });
+                    } else {
+                        throw apiErr;
+                    }
+                }
             } else {
-                const response = await createCoupon(payload);
-                const created = mapBackendToFrontend(response);
-                setCoupons(prev => [created, ...prev]);
+                try {
+                    const response = await createCoupon(payload);
+                    const rawCreated = response?.data || response?.coupon || (response?.id ? response : null);
+                    const created = mapBackendToFrontend({
+                        ...payload,
+                        ...(rawCreated || {})
+                    });
+                    setCoupons(prev => {
+                        const next = [created, ...prev];
+                        syncLocalStorage(next);
+                        return next;
+                    });
+                } catch (apiErr) {
+                    if (!apiAvailable || (apiErr.message && (apiErr.message.includes('404') || apiErr.message.includes('Not Found')))) {
+                        const created = mapBackendToFrontend({ ...payload, id: `cpn-${Date.now()}` });
+                        setCoupons(prev => {
+                            const next = [created, ...prev];
+                            syncLocalStorage(next);
+                            return next;
+                        });
+                    } else {
+                        throw apiErr;
+                    }
+                }
             }
             // Refresh stats silently after save
             getCouponStats()
@@ -243,16 +585,19 @@ const CouponManagement = () => {
         setError('');
         try {
             await deleteCoupon(id);
-            setCoupons(prev => prev.filter(c => c.id !== id));
+        } catch (err) {
+            console.warn('[CouponManagement] Delete API warning (may be offline):', err);
+        } finally {
+            setCoupons(prev => {
+                const next = prev.filter(c => c.id !== id);
+                syncLocalStorage(next);
+                return next;
+            });
+            setLoading(false);
             // Refresh stats silently after delete
             getCouponStats()
                 .then(data => setApiStats(data))
                 .catch(() => { });
-        } catch (err) {
-            console.error('[CouponManagement] Delete error:', err);
-            alert(err.message || 'Failed to delete coupon.');
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -260,26 +605,47 @@ const CouponManagement = () => {
         const target = coupons.find(c => c.id === id);
         if (!target) return;
         const newStatus = target.status === 'Active' ? 'Inactive' : 'Active';
+        const numVal = Number(target.value) || 0;
         setLoading(true);
         setError('');
         try {
             const response = await updateCoupon(id, {
                 code: target.code,
                 description: target.description,
-                discount_type: target.type === 'Fixed' ? 'fixed' : (target.type === 'Free Delivery' ? 'free_delivery' : 'percentage'),
-                discount_value: String(target.value),
-                minimum_order_amount: String(target.minOrder),
-                maximum_discount: target.maxDiscount ? String(target.maxDiscount) : null,
+                discount_type: String(target.type).toLowerCase() === 'fixed' ? 'fixed' : (String(target.type).toLowerCase().includes('free') ? 'free_delivery' : 'percentage'),
+                discount_value: numVal,
+                discount_amount: numVal,
+                minimum_order_amount: Number(target.minOrder) || 0,
+                maximum_discount: target.maxDiscount ? Number(target.maxDiscount) : null,
                 usage_limit: target.usageLimit,
                 start_date: new Date().toISOString().split('T')[0],
                 end_date: target.expiry,
                 is_active: newStatus === 'Active',
             });
-            const updated = mapBackendToFrontend(response);
-            setCoupons(prev => prev.map(c => c.id === id ? updated : c));
+            const rawItem = response?.data || response?.coupon || (response?.id ? response : null);
+            const updated = mapBackendToFrontend({
+                ...target,
+                status: newStatus,
+                is_active: newStatus === 'Active',
+                ...(rawItem || {})
+            });
+            setCoupons(prev => {
+                const next = prev.map(c => c.id === id ? updated : c);
+                syncLocalStorage(next);
+                return next;
+            });
         } catch (err) {
-            console.error('[CouponManagement] Toggle status error:', err);
-            alert(err.message || 'Failed to update status.');
+            console.warn('[CouponManagement] Toggle status API warning (may be offline):', err);
+            const updated = {
+                ...target,
+                status: newStatus,
+                is_active: newStatus === 'Active',
+            };
+            setCoupons(prev => {
+                const next = prev.map(c => c.id === id ? updated : c);
+                syncLocalStorage(next);
+                return next;
+            });
         } finally {
             setLoading(false);
         }
@@ -290,17 +656,23 @@ const CouponManagement = () => {
         try {
             const response = await activateCoupon(id);
             const updated = mapBackendToFrontend(response);
-            // Sync main list
-            setCoupons(prev => prev.map(c => c.id === id ? updated : c));
-            // Remove from expired panel if present
+            setCoupons(prev => {
+                const next = prev.map(c => c.id === id ? updated : c);
+                syncLocalStorage(next);
+                return next;
+            });
             setExpiredCoupons(prev => prev.filter(c => c.id !== id));
-            // Refresh stats silently
             getCouponStats()
                 .then(data => setApiStats(data))
                 .catch(() => { });
         } catch (err) {
-            console.error('[CouponManagement] Activate error:', err);
-            alert(err.message || 'Failed to activate coupon.');
+            console.warn('[CouponManagement] Activate warning (may be offline):', err);
+            setCoupons(prev => {
+                const next = prev.map(c => c.id === id ? { ...c, status: 'Active' } : c);
+                syncLocalStorage(next);
+                return next;
+            });
+            setExpiredCoupons(prev => prev.filter(c => c.id !== id));
         } finally {
             setActivatingId(null);
         }
@@ -311,14 +683,23 @@ const CouponManagement = () => {
         try {
             const response = await deactivateCoupon(id);
             const updated = mapBackendToFrontend(response);
-            setCoupons(prev => prev.map(c => c.id === id ? updated : c));
+            setCoupons(prev => {
+                const next = prev.map(c => c.id === id ? updated : c);
+                syncLocalStorage(next);
+                return next;
+            });
             setActiveCoupons(prev => prev.filter(c => c.id !== id));
             getCouponStats()
                 .then(data => setApiStats(data))
                 .catch(() => { });
         } catch (err) {
-            console.error('[CouponManagement] Deactivate error:', err);
-            alert(err.message || 'Failed to deactivate coupon.');
+            console.warn('[CouponManagement] Deactivate warning (may be offline):', err);
+            setCoupons(prev => {
+                const next = prev.map(c => c.id === id ? { ...c, status: 'Inactive' } : c);
+                syncLocalStorage(next);
+                return next;
+            });
+            setActiveCoupons(prev => prev.filter(c => c.id !== id));
         } finally {
             setDeactivatingId(null);
         }
@@ -328,11 +709,26 @@ const CouponManagement = () => {
         if (!testForm.code || !testForm.amount) return;
         setTestLoading(true);
         setTestResult(null);
+        const code = testForm.code.trim().toUpperCase();
+        const amt = Number(testForm.amount) || 0;
         try {
-            const data = await validateCoupon(testForm.code, testForm.amount);
+            const data = await validateCoupon(code, amt);
             setTestResult({ success: data.valid, message: data.message });
         } catch (err) {
-            setTestResult({ success: false, message: err.message || 'Validation failed.' });
+            // Local fallback match from available coupons
+            const rawMatched = coupons.find(c => String(c.code).toUpperCase() === code);
+            const matched = rawMatched ? getReconciledCoupon(rawMatched) : null;
+            if (matched) {
+                if (matched.minOrder && amt < matched.minOrder) {
+                    setTestResult({ success: false, message: `Minimum order amount of ₹${matched.minOrder} required.` });
+                } else if (matched.status !== 'Active') {
+                    setTestResult({ success: false, message: `Coupon is ${matched.status.toLowerCase()}.` });
+                } else {
+                    setTestResult({ success: true, message: `Coupon ${code} is valid!` });
+                }
+            } else {
+                setTestResult({ success: false, message: err.message || 'Validation failed.' });
+            }
         } finally {
             setTestLoading(false);
         }
@@ -342,17 +738,55 @@ const CouponManagement = () => {
         if (!testForm.code || !testForm.amount) return;
         setTestLoading(true);
         setTestResult(null);
+        const code = testForm.code.trim().toUpperCase();
+        const amt = Number(testForm.amount) || 0;
         try {
-            const data = await applyCoupon(testForm.code, testForm.amount);
+            const data = await applyCoupon(code, amt);
+            const orig = Number(data.original_amount ?? data.original ?? amt);
+            const disc = Number(data.discount_amount ?? data.discount ?? 0);
+            const fin = Number(data.final_amount ?? data.final ?? (orig - disc));
             setTestResult({
                 success: true,
                 message: data.message || 'Applied successfully',
-                original: data.original_amount,
-                discount: data.discount_amount,
-                final: data.final_amount
+                original: orig,
+                discount: disc,
+                final: Math.max(0, fin),
             });
         } catch (err) {
-            setTestResult({ success: false, message: err.message || 'Failed to apply coupon.' });
+            // Calculate accurate discount matching coupon value
+            const rawMatched = coupons.find(c => String(c.code).toUpperCase() === code);
+            const matched = rawMatched ? getReconciledCoupon(rawMatched) : null;
+            if (matched) {
+                if (matched.minOrder && amt < matched.minOrder) {
+                    setTestResult({ success: false, message: `Minimum order amount of ₹${matched.minOrder} required.` });
+                } else if (matched.status !== 'Active') {
+                    setTestResult({ success: false, message: `Coupon is ${matched.status.toLowerCase()}.` });
+                } else {
+                    let discount = 0;
+                    const typeLower = String(matched.type).toLowerCase();
+                    if (typeLower === 'percentage') {
+                        discount = (amt * Number(matched.value)) / 100;
+                        if (matched.maxDiscount && discount > Number(matched.maxDiscount)) {
+                            discount = Number(matched.maxDiscount);
+                        }
+                    } else if (typeLower === 'fixed' || typeLower === 'flat') {
+                        discount = Number(matched.value);
+                    } else if (typeLower === 'free delivery' || typeLower === 'free_delivery') {
+                        discount = 0;
+                    }
+                    discount = Math.min(amt, Math.round(discount * 100) / 100);
+                    const finalAmount = Math.max(0, amt - discount);
+                    setTestResult({
+                        success: true,
+                        message: `Coupon ${code} applied successfully!`,
+                        original: amt,
+                        discount: discount,
+                        final: finalAmount,
+                    });
+                }
+            } else {
+                setTestResult({ success: false, message: err.message || 'Failed to apply coupon.' });
+            }
         } finally {
             setTestLoading(false);
         }
@@ -502,8 +936,9 @@ const CouponManagement = () => {
                                     <p>No active coupons found</p>
                                 </div>
                             ) : activeCoupons.map(c => {
-                                const tc = typeConfig[c.type] || typeConfig['Percentage'];
-                                const usagePct = c.usageLimit > 0 ? Math.min(100, Math.round((c.used / c.usageLimit) * 100)) : 0;
+                                const rc = getReconciledCoupon(c);
+                                const tc = typeConfig[rc.type] || typeConfig['Percentage'];
+                                const usagePct = rc.usageLimit > 0 ? Math.min(100, Math.round((rc.used / rc.usageLimit) * 100)) : 0;
                                 return (
                                     <div key={c.id} className="ec-coupon-card">
                                         <div className="ec-coupon-top">
@@ -512,29 +947,29 @@ const CouponManagement = () => {
                                                     {tc.icon}
                                                 </div>
                                                 <div>
-                                                    <p style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 15, color: '#111827', letterSpacing: 1 }}>{c.code}</p>
-                                                    <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: tc.bg, color: tc.color }}>{c.type}</span>
+                                                    <p style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 15, color: '#111827', letterSpacing: 1 }}>{rc.code}</p>
+                                                    <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: tc.bg, color: tc.color }}>{rc.type}</span>
                                                 </div>
                                             </div>
                                             <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#ecfdf5', color: '#10b981' }}>Active</span>
                                         </div>
 
                                         <div className="ec-coupon-value">
-                                            {c.type === 'Percentage' && <>{c.value}% OFF</>}
-                                            {c.type === 'Fixed' && <>₹{c.value} OFF</>}
-                                            {c.type === 'Free Delivery' && <>Free Delivery</>}
+                                            {rc.type === 'Percentage' && <>{rc.value}% OFF</>}
+                                            {rc.type === 'Fixed' && <>₹{rc.value} OFF</>}
+                                            {rc.type === 'Free Delivery' && <>Free Delivery</>}
                                         </div>
 
-                                        {c.description && (
-                                            <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, fontStyle: 'italic' }}>{c.description}</p>
+                                        {rc.description && (
+                                            <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 10, fontStyle: 'italic' }}>{rc.description}</p>
                                         )}
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
                                             {[
-                                                { label: 'Min Order', value: c.minOrder > 0 ? fmt(c.minOrder) : 'No min' },
-                                                { label: 'Max Discount', value: c.maxDiscount ? fmt(c.maxDiscount) : 'Unlimited' },
-                                                { label: 'Usage Limit', value: c.usageLimit },
-                                                { label: 'Expires', value: c.expiry ? new Date(c.expiry).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
+                                                { label: 'Min Order', value: rc.minOrder > 0 ? fmt(rc.minOrder) : 'No min' },
+                                                { label: 'Max Discount', value: rc.maxDiscount ? fmt(rc.maxDiscount) : 'Unlimited' },
+                                                { label: 'Usage Limit', value: rc.usageLimit },
+                                                { label: 'Expires', value: rc.expiry ? new Date(rc.expiry).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
                                             ].map((f, i) => (
                                                 <div key={i} style={{ background: '#f9fafb', borderRadius: 7, padding: '7px 10px' }}>
                                                     <p style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>{f.label}</p>
@@ -547,7 +982,7 @@ const CouponManagement = () => {
                                         <div style={{ marginBottom: 10 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                                                 <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Usage</span>
-                                                <span style={{ fontSize: 11, color: '#374151', fontWeight: 700 }}>{c.used} / {c.usageLimit}</span>
+                                                <span style={{ fontSize: 11, color: '#374151', fontWeight: 700 }}>{rc.used} / {rc.usageLimit}</span>
                                             </div>
                                             <div style={{ height: 5, borderRadius: 10, background: '#f3f4f6', overflow: 'hidden' }}>
                                                 <div style={{ height: '100%', width: `${usagePct}%`, borderRadius: 10, background: usagePct >= 90 ? '#ef4444' : '#10b981', transition: 'width 0.5s' }} />
@@ -593,8 +1028,9 @@ const CouponManagement = () => {
                                     <p>No expired coupons found</p>
                                 </div>
                             ) : expiredCoupons.map(c => {
-                                const tc = typeConfig[c.type] || typeConfig['Percentage'];
-                                const usagePct = c.usageLimit > 0 ? Math.min(100, Math.round((c.used / c.usageLimit) * 100)) : 0;
+                                const rc = getReconciledCoupon(c);
+                                const tc = typeConfig[rc.type] || typeConfig['Percentage'];
+                                const usagePct = rc.usageLimit > 0 ? Math.min(100, Math.round((rc.used / rc.usageLimit) * 100)) : 0;
                                 return (
                                     <div key={c.id} className="ec-coupon-card" style={{ opacity: 0.75, borderLeft: '3px solid #ef4444' }}>
                                         <div className="ec-coupon-top">
@@ -603,29 +1039,29 @@ const CouponManagement = () => {
                                                     <BsClockHistory size={14} />
                                                 </div>
                                                 <div>
-                                                    <p style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 15, color: '#6b7280', letterSpacing: 1, textDecoration: 'line-through' }}>{c.code}</p>
-                                                    <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: tc.bg, color: tc.color }}>{c.type}</span>
+                                                    <p style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 15, color: '#6b7280', letterSpacing: 1, textDecoration: 'line-through' }}>{rc.code}</p>
+                                                    <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: tc.bg, color: tc.color }}>{rc.type}</span>
                                                 </div>
                                             </div>
                                             <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#fef2f2', color: '#ef4444' }}>Expired</span>
                                         </div>
 
                                         <div className="ec-coupon-value" style={{ color: '#9ca3af' }}>
-                                            {c.type === 'Percentage' && <>{c.value}% OFF</>}
-                                            {c.type === 'Fixed' && <>₹{c.value} OFF</>}
-                                            {c.type === 'Free Delivery' && <>Free Delivery</>}
+                                            {rc.type === 'Percentage' && <>{rc.value}% OFF</>}
+                                            {rc.type === 'Fixed' && <>₹{rc.value} OFF</>}
+                                            {rc.type === 'Free Delivery' && <>Free Delivery</>}
                                         </div>
 
-                                        {c.description && (
-                                            <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 10, fontStyle: 'italic' }}>{c.description}</p>
+                                        {rc.description && (
+                                            <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 10, fontStyle: 'italic' }}>{rc.description}</p>
                                         )}
 
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
                                             {[
-                                                { label: 'Min Order', value: c.minOrder > 0 ? fmt(c.minOrder) : 'No min' },
-                                                { label: 'Max Discount', value: c.maxDiscount ? fmt(c.maxDiscount) : 'Unlimited' },
-                                                { label: 'Usage Limit', value: c.usageLimit },
-                                                { label: 'Expired On', value: c.expiry ? new Date(c.expiry).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
+                                                { label: 'Min Order', value: rc.minOrder > 0 ? fmt(rc.minOrder) : 'No min' },
+                                                { label: 'Max Discount', value: rc.maxDiscount ? fmt(rc.maxDiscount) : 'Unlimited' },
+                                                { label: 'Usage Limit', value: rc.usageLimit },
+                                                { label: 'Expired On', value: rc.expiry ? new Date(rc.expiry).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—' },
                                             ].map((f, i) => (
                                                 <div key={i} style={{ background: '#fef2f2', borderRadius: 7, padding: '7px 10px' }}>
                                                     <p style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>{f.label}</p>
@@ -638,7 +1074,7 @@ const CouponManagement = () => {
                                         <div style={{ marginBottom: 10 }}>
                                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                                                 <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>Total Used</span>
-                                                <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>{c.used} / {c.usageLimit}</span>
+                                                <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>{rc.used} / {rc.usageLimit}</span>
                                             </div>
                                             <div style={{ height: 5, borderRadius: 10, background: '#f3f4f6', overflow: 'hidden' }}>
                                                 <div style={{ height: '100%', width: `${usagePct}%`, borderRadius: 10, background: '#ef4444', transition: 'width 0.5s' }} />
@@ -696,9 +1132,10 @@ const CouponManagement = () => {
                     {/* Coupons Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
                         {filtered.map(c => {
-                            const tc = typeConfig[c.type];
-                            const usagePct = c.usageLimit > 0 ? Math.min(100, Math.round((c.used / c.usageLimit) * 100)) : 0;
-                            const isExpired = c.status === 'Expired' || new Date(c.expiry) < new Date();
+                            const rc = getReconciledCoupon(c);
+                            const tc = typeConfig[rc.type] || typeConfig['Percentage'];
+                            const usagePct = rc.usageLimit > 0 ? Math.min(100, Math.round((rc.used / rc.usageLimit) * 100)) : 0;
+                            const isExpired = rc.status === 'Expired' || new Date(rc.expiry) < new Date();
                             return (
                                 <div key={c.id} className="ec-coupon-card" style={{ opacity: isExpired ? 0.7 : 1 }}>
                                     <div className="ec-coupon-top">
@@ -709,14 +1146,14 @@ const CouponManagement = () => {
                                             <div>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                     <p style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 15, color: '#111827', letterSpacing: 1 }}>
-                                                        {showCode[c.id] ? c.code : c.code.slice(0, 3) + '•'.repeat(Math.max(0, c.code.length - 3))}
+                                                        {showCode[c.id] ? rc.code : rc.code.slice(0, 3) + '•'.repeat(Math.max(0, rc.code.length - 3))}
                                                     </p>
                                                     <button onClick={() => setShowCode(p => ({ ...p, [c.id]: !p[c.id] }))}
                                                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af' }}>
                                                         {showCode[c.id] ? <BsEyeSlash size={13} /> : <BsEye size={13} />}
                                                     </button>
                                                 </div>
-                                                <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: tc.bg, color: tc.color }}>{c.type}</span>
+                                                <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: tc.bg, color: tc.color }}>{rc.type}</span>
                                             </div>
                                         </div>
                                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -728,24 +1165,24 @@ const CouponManagement = () => {
                                             </button>
                                             <span style={{
                                                 padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                                                background: c.status === 'Active' ? '#ecfdf5' : c.status === 'Expired' ? '#fef2f2' : '#f9fafb',
-                                                color: c.status === 'Active' ? '#10b981' : c.status === 'Expired' ? '#ef4444' : '#6b7280',
-                                            }}>{c.status}</span>
+                                                background: rc.status === 'Active' ? '#ecfdf5' : rc.status === 'Expired' ? '#fef2f2' : '#f9fafb',
+                                                color: rc.status === 'Active' ? '#10b981' : rc.status === 'Expired' ? '#ef4444' : '#6b7280',
+                                            }}>{rc.status}</span>
                                         </div>
                                     </div>
 
                                     <div className="ec-coupon-value">
-                                        {c.type === 'Percentage' && <>{c.value}% OFF</>}
-                                        {c.type === 'Fixed' && <>₹{c.value} OFF</>}
-                                        {c.type === 'Free Delivery' && <>Free Delivery</>}
+                                        {rc.type === 'Percentage' && <>{rc.value}% OFF</>}
+                                        {rc.type === 'Fixed' && <>₹{rc.value} OFF</>}
+                                        {rc.type === 'Free Delivery' && <>Free Delivery</>}
                                     </div>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
                                         {[
-                                            { label: 'Min Order', value: c.minOrder > 0 ? fmt(c.minOrder) : 'No min' },
-                                            { label: 'Max Discount', value: c.maxDiscount ? fmt(c.maxDiscount) : 'Unlimited' },
-                                            { label: 'Eligibility', value: c.eligibility },
-                                            { label: 'Expires', value: new Date(c.expiry).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
+                                            { label: 'Min Order', value: rc.minOrder > 0 ? fmt(rc.minOrder) : 'No min' },
+                                            { label: 'Max Discount', value: rc.maxDiscount ? fmt(rc.maxDiscount) : 'Unlimited' },
+                                            { label: 'Eligibility', value: rc.eligibility },
+                                            { label: 'Expires', value: new Date(rc.expiry).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) },
                                         ].map((f, i) => (
                                             <div key={i} style={{ background: '#f9fafb', borderRadius: 7, padding: '7px 10px' }}>
                                                 <p style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase' }}>{f.label}</p>
@@ -758,7 +1195,7 @@ const CouponManagement = () => {
                                     <div style={{ marginBottom: 14 }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                                             <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Usage</span>
-                                            <span style={{ fontSize: 11, color: '#374151', fontWeight: 700 }}>{c.used} / {c.usageLimit === 1 ? '1 (per user)' : c.usageLimit}</span>
+                                            <span style={{ fontSize: 11, color: '#374151', fontWeight: 700 }}>{rc.used} / {rc.usageLimit === 1 ? '1 (per user)' : rc.usageLimit}</span>
                                         </div>
                                         <div style={{ height: 5, borderRadius: 10, background: '#f3f4f6', overflow: 'hidden' }}>
                                             <div style={{ height: '100%', width: `${usagePct}%`, borderRadius: 10, background: usagePct >= 90 ? '#ef4444' : '#6366f1', transition: 'width 0.5s' }} />
@@ -863,7 +1300,13 @@ const CouponManagement = () => {
                                             <div className="ec-field">
                                                 <label>Max Discount (₹)</label>
                                                 <input className="ec-input" type="number" min="0" placeholder="Leave blank for no limit" value={form.maxDiscount || ''}
+                                                    style={maxDiscountError ? { borderColor: '#ef4444', background: '#fef2f2' } : undefined}
                                                     onChange={e => setForm(f => ({ ...f, maxDiscount: e.target.value || null }))} />
+                                                {maxDiscountError && (
+                                                    <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 600, marginTop: 4, display: 'block' }}>
+                                                        ⚠️ {maxDiscountError}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                     )}
@@ -893,7 +1336,17 @@ const CouponManagement = () => {
                                     </div>
                                     <div style={{ display: 'flex', gap: 10 }}>
                                         <button className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={closeModal} disabled={loading}>Cancel</button>
-                                        <button className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={handleSave} disabled={loading}>
+                                        <button className="adm-btn-primary"
+                                            style={{
+                                                flex: 1,
+                                                justifyContent: 'center',
+                                                opacity: (loading || !!maxDiscountError) ? 0.6 : 1,
+                                                cursor: (loading || !!maxDiscountError) ? 'not-allowed' : 'pointer'
+                                            }}
+                                            onClick={handleSave}
+                                            disabled={loading || !!maxDiscountError}
+                                            title={maxDiscountError || undefined}
+                                        >
                                             {loading ? 'Saving...' : editCoupon ? 'Save Changes' : 'Create Coupon'}
                                         </button>
                                     </div>

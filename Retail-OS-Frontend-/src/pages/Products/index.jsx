@@ -1,267 +1,640 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { inventoryService } from "../../services/inventoryService";
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
     BsChevronLeft, BsChevronRight, BsToggleOn, BsToggleOff, BsImage,
-    BsCheckSquareFill, BsStarFill, BsSlashCircleFill
+    BsStarFill
 } from 'react-icons/bs';
 import productService from "../../services/product";
+import categoryService from "../../services/categoryService";
+import apiClient from "../../api/axios";
 
-const CATEGORIES_LIST = [
-    'Electronics', 'Groceries', 'Apparel', 'Accessories',
-    'Home & Kitchen', 'Beauty', 'Sports', 'Books', 'Toys'
-];
+export const fetchDatabaseCategories = async () => {
+    try {
+        const res = await categoryService.getAll();
+        const body = res?.data ?? res;
+        const list = Array.isArray(body)
+            ? body
+            : Array.isArray(body?.data)
+                ? body.data
+                : Array.isArray(body?.items)
+                    ? body.items
+                    : [];
+        if (list.length > 0) {
+            return list
+                .map(c => ({
+                    id: Number(c.id ?? c.category_id),
+                    name: String(c.name ?? c.category_name ?? '').trim()
+                }))
+                .filter(c => Number.isInteger(c.id) && c.id > 0 && c.name);
+        }
+    } catch {
+        // Fallback to product categories endpoint
+    }
+
+    try {
+        const res = await productService.getCategories();
+        const body = res?.data ?? res;
+        const list = Array.isArray(body)
+            ? body
+            : Array.isArray(body?.data)
+                ? body.data
+                : Array.isArray(body?.items)
+                    ? body.items
+                    : [];
+        return list
+            .map(c => ({
+                id: Number(c.id ?? c.category_id),
+                name: String(c.name ?? c.category_name ?? '').trim()
+            }))
+            .filter(c => Number.isInteger(c.id) && c.id > 0 && c.name);
+    } catch {
+        return [];
+    }
+};
 
 const GST_RATES = ['0%', '5%', '12%', '18%', '28%'];
 const UNITS = ['Pcs', 'Kg', 'Ltr', 'Box', 'Set', 'Pair', 'Bag', 'Dozen'];
-
-const CATEGORY_IDS = {
-    Electronics: 1,
-    Groceries: 2,
-    Apparel: 3,
-    Accessories: 4,
-    "Home & Kitchen": 5,
-    Beauty: 6,
-    Sports: 7,
-    Books: 8,
-    Toys: 9,
-};
-
-const CATEGORY_NAMES = Object.fromEntries(
-    Object.entries(CATEGORY_IDS).map(([name, id]) => [id, name])
-);
 
 const PAGE_SIZE = 10;
 
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
 
-const getProductStock = (p) => {
-    if (p.stock !== undefined && p.stock !== null) {
-        return Number(p.stock) || 0;
+// Validate whether a string is a valid image URL, data URI, or backend image path
+const isValidImageUrl = (url) => {
+    if (!url || typeof url !== 'string') return false;
+    const trimmed = url.trim().replace(/^["']+|["']+$/g, '');
+    if (!trimmed) return false;
+
+    const lower = trimmed.toLowerCase();
+    if (
+        lower === 'null' ||
+        lower === 'undefined' ||
+        lower === '[object object]' ||
+        lower === 'none' ||
+        lower === 'n/a' ||
+        lower === 'false' ||
+        lower === 'true'
+    ) {
+        return false;
     }
 
-    if (p.quantity !== undefined && p.quantity !== null) {
-        return Number(p.quantity) || 0;
+    return true;
+};
+
+// Normalize image URL to an absolute, browser-loadable URL
+const normalizeImageUrl = (url) => {
+    if (!isValidImageUrl(url)) return null;
+    let trimmed = url.trim().replace(/^["']+|["']+$/g, '');
+
+    if (trimmed.startsWith('data:image/') || trimmed.startsWith('blob:')) {
+        return trimmed;
     }
 
-    if (p.inventory && !Array.isArray(p.inventory)) {
-        return Number(
-            p.inventory.stock ??
-            p.inventory.quantity ??
-            p.inventory.current_stock ??
-            0
-        ) || 0;
+    if (trimmed.startsWith('//')) {
+        return `https:${trimmed}`;
     }
 
-    if (Array.isArray(p.inventory)) {
-        return p.inventory.reduce((total, item) => {
-            return total + Number(
-                item.stock ??
-                item.quantity ??
-                item.current_stock ??
-                0
-            );
-        }, 0);
+    if (/^https?:\/\//i.test(trimmed)) {
+        return trimmed;
     }
 
-    return 0;
+    if (trimmed.startsWith('/') || trimmed.startsWith('uploads/') || trimmed.startsWith('media/') || trimmed.startsWith('static/') || trimmed.startsWith('images/')) {
+        const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+        return `https://api-testing.myretailos.com${cleanPath}`;
+    }
+
+    if (/^[a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+/i.test(trimmed)) {
+        return `https://${trimmed}`;
+    }
+
+    return trimmed;
+};
+
+// Safe date parser supporting ISO strings, YYYY-MM-DD, DD-MM-YYYY, DD/MM/YYYY, timestamps
+const parseDateSafe = (val) => {
+    if (!val) return null;
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+    if (typeof val === 'number') {
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? null : d;
+    }
+    if (typeof val !== 'string') return null;
+    const s = val.trim();
+    if (!s) return null;
+
+    // YYYY-MM-DD or YYYY/MM/DD
+    const ymd = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (ymd) {
+        const year = parseInt(ymd[1], 10);
+        const month = parseInt(ymd[2], 10) - 1;
+        const day = parseInt(ymd[3], 10);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+    }
+
+    // DD-MM-YYYY or DD/MM/YYYY
+    const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+    if (dmy) {
+        const day = parseInt(dmy[1], 10);
+        const month = parseInt(dmy[2], 10) - 1;
+        const year = parseInt(dmy[3], 10);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+    }
+
+    const standard = new Date(s);
+    if (!isNaN(standard.getTime())) return standard;
+
+    return null;
+};
+
+// Brand validation: accepts letters and numbers, allows spaces between words, forbids only special chars
+const validateBrandField = (value) => {
+    const trimmed = (value || '').trim();
+    if (!trimmed) {
+        return 'Brand is required';
+    }
+    if (trimmed.length < 2) {
+        return 'Brand must be at least 2 characters';
+    }
+    if (trimmed.length > 100) {
+        return 'Brand cannot exceed 100 characters';
+    }
+    if (!/[a-zA-Z0-9]/.test(trimmed)) {
+        return 'Brand cannot consist of only special characters';
+    }
+    if (/^\d+$/.test(trimmed)) {
+        return 'Brand cannot consist of only numbers';
+    }
+    if (!/^[a-zA-Z0-9\s&'.-]+$/.test(trimmed)) {
+        return 'Brand contains invalid characters';
+    }
+    return '';
+};
+
+// Manufacturing and Expiry cross-validation
+const validateDates = (mfgDateStr, expDateStr) => {
+    let mfgError = '';
+    let expError = '';
+
+    const today = new Date();
+    const todayZero = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+
+    let mfgDateObj = null;
+    let expDateObj = null;
+
+    if (mfgDateStr) {
+        mfgDateObj = parseDateSafe(mfgDateStr);
+        if (!mfgDateObj) {
+            mfgError = 'Please enter a valid manufacturing date';
+        } else {
+            const mfgZero = new Date(mfgDateObj.getFullYear(), mfgDateObj.getMonth(), mfgDateObj.getDate(), 0, 0, 0, 0);
+            if (mfgZero > todayZero) {
+                mfgError = 'Manufacturing date cannot be a future date.';
+            }
+        }
+    }
+
+    if (expDateStr) {
+        expDateObj = parseDateSafe(expDateStr);
+        if (!expDateObj) {
+            expError = 'Please enter a valid expiry date';
+        }
+    }
+
+    // Cross-date validation
+    if (mfgDateObj && expDateObj) {
+        const mfgZero = new Date(mfgDateObj.getFullYear(), mfgDateObj.getMonth(), mfgDateObj.getDate(), 0, 0, 0, 0);
+        const expZero = new Date(expDateObj.getFullYear(), expDateObj.getMonth(), expDateObj.getDate(), 0, 0, 0, 0);
+
+        if (mfgZero > expZero) {
+            mfgError = 'Manufacturing date cannot be later than expiry date.';
+            expError = 'Expiry date must be after manufacturing date.';
+        } else if (mfgZero.getTime() === expZero.getTime()) {
+            mfgError = 'Manufacturing date cannot be equal to expiry date.';
+            expError = 'Expiry date must be after manufacturing date.';
+        }
+    }
+
+    return { mfgError, expError };
 };
 
 const EMPTY_FORM = {
     name: '',
     sku: '',
-    category: 'Electronics',
+    category: '',
+    category_id: null,
     brand: '',
     barcode: '',
     unit: 'Pcs',
     mrp: '',
     sellingPrice: '',
     gst: '18%',
-    stock: '',
     hsnCode: '',
     status: true,
     featured: false,
     description: '',
-    minStock: 10,
+    imageUrl: '',
+    manufacturingDate: '',
     expiryDate: '',
 };
 
-const toPayload = (form) => ({
-    name: form.name,
-    sku: form.sku,
-    barcode: form.barcode,
-    category_id: CATEGORY_IDS[form.category] || 1,
-    brand: form.brand,
-    unit: form.unit,
-    mrp: String(Number(form.mrp) || 0),
-    price: String(Number(form.sellingPrice) || 0),
-    gst_rate: String(
-        Number(String(form.gst).replace('%', '')) || 0
-    ),
-    stock: Number(form.stock) || 0,
-    hsn_code: form.hsnCode,
-    is_active: Boolean(form.status),
-    featured: Boolean(form.featured),
-    description: form.description,
-    min_stock: Number(form.minStock) || 10,
+const STORAGE_KEY_META = 'retail_os_products_meta';
 
-    // Food/Grocery expiry
-    expiry_date: form.expiryDate || null,
+const getLocalMetaMap = () => {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY_META);
+        return raw ? JSON.parse(raw) : {};
+    } catch {
+        return {};
+    }
+};
 
-    variants: null,
-});
+const saveLocalProductMeta = (id, sku, meta) => {
+    try {
+        const map = getLocalMetaMap();
+        if (id) {
+            map[`id_${id}`] = { ...(map[`id_${id}`] || {}), ...meta };
+        }
+        if (sku) {
+            map[`sku_${String(sku).trim().toUpperCase()}`] = {
+                ...(map[`sku_${String(sku).trim().toUpperCase()}`] || {}),
+                ...meta
+            };
+        }
+        localStorage.setItem(STORAGE_KEY_META, JSON.stringify(map));
+    } catch (e) {
+        console.warn('Could not save local product meta', e);
+    }
+};
 
-export const ProductFormModal = ({
-    product,
-    onClose,
-    onSave,
-    existingProducts = []
-}) => {
-    const isNew = !product;
+const getLocalProductMeta = (id, sku) => {
+    try {
+        const map = getLocalMetaMap();
+        const byId = id ? map[`id_${id}`] : null;
+        const bySku = sku ? map[`sku_${String(sku).trim().toUpperCase()}`] : null;
+        return { ...(bySku || {}), ...(byId || {}) };
+    } catch {
+        return {};
+    }
+};
 
-    const [form, setForm] = useState(
-        product
-            ? {
-                ...EMPTY_FORM,
-                ...product,
+const removeLocalProductMeta = (id, sku) => {
+    try {
+        const map = getLocalMetaMap();
+        if (id) delete map[`id_${id}`];
+        if (sku) delete map[`sku_${String(sku).trim().toUpperCase()}`];
+        localStorage.setItem(STORAGE_KEY_META, JSON.stringify(map));
+    } catch (e) {
+        console.warn('Could not remove local product meta', e);
+    }
+};
 
-                sku: String(product.sku ?? ''),
+// Safe extractor for product image URL from API fields, variants, or local storage
+const getProductImageUrl = (p) => {
+    if (!p) return null;
+    const localMeta = getLocalProductMeta(p.id, p.sku);
+    const variants = (typeof p.variants === 'object' && p.variants !== null) ? p.variants : {};
 
-                hsnCode: String(
-                    product.hsn_code ??
-                    product.hsnCode ??
-                    ''
-                ),
-
-                sellingPrice:
-                    product.price ??
-                    product.sellingPrice ??
-                    '',
-
-                mrp:
-                    product.mrp ??
-                    product.mrp_price ??
-                    '',
-
-                brand: String(product.brand ?? ''),
-
-                barcode: String(product.barcode ?? ''),
-
-                name: String(product.name ?? ''),
-
-                description: String(
-                    product.description ?? ''
-                ),
-
-                category:
-                    CATEGORY_NAMES[product.category_id] ||
-                    product.category ||
-                    '',
-
-                gst:
-                    product.gst_rate != null
-                        ? `${Number(product.gst_rate)}%`
-                        : (product.gst || ''),
-
-                stock:
-                    product.stock ??
-                    product.quantity ??
-                    0,
-
-                status:
-                    product.is_active ??
-                    true,
-
-                featured:
-                    product.featured ??
-                    false,
-
-                unit:
-                    product.unit ||
-                    'Pcs',
-
-                minStock:
-                    product.min_stock ??
-                    10,
-
-                // Existing expiry date support
-                expiryDate:
-                    product.expiry_date ??
-                    product.expiryDate ??
-                    product.expiration_date ??
-                    product.expirationDate ??
-                    '',
-            }
-            : { ...EMPTY_FORM }
+    let raw = (
+        p.imageUrl ||
+        p.image_url ||
+        p.image ||
+        p.product_image ||
+        p.product_image_url ||
+        p.thumbnail ||
+        variants.image_url ||
+        variants.image ||
+        variants.imageUrl ||
+        localMeta.imageUrl ||
+        localMeta.image_url ||
+        null
     );
 
+    if (!raw && Array.isArray(p.images) && p.images.length > 0) {
+        const first = p.images[0];
+        raw = typeof first === 'string' ? first : (first?.image_url || first?.url || first?.src);
+    }
+
+    if (!raw || typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed === 'null' || trimmed === 'undefined' || trimmed === '[object Object]') return null;
+
+    return normalizeImageUrl(trimmed) || trimmed;
+};
+
+// Validate whether a string is a valid remote/server image URL (<= 500 chars)
+// Base64 data URLs and Blob URLs must NEVER be sent to the backend API as image_url
+const getValidRemoteImageUrl = (url) => {
+    if (!url || typeof url !== 'string') return null;
+    const trimmed = url.trim().replace(/^["']+|["']+$/g, '');
+    if (!trimmed) return null;
+    if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+        return null;
+    }
+    if (trimmed.length > 500) {
+        return null;
+    }
+    const lower = trimmed.toLowerCase();
+    if (
+        lower === 'null' ||
+        lower === 'undefined' ||
+        lower === '[object object]' ||
+        lower === 'none' ||
+        lower === 'n/a' ||
+        lower === 'false' ||
+        lower === 'true'
+    ) {
+        return null;
+    }
+    return trimmed;
+};
+
+// Payload builder for POST /api/v1/products (ProductCreate schema)
+const toCreatePayload = (form, categories = []) => {
+    let resolvedCategoryId = null;
+    if (form.category_id != null && Number.isInteger(Number(form.category_id)) && Number(form.category_id) > 0) {
+        resolvedCategoryId = Number(form.category_id);
+    } else if (form.category && Array.isArray(categories)) {
+        const matched = categories.find(c =>
+            String(c.id) === String(form.category) ||
+            (c.name && String(c.name).trim().toLowerCase() === String(form.category).trim().toLowerCase())
+        );
+        if (matched && Number.isInteger(Number(matched.id)) && Number(matched.id) > 0) {
+            resolvedCategoryId = Number(matched.id);
+        }
+    }
+
+    const validImageUrl = getValidRemoteImageUrl(form.imageUrl);
+
+    const metaVariants = {
+        ...((typeof form.variants === 'object' && form.variants !== null) ? form.variants : {}),
+        featured: Boolean(form.featured),
+        brand: form.brand?.trim() || '',
+        unit: form.unit || 'Pcs',
+        mrp: Number(form.mrp) || 0,
+        selling_price: Number(form.sellingPrice) || 0,
+        manufacturing_date: form.manufacturingDate || null,
+        expiry_date: form.expiryDate || null,
+    };
+
+    return {
+        name: form.name?.trim() || '',
+        sku: form.sku?.trim().toUpperCase() || '',
+        barcode: form.barcode?.trim() || null,
+        description: form.description?.trim() || null,
+        category_id: resolvedCategoryId,
+        hsn_code: form.hsnCode?.trim() || null,
+        gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
+        price: String(Number(form.sellingPrice) || 0),
+        cost_price: String(Number(form.mrp) || 0),
+        variants: metaVariants,
+        track_batch: false,
+        track_expiry: Boolean(form.expiryDate),
+        image_url: validImageUrl,
+    };
+};
+
+// Payload builder for PATCH /api/v1/products/{product_id} (ProductUpdate schema)
+const toUpdatePayload = (form, categories = [], existingProduct = null) => {
+    let resolvedCategoryId = null;
+    if (form.category_id != null && Number.isInteger(Number(form.category_id)) && Number(form.category_id) > 0) {
+        resolvedCategoryId = Number(form.category_id);
+    } else if (form.category && Array.isArray(categories)) {
+        const matched = categories.find(c =>
+            String(c.id) === String(form.category) ||
+            (c.name && String(c.name).trim().toLowerCase() === String(form.category).trim().toLowerCase())
+        );
+        if (matched && Number.isInteger(Number(matched.id)) && Number(matched.id) > 0) {
+            resolvedCategoryId = Number(matched.id);
+        }
+    }
+
+    // Determine final image_url:
+    // 1. If user clicked remove image: null
+    // 2. If user entered a valid remote URL: valid remote URL
+    // 3. If user selected a new local file (Base64 preview): NEVER send Base64; send null
+    // 4. If image was unchanged: preserve existing remote server URL if present
+    let finalImageUrl = null;
+    if (form.imageRemoved) {
+        finalImageUrl = null;
+    } else if (form.imageUrl && getValidRemoteImageUrl(form.imageUrl)) {
+        finalImageUrl = getValidRemoteImageUrl(form.imageUrl);
+    } else if (!form.hasNewFile && existingProduct) {
+        finalImageUrl = getValidRemoteImageUrl(existingProduct.image_url || existingProduct.imageUrl);
+    }
+
+    const metaVariants = {
+        ...((typeof form.variants === 'object' && form.variants !== null) ? form.variants : {}),
+        featured: Boolean(form.featured),
+        brand: form.brand?.trim() || '',
+        unit: form.unit || 'Pcs',
+        mrp: Number(form.mrp) || 0,
+        selling_price: Number(form.sellingPrice) || 0,
+        manufacturing_date: form.manufacturingDate || null,
+        expiry_date: form.expiryDate || null,
+    };
+
+    return {
+        name: form.name?.trim() || null,
+        barcode: form.barcode?.trim() || null,
+        description: form.description?.trim() || null,
+        category_id: resolvedCategoryId,
+        hsn_code: form.hsnCode?.trim() || null,
+        gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
+        price: String(Number(form.sellingPrice) || 0),
+        cost_price: String(Number(form.mrp) || 0),
+        variants: metaVariants,
+        track_batch: false,
+        track_expiry: Boolean(form.expiryDate),
+        image_url: finalImageUrl,
+        is_active: Boolean(form.status),
+    };
+};
+
+const toPayload = (form, categories = [], existingProduct = null) => {
+    return existingProduct
+        ? toUpdatePayload(form, categories, existingProduct)
+        : toCreatePayload(form, categories);
+};
+
+export const ProductFormModal = ({ product, onClose, onSave, existingProducts = [], categories = [] }) => {
+    const isNew = !product;
+
+    // Build edit-form state — mapped from actual API response fields
+    const localMeta = product ? getLocalProductMeta(product.id, product.sku) : {};
+    const variants = (typeof product?.variants === 'object' && product?.variants !== null) ? product.variants : {};
+
+    const initialCatObj = product
+        ? (categories.find(c => c.id === product.category_id) || categories.find(c => c.name?.toLowerCase() === product.category?.toLowerCase()))
+        : (categories[0] || null);
+
+    const initialCategoryId = product
+        ? (product.category_id ?? initialCatObj?.id ?? null)
+        : (initialCatObj?.id ?? null);
+
+    const initialCategoryName = product
+        ? (initialCatObj?.name || product.category || '')
+        : (initialCatObj?.name || '');
+
+    const existingServerImage = getValidRemoteImageUrl(product?.image_url || product?.imageUrl || variants.image_url || localMeta.imageUrl);
+    const initialPreview = normalizeImageUrl(product?.imageUrl ?? product?.image_url ?? variants.image_url ?? localMeta.imageUrl ?? '') || '';
+
+    const editInit = product ? {
+        ...EMPTY_FORM,
+        name: String(product.name ?? ''),
+        sku: String(product.sku ?? ''),
+        hsnCode: String(product.hsn_code ?? product.hsnCode ?? ''),
+        sellingPrice: product.sellingPrice ?? product.price ?? product.selling_price ?? '',
+        mrp: product.mrp ?? product.cost_price ?? product.mrp_price ?? '',
+        brand: String(product.brand ?? product.brand_name ?? variants.brand ?? localMeta.brand ?? ''),
+        barcode: String(product.barcode ?? ''),
+        description: String(product.description ?? ''),
+        category: initialCategoryName,
+        category_id: initialCategoryId,
+        gst: product.gst_rate != null
+            ? `${Number(product.gst_rate)}%`
+            : (product.gst || '18%'),
+        unit: product.unit || 'Pcs',
+        status: Boolean(product.is_active ?? product.status ?? true),
+        featured: Boolean(
+            product.featured === true ||
+            product.featured === 1 ||
+            product.featured === 'true' ||
+            variants.featured === true ||
+            variants.featured === 1 ||
+            variants.featured === 'true' ||
+            localMeta.featured === true
+        ),
+        imageUrl: existingServerImage || '',
+        imagePreview: initialPreview,
+        selectedFile: null,
+        hasNewFile: false,
+        imageRemoved: false,
+        manufacturingDate: product.manufacturing_date ?? product.manufacturingDate ?? variants.manufacturing_date ?? localMeta.manufacturingDate ?? '',
+        expiryDate: product.expiry_date ?? product.expiryDate ?? product.expiration_date ?? product.expirationDate ?? variants.expiry_date ?? localMeta.expiryDate ?? '',
+        variants: variants,
+    } : {
+        ...EMPTY_FORM,
+        category: initialCategoryName,
+        category_id: initialCategoryId,
+        imageUrl: '',
+        imagePreview: '',
+        selectedFile: null,
+        hasNewFile: false,
+        imageRemoved: false,
+    };
+
+    const [form, setForm] = useState(editInit);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
+    useEffect(() => {
+        if (!product && !form.category_id && categories.length > 0) {
+            setForm(f => ({
+                ...f,
+                category_id: categories[0].id,
+                category: categories[0].name
+            }));
+        }
+    }, [categories, product]);
+
     const set = (k, v) => {
-        setForm(f => ({
-            ...f,
-            [k]: v
-        }));
+        setForm(f => {
+            const nextForm = { ...f, [k]: v };
+            return nextForm;
+        });
 
-        setErrors(prev => ({
-            ...prev,
-            [k]: ''
-        }));
+        // Real-time validation for brand, manufacturing date, and expiry date
+        setErrors(prev => {
+            const next = { ...prev };
+
+            if (k === 'brand') {
+                next.brand = validateBrandField(v);
+            } else if (k === 'category') {
+                next.category = '';
+                const isGroceries = String(v || '').trim().toLowerCase() === 'groceries';
+                if (isGroceries && !String(form.expiryDate || '').trim()) {
+                    next.expiryDate = 'Expiry date is required for food/grocery products.';
+                } else if (!isGroceries && next.expiryDate === 'Expiry date is required for food/grocery products.') {
+                    next.expiryDate = '';
+                }
+            } else if (k === 'manufacturingDate') {
+                const { mfgError, expError } = validateDates(v, form.expiryDate);
+                next.manufacturingDate = mfgError;
+                const isGroceries = String(form.category || '').trim().toLowerCase() === 'groceries';
+                next.expiryDate = (isGroceries && !String(form.expiryDate || '').trim())
+                    ? 'Expiry date is required for food/grocery products.'
+                    : expError;
+            } else if (k === 'expiryDate') {
+                const isGroceries = String(form.category || '').trim().toLowerCase() === 'groceries';
+                if (isGroceries && !String(v || '').trim()) {
+                    next.expiryDate = 'Expiry date is required for food/grocery products.';
+                } else {
+                    const { mfgError, expError } = validateDates(form.manufacturingDate, v);
+                    next.manufacturingDate = mfgError;
+                    next.expiryDate = expError;
+                }
+            } else {
+                next[k] = '';
+            }
+
+            return next;
+        });
     };
-
     const SKU_REGEX = /^SKU-\d{3,6}$/;
 
-    const validateSKUFormat = (sku) => {
-        const value = sku.trim().toUpperCase();
+const validateSKUFormat = (sku) => {
+    const value = sku.trim().toUpperCase();
 
-        if (!value) {
-            return 'SKU is required';
-        }
+    if (!value) {
+        return 'SKU is required';
+    }
 
-        if (!SKU_REGEX.test(value)) {
-            return 'SKU must be in format SKU-001 with 3 to 6 digits';
-        }
+    if (!SKU_REGEX.test(value)) {
+        return 'SKU must be in format SKU-001 with 3 to 6 digits';
+    }
 
-        if (/^SKU-0+$/.test(value)) {
-            return 'SKU cannot be all zeros';
-        }
+    if (/^SKU-0+$/.test(value)) {
+        return 'SKU cannot be all zeros';
+    }
 
-        return '';
-    };
-
+    return '';
+};
     const validateForm = () => {
         const newErrors = {};
 
         if (!form.name.trim()) {
             newErrors.name = 'Product name is required';
         }
-
         const normalizedSKU = form.sku.trim().toUpperCase();
 
-        const skuError = validateSKUFormat(normalizedSKU);
+const skuError = validateSKUFormat(normalizedSKU);
 
-        if (skuError) {
-            newErrors.sku = skuError;
-        } else {
-            const duplicateSKU = existingProducts.some(p => {
-                const existingSKU =
-                    (p.sku || '').trim().toUpperCase();
+if (skuError) {
+    newErrors.sku = skuError;
+} else {
+   const duplicateSKU = existingProducts.some(p => {
+        const existingSKU = (p.sku || '').trim().toUpperCase();
 
-                return (
-                    existingSKU === normalizedSKU &&
-                    p.id !== product?.id
-                );
-            });
+        return (
+            existingSKU === normalizedSKU &&
+            p.id !== product?.id
+        );
+    });
 
-            if (duplicateSKU) {
-                newErrors.sku =
-                    'SKU already exists. Please use a unique SKU.';
-            }
+    if (duplicateSKU) {
+        newErrors.sku = 'SKU already exists. Please use a unique SKU.';
+    }
+}
+
+        if (!form.category && form.category_id == null && categories.length > 0) {
+            newErrors.category = 'Category is required';
         }
 
-        if (!form.category) {
-            newErrors.category = 'Category is required';
+        const brandErr = validateBrandField(form.brand);
+        if (brandErr) {
+            newErrors.brand = brandErr;
         }
 
         if (!form.unit) {
@@ -271,31 +644,24 @@ export const ProductFormModal = ({
         if (!form.barcode.trim()) {
             newErrors.barcode = 'Barcode is required';
         } else if (!/^\d{13}$/.test(form.barcode.trim())) {
-            newErrors.barcode =
-                'Barcode must be exactly 13 digits';
+            newErrors.barcode = 'Barcode must be exactly 13 digits';
         }
 
         if (!form.hsnCode.trim()) {
             newErrors.hsnCode = 'HSN Code is required';
         } else if (!/^\d{4}$/.test(form.hsnCode.trim())) {
-            newErrors.hsnCode =
-                'HSN Code must be exactly 4 digits';
+            newErrors.hsnCode = 'HSN Code must be exactly 4 digits';
         }
 
         const mrp = Number(form.mrp);
         const sellingPrice = Number(form.sellingPrice);
 
         if (form.mrp === '' || mrp <= 0) {
-            newErrors.mrp =
-                'MRP must be greater than 0';
+            newErrors.mrp = 'MRP must be greater than 0';
         }
 
-        if (
-            form.sellingPrice === '' ||
-            sellingPrice <= 0
-        ) {
-            newErrors.sellingPrice =
-                'Selling price must be greater than 0';
+        if (form.sellingPrice === '' || sellingPrice <= 0) {
+            newErrors.sellingPrice = 'Selling price must be greater than 0';
         }
 
         if (
@@ -303,56 +669,35 @@ export const ProductFormModal = ({
             form.sellingPrice !== '' &&
             mrp <= sellingPrice
         ) {
-            newErrors.mrp =
-                'MRP must be greater than selling price';
+            newErrors.mrp = 'MRP must be greater than selling price';
         }
 
         if (!form.gst) {
-            newErrors.gst =
-                'GST rate is required';
+            newErrors.gst = 'GST rate is required';
         }
 
+        // Food / Grocery expiry validation
         if (
-            form.stock === '' ||
-            Number(form.stock) < 0
-        ) {
-            newErrors.stock =
-                'Stock cannot be negative';
-        }
-
-        if (
-            form.minStock === '' ||
-            Number(form.minStock) < 0
-        ) {
-            newErrors.minStock =
-                'Minimum stock cannot be negative';
-        }
-
-        // ==========================================
-        // FOOD / GROCERY EXPIRY VALIDATION
-        // ==========================================
-        if (
-            form.category === 'Groceries' &&
+            String(form.category || '').trim().toLowerCase() === 'groceries' &&
             !String(form.expiryDate || '').trim()
         ) {
-            newErrors.expiryDate =
-                'Expiry date is required for food/grocery products.';
+            newErrors.expiryDate = 'Expiry date is required for food/grocery products.';
         }
 
-        // Validate expiry date when provided
-        if (form.expiryDate) {
-            const expiry = new Date(form.expiryDate);
-
-            if (Number.isNaN(expiry.getTime())) {
-                newErrors.expiryDate =
-                    'Please enter a valid expiry date.';
-            }
+        // Manufacturing Date & Expiry Date validation
+        const { mfgError, expError } = validateDates(form.manufacturingDate, form.expiryDate);
+        if (mfgError) {
+            newErrors.manufacturingDate = mfgError;
+        }
+        if (expError && !newErrors.expiryDate) {
+            newErrors.expiryDate = expError;
         }
 
         setErrors(newErrors);
-
         return Object.keys(newErrors).length === 0;
-    };
+    }; 
+
+    const [featuredConfirm, setFeaturedConfirm] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -361,30 +706,31 @@ export const ProductFormModal = ({
             return;
         }
 
+        // If featured is being turned ON, show confirmation dialog first
+        const existingFeatured = product ? Boolean(product.featured) : false;
+        if (form.featured && !existingFeatured) {
+            setFeaturedConfirm(true);
+            return;
+        }
+
+        await doSave();
+    };
+
+    const doSave = async () => {
         setSaving(true);
-
         try {
-            await onSave(
-                toPayload(form),
-                product?.id
-            );
-
+            const payload = isNew
+                ? toCreatePayload(form, categories)
+                : toUpdatePayload(form, categories, product);
+            await onSave(payload, product?.id, form, product);
             onClose();
         } catch (err) {
-            const detail =
-                err?.response?.data?.detail;
-
+            const detail = err?.response?.data?.detail;
             alert(
                 'Could not save product: ' +
-                (
-                    typeof detail === 'string'
-                        ? detail
-                        : JSON.stringify(
-                            detail ||
-                            err?.message ||
-                            err
-                        )
-                )
+                (typeof detail === 'string'
+                    ? detail
+                    : JSON.stringify(detail || err?.message || err))
             );
         } finally {
             setSaving(false);
@@ -392,178 +738,115 @@ export const ProductFormModal = ({
     };
 
     return (
-        <div
-            className="ec-modal-overlay"
-            onClick={onClose}
-        >
+        <>
+        {featuredConfirm && (
+            <div className="ec-modal-overlay" style={{ zIndex: 2000 }}>
+                <div className="ec-modal" style={{ maxWidth: 420, width: '90%', padding: 28 }} onClick={e => e.stopPropagation()}>
+                    <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>⭐</div>
+                    <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827', textAlign: 'center', margin: '0 0 8px' }}>
+                        Mark as Featured Product?
+                    </h3>
+                    <p style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' }}>
+                        Do you want to mark this product as a featured product? It will be displayed in the Featured Products section and included in the Featured Products KPI count.
+                    </p>
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                        <button
+                            className="adm-btn-secondary"
+                            style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+                            onClick={() => { set('featured', false); setFeaturedConfirm(false); }}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="adm-btn-primary"
+                            style={{ padding: '9px 20px', borderRadius: 8, background: '#eab308', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}
+                            onClick={() => { setFeaturedConfirm(false); doSave(); }}
+                        >
+                            ⭐ Mark as Featured
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+        <div className="ec-modal-overlay" onClick={onClose}>
             <div
                 className="ec-modal"
-                style={{
-                    maxWidth: 720,
-                    width: '90%'
-                }}
+                style={{ maxWidth: 720, width: '90%' }}
                 onClick={e => e.stopPropagation()}
             >
                 <div className="ec-modal-header">
                     <div>
-                        <h3
-                            style={{
-                                fontWeight: 700,
-                                fontSize: 16,
-                                color: '#111827'
-                            }}
-                        >
-                            {
-                                isNew
-                                    ? 'Add New Product'
-                                    : `Edit: ${product.name}`
-                            }
+                        <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>
+                            {isNew ? 'Add New Product' : `Edit: ${product.name}`}
                         </h3>
-
-                        <p
-                            style={{
-                                fontSize: 12,
-                                color: '#9ca3af',
-                                marginTop: 2
-                            }}
-                        >
+                        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
                             Fill in all required product details
                         </p>
                     </div>
-
-                    <button
-                        className="ec-modal-close"
-                        onClick={onClose}
-                    >
-                        ✕
-                    </button>
+                    <button className="ec-modal-close" onClick={onClose}>✕</button>
                 </div>
 
-                <form
-                    onSubmit={handleSubmit}
-                    style={{
-                        padding: 20,
-                        display: 'grid',
-                        gap: 14
-                    }}
-                >
+                <form onSubmit={handleSubmit} style={{ padding: 20, display: 'grid', gap: 14 }}>
                     {/* Product Name + SKU */}
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: 14
-                        }}
-                    >
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151'
-                                }}
-                            >
-                                Product Name
-                                <span style={{ color: 'red' }}>
-                                    {' '}*
-                                </span>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                Product Name <span style={{ color: 'red' }}>*</span>
                             </label>
-
                             <input
                                 className="adm-search"
                                 value={form.name}
-                                onChange={e =>
-                                    set(
-                                        'name',
-                                        e.target.value
-                                    )
-                                }
+                                onChange={e => set('name', e.target.value)}
                                 placeholder="e.g. Wireless Earbuds Pro"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
-
                             {errors.name && (
-                                <div
-                                    style={{
-                                        color: '#dc2626',
-                                        fontSize: 11,
-                                        marginTop: 3
-                                    }}
-                                >
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.name}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151'
-                                }}
-                            >
-                                SKU
-                                <span style={{ color: 'red' }}>
-                                    {' '}*
-                                </span>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                SKU <span style={{ color: 'red' }}>*</span>
                             </label>
-
                             <input
                                 className="adm-search"
                                 value={form.sku}
-                                onChange={e => {
-                                    let value =
-                                        e.target.value.toUpperCase();
+                               onChange={e => {
+    let value = e.target.value.toUpperCase();
 
-                                    if (!value.startsWith('SKU-')) {
-                                        value =
-                                            'SKU-' +
-                                            value.replace(
-                                                /^SKU-?/i,
-                                                ''
-                                            );
-                                    }
+    if (!value.startsWith('SKU-')) {
+        value = 'SKU-' + value.replace(/^SKU-?/i, '');
+    }
 
-                                    const digits =
-                                        value
-                                            .slice(4)
-                                            .replace(/\D/g, '')
-                                            .slice(0, 6);
+    const digits = value
+        .slice(4)
+        .replace(/\D/g, '')
+        .slice(0, 6);
 
-                                    set(
-                                        'sku',
-                                        'SKU-' + digits
-                                    );
-                                }}
+    set('sku', 'SKU-' + digits);
+}}
                                 placeholder="e.g. SKU-001"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
-
                             {errors.sku && (
-                                <div
-                                    style={{
-                                        color: '#dc2626',
-                                        fontSize: 11,
-                                        marginTop: 3
-                                    }}
-                                >
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.sku}
                                 </div>
                             )}
@@ -571,133 +854,89 @@ export const ProductFormModal = ({
                     </div>
 
                     {/* Category + Brand */}
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: 14
-                        }}
-                    >
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151'
-                                }}
-                            >
-                                Category
-                                <span style={{ color: 'red' }}>
-                                    {' '}*
-                                </span>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                Category <span style={{ color: 'red' }}>*</span>
                             </label>
-
                             <select
-                                value={form.category}
-                                onChange={e =>
-                                    set(
-                                        'category',
-                                        e.target.value
-                                    )
-                                }
+                                value={form.category_id != null ? String(form.category_id) : (categories.find(c => c.name === form.category)?.id != null ? String(categories.find(c => c.name === form.category).id) : '')}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    const selId = val ? Number(val) : null;
+                                    const selCat = categories.find(c => String(c.id) === String(val));
+                                    const catName = selCat ? selCat.name : val;
+                                    setForm(f => ({ ...f, category: catName, category_id: selId }));
+                                    set('category', catName);
+                                }}
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             >
-                                {CATEGORIES_LIST.map(c => (
-                                    <option
-                                        key={c}
-                                        value={c}
-                                    >
-                                        {c}
-                                    </option>
-                                ))}
+                                {categories.length === 0 ? (
+                                    <option value="" disabled>No categories available</option>
+                                ) : (
+                                    categories.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))
+                                )}
                             </select>
-
                             {errors.category && (
-                                <div
-                                    style={{
-                                        color: '#dc2626',
-                                        fontSize: 11,
-                                        marginTop: 3
-                                    }}
-                                >
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.category}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151'
-                                }}
-                            >
-                                Brand
+                            <label htmlFor="product-brand-input" style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                Brand <span style={{ color: 'red' }}>*</span>
                             </label>
-
                             <input
+                                id="product-brand-input"
+                                name="brand"
                                 className="adm-search"
                                 value={form.brand}
-                                onChange={e =>
-                                    set(
-                                        'brand',
-                                        e.target.value
-                                    )
-                                }
-                                placeholder="Brand name"
+                                onChange={e => set('brand', e.target.value)}
+                                onBlur={() => {
+                                    setErrors(prev => ({
+                                        ...prev,
+                                        brand: validateBrandField(form.brand)
+                                    }));
+                                }}
+                                placeholder="e.g. Nike, Nike123, ABC 123"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
+                                    border: errors.brand ? '1px solid #dc2626' : '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
+                            {errors.brand && (
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                    {errors.brand}
+                                </div>
+                            )}
                         </div>
                     </div>
 
                     {/* Barcode + Unit */}
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: 14
-                        }}
-                    >
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#01050c'
-                                }}
-                            >
-                                Barcode
-                                <span style={{ color: 'red' }}>
-                                    {' '}*
-                                </span>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#01050c' }}>
+                                Barcode <span style={{ color: 'red' }}>*</span>
                             </label>
-
                             <input
                                 className="adm-search"
                                 value={form.barcode}
-                                onChange={e =>
-                                    set(
-                                        'barcode',
-                                        e.target.value
-                                    )
-                                }
+                                onChange={e => set('barcode', e.target.value)}
                                 placeholder="EAN/UPC Barcode"
                                 inputMode="numeric"
                                 maxLength={13}
@@ -706,72 +945,39 @@ export const ProductFormModal = ({
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
-
                             {errors.barcode && (
-                                <div
-                                    style={{
-                                        color: '#dc2626',
-                                        fontSize: 11,
-                                        marginTop: 3
-                                    }}
-                                >
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.barcode}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151'
-                                }}
-                            >
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
                                 Unit
                             </label>
-
                             <select
                                 value={form.unit}
-                                onChange={e =>
-                                    set(
-                                        'unit',
-                                        e.target.value
-                                    )
-                                }
+                                onChange={e => set('unit', e.target.value)}
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             >
                                 {UNITS.map(u => (
-                                    <option
-                                        key={u}
-                                        value={u}
-                                    >
-                                        {u}
-                                    </option>
+                                    <option key={u} value={u}>{u}</option>
                                 ))}
                             </select>
-
                             {errors.unit && (
-                                <div
-                                    style={{
-                                        color: '#dc2626',
-                                        fontSize: 11,
-                                        marginTop: 3
-                                    }}
-                                >
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.unit}
                                 </div>
                             )}
@@ -779,36 +985,15 @@ export const ProductFormModal = ({
                     </div>
 
                     {/* HSN + MRP */}
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: 14
-                        }}
-                    >
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151'
-                                }}
-                            >
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
                                 HSN Code
-                                <span style={{ color: 'red' }}>
-                                    {' '}*
-                                </span>
                             </label>
-
                             <input
                                 className="adm-search"
                                 value={form.hsnCode}
-                                onChange={e =>
-                                    set(
-                                        'hsnCode',
-                                        e.target.value
-                                    )
-                                }
+                                onChange={e => set('hsnCode', e.target.value)}
                                 placeholder="HSN/SAC Code"
                                 inputMode="numeric"
                                 maxLength={4}
@@ -817,369 +1002,303 @@ export const ProductFormModal = ({
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
-
                             {errors.hsnCode && (
-                                <div
-                                    style={{
-                                        color: '#dc2626',
-                                        fontSize: 11,
-                                        marginTop: 3
-                                    }}
-                                >
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.hsnCode}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151'
-                                }}
-                            >
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
                                 MRP (₹)
                             </label>
-
                             <input
                                 type="number"
                                 min="0"
                                 value={form.mrp}
-                                onChange={e =>
-                                    set(
-                                        'mrp',
-                                        e.target.value
-                                    )
-                                }
+                                onChange={e => set('mrp', e.target.value)}
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
-
                             {errors.mrp && (
-                                <div
-                                    style={{
-                                        color: '#dc2626',
-                                        fontSize: 11,
-                                        marginTop: 3
-                                    }}
-                                >
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.mrp}
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Selling Price + GST */}
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: 14
-                        }}
-                    >
+                    {/* Selling Price + GST Rate */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151'
-                                }}
-                            >
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
                                 Selling Price (₹)
                             </label>
-
                             <input
                                 className="ec-input"
                                 type="number"
                                 value={form.sellingPrice}
-                                onChange={e =>
-                                    set(
-                                        'sellingPrice',
-                                        e.target.value
-                                    )
-                                }
+                                onChange={e => set('sellingPrice', e.target.value)}
                                 placeholder="0"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             />
-
                             {errors.sellingPrice && (
-                                <div
-                                    style={{
-                                        color: '#dc2626',
-                                        fontSize: 11,
-                                        marginTop: 3
-                                    }}
-                                >
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.sellingPrice}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151'
-                                }}
-                            >
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
                                 GST Rate
                             </label>
-
                             <select
                                 value={form.gst}
-                                onChange={e =>
-                                    set(
-                                        'gst',
-                                        e.target.value
-                                    )
-                                }
+                                onChange={e => set('gst', e.target.value)}
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
+                                    border: '1px solid #e5e7eb',
                                     boxSizing: 'border-box'
                                 }}
                             >
                                 {GST_RATES.map(g => (
-                                    <option
-                                        key={g}
-                                        value={g}
-                                    >
-                                        {g}
-                                    </option>
+                                    <option key={g} value={g}>{g}</option>
                                 ))}
                             </select>
-
                             {errors.gst && (
-                                <div
-                                    style={{
-                                        color: '#dc2626',
-                                        fontSize: 11,
-                                        marginTop: 3
-                                    }}
-                                >
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.gst}
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Stock + Min Stock */}
-                    <div
-                        style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 1fr',
-                            gap: 14
-                        }}
-                    >
-                        <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151'
-                                }}
-                            >
-                                Stock
-                            </label>
 
+                    {/* Manufacturing Date + Expiry Date */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                        <div>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                Manufacturing Date
+                            </label>
                             <input
-                                type="number"
-                                min="0"
-                                value={form.stock}
-                                onChange={e =>
-                                    set(
-                                        'stock',
-                                        e.target.value
-                                    )
-                                }
+                                type="date"
+                                value={form.manufacturingDate}
+                                onChange={e => set('manufacturingDate', e.target.value)}
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
+                                    border: errors.manufacturingDate ? '1px solid #dc2626' : '1px solid #e5e7eb',
+                                    boxSizing: 'border-box',
+                                    fontSize: 13,
+                                    color: '#111827'
                                 }}
                             />
-
-                            {errors.stock && (
-                                <div
-                                    style={{
-                                        color: '#dc2626',
-                                        fontSize: 11,
-                                        marginTop: 3
-                                    }}
-                                >
-                                    {errors.stock}
+                            {errors.manufacturingDate && (
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                    {errors.manufacturingDate}
                                 </div>
                             )}
                         </div>
 
                         <div>
-                            <label
-                                style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151'
-                                }}
-                            >
-                                Min Stock Alert
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                Expiry Date
+                                {form.category === 'Groceries' && (
+                                    <span style={{ color: 'red' }}> *</span>
+                                )}
                             </label>
-
                             <input
-                                type="number"
-                                min="0"
-                                value={form.minStock}
-                                onChange={e =>
-                                    set(
-                                        'minStock',
-                                        e.target.value
-                                    )
-                                }
+                                type="date"
+                                value={form.expiryDate}
+                                onChange={e => set('expiryDate', e.target.value)}
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
                                     padding: '8px 10px',
                                     borderRadius: 6,
-                                    border:
-                                        '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
+                                    border: errors.expiryDate ? '1px solid #dc2626' : '1px solid #e5e7eb',
+                                    boxSizing: 'border-box',
+                                    fontSize: 13,
+                                    color: '#111827'
                                 }}
                             />
-
-                            {errors.minStock && (
-                                <div
-                                    style={{
-                                        color: '#dc2626',
-                                        fontSize: 11,
-                                        marginTop: 3
-                                    }}
-                                >
-                                    {errors.minStock}
+                            {form.category === 'Groceries' && (
+                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
+                                    Expiry date is mandatory for food/grocery products.
+                                </div>
+                            )}
+                            {errors.expiryDate && (
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                    {errors.expiryDate}
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* EXPIRY DATE */}
+                    {/* Product Image URL or File Upload (Optional) */}
                     <div>
-                        <label
-                            style={{
-                                fontSize: 12,
-                                fontWeight: 600,
-                                color: '#374151'
-                            }}
-                        >
-                            Expiry Date
-
-                            {form.category === 'Groceries' && (
-                                <span style={{ color: 'red' }}>
-                                    {' '}*
-                                </span>
-                            )}
+                        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                            Product Image <span style={{ color: '#9ca3af', fontWeight: 400 }}>(URL or choose file)</span>
                         </label>
-
-                        <input
-                            type="date"
-                            value={form.expiryDate}
-                            onChange={e =>
-                                set(
-                                    'expiryDate',
-                                    e.target.value
-                                )
-                            }
-                            style={{
-                                width: '100%',
-                                marginTop: 4,
-                                padding: '10px',
-                                borderRadius: 6,
-                                border:
-                                    '1px solid #e5e7eb',
-                                boxSizing: 'border-box'
-                            }}
-                        />
-
-                        {form.category === 'Groceries' && (
-                            <div
-                                style={{
-                                    fontSize: 11,
-                                    color: '#6b7280',
-                                    marginTop: 3
+                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                            <input
+                                className="adm-search"
+                                value={form.imageUrl || ''}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    setForm(f => ({
+                                        ...f,
+                                        imageUrl: val,
+                                        imagePreview: val,
+                                        selectedFile: null,
+                                        hasNewFile: false,
+                                        imageRemoved: false
+                                    }));
                                 }}
-                            >
-                                Expiry date is mandatory for
-                                food/grocery products.
-                            </div>
-                        )}
-
-                        {errors.expiryDate && (
-                            <div
+                                placeholder="Paste image URL (https://...)"
                                 style={{
-                                    color: '#dc2626',
-                                    fontSize: 11,
-                                    marginTop: 3
+                                    flex: 1,
+                                    padding: '9px 10px',
+                                    borderRadius: 6,
+                                    border: '1px solid #e5e7eb',
+                                    boxSizing: 'border-box',
+                                    fontSize: 13
                                 }}
+                            />
+                            <label
+                                style={{
+                                    padding: '9px 14px',
+                                    background: '#f9fafb',
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: 6,
+                                    cursor: 'pointer',
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#374151',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    whiteSpace: 'nowrap',
+                                    userSelect: 'none'
+                                }}
+                                title="Upload image from computer"
                             >
-                                {errors.expiryDate}
+                                📁 Choose File
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    style={{ display: 'none' }}
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        if (!file.type.startsWith('image/')) {
+                                            alert('Please select a valid image file (PNG, JPG, WEBP, etc.)');
+                                            return;
+                                        }
+                                        if (file.size > 2 * 1024 * 1024) {
+                                            alert('Image file size should be less than 2MB');
+                                            return;
+                                        }
+                                        const reader = new FileReader();
+                                        reader.onload = (ev) => {
+                                            if (ev.target?.result) {
+                                                setForm(f => ({
+                                                    ...f,
+                                                    imagePreview: ev.target.result,
+                                                    selectedFile: file,
+                                                    hasNewFile: true,
+                                                    imageRemoved: false,
+                                                    imageUrl: ''
+                                                }));
+                                            }
+                                        };
+                                        reader.readAsDataURL(file);
+                                    }}
+                                />
+                            </label>
+                        </div>
+                        {Boolean(form.imagePreview) && (
+                            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <img
+                                    src={normalizeImageUrl(form.imagePreview) || form.imagePreview}
+                                    alt="Selected preview"
+                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 6,
+                                        objectFit: 'cover',
+                                        border: '1px solid #e5e7eb',
+                                        display: 'block'
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setForm(f => ({
+                                            ...f,
+                                            imageUrl: '',
+                                            imagePreview: '',
+                                            selectedFile: null,
+                                            hasNewFile: false,
+                                            imageRemoved: true
+                                        }));
+                                    }}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#ef4444',
+                                        fontSize: 12,
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                        textDecoration: 'underline'
+                                    }}
+                                >
+                                    Remove image
+                                </button>
                             </div>
                         )}
                     </div>
 
                     {/* Description */}
                     <div>
-                        <label
-                            style={{
-                                fontSize: 12,
-                                fontWeight: 600,
-                                color: '#374151'
-                            }}
-                        >
+                        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
                             Description
                         </label>
-
                         <textarea
                             value={form.description}
-                            onChange={e =>
-                                set(
-                                    'description',
-                                    e.target.value
-                                )
-                            }
+                            onChange={e => set('description', e.target.value)}
                             rows={3}
                             style={{
                                 width: '100%',
                                 marginTop: 4,
                                 padding: '8px 10px',
                                 borderRadius: 6,
-                                border:
-                                    '1px solid #e5e7eb',
+                                border: '1px solid #e5e7eb',
                                 boxSizing: 'border-box',
                                 resize: 'vertical'
                             }}
@@ -1187,76 +1306,52 @@ export const ProductFormModal = ({
                     </div>
 
                     {/* Active + Featured */}
-                    <div
-                        style={{
+                    <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                        <label style={{
                             display: 'flex',
-                            gap: 20,
-                            alignItems: 'center'
-                        }}
-                    >
-                        <label
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 8,
-                                fontSize: 13,
-                                color: '#374151',
-                                cursor: 'pointer'
-                            }}
-                        >
+                            alignItems: 'center',
+                            gap: 8,
+                            fontSize: 13,
+                            color: '#374151',
+                            cursor: 'pointer'
+                        }}>
                             <input
                                 type="checkbox"
                                 checked={form.status}
-                                onChange={e =>
-                                    set(
-                                        'status',
-                                        e.target.checked
-                                    )
-                                }
+                                onChange={e => set('status', e.target.checked)}
                             />
                             Active
                         </label>
 
-                        <label
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 8,
-                                fontSize: 13,
-                                color: '#374151',
-                                cursor: 'pointer'
-                            }}
-                        >
+                        <label style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            fontSize: 13,
+                            color: '#374151',
+                            cursor: 'pointer'
+                        }}>
                             <input
                                 type="checkbox"
                                 checked={form.featured}
-                                onChange={e =>
-                                    set(
-                                        'featured',
-                                        e.target.checked
-                                    )
-                                }
+                                onChange={e => set('featured', e.target.checked)}
                             />
                             Featured
                         </label>
                     </div>
 
                     {/* Footer */}
-                    <div
-                        style={{
-                            display: 'flex',
-                            justifyContent: 'flex-end',
-                            gap: 10,
-                            marginTop: 10
-                        }}
-                    >
+                    <div style={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: 10,
+                        marginTop: 10
+                    }}>
                         <button
                             type="button"
                             className="adm-btn-secondary"
                             onClick={onClose}
-                            style={{
-                                padding: '8px 16px'
-                            }}
+                            style={{ padding: '8px 16px' }}
                         >
                             Cancel
                         </button>
@@ -1265,266 +1360,510 @@ export const ProductFormModal = ({
                             type="submit"
                             className="adm-btn-primary"
                             disabled={saving}
-                            style={{
-                                padding: '8px 16px'
-                            }}
+                            style={{ padding: '8px 16px' }}
                         >
-                            {saving
-                                ? 'Saving…'
-                                : (
-                                    isNew
-                                        ? 'Create Product'
-                                        : 'Update Product'
-                                )}
+                            {saving ? 'Saving…' : (isNew ? 'Create Product' : 'Update Product')}
                         </button>
                     </div>
                 </form>
             </div>
         </div>
+    </>
     );
+};
+
+
+const NEARLY_EXPIRY_DAYS = 30;
+
+const isNearlyExpiry = (p) => {
+    const expDateStr = p.expiry_date || p.expiry || p.expire_date || p.variants?.expiry_date;
+    const exp = parseDateSafe(expDateStr);
+    if (!exp) return false;
+
+    const today = new Date();
+    const todayZero = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const expZero = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate(), 0, 0, 0, 0);
+
+    const threshold = new Date(todayZero);
+    threshold.setDate(threshold.getDate() + NEARLY_EXPIRY_DAYS);
+    threshold.setHours(23, 59, 59, 999);
+
+    // Must be >= today (exclude already expired products) AND <= threshold (within 30 days)
+    return expZero >= todayZero && expZero <= threshold;
+};
+
+const getExpiryBadge = (p) => {
+    const expDateStr = p.expiry_date || p.expiry || p.expire_date || p.variants?.expiry_date;
+    const exp = parseDateSafe(expDateStr);
+    if (!exp) {
+        return { text: '—', badge: null, color: '#9ca3af', bg: 'transparent', border: 'transparent', isExpired: false, isSoon: false };
+    }
+
+    const today = new Date();
+    const todayZero = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const expZero = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate(), 0, 0, 0, 0);
+
+    const diffDays = Math.round((expZero.getTime() - todayZero.getTime()) / (1000 * 60 * 60 * 24));
+    const formattedDate = expZero.toISOString().split('T')[0];
+
+    if (diffDays < 0) {
+        return {
+            text: formattedDate,
+            badge: 'Expired',
+            color: '#ef4444',
+            bg: '#fef2f2',
+            border: '#fecaca',
+            isExpired: true,
+            isSoon: false,
+        };
+    } else if (diffDays <= NEARLY_EXPIRY_DAYS) {
+        return {
+            text: formattedDate,
+            badge: diffDays === 0 ? 'Expires today' : `${diffDays}d left`,
+            color: '#d97706',
+            bg: '#fffbeb',
+            border: '#fde68a',
+            isExpired: false,
+            isSoon: true,
+        };
+    }
+
+    return {
+        text: formattedDate,
+        badge: null,
+        color: '#4b5563',
+        bg: 'transparent',
+        border: 'transparent',
+        isExpired: false,
+        isSoon: false,
+    };
 };
 
 const Products = () => {
     const [products, setProducts] = useState([]);
+    const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
     const [search, setSearch] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
+    const [kpiFilter, setKpiFilter] = useState('all'); // 'all' | 'featured' | 'categories' | 'expirySoon'
     const [page, setPage] = useState(1);
     const [modal, setModal] = useState(null);
+    const [editLoadingId, setEditLoadingId] = useState(null);
+    const [togglingId, setTogglingId] = useState(null);
+    const [deletingId, setDeletingId] = useState(null);
+    const [previewImage, setPreviewImage] = useState(null);
+    const [previewError, setPreviewError] = useState(false);
+    const [brokenImages, setBrokenImages] = useState(new Set());
+    const [backendExpiringIds, setBackendExpiringIds] = useState(new Set());
+    const isInitialMount = React.useRef(true);
 
-    const fetchProducts = async () => {
+    const openImagePreview = async (imgData, productId = null) => {
+        if (!imgData) return;
+        setPreviewError(false);
+        setPreviewImage(imgData);
+
+        if (productId) {
+            try {
+                const res = await productService.getImages(productId);
+                const imgs = res?.data ?? res;
+                if (Array.isArray(imgs) && imgs.length > 0) {
+                    const first = imgs[0]?.image_url || imgs[0]?.url;
+                    if (first && !imgData.url) {
+                        setPreviewImage(prev => ({ ...prev, url: normalizeImageUrl(first) }));
+                    }
+                }
+            } catch {
+                // Silently fallback to current preview
+            }
+        }
+    };
+
+    const closeImagePreview = () => {
+        setPreviewImage(null);
+        setPreviewError(false);
+    };
+
+    const categoryMap = useMemo(() => {
+        const map = {};
+        categories.forEach(c => {
+            if (c.id != null) {
+                map[c.id] = c.name;
+            }
+        });
+        return map;
+    }, [categories]);
+
+    const fetchProducts = async (currentCatMap = null, searchQuery = '') => {
         setLoading(true);
+        setError(null);
 
         try {
-            const res = await productService.getAll();
+            let res;
+            const trimmedQuery = (searchQuery || '').trim();
+            if (trimmedQuery && trimmedQuery.length >= 2) {
+                res = await productService.search(trimmedQuery);
+            } else {
+                res = await productService.getAll();
+            }
 
-            const list = Array.isArray(res)
-                ? res
-                : (
-                    res?.data ||
-                    res?.items ||
-                    []
-                );
+            const body = res?.data ?? res;
+            const list = Array.isArray(body)
+                ? body
+                : Array.isArray(body?.items)
+                    ? body.items
+                    : Array.isArray(body?.data)
+                        ? body.data
+                        : [];
+
+            // Attempt to retrieve inventory/batch expiry information if available
+            let inventoryExpiryMap = {};
+            try {
+                const invRes = await apiClient.get('/api/v1/inventory/expiry');
+                const invList = Array.isArray(invRes?.data)
+                    ? invRes.data
+                    : Array.isArray(invRes?.data?.items)
+                        ? invRes.data.items
+                        : [];
+                invList.forEach(item => {
+                    const pid = item.product_id;
+                    const exp = item.expiry_date || item.expiry || item.expire_date;
+                    if (pid && exp) {
+                        const parsed = parseDateSafe(exp);
+                        if (parsed) {
+                            if (!inventoryExpiryMap[pid] || parsed < parseDateSafe(inventoryExpiryMap[pid])) {
+                                inventoryExpiryMap[pid] = exp;
+                            }
+                        }
+                    }
+                });
+            } catch {
+                // Silently fallback if endpoint is not enabled or requires store_id
+            }
+
+            const activeCatMap = currentCatMap || categoryMap;
 
             setProducts(
                 list.map(p => {
-                    const stock =
-                        getProductStock(p);
+                    const mrpVal = p.mrp ?? p.cost_price ?? p.mrp_price ?? null;
+                    const priceVal = p.selling_price ?? p.price ?? p.sellingPrice ?? null;
+                    const variants = (typeof p.variants === 'object' && p.variants !== null) ? p.variants : {};
+                    const localMeta = getLocalProductMeta(p.id, p.sku);
+
+                    const isFeatured = Boolean(
+                        p.featured === true ||
+                        p.featured === 1 ||
+                        p.featured === 'true' ||
+                        variants.featured === true ||
+                        variants.featured === 1 ||
+                        variants.featured === 'true' ||
+                        localMeta.featured === true
+                    );
+
+                    let batchExpiry = null;
+                    if (Array.isArray(p.batches) && p.batches.length > 0) {
+                        const batchExps = p.batches
+                            .map(b => b.expiry_date || b.expiry || b.expire_date)
+                            .filter(Boolean);
+                        if (batchExps.length > 0) {
+                            batchExpiry = batchExps[0];
+                        }
+                    }
+
+                    const expiryDate = (
+                        p.expiry_date ||
+                        p.expiryDate ||
+                        p.expiry ||
+                        p.expire_date ||
+                        p.exp_date ||
+                        variants.expiry_date ||
+                        variants.expiryDate ||
+                        variants.expiry ||
+                        variants.expire_date ||
+                        batchExpiry ||
+                        inventoryExpiryMap[p.id] ||
+                        localMeta.expiryDate ||
+                        null
+                    );
+
+                    const manufacturingDate = (
+                        p.manufacturing_date ||
+                        p.manufacturingDate ||
+                        p.mfg_date ||
+                        p.mfgDate ||
+                        variants.manufacturing_date ||
+                        variants.manufacturingDate ||
+                        variants.mfg_date ||
+                        localMeta.manufacturingDate ||
+                        null
+                    );
+
+                    const brandVal = (
+                        p.brand ||
+                        p.brand_name ||
+                        variants.brand ||
+                        localMeta.brand ||
+                        ''
+                    );
+
+                    const rawImg = (
+                        p.image_url ||
+                        p.imageUrl ||
+                        (Array.isArray(p.images) && p.images.length > 0 ? (p.images[0].image_url || p.images[0].url) : null) ||
+                        p.image ||
+                        variants.image_url ||
+                        localMeta.imageUrl ||
+                        null
+                    );
+                    const imageUrl = normalizeImageUrl(rawImg);
+
+                    const catName = (
+                        activeCatMap[p.category_id] ||
+                        p.category_name ||
+                        (typeof p.category === 'object' ? p.category?.name : p.category) ||
+                        '—'
+                    );
 
                     return {
                         ...p,
-                        stock,
-
-                        category:
-                            CATEGORY_NAMES[p.category_id] ||
-                            p.category ||
-                            '—',
-
-                        status:
-                            stock > 0 &&
-                            (
-                                p.is_active ??
-                                p.status ??
-                                true
-                            ),
+                        category: catName,
+                        status: Boolean(p.is_active ?? p.status ?? true),
+                        sellingPrice: priceVal,
+                        price: priceVal,
+                        mrp: mrpVal,
+                        cost_price: mrpVal,
+                        brand: brandVal,
+                        featured: isFeatured,
+                        expiry_date: expiryDate,
+                        manufacturing_date: manufacturingDate,
+                        imageUrl: imageUrl,
+                        image_url: imageUrl,
+                        variants: variants,
                     };
                 })
             );
         } catch (err) {
-            console.error(
-                'Failed to load products',
-                err
-            );
+            console.error('Failed to load products', err);
+            const detail = err?.response?.data?.detail;
+            setError(typeof detail === 'string' ? detail : (err?.message || 'Failed to load products from server.'));
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchProducts();
+        const loadInitialData = async () => {
+            const loadedCats = await fetchDatabaseCategories();
+            setCategories(loadedCats);
+            const map = {};
+            loadedCats.forEach(c => {
+                if (c.id != null) map[c.id] = c.name;
+            });
+            await fetchProducts(map, '');
+        };
+        loadInitialData();
     }, []);
 
     useEffect(() => {
-        setPage(1);
-    }, [search, selectedCategory]);
+        const timer = setTimeout(() => {
+            setDebouncedSearch(search);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [search]);
 
+    useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+        fetchProducts(categoryMap, debouncedSearch);
+    }, [debouncedSearch]);
+
+    useEffect(() => {
+        if (kpiFilter === 'expirySoon') {
+            const fetchBackendExpiring = async () => {
+                try {
+                    const u = JSON.parse(localStorage.getItem('user') || '{}');
+                    const storeId = u.store_id || u.storeId || 1;
+                    const res = await productService.getExpiringSoon(storeId, 30);
+                    const list = res?.data ?? res;
+                    if (Array.isArray(list) && list.length > 0) {
+                        setBackendExpiringIds(new Set(list.map(x => x.id)));
+                    }
+                } catch {
+                    // Fall back to client-side date inspection
+                }
+            };
+            fetchBackendExpiring();
+        }
+    }, [kpiFilter]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, selectedCategory, kpiFilter]);
+
+    // KPI Metrics calculation
     const kpiStats = useMemo(() => {
         const total = products.length;
+        const featured = products.filter(p => Boolean(p.featured)).length;
+        const categorySet = new Set(
+            products.map(p => p.category).filter(c => c && c !== '—')
+        );
+        const categoriesCount = categories.length > 0 ? categories.length : categorySet.size;
 
-        const active =
-            products.filter(
-                p => Boolean(p.status)
-            ).length;
+        // Expiry Soon: products expiring within the next 30 days, excluding already expired
+        const expirySoon = products.filter(p => backendExpiringIds.has(p.id) || isNearlyExpiry(p)).length;
 
-        const featured =
-            products.filter(
-                p => Boolean(p.featured)
-            ).length;
+        return { total, featured, categories: categoriesCount, expirySoon };
+    }, [products, categories, backendExpiringIds]);
 
-        const outOfStock =
-            products.filter(
-                p => (Number(p.stock) || 0) === 0
-            ).length;
+    const categoryFilterList = useMemo(() => {
+        const dbNames = categories.map(c => c.name).filter(Boolean);
+        if (dbNames.length > 0) return dbNames;
+        return Array.from(new Set(products.map(p => p.category).filter(c => c && c !== '—')));
+    }, [categories, products]);
 
-        return {
-            total,
-            active,
-            featured,
-            outOfStock
-        };
-    }, [products]);
-
+    // Filter by KPI filter, Category, and Search query
     const filtered = useMemo(() => {
         let list = products;
 
-        if (
-            selectedCategory &&
-            selectedCategory !== 'All'
-        ) {
-            list = list.filter(p => {
-                const cat =
-                    (p.category || '').toLowerCase();
+        // 1. KPI Card Filter
+        if (kpiFilter === 'featured') {
+            list = list.filter(p => Boolean(p.featured));
+        } else if (kpiFilter === 'expirySoon') {
+            list = list.filter(p => backendExpiringIds.has(p.id) || isNearlyExpiry(p));
+        } else if (kpiFilter === 'categories') {
+            if (selectedCategory && selectedCategory !== 'All') {
+                list = list.filter(p => (p.category || '').toLowerCase() === selectedCategory.toLowerCase());
+            } else {
+                list = list.filter(p => Boolean(p.category && p.category !== '—'));
+            }
+        }
 
-                return (
-                    cat ===
-                    selectedCategory.toLowerCase()
-                );
+        // 2. Category Pill Filter (when not already filtering category mode)
+        if (kpiFilter !== 'categories' && selectedCategory && selectedCategory !== 'All') {
+            list = list.filter(p => {
+                const cat = (p.category || '').toLowerCase();
+                return cat === selectedCategory.toLowerCase();
             });
         }
 
-        const q =
-            search.trim().toLowerCase();
-
+        // 3. Search query (client-side fallback/refinement)
+        const q = search.trim().toLowerCase();
         if (q) {
             list = list.filter(p =>
-                (p.name || '')
-                    .toLowerCase()
-                    .includes(q) ||
-
-                (p.sku || '')
-                    .toLowerCase()
-                    .includes(q) ||
-
-                (p.barcode || '')
-                    .toLowerCase()
-                    .includes(q) ||
-
-                (p.brand || '')
-                    .toLowerCase()
-                    .includes(q) ||
-
-                (p.category || '')
-                    .toLowerCase()
-                    .includes(q)
+                (p.name || '').toLowerCase().includes(q) ||
+                (p.sku || '').toLowerCase().includes(q) ||
+                (p.barcode || '').toLowerCase().includes(q) ||
+                (p.brand || '').toLowerCase().includes(q) ||
+                (p.category || '').toLowerCase().includes(q)
             );
         }
 
         return list;
-    }, [
-        products,
-        search,
-        selectedCategory
-    ]);
+    }, [products, search, selectedCategory, kpiFilter]);
 
-    const totalPages = Math.max(
-        1,
-        Math.ceil(
-            filtered.length / PAGE_SIZE
-        )
-    );
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const start = (page - 1) * PAGE_SIZE + 1;
+    const end = Math.min(page * PAGE_SIZE, filtered.length);
+    const paginated = filtered.slice(start - 1, end);
 
-    const start =
-        (page - 1) *
-        PAGE_SIZE +
-        1;
-
-    const end =
-        Math.min(
-            page * PAGE_SIZE,
-            filtered.length
-        );
-
-    const paginated =
-        filtered.slice(
-            start - 1,
-            end
-        );
-
-    const handleSave = async (
-        payload,
-        id
-    ) => {
+    const handleSave = async (payload, id, originalForm, originalProduct) => {
+        let savedProduct = null;
         if (id) {
-            await productService.update(
-                id,
-                payload
-            );
+            const res = await productService.update(id, payload);
+            savedProduct = res?.data ?? res;
+            // If image was removed and product had server images:
+            if (originalForm?.imageRemoved && Array.isArray(originalProduct?.images) && originalProduct.images.length > 0) {
+                for (const img of originalProduct.images) {
+                    if (img?.id) {
+                        try {
+                            await productService.deleteImage(id, img.id);
+                        } catch (e) {
+                            console.warn('Failed to delete image', img.id, e);
+                        }
+                    }
+                }
+            }
         } else {
-            await productService.create(
-                payload
-            );
+            const res = await productService.create(payload);
+            savedProduct = res?.data ?? res;
         }
 
-        await fetchProducts();
+        const targetId = savedProduct?.id || id;
+        const targetSku = payload.sku || originalForm?.sku;
+
+        if (originalForm) {
+            saveLocalProductMeta(targetId, targetSku, {
+                featured: Boolean(originalForm.featured),
+                brand: originalForm.brand?.trim() || null,
+                manufacturingDate: originalForm.manufacturingDate || null,
+                expiryDate: originalForm.expiryDate || null,
+                imageUrl: originalForm.imagePreview || originalForm.imageUrl || null,
+            });
+        }
+
+        await fetchProducts(categoryMap, debouncedSearch);
+    };
+
+    const handleOpenEditModal = async (p) => {
+        if (editLoadingId === p.id) return;
+        setEditLoadingId(p.id);
+        try {
+            const res = await productService.getById(p.id);
+            const detailed = res?.data ?? res;
+            setModal(detailed || p);
+        } catch (err) {
+            console.warn('Failed to fetch detailed product, falling back to cached item', err);
+            setModal(p);
+        } finally {
+            setEditLoadingId(null);
+        }
     };
 
     const handleDelete = async (id) => {
-        if (
-            !window.confirm(
-                'Are you sure you want to delete this product?'
-            )
-        ) {
+        if (deletingId === id) return;
+        if (!window.confirm('Are you sure you want to delete this product?')) {
             return;
         }
 
-        await productService.delete(id);
-
-        await fetchProducts();
+        setDeletingId(id);
+        try {
+            await productService.delete(id);
+            const prod = products.find(p => p.id === id);
+            removeLocalProductMeta(id, prod?.sku);
+            await fetchProducts(categoryMap, debouncedSearch);
+        } catch (err) {
+            const detail = err?.response?.data?.detail;
+            alert(
+                'Could not delete product: ' +
+                (typeof detail === 'string'
+                    ? detail
+                    : JSON.stringify(detail || err?.message || err))
+            );
+        } finally {
+            setDeletingId(null);
+        }
     };
 
     const toggleStatus = async (p) => {
-        const next = !p.status;
+        if (togglingId === p.id) return;
+        setTogglingId(p.id);
 
         try {
-            setProducts(prev =>
-                prev.map(x =>
-                    x.id === p.id
-                        ? {
-                            ...x,
-                            status: next
-                        }
-                        : x
-                )
-            );
-
-            await productService.update(
-                p.id,
-                {
-                    ...toPayload({
-                        ...p,
-                        status: next
-                    }),
-                    is_active: next
-                }
-            );
-
-            await fetchProducts();
+            await productService.toggleStatus(p.id);
+            await fetchProducts(categoryMap, debouncedSearch);
         } catch (err) {
-            setProducts(prev =>
-                prev.map(x =>
-                    x.id === p.id
-                        ? {
-                            ...x,
-                            status: p.status
-                        }
-                        : x
-                )
+            const detail = err?.response?.data?.detail;
+            alert(
+                'Status update failed: ' +
+                (typeof detail === 'string'
+                    ? detail
+                    : JSON.stringify(detail || err?.message || err))
             );
-
-            console.error(
-                'Status update failed',
-                err
-            );
+        } finally {
+            setTogglingId(null);
         }
     };
 
@@ -1537,82 +1876,48 @@ const Products = () => {
             'MRP',
             'Selling Price',
             'GST',
-            'Stock',
+            'Expiry Date',
             'Status'
         ];
 
-        const rows =
-            filtered.map(p => [
-                p.name,
-                p.sku,
-                p.barcode,
-                p.category,
-                p.mrp,
-                p.price ||
-                    p.sellingPrice,
-                p.gst_rate ||
-                    p.gst,
-                p.stock,
-                p.status
-                    ? 'Active'
-                    : 'Inactive'
-            ]);
+        const rows = filtered.map(p => [
+            p.name,
+            p.sku,
+            p.barcode,
+            p.category,
+            p.mrp ?? p.cost_price ?? '',
+            p.sellingPrice ?? p.price ?? p.selling_price ?? '',
+            p.gst_rate || p.gst,
+            p.expiry_date || '',
+            p.status ? 'Active' : 'Inactive'
+        ]);
 
-        const csv =
-            [headers, ...rows]
-                .map(row =>
-                    row
-                        .map(x =>
-                            `"${String(x).replace(
-                                /"/g,
-                                '""'
-                            )}"`
-                        )
-                        .join(',')
-                )
-                .join('\n');
+        const csv = [headers, ...rows]
+            .map(row =>
+                row
+                    .map(x => `"${String(x).replace(/"/g, '""')}"`)
+                    .join(',')
+            )
+            .join('\n');
 
-        const blob =
-            new Blob(
-                [csv],
-                {
-                    type: 'text/csv'
-                }
-            );
-
-        const url =
-            URL.createObjectURL(
-                blob
-            );
-
-        const a =
-            document.createElement(
-                'a'
-            );
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
 
         a.href = url;
-
-        a.download =
-            `products-${new Date()
-                .toISOString()
-                .slice(0, 10)}.csv`;
-
+        a.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
         a.click();
 
-        URL.revokeObjectURL(
-            url
-        );
+        URL.revokeObjectURL(url);
     };
 
     return (
-        <div
-            style={{
-                padding: '24px 32px',
-                background: '#f8f9fb',
-                minHeight: '100vh',
-                fontFamily: 'inherit'
-            }}
-        >
+        <div style={{
+            padding: '24px 32px',
+            background: '#f8f9fb',
+            minHeight: '100vh',
+            fontFamily: 'inherit'
+        }}>
             <style>
                 {`
                 input[type="number"]::-webkit-inner-spin-button,
@@ -1631,7 +1936,7 @@ const Products = () => {
                     overflow-y: hidden;
                     box-sizing: border-box;
                     scrollbar-width: thin;
-                    scrollbar-color: #c7c7c7 transparent;
+                    scrollbar-color: #cbd5e1 #f1f5f9;
                 }
 
                 .table-scroll table {
@@ -1641,21 +1946,23 @@ const Products = () => {
                 }
 
                 .table-scroll::-webkit-scrollbar {
-                    height: 5px;
+                    height: 8px;
+                    width: 8px;
                 }
 
                 .table-scroll::-webkit-scrollbar-track {
-                    background: #f1f1f1;
+                    background: #f1f5f9;
                     border-radius: 8px;
                 }
 
                 .table-scroll::-webkit-scrollbar-thumb {
-                    background: #c7c7c7;
+                    background: #cbd5e1;
                     border-radius: 8px;
+                    transition: background 0.2s ease;
                 }
 
                 .table-scroll::-webkit-scrollbar-thumb:hover {
-                    background: #999;
+                    background: #94a3b8;
                 }
 
                 .cat-pill {
@@ -1681,69 +1988,97 @@ const Products = () => {
                     border-color: #818cf8;
                     font-weight: 600;
                 }
+
+                .kpi-card-clickable {
+                    cursor: pointer;
+                    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+                    user-select: none;
+                }
+
+                .kpi-card-clickable:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+                    border-color: #cbd5e1 !important;
+                }
+
+                .kpi-card-clickable.active-total {
+                    border-color: #2563eb !important;
+                    background: #f0f7ff !important;
+                    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+                }
+
+                .kpi-card-clickable.active-featured {
+                    border-color: #6366f1 !important;
+                    background: #f5f3ff !important;
+                    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
+                }
+
+                .kpi-card-clickable.active-categories {
+                    border-color: #0891b2 !important;
+                    background: #ecfeff !important;
+                    box-shadow: 0 0 0 2px rgba(8, 145, 178, 0.18);
+                }
+
+                .kpi-card-clickable.active-expiry {
+                    border-color: #f59e0b !important;
+                    background: #fffbeb !important;
+                    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
+                }
+
+                .prod-thumb-clickable {
+                    cursor: pointer !important;
+                    pointer-events: auto !important;
+                    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+                }
+
+                .prod-thumb-clickable:hover {
+                    transform: scale(1.08);
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+                    border-color: #6366f1 !important;
+                }
+                .prod-thumb-clickable * {
+                    cursor: pointer !important;
+                }
                 `}
             </style>
 
-            {/* HEADER */}
-            <div
-                style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                    marginBottom: 24,
-                    flexWrap: 'wrap',
-                    gap: 12
-                }}
-            >
+            {/* 1. TOP HEADER */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                marginBottom: 24,
+                flexWrap: 'wrap',
+                gap: 12
+            }}>
                 <div>
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10
-                        }}
-                    >
-                        <span
-                            style={{
-                                fontSize: 22
-                            }}
-                        >
-                            🛒
-                        </span>
-
-                        <h2
-                            style={{
-                                fontSize: 22,
-                                fontWeight: 700,
-                                color: '#111827',
-                                margin: 0
-                            }}
-                        >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 22 }}>🛒</span>
+                        <h2 style={{
+                            fontSize: 22,
+                            fontWeight: 700,
+                            color: '#111827',
+                            margin: 0
+                        }}>
                             Products
                         </h2>
                     </div>
-
-                    <p
-                        style={{
-                            fontSize: 13,
-                            color: '#6b7280',
-                            marginTop: 4,
-                            marginBottom: 0
-                        }}
-                    >
-                        Manage your POS product catalog,
-                        pricing and tax settings
+                    <p style={{
+                        fontSize: 13,
+                        color: '#6b7280',
+                        marginTop: 4,
+                        marginBottom: 0
+                    }}>
+                        Manage your POS product catalog, pricing and tax settings
                     </p>
                 </div>
 
-                <div
-                    style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        flexWrap: 'wrap'
-                    }}
-                >
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    flexWrap: 'wrap'
+                }}>
                     <button
                         className="adm-btn-secondary"
                         onClick={exportCSV}
@@ -1753,8 +2088,7 @@ const Products = () => {
                             gap: 6,
                             padding: '8px 16px',
                             background: '#fff',
-                            border:
-                                '1px solid #e5e7eb',
+                            border: '1px solid #e5e7eb',
                             borderRadius: 8,
                             fontSize: 13,
                             fontWeight: 500,
@@ -1768,9 +2102,7 @@ const Products = () => {
 
                     <button
                         className="adm-btn-primary"
-                        onClick={() =>
-                            setModal('new')
-                        }
+                        onClick={() => setModal('new')}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -1791,266 +2123,153 @@ const Products = () => {
                 </div>
             </div>
 
-            {/* KPI CARDS */}
-            <div
-                style={{
-                    display: 'grid',
-                    gridTemplateColumns:
-                        'repeat(4, 1fr)',
-                    gap: 16,
-                    marginBottom: 24,
-                    width: '100%'
-                }}
-            >
+            {/* 2. KPI METRIC CARDS (ALL IN 1 SINGLE ROW) */}
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: 16,
+                marginBottom: 24,
+                width: '100%'
+            }}>
+                {/* Total Products */}
                 <div
+                    className={`kpi-card-clickable ${kpiFilter === 'all' ? 'active-total' : ''}`}
+                    onClick={() => setKpiFilter('all')}
+                    title="Click to view all products"
                     style={{
                         background: '#ffffff',
                         borderRadius: 12,
                         padding: '16px 20px',
-                        border:
-                            '1px solid #edf0f2',
-                        boxShadow:
-                            '0 1px 3px rgba(0,0,0,0.02)',
+                        border: '1px solid #edf0f2',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 6
                     }}
                 >
-                    <div style={{ fontSize: 20 }}>
-                        📦
-                    </div>
-
-                    <span
-                        style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: '#9ca3af',
-                            letterSpacing:
-                                '0.04em'
-                        }}
-                    >
+                    <div style={{ fontSize: 20 }}>📦</div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
                         TOTAL PRODUCTS
                     </span>
-
-                    <span
-                        style={{
-                            fontSize: 24,
-                            fontWeight: 700,
-                            color: '#2563eb'
-                        }}
-                    >
+                    <span style={{ fontSize: 24, fontWeight: 700, color: '#2563eb' }}>
                         {kpiStats.total}
                     </span>
                 </div>
 
+                {/* Featured */}
                 <div
+                    className={`kpi-card-clickable ${kpiFilter === 'featured' ? 'active-featured' : ''}`}
+                    onClick={() => setKpiFilter(prev => prev === 'featured' ? 'all' : 'featured')}
+                    title="Click to filter featured products"
                     style={{
                         background: '#ffffff',
                         borderRadius: 12,
                         padding: '16px 20px',
-                        border:
-                            '1px solid #edf0f2',
-                        boxShadow:
-                            '0 1px 3px rgba(0,0,0,0.02)',
+                        border: '1px solid #edf0f2',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 6
                     }}
                 >
-                    <div
-                        style={{
-                            fontSize: 20,
-                            color: '#16a34a'
-                        }}
-                    >
-                        <BsCheckSquareFill
-                            size={20}
-                        />
-                    </div>
-
-                    <span
-                        style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: '#9ca3af',
-                            letterSpacing:
-                                '0.04em'
-                        }}
-                    >
-                        ACTIVE
-                    </span>
-
-                    <span
-                        style={{
-                            fontSize: 24,
-                            fontWeight: 700,
-                            color: '#16a34a'
-                        }}
-                    >
-                        {kpiStats.active}
-                    </span>
-                </div>
-
-                <div
-                    style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        padding: '16px 20px',
-                        border:
-                            '1px solid #edf0f2',
-                        boxShadow:
-                            '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6
-                    }}
-                >
-                    <div
-                        style={{
-                            fontSize: 20,
-                            color: '#eab308'
-                        }}
-                    >
+                    <div style={{ fontSize: 20, color: '#eab308' }}>
                         <BsStarFill size={20} />
                     </div>
-
-                    <span
-                        style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: '#9ca3af',
-                            letterSpacing:
-                                '0.04em'
-                        }}
-                    >
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
                         FEATURED
                     </span>
-
-                    <span
-                        style={{
-                            fontSize: 24,
-                            fontWeight: 700,
-                            color: '#6366f1'
-                        }}
-                    >
+                    <span style={{ fontSize: 24, fontWeight: 700, color: '#6366f1' }}>
                         {kpiStats.featured}
                     </span>
                 </div>
 
+                {/* Categories */}
                 <div
+                    className={`kpi-card-clickable ${kpiFilter === 'categories' ? 'active-categories' : ''}`}
+                    onClick={() => setKpiFilter(prev => prev === 'categories' ? 'all' : 'categories')}
+                    title="Click to filter products with category"
                     style={{
                         background: '#ffffff',
                         borderRadius: 12,
                         padding: '16px 20px',
-                        border:
-                            '1px solid #edf0f2',
-                        boxShadow:
-                            '0 1px 3px rgba(0,0,0,0.02)',
+                        border: '1px solid #edf0f2',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 6
                     }}
                 >
-                    <div
-                        style={{
-                            fontSize: 20,
-                            color: '#dc2626'
-                        }}
-                    >
-                        <BsSlashCircleFill
-                            size={20}
-                        />
-                    </div>
-
-                    <span
-                        style={{
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: '#9ca3af',
-                            letterSpacing:
-                                '0.04em'
-                        }}
-                    >
-                        OUT OF STOCK
+                    <div style={{ fontSize: 20 }}>🏷️</div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
+                        CATEGORIES
                     </span>
+                    <span style={{ fontSize: 24, fontWeight: 700, color: '#0891b2' }}>
+                        {kpiStats.categories}
+                    </span>
+                </div>
 
-                    <span
-                        style={{
-                            fontSize: 24,
-                            fontWeight: 700,
-                            color: '#dc2626'
-                        }}
-                    >
-                        {kpiStats.outOfStock}
+                {/* Expiry Soon */}
+                <div
+                    className={`kpi-card-clickable ${kpiFilter === 'expirySoon' ? 'active-expiry' : ''}`}
+                    onClick={() => setKpiFilter(prev => prev === 'expirySoon' ? 'all' : 'expirySoon')}
+                    title="Click to view products expiring within 30 days"
+                    style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        padding: '16px 20px',
+                        border: '1px solid #edf0f2',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6
+                    }}
+                >
+                    <div style={{ fontSize: 20 }}>⏳</div>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
+                        EXPIRY SOON
+                    </span>
+                    <span style={{ fontSize: 24, fontWeight: 700, color: '#f59e0b' }}>
+                        {kpiStats.expirySoon}
                     </span>
                 </div>
             </div>
 
-            {/* CATEGORY FILTER */}
-            <div
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    overflowX: 'auto',
-                    paddingBottom: 6,
-                    marginBottom: 16,
-                    scrollbarWidth: 'none'
-                }}
-            >
-                {[
-                    'All',
-                    ...CATEGORIES_LIST
-                ].map(cat => (
+            {/* 3. CATEGORY PILL LIST */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                overflowX: 'auto',
+                paddingBottom: 6,
+                marginBottom: 16,
+                scrollbarWidth: 'none'
+            }}>
+                {['All', ...categoryFilterList].map(cat => (
                     <button
                         key={cat}
-                        className={
-                            `cat-pill ${
-                                selectedCategory === cat
-                                    ? 'active'
-                                    : ''
-                            }`
-                        }
-                        onClick={() =>
-                            setSelectedCategory(cat)
-                        }
+                        className={`cat-pill ${selectedCategory === cat ? 'active' : ''}`}
+                        onClick={() => setSelectedCategory(cat)}
                     >
                         {cat}
                     </button>
                 ))}
             </div>
 
-            {/* SEARCH */}
-            <div
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    background: '#ffffff',
-                    border:
-                        '1px solid #e5e7eb',
-                    borderRadius: 10,
-                    padding: '10px 16px',
-                    marginBottom: 20,
-                    boxShadow:
-                        '0 1px 2px rgba(0,0,0,0.03)'
-                }}
-            >
-                <BsSearch
-                    style={{
-                        color: '#9ca3af',
-                        marginRight: 12,
-                        flexShrink: 0
-                    }}
-                    size={16}
-                />
-
+            {/* 4. FULL-WIDTH SEARCH BAR */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                background: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: 10,
+                padding: '10px 16px',
+                marginBottom: 20,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+            }}>
+                <BsSearch style={{ color: '#9ca3af', marginRight: 12, flexShrink: 0 }} size={16} />
                 <input
                     value={search}
-                    onChange={e =>
-                        setSearch(
-                            e.target.value
-                        )
-                    }
+                    onChange={e => setSearch(e.target.value)}
                     placeholder="Search products, barcode or brand..."
                     style={{
                         border: 'none',
@@ -2058,16 +2277,12 @@ const Products = () => {
                         width: '100%',
                         fontSize: 13,
                         color: '#111827',
-                        background:
-                            'transparent'
+                        background: 'transparent'
                     }}
                 />
-
                 {search && (
                     <button
-                        onClick={() =>
-                            setSearch('')
-                        }
+                        onClick={() => setSearch('')}
                         style={{
                             background: 'none',
                             border: 'none',
@@ -2081,71 +2296,93 @@ const Products = () => {
                     </button>
                 )}
             </div>
-
-            {/* TABLE */}
-            <div
-                style={{
-                    background: '#fff',
-                    borderRadius: 12,
-                    boxShadow:
-                        '0 1px 3px rgba(0,0,0,0.05)',
-                    overflow: 'hidden',
-                    border:
-                        '1px solid #edf0f2'
-                }}
-            >
-                <div className="table-scroll">
-                    <table
+            {/* Active KPI Filter Banner */}
+            {kpiFilter !== 'all' && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 16px',
+                    marginBottom: 16,
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 10,
+                    fontSize: 13,
+                    color: '#334155'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ color: '#64748b' }}>Active KPI Filter:</span>
+                        <span style={{
+                            fontWeight: 600,
+                            padding: '3px 10px',
+                            borderRadius: 6,
+                            background:
+                                kpiFilter === 'featured' ? '#eef2ff' :
+                                kpiFilter === 'categories' ? '#ecfeff' :
+                                '#fffbeb',
+                            color:
+                                kpiFilter === 'featured' ? '#4f46e5' :
+                                kpiFilter === 'categories' ? '#0e7490' :
+                                '#b45309',
+                            border:
+                                kpiFilter === 'featured' ? '1px solid #c7d2fe' :
+                                kpiFilter === 'categories' ? '1px solid #a5f3fc' :
+                                '1px solid #fde68a'
+                        }}>
+                            {kpiFilter === 'featured' && `⭐ Featured Products (${filtered.length})`}
+                            {kpiFilter === 'categories' && `🏷️ Categorized Products (${filtered.length})`}
+                            {kpiFilter === 'expirySoon' && `⏳ Expiring Soon (Next 30 Days) (${filtered.length})`}
+                        </span>
+                    </div>
+                    <button
+                        onClick={() => setKpiFilter('all')}
                         style={{
-                            width: '100%',
-                            minWidth: 1100,
-                            borderCollapse:
-                                'collapse',
-                            fontSize: 13
+                            background: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: 6,
+                            padding: '4px 10px',
+                            color: '#475569',
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4
                         }}
                     >
+                        ✕ Show All Products
+                    </button>
+                </div>
+            )}
+
+            {/* 5. PRODUCT TABLE CONTAINER */}
+            <div style={{
+                background: '#fff',
+                borderRadius: 12,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                overflow: 'hidden',
+                border: '1px solid #edf0f2'
+            }}>
+                <div className="table-scroll custom-scrollbar">
+                    <table style={{
+                        width: '100%',
+                        minWidth: 1100,
+                        borderCollapse: 'collapse',
+                        fontSize: 13
+                    }}>
                         <thead>
-                            <tr
-                                style={{
-                                    background:
-                                        '#f9fafb',
-                                    borderBottom:
-                                        '1px solid #e5e7eb'
-                                }}
-                            >
-                                {[
-                                    'PRODUCT',
-                                    'CATEGORY',
-                                    'BARCODE',
-                                    'MRP',
-                                    'PRICE',
-                                    'GST',
-                                    'STOCK',
-                                    'STATUS',
-                                    'ACTIONS'
-                                ].map((header, index) => (
-                                    <th
-                                        key={header}
-                                        style={{
-                                            padding:
-                                                '14px 16px',
-                                            textAlign:
-                                                index === 8
-                                                    ? 'center'
-                                                    : 'left',
-                                            color:
-                                                '#6b7280',
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            textTransform:
-                                                'uppercase',
-                                            letterSpacing:
-                                                '0.04em'
-                                        }}
-                                    >
-                                        {header}
-                                    </th>
-                                ))}
+                            <tr style={{
+                                background: '#f9fafb',
+                                borderBottom: '1px solid #e5e7eb'
+                            }}>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>PRODUCT</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>CATEGORY</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>BARCODE</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>MRP</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>SELLING PRICE</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>GST</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>EXPIRY DATE</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'center', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>ACTIONS</th>
                             </tr>
                         </thead>
 
@@ -2153,13 +2390,11 @@ const Products = () => {
                             {loading && (
                                 <tr>
                                     <td
-                                        colSpan={9}
+                                        colSpan={8}
                                         style={{
                                             padding: 48,
-                                            textAlign:
-                                                'center',
-                                            color:
-                                                '#9ca3af'
+                                            textAlign: 'center',
+                                            color: '#9ca3af'
                                         }}
                                     >
                                         Loading products…
@@ -2167,492 +2402,386 @@ const Products = () => {
                                 </tr>
                             )}
 
-                            {!loading &&
-                                paginated.map(p => (
-                                    <tr
-                                        key={p.id}
+                            {error && !loading && (
+                                <tr>
+                                    <td
+                                        colSpan={8}
                                         style={{
-                                            borderBottom:
-                                                '1px solid #f3f4f6'
+                                            padding: 48,
+                                            textAlign: 'center',
+                                            color: '#ef4444'
                                         }}
                                     >
-                                        <td
-                                            style={{
-                                                padding:
-                                                    '12px 16px'
-                                            }}
-                                        >
-                                            <div
+                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                                            <span>⚠️ {error}</span>
+                                            <button
+                                                onClick={() => fetchProducts(categoryMap, debouncedSearch)}
                                                 style={{
-                                                    display:
-                                                        'flex',
-                                                    alignItems:
-                                                        'center',
-                                                    gap: 12
+                                                    padding: '6px 14px',
+                                                    background: '#6366f1',
+                                                    color: '#fff',
+                                                    border: 'none',
+                                                    borderRadius: 6,
+                                                    cursor: 'pointer',
+                                                    fontSize: 12
                                                 }}
                                             >
-                                                <div
-                                                    style={{
-                                                        width: 40,
-                                                        height: 40,
-                                                        borderRadius: 8,
-                                                        background:
-                                                            '#f3f4f6',
-                                                        display:
-                                                            'grid',
-                                                        placeItems:
-                                                            'center',
-                                                        flexShrink:
-                                                            0
-                                                    }}
-                                                >
-                                                    <BsImage
-                                                        color="#9ca3af"
-                                                        size={18}
-                                                    />
+                                                Retry
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            )}
+
+                            {!loading && !error && paginated.map(p => (
+                                <tr
+                                    key={p.id}
+                                    style={{
+                                        borderBottom: '1px solid #f3f4f6'
+                                    }}
+                                >
+                                    <td style={{ padding: '12px 16px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                            {(() => {
+                                                const imgUrl = getProductImageUrl(p);
+                                                const isBroken = Boolean(!imgUrl || brokenImages.has(imgUrl) || brokenImages.has(String(p.id)));
+
+                                                return (
+                                                    <div
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            openImagePreview({
+                                                                url: isBroken ? null : imgUrl,
+                                                                name: p.name || 'Product Image',
+                                                                sku: p.sku || ''
+                                                            }, p.id);
+                                                        }}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                                e.stopPropagation();
+                                                                openImagePreview({
+                                                                    url: isBroken ? null : imgUrl,
+                                                                    name: p.name || 'Product Image',
+                                                                    sku: p.sku || ''
+                                                                }, p.id);
+                                                            }
+                                                        }}
+                                                        className="prod-thumb-clickable"
+                                                        title={imgUrl && !isBroken ? "Click to view full image" : "Click to view product image"}
+                                                        style={{
+                                                            width: 40,
+                                                            height: 40,
+                                                            borderRadius: 8,
+                                                            overflow: 'hidden',
+                                                            cursor: 'pointer',
+                                                            flexShrink: 0,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#f9fafb',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            pointerEvents: 'auto',
+                                                            position: 'relative',
+                                                            userSelect: 'none',
+                                                        }}
+                                                    >
+                                                        {imgUrl && !isBroken ? (
+                                                            <img
+                                                                src={imgUrl}
+                                                                alt={p.name || 'Product'}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    openImagePreview({
+                                                                        url: imgUrl,
+                                                                        name: p.name || 'Product Image',
+                                                                        sku: p.sku || ''
+                                                                    }, p.id);
+                                                                }}
+                                                                onError={() => {
+                                                                    setBrokenImages(prev => {
+                                                                        const next = new Set(prev);
+                                                                        if (imgUrl) next.add(imgUrl);
+                                                                        if (p.id) next.add(String(p.id));
+                                                                        return next;
+                                                                    });
+                                                                }}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    height: '100%',
+                                                                    objectFit: 'cover',
+                                                                    display: 'block',
+                                                                    cursor: 'pointer',
+                                                                    pointerEvents: 'auto'
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <BsImage color="#9ca3af" size={18} style={{ pointerEvents: 'none' }} />
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
+                                            <div>
+                                                <div style={{ fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                    <span>{p.name}</span>
+                                                    {p.featured && (
+                                                        <span style={{
+                                                            fontSize: 10,
+                                                            background: '#fef3c7',
+                                                            color: '#b45309',
+                                                            padding: '1px 6px',
+                                                            borderRadius: 12,
+                                                            fontWeight: 700,
+                                                            letterSpacing: '0.03em',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 2
+                                                        }}>
+                                                            ⭐ FEATURED
+                                                        </span>
+                                                    )}
                                                 </div>
-
-                                                <div>
-                                                    <div
-                                                        style={{
-                                                            fontWeight:
-                                                                600,
-                                                            color:
-                                                                '#111827'
-                                                        }}
-                                                    >
-                                                        {p.name}
-                                                    </div>
-
-                                                    <div
-                                                        style={{
-                                                            fontSize:
-                                                                11,
-                                                            color:
-                                                                '#9ca3af',
-                                                            marginTop:
-                                                                2
-                                                        }}
-                                                    >
-                                                        {p.sku}
-                                                    </div>
+                                                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                                                    {p.sku}
                                                 </div>
                                             </div>
-                                        </td>
+                                        </div>
+                                    </td>
 
-                                        <td
-                                            style={{
-                                                padding:
-                                                    '12px 16px'
-                                            }}
-                                        >
+                                    <td style={{ padding: '12px 16px' }}>
+                                        <span style={{
+                                            padding: '4px 10px',
+                                            borderRadius: 20,
+                                            background: '#eef2ff',
+                                            color: '#6366f1',
+                                            fontSize: 11,
+                                            fontWeight: 600
+                                        }}>
+                                            {p.category}
+                                        </span>
+                                    </td>
+
+                                    <td style={{
+                                        padding: '12px 16px',
+                                        color: '#111827',
+                                        fontWeight: 500,
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {p.barcode ? (
                                             <span
-                                                style={{
-                                                    padding:
-                                                        '4px 10px',
-                                                    borderRadius:
-                                                        20,
-                                                    background:
-                                                        '#eef2ff',
-                                                    color:
-                                                        '#6366f1',
-                                                    fontSize:
-                                                        11,
-                                                    fontWeight:
-                                                        600
-                                                }}
-                                            >
-                                                {p.category}
-                                            </span>
-                                        </td>
-
-                                        <td
-                                            style={{
-                                                padding:
-                                                    '12px 16px',
-                                                color:
-                                                    '#111827',
-                                                fontWeight:
-                                                    500,
-                                                whiteSpace:
-                                                    'nowrap'
-                                            }}
-                                        >
-                                            {p.barcode ||
-                                                '—'}
-                                        </td>
-
-                                        <td
-                                            style={{
-                                                padding:
-                                                    '12px 16px',
-                                                color:
-                                                    '#111827',
-                                                fontWeight:
-                                                    600,
-                                                whiteSpace:
-                                                    'nowrap'
-                                            }}
-                                        >
-                                            {fmt(p.mrp)}
-                                        </td>
-
-                                        <td
-                                            style={{
-                                                padding:
-                                                    '12px 16px',
-                                                color:
-                                                    '#111827',
-                                                fontWeight:
-                                                    600,
-                                                whiteSpace:
-                                                    'nowrap'
-                                            }}
-                                        >
-                                            {fmt(
-                                                p.price ||
-                                                p.sellingPrice
-                                            )}
-                                        </td>
-
-                                        <td
-                                            style={{
-                                                padding:
-                                                    '12px 16px',
-                                                color:
-                                                    '#4b5563',
-                                                fontWeight:
-                                                    500,
-                                                whiteSpace:
-                                                    'nowrap'
-                                            }}
-                                        >
-                                            {p.gst_rate
-                                                ? `${p.gst_rate}%`
-                                                : p.gst ||
-                                                  '—'}
-                                        </td>
-
-                                        <td
-                                            style={{
-                                                padding:
-                                                    '12px 16px',
-                                                color:
-                                                    Number(
-                                                        p.stock
-                                                    ) === 0
-                                                        ? '#dc2626'
-                                                        : '#111827',
-                                                fontWeight:
-                                                    600,
-                                                whiteSpace:
-                                                    'nowrap'
-                                            }}
-                                        >
-                                            {Number(
-                                                p.stock
-                                            ) || 0}{' '}
-                                            {p.unit ||
-                                                'Pcs'}
-                                        </td>
-
-                                        <td
-                                            style={{
-                                                padding:
-                                                    '12px 16px'
-                                            }}
-                                        >
-                                            <button
-                                                onClick={() => {
-                                                    if (
-                                                        Number(
-                                                            p.stock
-                                                        ) === 0
-                                                    ) {
-                                                        return;
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    try {
+                                                        const res = await productService.getBarcodeImage(p.id, 'download');
+                                                        const blob = res.data;
+                                                        const url = URL.createObjectURL(blob);
+                                                        const a = document.createElement('a');
+                                                        a.href = url;
+                                                        a.download = `barcode-${p.barcode}.png`;
+                                                        a.click();
+                                                        URL.revokeObjectURL(url);
+                                                    } catch (err) {
+                                                        console.warn('Barcode download failed', err);
+                                                        alert(`Barcode: ${p.barcode}`);
                                                     }
-
-                                                    toggleStatus(
-                                                        p
-                                                    );
                                                 }}
-                                                style={{
-                                                    background:
-                                                        'none',
-                                                    border:
-                                                        'none',
-                                                    cursor:
-                                                        Number(
-                                                            p.stock
-                                                        ) === 0
-                                                            ? 'default'
-                                                            : 'pointer',
-                                                    verticalAlign:
-                                                        'middle'
-                                                }}
-                                                title={
-                                                    Number(
-                                                        p.stock
-                                                    ) === 0
-                                                        ? 'Inactive because stock is 0'
-                                                        : p.status
-                                                            ? 'Active'
-                                                            : 'Inactive'
-                                                }
+                                                title="Click to download barcode image"
+                                                style={{ cursor: 'pointer', color: '#4f46e5', textDecoration: 'underline dotted' }}
                                             >
-                                                {
-                                                    Number(
-                                                        p.stock
-                                                    ) === 0 ||
-                                                    !p.status ? (
-                                                        <BsToggleOff
-                                                            size={26}
-                                                            color="#9ca3af"
-                                                        />
-                                                    ) : (
-                                                        <BsToggleOn
-                                                            size={26}
-                                                            color="#22c55e"
-                                                        />
-                                                    )
-                                                }
+                                                {p.barcode}
+                                            </span>
+                                        ) : (
+                                            '—'
+                                        )}
+                                    </td>
+
+                                    <td style={{
+                                        padding: '12px 16px',
+                                        color: '#111827',
+                                        fontWeight: 600,
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {fmt(p.mrp ?? p.cost_price)}
+                                    </td>
+
+                                    <td style={{
+                                        padding: '12px 16px',
+                                        color: '#111827',
+                                        fontWeight: 600,
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {fmt(p.sellingPrice ?? p.price ?? p.selling_price)}
+                                    </td>
+
+                                    <td style={{
+                                        padding: '12px 16px',
+                                        color: '#4b5563',
+                                        fontWeight: 500,
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {p.gst_rate ? `${p.gst_rate}%` : p.gst || '—'}
+                                    </td>
+
+                                    <td style={{
+                                        padding: '12px 16px',
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {(() => {
+                                            const badge = getExpiryBadge(p);
+                                            if (!badge.text || badge.text === '—') {
+                                                return <span style={{ color: '#9ca3af' }}>—</span>;
+                                            }
+                                            return (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                                    <span style={{ fontSize: 13, color: badge.isExpired ? '#dc2626' : '#374151', fontWeight: 500 }}>
+                                                        {badge.text}
+                                                    </span>
+                                                    {badge.badge && (
+                                                        <span style={{
+                                                            fontSize: 10,
+                                                            fontWeight: 600,
+                                                            color: badge.color,
+                                                            background: badge.bg,
+                                                            border: `1px solid ${badge.border}`,
+                                                            borderRadius: 4,
+                                                            padding: '1px 5px',
+                                                            display: 'inline-block',
+                                                            width: 'fit-content'
+                                                        }}>
+                                                            {badge.isExpired ? '⚠️ ' : '⏳ '}
+                                                            {badge.badge}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })()}
+                                    </td>
+
+                                    <td style={{
+                                        padding: '12px 16px',
+                                        textAlign: 'center'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            gap: 8,
+                                            justifyContent: 'center',
+                                            alignItems: 'center'
+                                        }}>
+                                            <button
+                                                className="adm-btn-secondary"
+                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: togglingId === p.id ? 'wait' : 'pointer' }}
+                                                onClick={() => toggleStatus(p)}
+                                                disabled={togglingId === p.id}
+                                                title={p.status ? "Active (Click to deactivate)" : "Inactive (Click to activate)"}
+                                            >
+                                                {p.status ? (
+                                                    <BsToggleOn size={16} color="#10b981" />
+                                                ) : (
+                                                    <BsToggleOff size={16} color="#9ca3af" />
+                                                )}
                                             </button>
 
-                                            <span
-                                                style={{
-                                                    marginLeft:
-                                                        6,
-                                                    fontSize:
-                                                        12,
-                                                    fontWeight:
-                                                        600,
-                                                    color:
-                                                        Number(
-                                                            p.stock
-                                                        ) === 0 ||
-                                                        !p.status
-                                                            ? '#9ca3af'
-                                                            : '#16a34a'
-                                                }}
+                                            <button
+                                                className="adm-btn-secondary"
+                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: editLoadingId === p.id ? 'wait' : 'pointer' }}
+                                                onClick={() => handleOpenEditModal(p)}
+                                                disabled={editLoadingId === p.id}
+                                                title="Edit"
                                             >
-                                                {
-                                                    Number(
-                                                        p.stock
-                                                    ) === 0 ||
-                                                    !p.status
-                                                        ? 'Inactive'
-                                                        : 'Active'
-                                                }
-                                            </span>
-                                        </td>
+                                                <BsPencilFill size={13} color="#6366f1" />
+                                            </button>
 
-                                        <td
-                                            style={{
-                                                padding:
-                                                    '12px 16px',
-                                                textAlign:
-                                                    'center'
-                                            }}
-                                        >
-                                            <div
-                                                style={{
-                                                    display:
-                                                        'flex',
-                                                    gap: 8,
-                                                    justifyContent:
-                                                        'center'
-                                                }}
+                                            <button
+                                                className="adm-btn-secondary"
+                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: deletingId === p.id ? 'wait' : 'pointer' }}
+                                                onClick={() => handleDelete(p.id)}
+                                                disabled={deletingId === p.id}
+                                                title="Delete"
                                             >
-                                                <button
-                                                    className="adm-btn-secondary"
-                                                    style={{
-                                                        padding:
-                                                            '6px 8px',
-                                                        borderRadius:
-                                                            6,
-                                                        border:
-                                                            '1px solid #e5e7eb',
-                                                        background:
-                                                            '#fff',
-                                                        cursor:
-                                                            'pointer'
-                                                    }}
-                                                    onClick={() =>
-                                                        setModal(
-                                                            p
-                                                        )
-                                                    }
-                                                    title="Edit"
-                                                >
-                                                    <BsPencilFill
-                                                        size={13}
-                                                        color="#6366f1"
-                                                    />
-                                                </button>
+                                                <BsTrashFill size={13} color="#ef4444" />
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
 
-                                                <button
-                                                    className="adm-btn-secondary"
-                                                    style={{
-                                                        padding:
-                                                            '6px 8px',
-                                                        borderRadius:
-                                                            6,
-                                                        border:
-                                                            '1px solid #e5e7eb',
-                                                        background:
-                                                            '#fff',
-                                                        cursor:
-                                                            'pointer'
-                                                    }}
-                                                    onClick={() =>
-                                                        handleDelete(
-                                                            p.id
-                                                        )
-                                                    }
-                                                    title="Delete"
-                                                >
-                                                    <BsTrashFill
-                                                        size={13}
-                                                        color="#ef4444"
-                                                    />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-
-                            {!loading &&
-                                paginated.length === 0 && (
-                                    <tr>
-                                        <td
-                                            colSpan={9}
-                                            style={{
-                                                padding: 48,
-                                                textAlign:
-                                                    'center',
-                                                color:
-                                                    '#9ca3af',
-                                                fontSize:
-                                                    14
-                                            }}
-                                        >
-                                            No products found
-                                        </td>
-                                    </tr>
-                                )}
+                            {!loading && !error && paginated.length === 0 && (
+                                <tr>
+                                    <td
+                                        colSpan={8}
+                                        style={{
+                                            padding: 48,
+                                            textAlign: 'center',
+                                            color: '#9ca3af',
+                                            fontSize: 14
+                                        }}
+                                    >
+                                        No products found
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
 
-                {/* PAGINATION */}
+                {/* 6. PAGINATION */}
                 {filtered.length > 0 && (
-                    <div
-                        style={{
-                            display: 'flex',
-                            alignItems:
-                                'center',
-                            justifyContent:
-                                'space-between',
-                            padding:
-                                '12px 16px',
-                            borderTop:
-                                '1px solid #f3f4f6',
-                            flexWrap: 'wrap',
-                            gap: 10
-                        }}
-                    >
-                        <span
-                            style={{
-                                fontSize: 12,
-                                color:
-                                    '#6b7280'
-                            }}
-                        >
-                            Showing {start}–{end}{' '}
-                            of {filtered.length}
-                            &nbsp;|&nbsp; Page{' '}
-                            {page} of {totalPages}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        borderTop: '1px solid #f3f4f6',
+                        flexWrap: 'wrap',
+                        gap: 10
+                    }}>
+                        <span style={{
+                            fontSize: 12,
+                            color: '#6b7280'
+                        }}>
+                            Showing {start}–{end} of {filtered.length}
+                            &nbsp;|&nbsp; Page {page} of {totalPages}
                         </span>
 
-                        <div
-                            style={{
-                                display:
-                                    'flex',
-                                alignItems:
-                                    'center',
-                                gap: 6,
-                                flexWrap:
-                                    'wrap'
-                            }}
-                        >
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            flexWrap: 'wrap'
+                        }}>
                             <button
                                 className="adm-btn-secondary"
-                                style={{
-                                    padding:
-                                        '5px 10px',
-                                    borderRadius:
-                                        6,
-                                    border:
-                                        '1px solid #e5e7eb',
-                                    background:
-                                        '#fff',
-                                    cursor:
-                                        page === 1
-                                            ? 'not-allowed'
-                                            : 'pointer'
-                                }}
-                                disabled={
-                                    page === 1
-                                }
-                                onClick={() =>
-                                    setPage(
-                                        p => p - 1
-                                    )
-                                }
+                                style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: page === 1 ? 'not-allowed' : 'pointer' }}
+                                disabled={page === 1}
+                                onClick={() => setPage(p => p - 1)}
                             >
-                                <BsChevronLeft
-                                    size={12}
-                                />
+                                <BsChevronLeft size={12} />
                             </button>
 
                             {Array.from(
-                                {
-                                    length:
-                                        totalPages
-                                },
-                                (_, i) =>
-                                    i + 1
+                                { length: totalPages },
+                                (_, i) => i + 1
                             ).map(n => (
                                 <button
                                     key={n}
-                                    onClick={() =>
-                                        setPage(n)
-                                    }
+                                    onClick={() => setPage(n)}
                                     style={{
                                         width: 30,
                                         height: 30,
-                                        borderRadius:
-                                            6,
-                                        border:
-                                            `1.5px solid ${
-                                                n === page
-                                                    ? '#6366f1'
-                                                    : '#e5e7eb'
-                                            }`,
-                                        background:
-                                            n === page
-                                                ? '#eef2ff'
-                                                : '#fff',
-                                        color:
-                                            n === page
-                                                ? '#6366f1'
-                                                : '#6b7280',
-                                        fontSize:
-                                            12,
-                                        fontWeight:
-                                            600,
-                                        cursor:
-                                            'pointer'
+                                        borderRadius: 6,
+                                        border: `1.5px solid ${
+                                            n === page ? '#6366f1' : '#e5e7eb'
+                                        }`,
+                                        background: n === page
+                                            ? '#eef2ff'
+                                            : '#fff',
+                                        color: n === page
+                                            ? '#6366f1'
+                                            : '#6b7280',
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer'
                                     }}
                                 >
                                     {n}
@@ -2661,58 +2790,144 @@ const Products = () => {
 
                             <button
                                 className="adm-btn-secondary"
-                                style={{
-                                    padding:
-                                        '5px 10px',
-                                    borderRadius:
-                                        6,
-                                    border:
-                                        '1px solid #e5e7eb',
-                                    background:
-                                        '#fff',
-                                    cursor:
-                                        page ===
-                                        totalPages
-                                            ? 'not-allowed'
-                                            : 'pointer'
-                                }}
-                                disabled={
-                                    page ===
-                                    totalPages
-                                }
-                                onClick={() =>
-                                    setPage(
-                                        p => p + 1
-                                    )
-                                }
+                                style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: page === totalPages ? 'not-allowed' : 'pointer' }}
+                                disabled={page === totalPages}
+                                onClick={() => setPage(p => p + 1)}
                             >
-                                <BsChevronRight
-                                    size={12}
-                                />
+                                <BsChevronRight size={12} />
                             </button>
                         </div>
                     </div>
                 )}
             </div>
+{modal && (
+    <ProductFormModal
+        product={modal === 'new' ? null : modal}
+        existingProducts={products}
+        categories={categories}
+        onClose={() => setModal(null)}
+        onSave={handleSave}
+    />
+)}
 
-            {modal && (
-                <ProductFormModal
-                    product={
-                        modal === 'new'
-                            ? null
-                            : modal
-                    }
-                    existingProducts={
-                        products
-                    }
-                    onClose={() =>
-                        setModal(null)
-                    }
-                    onSave={handleSave}
-                />
-            )}
+{previewImage && (
+    <div
+        className="ec-modal-overlay"
+        style={{
+            zIndex: 3000,
+            background: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20
+        }}
+        onClick={closeImagePreview}
+    >
+        <div
+            style={{
+                position: 'relative',
+                maxWidth: '90vw',
+                maxHeight: '90vh',
+                background: '#ffffff',
+                borderRadius: 12,
+                padding: 20,
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12,
+                minWidth: 320
+            }}
+            onClick={e => e.stopPropagation()}
+        >
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottom: '1px solid #f3f4f6',
+                paddingBottom: 10
+            }}>
+                <div>
+                    <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                        {previewImage.name}
+                    </h4>
+                    {previewImage.sku && (
+                        <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 500 }}>
+                            SKU: {previewImage.sku}
+                        </span>
+                    )}
+                </div>
+                <button
+                    onClick={closeImagePreview}
+                    style={{
+                        background: '#f3f4f6',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: 32,
+                        height: 32,
+                        display: 'grid',
+                        placeItems: 'center',
+                        cursor: 'pointer',
+                        color: '#6b7280',
+                        fontSize: 14,
+                        fontWeight: 700
+                    }}
+                    title="Close"
+                >
+                    ✕
+                </button>
+            </div>
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 200,
+                maxHeight: '75vh',
+                overflow: 'hidden',
+                borderRadius: 8,
+                background: '#f9fafb'
+            }}>
+                {previewError || !previewImage.url ? (
+                    <div style={{ padding: '36px 20px', textAlign: 'center', color: '#6b7280' }}>
+                        <BsImage size={40} color="#9ca3af" style={{ marginBottom: 10 }} />
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#374151' }}>
+                            {previewError ? 'Image unavailable' : 'No image uploaded'}
+                        </p>
+                        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9ca3af' }}>
+                            {previewError
+                                ? 'The image could not be loaded or the link is broken.'
+                                : 'No image link or file was provided for this product.'}
+                        </p>
+                    </div>
+                ) : (
+                    <img
+                        src={previewImage.url}
+                        alt={previewImage.name}
+                        onError={() => {
+                            setPreviewError(true);
+                            setBrokenImages(prev => {
+                                const next = new Set(prev);
+                                if (previewImage.url) next.add(previewImage.url);
+                                return next;
+                            });
+                        }}
+                        style={{
+                            maxWidth: '100%',
+                            maxHeight: '75vh',
+                            objectFit: 'contain',
+                            borderRadius: 8,
+                            display: 'block'
+                        }}
+                    />
+                )}
+            </div>
+        </div>
+    </div>
+)}
         </div>
     );
 };
+
+
 
 export default Products;
