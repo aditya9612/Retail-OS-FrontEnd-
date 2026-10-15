@@ -1,1198 +1,861 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
-    XAxis, YAxis, Tooltip, ResponsiveContainer,
-    CartesianGrid, ComposedChart,
-    Legend, PieChart, Pie, Cell, Bar, Line,
+    ResponsiveContainer,
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    Tooltip,
+    CartesianGrid,
+    Cell,
+    LabelList,
 } from 'recharts';
-import { getInvoices } from '../../services/billingService';
+import {
+    BsShop,
+    BsCalendar3,
+    BsChevronDown,
+    BsBarChartFill,
+    BsCart3,
+    BsPeopleFill,
+    BsBoxSeam,
+    BsArrowUp,
+    BsReceiptCutoff,
+    BsTrophyFill,
+    BsArrowRepeat,
+    BsExclamationCircleFill,
+    BsBox,
+} from 'react-icons/bs';
 
-/* ── October (This Month) Daily Breakdown ──
-   Total Monthly Sales: ₹22,70,958 (₹22.71 Lakhs)
-   Total Monthly Units Sold: 4,589 units
-   Daily Target: ₹80,645/day (₹25,00,000 monthly target / 31 days)
-   Daily Units Target: 161 units/day (5,000 monthly units target / 31 days)
-*/
-const octoberDailyData = [
-    { x: '01 Oct', sales: 68500, target: 80645, units: 138, cumSales: 68500, cumUnits: 138 },
-    { x: '04 Oct', sales: 74200, target: 80645, units: 150, cumSales: 285400, cumUnits: 576 },
-    { x: '07 Oct', sales: 62800, target: 80645, units: 127, cumSales: 489600, cumUnits: 989 },
-    { x: '10 Oct', sales: 78500, target: 80645, units: 159, cumSales: 718300, cumUnits: 1451 },
-    { x: '13 Oct', sales: 85400, target: 80645, units: 173, cumSales: 968700, cumUnits: 1957 },
-    { x: '16 Oct', sales: 71900, target: 80645, units: 145, cumSales: 1195800, cumUnits: 2415 },
-    { x: '19 Oct', sales: 89200, target: 80645, units: 180, cumSales: 1445600, cumUnits: 2920 },
-    { x: '22 Oct', sales: 76800, target: 80645, units: 155, cumSales: 1675200, cumUnits: 3384 },
-    { x: '25 Oct', sales: 92400, target: 80645, units: 187, cumSales: 1944800, cumUnits: 3928 },
-    { x: '28 Oct', sales: 84600, target: 80645, units: 171, cumSales: 2185400, cumUnits: 4414 },
-    { x: '31 Oct', sales: 96800, target: 80645, units: 196, cumSales: 2270958, cumUnits: 4589 },
-];
+import {
+    getDashboardSummary,
+    getDashboardOverview,
+    getRevenueVsCost,
+    getTopProducts,
+    getStores,
+} from '../../services/dashboard';
+import { getOrders } from '../../services/orderService';
+import './dashboard.css';
 
-/* ── September (Last Month) Daily Breakdown ──
-   Total Monthly Sales: ₹19,40,500 (₹19.41 Lakhs)
-   Total Monthly Units Sold: 3,920 units
-*/
-const septemberDailyData = [
-    { x: '01 Sep', sales: 58000, target: 66667, units: 120, cumSales: 58000, cumUnits: 120 },
-    { x: '05 Sep', sales: 62500, target: 66667, units: 128, cumSales: 298000, cumUnits: 602 },
-    { x: '10 Sep', sales: 55000, target: 66667, units: 112, cumSales: 615000, cumUnits: 1242 },
-    { x: '15 Sep', sales: 71200, target: 66667, units: 144, cumSales: 964000, cumUnits: 1947 },
-    { x: '20 Sep', sales: 67800, target: 66667, units: 137, cumSales: 1302000, cumUnits: 2630 },
-    { x: '25 Sep', sales: 74500, target: 66667, units: 151, cumSales: 1664000, cumUnits: 3361 },
-    { x: '30 Sep', sales: 69200, target: 66667, units: 140, cumSales: 1940500, cumUnits: 3920 },
-];
-
-/* ── Full Year (Jan to Dec 2026) Monthly Sales & Volume ──
-   October exactly matches Total Sales: ₹22,70,958 (₹22.71 Lakhs) and 4,589 units sold!
-   Annual Total Revenue: ₹2.27 Crore
-   Annual Total Units: 46,019 units
-*/
-const yearMonthlyData = [
-    { x: 'Jan', sales: 1680000, target: 2000000, units: 3400, targetUnits: 4000 },
-    { x: 'Feb', sales: 1540000, target: 2000000, units: 3110, targetUnits: 4000 },
-    { x: 'Mar', sales: 1820000, target: 2000000, units: 3680, targetUnits: 4000 },
-    { x: 'Apr', sales: 1750000, target: 2000000, units: 3540, targetUnits: 4000 },
-    { x: 'May', sales: 1980000, target: 2200000, units: 4000, targetUnits: 4400 },
-    { x: 'Jun', sales: 1890000, target: 2200000, units: 3820, targetUnits: 4400 },
-    { x: 'Jul', sales: 1720000, target: 2200000, units: 3480, targetUnits: 4400 },
-    { x: 'Aug', sales: 1850000, target: 2200000, units: 3740, targetUnits: 4400 },
-    { x: 'Sep', sales: 1940500, target: 2200000, units: 3920, targetUnits: 4400 },
-    { x: 'Oct', sales: 2270958, target: 2500000, units: 4589, targetUnits: 5000 },
-    { x: 'Nov', sales: 2150000, target: 2500000, units: 4350, targetUnits: 5000 },
-    { x: 'Dec', sales: 2420000, target: 2500000, units: 4890, targetUnits: 5000 },
-];
-
-/* ── Clear Y-Axis Tick Formatters ── */
-
-// 1. Currency Y-Axis: Clearly formatted in ₹ Lakhs (or ₹k for daily)
-const formatCurrencyYAxis = (val, isDaily = false) => {
-    if (!val || val === 0) return '₹0';
-    if (val >= 10000000) {
-        const inCr = val / 10000000;
-        return `₹${inCr % 1 === 0 ? inCr : inCr.toFixed(1)}Cr`;
-    }
-    if (val >= 100000) {
-        const inLakhs = val / 100000;
-        return `₹${inLakhs % 1 === 0 ? inLakhs : inLakhs.toFixed(1)}L`;
-    }
-    if (val >= 1000) {
-        return `₹${Math.round(val / 1000)}k`;
-    }
-    return `₹${val}`;
+const PERIOD_LABELS = {
+    this_year: 'This Year',
+    this_month: 'This Month',
+    last_month: 'Last Month',
 };
 
-// 2. Units (Quantity) Y-Axis: Clearly formatted with 'units' or 'k'
-const formatUnitsYAxis = (val) => {
-    if (!val || val === 0) return '0';
-    if (val >= 1000) {
-        const inK = val / 1000;
-        return `${inK % 1 === 0 ? inK : inK.toFixed(1)}k`;
-    }
-    return `${val}`;
-};
-
-/* ── Custom Disambiguated Tooltip ──
-   Completely separates Sales Revenue (₹ / Lakhs) from Volume (Units sold)
-*/
-const OverviewTooltip = ({ active, payload, label, period, metric }) => {
-    if (!active || !payload?.length) return null;
-    const data = payload[0]?.payload;
-    if (!data) return null;
-
-    const salesVal = Number(data.sales || 0);
-    const targetVal = Number(data.target || 0);
-    const unitsVal = Number(data.units || 0);
-    const targetUnitsVal = Number(data.targetUnits || (targetVal ? Math.round(targetVal / 500) : 0));
-    const cumSalesVal = data.cumSales ? Number(data.cumSales) : null;
-
-    const salesLakhs = (salesVal / 100000).toFixed(2);
-    const targetLakhs = (targetVal / 100000).toFixed(2);
-    const isYear = period === 'This Year';
-
-    return (
-        <div style={{
-            background: '#ffffff',
-            border: '1px solid #cbd5e1',
-            borderRadius: 12,
-            padding: '12px 16px',
-            boxShadow: '0 10px 25px -5px rgba(0,0,0,0.12), 0 8px 10px -6px rgba(0,0,0,0.06)',
-            fontSize: 12,
-            minWidth: 230,
-            color: '#1e293b',
-        }}>
-            {/* Header */}
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: '1px solid #e2e8f0',
-                paddingBottom: 6,
-                marginBottom: 8,
-            }}>
-                <span style={{ fontWeight: 800, color: '#0f172a', fontSize: 13 }}>
-                    {label} {isYear ? '2026' : ''}
-                </span>
-                <span style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: '2px 7px',
-                    borderRadius: 10,
-                    background: '#e0e7ff',
-                    color: '#4338ca',
-                }}>
-                    {isYear ? 'Monthly Total' : 'Daily Report'}
-                </span>
-            </div>
-
-            {/* Sales Revenue (Currency in ₹ & Lakhs) */}
-            <div style={{ margin: '5px 0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#4f46e5', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4f46e5', display: 'inline-block' }} />
-                        Sales Revenue:
-                    </span>
-                    <span style={{ fontWeight: 800, color: '#1e1b4b' }}>
-                        ₹{salesVal.toLocaleString('en-IN')}
-                    </span>
-                </div>
-                <div style={{ textAlign: 'right', fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
-                    ({salesVal >= 100000 ? `₹${salesLakhs} Lakhs` : `₹${(salesVal / 1000).toFixed(1)}k`})
-                </div>
-            </div>
-
-            {/* Target Revenue */}
-            {targetVal > 0 && (
-                <div style={{ margin: '5px 0', borderTop: '1px dashed #f1f5f9', paddingTop: 4 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#059669', display: 'inline-block' }} />
-                            Target Revenue:
-                        </span>
-                        <span style={{ fontWeight: 700, color: '#064e3b' }}>
-                            ₹{targetVal.toLocaleString('en-IN')}
-                        </span>
-                    </div>
-                    <div style={{ textAlign: 'right', fontSize: 11, color: '#059669', fontWeight: 600 }}>
-                        ({targetVal >= 100000 ? `₹${targetLakhs} Lakhs` : `₹${(targetVal / 1000).toFixed(1)}k`})
-                    </div>
-                </div>
-            )}
-
-            {/* Units Sold (Quantity) */}
-            {unitsVal > 0 && (
-                <div style={{ margin: '6px 0 0 0', borderTop: '1px solid #f1f5f9', paddingTop: 6 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ color: '#d97706', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#d97706', display: 'inline-block' }} />
-                            Volume Sold:
-                        </span>
-                        <span style={{ fontWeight: 800, color: '#78350f' }}>
-                            {unitsVal.toLocaleString('en-IN')} units
-                        </span>
-                    </div>
-                    {targetUnitsVal > 0 && (
-                        <div style={{ textAlign: 'right', fontSize: 10, color: '#92400e', fontWeight: 500 }}>
-                            Target: {targetUnitsVal.toLocaleString('en-IN')} units ({Math.round((unitsVal / targetUnitsVal) * 100)}%)
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Cumulative MTD for Daily view */}
-            {!isYear && cumSalesVal && (
-                <div style={{
-                    marginTop: 8,
-                    paddingTop: 6,
-                    borderTop: '1px solid #e2e8f0',
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    fontSize: 11,
-                    color: '#475569',
-                    fontWeight: 600,
-                }}>
-                    <span>Month-to-Date:</span>
-                    <span style={{ color: '#0f172a', fontWeight: 700 }}>
-                        ₹{(cumSalesVal / 100000).toFixed(2)} Lakhs
-                    </span>
-                </div>
-            )}
-        </div>
-    );
-};
-
-/* ── Shimmer Skeleton ── */
-const StatCardSkeleton = () => (
-    <div className="stat-card stat-card-skeleton">
-        <div className="stat-card-top">
-            <div>
-                <div className="skeleton-line skeleton-label" />
-                <div className="skeleton-line skeleton-value" />
-            </div>
-            <div className="skeleton-circle" />
-        </div>
-        <div className="skeleton-bar" />
-    </div>
-);
-
-/* ── Stat Card with explicit Currency & Unit Clarification ── */
-const StatCard = ({ label, value, subValue, progress, target, color, trackColor, emoji, bg, loading, trend }) => (
-    <div className="stat-card" style={{ background: bg }}>
-        <div className="stat-card-top">
-            <div>
-                <p className="stat-label">{label}</p>
-                {loading ? (
-                    <div className="skeleton-line skeleton-value" style={{ marginTop: 6 }} />
-                ) : (
-                    <div>
-                        <p className="stat-value">{value}</p>
-                        {subValue && (
-                            <p style={{ fontSize: 12, fontWeight: 700, color, marginTop: 2, letterSpacing: '-0.2px' }}>
-                                {subValue}
-                            </p>
-                        )}
-                    </div>
-                )}
-                {!loading && trend !== undefined && (
-                    <p className="stat-trend" style={{ color: trend >= 0 ? '#10b981' : '#f59e0b', marginTop: 4 }}>
-                        {trend >= 0 ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}% vs target
-                    </p>
-                )}
-            </div>
-            <div className="stat-emoji">{emoji}</div>
-        </div>
-        <div className="stat-progress-track" style={{ background: trackColor }}>
-            <div
-                className="stat-progress-bar"
-                style={{ width: loading ? '0%' : `${Math.min(Math.max(progress, 0), 100)}%`, background: color }}
-            />
-        </div>
-        {!loading && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                <p className="stat-progress-label" style={{ color, margin: 0, fontWeight: 700 }}>
-                    {progress.toFixed(1)}% of target
-                </p>
-                {target && (
-                    <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
-                        {target}
-                    </span>
-                )}
-            </div>
-        )}
-    </div>
-);
-
-/* ── Default recent transactions & top products ── */
-const defaultRecentOrders = [
-    { id: '#ORD-001', amount: '₹2,450', status: 'Paid', color: '#10b981' },
-    { id: '#ORD-002', amount: '₹1,200', status: 'Pending', color: '#f59e0b' },
-    { id: '#ORD-003', amount: '₹3,800', status: 'Paid', color: '#10b981' },
-    { id: '#ORD-004', amount: '₹950', status: 'Cancelled', color: '#ef4444' },
-    { id: '#ORD-005', amount: '₹5,100', status: 'Paid', color: '#10b981' },
-];
-
-const defaultTopProducts = [
-    { name: 'Cotton T-Shirt', sold: 340, pct: 85, revenueFormatted: '₹34,000' },
-    { name: 'Wireless Earbuds', sold: 218, pct: 72, revenueFormatted: '₹87,200' },
-    { name: 'Denim Jeans', sold: 195, pct: 61, revenueFormatted: '₹58,500' },
-    { name: 'Water Bottle', sold: 412, pct: 93, revenueFormatted: '₹20,600' },
-    { name: 'Face Cream', sold: 156, pct: 48, revenueFormatted: '₹46,800' },
-];
-
-/* ── Main Dashboard ── */
-const Dashboard = () => {
-    // Default to 'This Year' so the Y-axis explicitly shows ₹ Lakhs (0-30L) and Oct matches ₹22.71 Lakhs!
-    const [overviewPeriod, setOverviewPeriod] = useState('This Year');
-    // Metric mode: 'revenue' (₹ in Lakhs), 'units' (Volume in Units), 'both' (Dual Axis)
-    const [chartMetric, setChartMetric] = useState('revenue');
-    const [paretoPeriod, setParetoPeriod] = useState('This Month');
-    const [lastUpdated, setLastUpdated] = useState(new Date());
-    const [refreshing, setRefreshing] = useState(false);
-
-    // Initial calibrated retail business state:
-    // Total Sales: ₹22,70,958 (₹22.71 Lakhs)
-    // Total Cost: ₹13,62,570 (60% COGS)
-    // Products Sold: 4,589 units
-    const [realStats, setRealStats] = useState({
-        totalSales: 2270958,
-        totalCost: 1362570,
-        productSold: 4589,
-        loading: false,
-        error: null,
-        recentOrders: defaultRecentOrders,
-        topProducts: defaultTopProducts,
-        pieData: [
-            { name: 'Revenue', value: 2270958 },
-            { name: 'Cost', value: 1362570 },
-        ],
+const formatCurrency = (val) => {
+    const num = Number(val || 0);
+    return '₹' + num.toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
     });
+};
 
-    // Auto-calculate dynamic values from real invoices or fallback
-    const fetchDashboardData = useCallback(async (silent = false) => {
-        if (!silent) setRefreshing(true);
-        try {
-            let invoices = [];
-            try {
-                const res = await getInvoices();
-                if (res) {
-                    const data = Array.isArray(res) ? res : (res?.data || res?.items || []);
-                    if (Array.isArray(data) && data.length > 0) invoices = data;
-                }
-            } catch (_) {}
+const formatInteger = (val) => {
+    return Number(val || 0).toLocaleString('en-IN');
+};
 
-            try {
-                const stored = localStorage.getItem('gst_invoices');
-                if (stored) {
-                    const parsed = JSON.parse(stored);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                        parsed.forEach(loc => {
-                            if (!invoices.some(inv => String(inv.id || inv.invoice_number) === String(loc.id))) {
-                                invoices.push(loc);
-                            }
-                        });
-                    }
-                }
-            } catch (_) {}
-
-            if (invoices.length > 0) {
-                const active = invoices.filter(inv => inv.status !== 'Cancelled' && inv.status !== 'Returned');
-                const sumSales = active.reduce((sum, inv) => sum + Number(inv.amount || inv.total || inv.grand_total || 0), 0);
-                const sumUnits = active.reduce((sum, inv) => {
-                    if (Array.isArray(inv.items) && inv.items.length > 0) {
-                        return sum + inv.items.reduce((s, it) => s + Number(it.quantity || it.qty || 1), 0);
-                    }
-                    return sum + Number(inv.total_items || inv.quantity || inv.qty || 1);
-                }, 0);
-
-                if (sumSales > 0) {
-                    const cost = Math.round(sumSales * 0.6);
-                    setRealStats(prev => ({
-                        ...prev,
-                        totalSales: sumSales,
-                        totalCost: cost,
-                        productSold: sumUnits > 0 ? sumUnits : prev.productSold,
-                        pieData: [
-                            { name: 'Revenue', value: sumSales },
-                            { name: 'Cost', value: cost },
-                        ],
-                    }));
-                }
-            }
-        } catch (_) {
-        } finally {
-            setLastUpdated(new Date());
-            setRefreshing(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchDashboardData(true);
-    }, [fetchDashboardData]);
-
-    /* ── Precise Target Calculations ── */
-    // Monthly Sales Target: ₹25,00,000 (25.0 Lakhs)
-    const salesTarget = useMemo(() => {
-        try {
-            const stored = localStorage.getItem('store_targets') || localStorage.getItem('revenue_target');
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                if (Array.isArray(parsed)) {
-                    const active = parsed.find(t => t.target_type === 'revenue' && t.status === 'active');
-                    if (active && Number(active.target_value) >= 500000) return Number(active.target_value);
-                } else if (Number(parsed) >= 500000) {
-                    return Number(parsed);
-                }
-            }
-        } catch (_) {}
-
-        const sales = realStats.totalSales || 2270958;
-        if (sales > 10000000) return Math.ceil(sales / 5000000) * 5000000;
-        if (sales > 1000000) return 2500000; // ₹25 Lakhs monthly target
-        if (sales > 500000) return 1000000;
-        return 500000;
-    }, [realStats.totalSales]);
-
-    // Budgeted Cost Target is 60% of Sales Target (COGS)
-    const costTarget = useMemo(() => Math.round(salesTarget * 0.6), [salesTarget]);
-
-    // Products Sold Target: 5,000 units
-    const soldTarget = useMemo(() => {
-        const sold = realStats.productSold || 4589;
-        if (sold > 10000) return Math.ceil(sold / 5000) * 5000;
-        if (sold > 1000) return 5000;
-        if (sold > 500) return 1000;
-        return 500;
-    }, [realStats.productSold]);
-
-    const salesProgress = salesTarget > 0 ? (realStats.totalSales / salesTarget) * 100 : 0;
-    const costProgress = costTarget > 0 ? (realStats.totalCost / costTarget) * 100 : 0;
-    const soldProgress = soldTarget > 0 ? (realStats.productSold / soldTarget) * 100 : 0;
-
-    const salesInLakhs = (realStats.totalSales / 100000).toFixed(2);
-    const costInLakhs = (realStats.totalCost / 100000).toFixed(2);
-    const targetInLakhs = (salesTarget / 100000).toFixed(1);
-    const costTargetInLakhs = (costTarget / 100000).toFixed(1);
-
-    const displayStats = [
-        {
-            label: 'Total Sales',
-            value: `₹${Math.round(realStats.totalSales).toLocaleString('en-IN')}`,
-            subValue: `₹${salesInLakhs} Lakhs`,
-            progress: salesProgress,
-            trend: salesProgress - 100,
-            target: `Target: ₹${targetInLakhs} Lakhs`,
-            color: '#6366f1',
-            trackColor: '#e0e7ff',
-            emoji: '🛍️',
-            bg: 'linear-gradient(135deg,#eef2ff 0%,#f5f3ff 100%)',
-        },
-        {
-            label: 'Total Cost',
-            value: `₹${Math.round(realStats.totalCost).toLocaleString('en-IN')}`,
-            subValue: `₹${costInLakhs} Lakhs (COGS)`,
-            progress: costProgress,
-            trend: costProgress - 100,
-            target: `Target: ₹${costTargetInLakhs} Lakhs`,
-            color: '#ec4899',
-            trackColor: '#fce7f3',
-            emoji: '💳',
-            bg: 'linear-gradient(135deg,#fdf2f8 0%,#fff1f9 100%)',
-        },
-        {
-            label: 'Products Sold',
-            value: `${realStats.productSold.toLocaleString('en-IN')} units`,
-            subValue: 'Quantity / Volume',
-            progress: soldProgress,
-            trend: soldProgress - 100,
-            target: `Target: ${soldTarget.toLocaleString('en-IN')} units`,
-            color: '#10b981',
-            trackColor: '#d1fae5',
-            emoji: '📦',
-            bg: 'linear-gradient(135deg,#ecfdf5 0%,#f0fdf4 100%)',
-        },
-    ];
-
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    const hour = new Date().getHours();
-    const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
-
-    const updatedDateInfo = useMemo(() => {
-        if (!lastUpdated) return { isToday: true, isYesterday: false, display: 'Live', badgeLabel: "● Today's Data" };
-        const now = new Date();
-        const isToday = lastUpdated.toDateString() === now.toDateString();
-
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        const isYesterday = lastUpdated.toDateString() === yesterday.toDateString();
-
-        const dateStr = lastUpdated.toLocaleDateString('en-IN', {
+const formatDate = (isoStr) => {
+    if (!isoStr) return '—';
+    try {
+        const d = new Date(isoStr);
+        if (isNaN(d.getTime())) return isoStr;
+        return d.toLocaleDateString('en-IN', {
             day: '2-digit',
             month: 'short',
             year: 'numeric',
-        });
-        const timeStr = lastUpdated.toLocaleTimeString('en-IN', {
             hour: '2-digit',
             minute: '2-digit',
-            second: '2-digit',
             hour12: true,
         });
+    } catch {
+        return isoStr;
+    }
+};
 
-        const dayTag = isToday ? 'Today' : isYesterday ? 'Yesterday' : dateStr;
-        const badgeLabel = isToday ? "● Today's Real-Time Data" : isYesterday ? "● Yesterday's Data" : `● Data as of ${dateStr}`;
+const Dashboard = () => {
+    // ── Filters & Selectors ──
+    const [stores, setStores] = useState([]);
+    const [selectedStore, setSelectedStore] = useState(''); // '' means All Stores (omitted store_id)
+    const [period, setPeriod] = useState('this_year'); // 'this_year' | 'this_month' | 'last_month'
 
-        return {
-            isToday,
-            isYesterday,
-            dateStr,
-            timeStr,
-            dayTag,
-            badgeLabel,
-            display: `${dayTag}, ${dateStr} at ${timeStr}`,
-        };
-    }, [lastUpdated]);
+    // Individual chart period overrides (default synchronized with main period)
+    const [overviewChartPeriod, setOverviewChartPeriod] = useState('this_year');
+    const [revCostChartPeriod, setRevCostChartPeriod] = useState('this_year');
 
-    // Dynamic Chart Data based on selected period
-    const chartData = useMemo(() => {
-        if (overviewPeriod === 'This Month') {
-            const total = realStats.totalSales || 2270958;
-            const ratio = total / 2270958;
-            const dayTarget = Math.round(salesTarget / 31);
-            const unitRatio = (realStats.productSold || 4589) / 4589;
-            return octoberDailyData.map(d => ({
-                ...d,
-                sales: Math.round(d.sales * ratio),
-                target: dayTarget,
-                units: Math.round(d.units * unitRatio),
-                cumSales: Math.round(d.cumSales * ratio),
-            }));
-        }
-        if (overviewPeriod === 'Last Month') {
-            return septemberDailyData;
-        }
-        // 'This Year' (Jan to Dec 2026):
-        // October bar precisely incorporates the realStats.totalSales and realStats.productSold
-        return yearMonthlyData.map(d => {
-            if (d.x === 'Oct') {
-                return {
-                    ...d,
-                    sales: realStats.totalSales || 2270958,
-                    target: salesTarget,
-                    units: realStats.productSold || 4589,
-                    targetUnits: soldTarget,
-                };
+    // Dropdown open states
+    const [isStoreOpen, setIsStoreOpen] = useState(false);
+    const [isPeriodOpen, setIsPeriodOpen] = useState(false);
+
+    // ── API State ──
+    const [summary, setSummary] = useState({
+        today_sales: 0,
+        monthly_sales: 0,
+        total_customers: 0,
+        total_revenue: 0,
+        low_stock_products: 0,
+        mode: 'all_stores',
+        stores_summary: [],
+    });
+
+    const [overviewData, setOverviewData] = useState([]);
+    const [revenueVsCost, setRevenueVsCost] = useState({ revenue: 0, cost: 0 });
+    const [topProducts, setTopProducts] = useState([]);
+    const [transactions, setTransactions] = useState([]);
+
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState(null);
+
+    // Sequence reference to prevent stale responses from race conditions
+    const reqSeqRef = useRef(0);
+    const storeDropdownRef = useRef(null);
+    const periodDropdownRef = useRef(null);
+
+    // Close dropdowns on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (storeDropdownRef.current && !storeDropdownRef.current.contains(e.target)) {
+                setIsStoreOpen(false);
             }
-            return d;
-        });
-    }, [overviewPeriod, realStats.totalSales, realStats.productSold, salesTarget, soldTarget]);
+            if (periodDropdownRef.current && !periodDropdownRef.current.contains(e.target)) {
+                setIsPeriodOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
-    // Dynamic Donut chart data based on selected period
-    const activePieData = useMemo(() => {
-        if (paretoPeriod === 'This Month') {
-            return [
-                { name: 'Revenue', value: realStats.totalSales || 2270958 },
-                { name: 'Cost', value: realStats.totalCost || 1362570 },
-            ];
+    // ── Load Authorized Stores ──
+    useEffect(() => {
+        let mounted = true;
+        const fetchStoreList = async () => {
+            try {
+                const storeList = await getStores();
+                if (mounted && Array.isArray(storeList)) {
+                    setStores(storeList);
+                }
+            } catch (err) {
+                console.warn('Could not load stores list:', err?.message || err);
+            }
+        };
+        fetchStoreList();
+        return () => { mounted = false; };
+    }, []);
+
+    // ── Fetch All Dashboard Data ──
+    const fetchAllDashboardData = useCallback(async (storeIdVal, mainPeriodVal, ovPeriodVal, rcPeriodVal, isSilent = false) => {
+        const currentSeq = ++reqSeqRef.current;
+        if (!isSilent) setLoading(true);
+        setRefreshing(true);
+        setError(null);
+
+        const storeFilter = storeIdVal ? Number(storeIdVal) : null;
+
+        try {
+            const [
+                summaryResult,
+                overviewResult,
+                revCostResult,
+                topProductsResult,
+                ordersResult,
+            ] = await Promise.allSettled([
+                getDashboardSummary(storeFilter),
+                getDashboardOverview(ovPeriodVal || mainPeriodVal, storeFilter),
+                getRevenueVsCost(rcPeriodVal || mainPeriodVal, storeFilter),
+                getTopProducts(10, storeFilter),
+                getOrders({
+                    store_id: storeFilter || undefined,
+                    page: 1,
+                    page_size: 5,
+                }),
+            ]);
+
+            // Prevent stale responses if a newer request was dispatched
+            if (currentSeq !== reqSeqRef.current) return;
+
+            let hadError = false;
+            let errorMsg = '';
+
+            // 1. Dashboard Summary
+            if (summaryResult.status === 'fulfilled' && summaryResult.value) {
+                const val = summaryResult.value;
+                setSummary({
+                    today_sales: Number(val.today_sales ?? 0),
+                    monthly_sales: Number(val.monthly_sales ?? 0),
+                    total_customers: Number(val.total_customers ?? 0),
+                    total_revenue: Number(val.total_revenue ?? 0),
+                    low_stock_products: Number(val.low_stock_products ?? 0),
+                    mode: val.mode || 'all_stores',
+                    stores_summary: Array.isArray(val.stores_summary) ? val.stores_summary : [],
+                });
+            } else {
+                hadError = true;
+                errorMsg = summaryResult.reason?.message || 'Failed to load dashboard summary';
+            }
+
+            // 2. Sales Overview Chart
+            if (overviewResult.status === 'fulfilled' && overviewResult.value) {
+                const list = Array.isArray(overviewResult.value.overview) ? overviewResult.value.overview : [];
+                setOverviewData(list);
+            } else {
+                hadError = true;
+                setOverviewData([]);
+            }
+
+            // 3. Revenue vs Cost Chart
+            if (revCostResult.status === 'fulfilled' && revCostResult.value) {
+                setRevenueVsCost({
+                    revenue: Number(revCostResult.value.revenue ?? 0),
+                    cost: Number(revCostResult.value.cost ?? 0),
+                });
+            } else {
+                hadError = true;
+                setRevenueVsCost({ revenue: 0, cost: 0 });
+            }
+
+            // 4. Top Selling Products
+            if (topProductsResult.status === 'fulfilled' && topProductsResult.value) {
+                const prods = Array.isArray(topProductsResult.value.top_products)
+                    ? topProductsResult.value.top_products
+                    : [];
+                setTopProducts(prods);
+            } else {
+                hadError = true;
+                setTopProducts([]);
+            }
+
+            // 5. Recent Transactions (Orders)
+            if (ordersResult.status === 'fulfilled' && ordersResult.value) {
+                const rawOrders = ordersResult.value;
+                const ordList = Array.isArray(rawOrders)
+                    ? rawOrders
+                    : Array.isArray(rawOrders?.items)
+                    ? rawOrders.items
+                    : Array.isArray(rawOrders?.data)
+                    ? rawOrders.data
+                    : [];
+                setTransactions(ordList.slice(0, 5));
+            } else {
+                setTransactions([]);
+            }
+
+            if (hadError && errorMsg) {
+                setError(errorMsg);
+            }
+        } catch (err) {
+            if (currentSeq === reqSeqRef.current) {
+                setError(err?.message || 'Unable to connect to dashboard API');
+            }
+        } finally {
+            if (currentSeq === reqSeqRef.current) {
+                setLoading(false);
+                setRefreshing(false);
+            }
         }
-        if (paretoPeriod === 'Last Month') {
-            return [
-                { name: 'Revenue', value: 1940500 },
-                { name: 'Cost', value: 1164300 },
-            ];
+    }, []);
+
+    // Trigger fetch on filter change
+    useEffect(() => {
+        fetchAllDashboardData(selectedStore, period, overviewChartPeriod, revCostChartPeriod);
+    }, [selectedStore, period, overviewChartPeriod, revCostChartPeriod, fetchAllDashboardData]);
+
+    // Handle Main Period Change
+    const handlePeriodChange = (newPeriod) => {
+        setPeriod(newPeriod);
+        setOverviewChartPeriod(newPeriod);
+        setRevCostChartPeriod(newPeriod);
+        setIsPeriodOpen(false);
+    };
+
+    // Selected store name label
+    const selectedStoreLabel = useMemo(() => {
+        if (!selectedStore) return 'All Stores';
+        const found = stores.find((s) => String(s.id) === String(selectedStore));
+        return found ? found.name : `Store #${selectedStore}`;
+    }, [selectedStore, stores]);
+
+    // Calculate today's orders count from stores_summary if available
+    const todayOrdersCount = useMemo(() => {
+        if (!selectedStore && Array.isArray(summary.stores_summary) && summary.stores_summary.length > 0) {
+            return summary.stores_summary.reduce((acc, curr) => acc + Number(curr.orders_count || 0), 0);
         }
+        if (selectedStore && Array.isArray(summary.stores_summary)) {
+            const current = summary.stores_summary.find((s) => String(s.store_id) === String(selectedStore));
+            if (current) return Number(current.orders_count || 0);
+        }
+        return 0;
+    }, [selectedStore, summary.stores_summary]);
+
+    // Prepare Revenue vs Cost Chart Data
+    const revVsCostChartData = useMemo(() => {
         return [
-            { name: 'Revenue', value: 22709580 },
-            { name: 'Cost', value: 13625748 },
+            {
+                name: 'Revenue',
+                amount: Number(revenueVsCost.revenue || 0),
+                fill: '#2563eb',
+            },
+            {
+                name: 'Cost',
+                amount: Number(revenueVsCost.cost || 0),
+                fill: '#ef4444',
+            },
         ];
-    }, [paretoPeriod, realStats.totalSales, realStats.totalCost]);
-
-    const activeSales = activePieData[0].value;
-    const activeCost = activePieData[1].value;
-    const activeProfit = activeSales - activeCost;
-
-    const pieTotal = (activeSales + activeCost) || 1;
-    const revSharePct = ((activeSales / pieTotal) * 100).toFixed(1);
-    const costSharePct = ((activeCost / pieTotal) * 100).toFixed(1);
-    const costToRevPct = activeSales > 0 ? ((activeCost / activeSales) * 100).toFixed(1) : '0.0';
-    const profitMarginPct = activeSales > 0 ? (((activeSales - activeCost) / activeSales) * 100).toFixed(1) : '0.0';
-    const activeSalesInLakhs = (activeSales / 100000).toFixed(2);
-    const activeCostInLakhs = (activeCost / 100000).toFixed(2);
+    }, [revenueVsCost]);
 
     return (
-        <div className="dash-page">
+        <div className="dashboard-container">
+            {/* ── Top Header Area ── */}
+            <header className="dashboard-header">
+                <div className="dashboard-title-wrap">
+                    <h1 className="dashboard-title">Dashboard</h1>
+                    <p className="dashboard-subtitle">
+                        Overview of your store performance and key metrics
+                    </p>
+                </div>
 
-            {/* ── Hero greeting + stat cards ── */}
-            <div className="dash-hero">
-                <div className="dash-greeting">
-                    <h1 className="dash-greeting-title">Hi {user?.full_name || 'User'}, {greeting}</h1>
-                    <p className="dash-greeting-sub">Your dashboard gives you a view of key performance indicators and business processes.</p>
-
-                    {/* Real-time indicator with Date, Time, and Today/Yesterday status */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                        <div className="dash-live-badge" style={{ marginTop: 0 }}>
-                            <span className={`dash-live-dot ${refreshing ? 'dash-live-dot--refreshing' : ''}`} />
-                            <span className="dash-live-text">
-                                {refreshing
-                                    ? 'Refreshing…'
-                                    : lastUpdated
-                                    ? `Updated: ${updatedDateInfo.display}`
-                                    : 'Live'}
+                <div className="dashboard-controls">
+                    {/* Store Selector Dropdown */}
+                    <div className="control-group" ref={storeDropdownRef}>
+                        <span className="control-label">Store</span>
+                        <button
+                            type="button"
+                            className={`dropdown-trigger ${isStoreOpen ? 'open' : ''}`}
+                            onClick={() => setIsStoreOpen((prev) => !prev)}
+                            title="Select store filter"
+                        >
+                            <span className="dropdown-trigger-content">
+                                <BsShop className="dropdown-icon" />
+                                <span>{selectedStoreLabel}</span>
                             </span>
-                            <button
-                                className="dash-refresh-btn"
-                                onClick={() => fetchDashboardData(false)}
-                                disabled={realStats.loading || refreshing}
-                                title="Refresh now"
-                            >
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
-                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-                                </svg>
-                            </button>
-                        </div>
+                            <BsChevronDown className={`dropdown-chevron ${isStoreOpen ? 'open' : ''}`} />
+                        </button>
 
-                        {!refreshing && (
-                            <span style={{
-                                fontSize: 11,
-                                fontWeight: 700,
-                                padding: '3px 10px',
-                                borderRadius: 14,
-                                background: updatedDateInfo.isToday ? '#ecfdf5' : '#fffbeb',
-                                color: updatedDateInfo.isToday ? '#059669' : '#b45309',
-                                border: `1px solid ${updatedDateInfo.isToday ? '#a7f3d0' : '#fde68a'}`,
-                                letterSpacing: '0.01em',
-                            }}>
-                                {updatedDateInfo.badgeLabel}
-                            </span>
+                        {isStoreOpen && (
+                            <div className="dropdown-menu">
+                                <button
+                                    type="button"
+                                    className={`dropdown-item ${!selectedStore ? 'active' : ''}`}
+                                    onClick={() => {
+                                        setSelectedStore('');
+                                        setIsStoreOpen(false);
+                                    }}
+                                >
+                                    <BsShop />
+                                    <span>All Stores</span>
+                                </button>
+                                {stores.map((s) => (
+                                    <button
+                                        key={s.id}
+                                        type="button"
+                                        className={`dropdown-item ${String(selectedStore) === String(s.id) ? 'active' : ''}`}
+                                        onClick={() => {
+                                            setSelectedStore(String(s.id));
+                                            setIsStoreOpen(false);
+                                        }}
+                                    >
+                                        <BsShop />
+                                        <span>{s.name}</span>
+                                    </button>
+                                ))}
+                            </div>
                         )}
                     </div>
 
-                    {realStats.error && (
-                        <p className="dash-error-msg">{realStats.error}</p>
-                    )}
-                </div>
+                    {/* Period Selector Dropdown */}
+                    <div className="control-group" ref={periodDropdownRef}>
+                        <span className="control-label">Period</span>
+                        <button
+                            type="button"
+                            className={`dropdown-trigger ${isPeriodOpen ? 'open' : ''}`}
+                            onClick={() => setIsPeriodOpen((prev) => !prev)}
+                            title="Select reporting period"
+                        >
+                            <span className="dropdown-trigger-content">
+                                <BsCalendar3 className="dropdown-icon" />
+                                <span>{PERIOD_LABELS[period]}</span>
+                            </span>
+                            <BsChevronDown className={`dropdown-chevron ${isPeriodOpen ? 'open' : ''}`} />
+                        </button>
 
-                <div className="dash-stats">
-                    {realStats.loading
-                        ? [0, 1, 2].map(i => <StatCardSkeleton key={i} />)
-                        : displayStats.map((s, i) => (
-                            <StatCard key={i} {...s} loading={false} />
-                        ))
-                    }
-                </div>
-            </div>
-
-            {/* ── Charts row ── */}
-            <div className="dash-charts-row">
-
-                {/* Overview – Calibrated Sales & Volume chart */}
-                <div className="chart-card">
-                    <div className="chart-card-header" style={{ alignItems: 'flex-start' }}>
-                        <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                <h2 className="chart-title" style={{ margin: 0 }}>Sales Overview</h2>
-                                <span style={{
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    padding: '2px 8px',
-                                    borderRadius: 6,
-                                    background: chartMetric === 'revenue' ? '#e0e7ff' : chartMetric === 'units' ? '#d1fae5' : '#fef3c7',
-                                    color: chartMetric === 'revenue' ? '#4338ca' : chartMetric === 'units' ? '#065f46' : '#92400e',
-                                }}>
-                                    {chartMetric === 'revenue'
-                                        ? 'Y-Axis: ₹ in Lakhs'
-                                        : chartMetric === 'units'
-                                        ? 'Y-Axis: Units Sold'
-                                        : 'Dual Y-Axis: ₹ Lakhs (Left) + Units (Right)'}
-                                </span>
-                            </div>
-
-                            {/* Informative Subtitle Banner resolving all Unit vs Lakh ambiguity */}
-                            <p style={{ fontSize: 11, color: '#6366f1', margin: '4px 0 0 0', fontWeight: 600 }}>
-                                {overviewPeriod === 'This Year'
-                                    ? `Year 2026 Monthly • Oct Sales: ₹${salesInLakhs} Lakhs (${realStats.productSold.toLocaleString('en-IN')} units) | Target: ₹${targetInLakhs} Lakhs`
-                                    : overviewPeriod === 'This Month'
-                                    ? `October 2026 Daily (~₹73k/day) • Month Total: ₹${salesInLakhs} Lakhs (${realStats.productSold.toLocaleString('en-IN')} units)`
-                                    : `September 2026 Daily (~₹65k/day) • Month Total: ₹19.41 Lakhs (3,920 units)`}
-                            </p>
-                        </div>
-
-                        {/* Controls: Metric Switcher + Period Dropdown */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                            {/* Metric Mode Pill Buttons */}
-                            <div style={{
-                                display: 'flex',
-                                background: '#f1f5f9',
-                                borderRadius: 8,
-                                padding: 2,
-                                border: '1px solid #e2e8f0',
-                            }}>
+                        {isPeriodOpen && (
+                            <div className="dropdown-menu">
                                 <button
                                     type="button"
-                                    onClick={() => setChartMetric('revenue')}
-                                    style={{
-                                        border: 'none',
-                                        background: chartMetric === 'revenue' ? '#ffffff' : 'transparent',
-                                        color: chartMetric === 'revenue' ? '#4f46e5' : '#64748b',
-                                        fontWeight: chartMetric === 'revenue' ? 700 : 500,
-                                        fontSize: 11,
-                                        padding: '4px 8px',
-                                        borderRadius: 6,
-                                        cursor: 'pointer',
-                                        boxShadow: chartMetric === 'revenue' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                        transition: 'all 0.15s ease',
-                                    }}
-                                    title="View Revenue in ₹ Lakhs"
+                                    className={`dropdown-item ${period === 'this_year' ? 'active' : ''}`}
+                                    onClick={() => handlePeriodChange('this_year')}
                                 >
-                                    ₹ Revenue
+                                    <span>This Year</span>
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setChartMetric('units')}
-                                    style={{
-                                        border: 'none',
-                                        background: chartMetric === 'units' ? '#ffffff' : 'transparent',
-                                        color: chartMetric === 'units' ? '#059669' : '#64748b',
-                                        fontWeight: chartMetric === 'units' ? 700 : 500,
-                                        fontSize: 11,
-                                        padding: '4px 8px',
-                                        borderRadius: 6,
-                                        cursor: 'pointer',
-                                        boxShadow: chartMetric === 'units' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                        transition: 'all 0.15s ease',
-                                    }}
-                                    title="View Volume in Units Sold"
+                                    className={`dropdown-item ${period === 'this_month' ? 'active' : ''}`}
+                                    onClick={() => handlePeriodChange('this_month')}
                                 >
-                                    Units
+                                    <span>This Month</span>
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setChartMetric('both')}
-                                    style={{
-                                        border: 'none',
-                                        background: chartMetric === 'both' ? '#ffffff' : 'transparent',
-                                        color: chartMetric === 'both' ? '#d97706' : '#64748b',
-                                        fontWeight: chartMetric === 'both' ? 700 : 500,
-                                        fontSize: 11,
-                                        padding: '4px 8px',
-                                        borderRadius: 6,
-                                        cursor: 'pointer',
-                                        boxShadow: chartMetric === 'both' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                        transition: 'all 0.15s ease',
-                                    }}
-                                    title="Dual Axis: ₹ Lakhs and Units"
+                                    className={`dropdown-item ${period === 'last_month' ? 'active' : ''}`}
+                                    onClick={() => handlePeriodChange('last_month')}
                                 >
-                                    Both
+                                    <span>Last Month</span>
                                 </button>
                             </div>
-
-                            {/* Period Selector */}
-                            <select
-                                className="chart-period-select"
-                                value={overviewPeriod}
-                                onChange={e => setOverviewPeriod(e.target.value)}
-                            >
-                                <option value="This Year">This Year (Monthly)</option>
-                                <option value="This Month">This Month (Daily - Oct)</option>
-                                <option value="Last Month">Last Month (Daily - Sep)</option>
-                            </select>
-                        </div>
+                        )}
                     </div>
 
-                    <ResponsiveContainer width="100%" height={250}>
-                        <ComposedChart data={chartData} margin={{ top: 12, right: chartMetric === 'both' ? 20 : 15, bottom: 0, left: 10 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                            <XAxis
-                                dataKey="x"
-                                tick={{ fontSize: 11, fill: '#64748b' }}
-                                axisLine={false}
-                                tickLine={false}
-                            />
+                    {/* Live Data Badge with Refresh Trigger */}
+                    <div className="live-data-badge">
+                        <span className="live-dot" />
+                        <span>Live data</span>
+                        <button
+                            type="button"
+                            className={`live-refresh-btn ${refreshing ? 'spinning' : ''}`}
+                            onClick={() => fetchAllDashboardData(selectedStore, period, overviewChartPeriod, revCostChartPeriod, true)}
+                            title="Refresh dashboard metrics"
+                        >
+                            <BsArrowRepeat size={14} />
+                        </button>
+                    </div>
+                </div>
+            </header>
 
-                            {/* Primary (Left) Y-Axis */}
-                            {chartMetric === 'units' ? (
-                                <YAxis
-                                    yAxisId="left"
-                                    tickFormatter={formatUnitsYAxis}
-                                    tick={{ fontSize: 11, fill: '#059669', fontWeight: 600 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    width={45}
-                                />
-                            ) : (
-                                <YAxis
-                                    yAxisId="left"
-                                    tickFormatter={val => formatCurrencyYAxis(val, overviewPeriod !== 'This Year')}
-                                    tick={{ fontSize: 11, fill: '#4f46e5', fontWeight: 600 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    width={58}
-                                />
-                            )}
+            {/* Error Notification with Interactive Retry */}
+            {error && (
+                <div className="dashboard-error-banner">
+                    <div className="dashboard-error-text">
+                        <BsExclamationCircleFill size={16} />
+                        <span>{error}</span>
+                    </div>
+                    <button
+                        type="button"
+                        className="dashboard-retry-btn"
+                        onClick={() => fetchAllDashboardData(selectedStore, period, overviewChartPeriod, revCostChartPeriod)}
+                    >
+                        Retry
+                    </button>
+                </div>
+            )}
 
-                            {/* Secondary (Right) Y-Axis when Dual Axis is active */}
-                            {chartMetric === 'both' && (
-                                <YAxis
-                                    yAxisId="right"
-                                    orientation="right"
-                                    tickFormatter={formatUnitsYAxis}
-                                    tick={{ fontSize: 11, fill: '#059669', fontWeight: 600 }}
-                                    axisLine={false}
-                                    tickLine={false}
-                                    width={45}
-                                />
-                            )}
-
-                            <Tooltip
-                                content={
-                                    <OverviewTooltip
-                                        period={overviewPeriod}
-                                        metric={chartMetric}
-                                    />
-                                }
-                            />
-
-                            <Legend
-                                verticalAlign="top"
-                                align="right"
-                                iconType="circle"
-                                wrapperStyle={{ paddingBottom: 8, fontSize: 11 }}
-                            />
-
-                            {/* Mode 1: Revenue View (₹ in Lakhs) */}
-                            {chartMetric === 'revenue' && (
-                                <>
-                                    <Bar
-                                        yAxisId="left"
-                                        dataKey="sales"
-                                        name={overviewPeriod === 'This Year' ? 'Sales Revenue (₹ Lakhs)' : 'Daily Sales (₹k)'}
-                                        fill="#6366f1"
-                                        radius={[4, 4, 0, 0]}
-                                        maxBarSize={24}
-                                    />
-                                    <Line
-                                        yAxisId="left"
-                                        type="monotone"
-                                        dataKey="target"
-                                        name={overviewPeriod === 'This Year' ? 'Target (₹ Lakhs)' : 'Daily Target (₹k)'}
-                                        stroke="#10b981"
-                                        strokeWidth={2.5}
-                                        strokeDasharray="4 4"
-                                        dot={{ r: 3, fill: '#10b981' }}
-                                        activeDot={{ r: 5 }}
-                                    />
-                                </>
-                            )}
-
-                            {/* Mode 2: Units Sold View (Volume in Units) */}
-                            {chartMetric === 'units' && (
-                                <>
-                                    <Bar
-                                        yAxisId="left"
-                                        dataKey="units"
-                                        name="Units Sold (Volume)"
-                                        fill="#10b981"
-                                        radius={[4, 4, 0, 0]}
-                                        maxBarSize={24}
-                                    />
-                                    <Line
-                                        yAxisId="left"
-                                        type="monotone"
-                                        dataKey={overviewPeriod === 'This Year' ? 'targetUnits' : 'target'}
-                                        name="Volume Target"
-                                        stroke="#f59e0b"
-                                        strokeWidth={2.5}
-                                        strokeDasharray="4 4"
-                                        dot={{ r: 3, fill: '#f59e0b' }}
-                                        activeDot={{ r: 5 }}
-                                    />
-                                </>
-                            )}
-
-                            {/* Mode 3: Both (Dual Axis: ₹ Lakhs on Left, Units on Right) */}
-                            {chartMetric === 'both' && (
-                                <>
-                                    <Bar
-                                        yAxisId="left"
-                                        dataKey="sales"
-                                        name="Revenue (₹ Left Axis)"
-                                        fill="#6366f1"
-                                        radius={[4, 4, 0, 0]}
-                                        maxBarSize={24}
-                                    />
-                                    <Line
-                                        yAxisId="right"
-                                        type="monotone"
-                                        dataKey="units"
-                                        name="Units (Right Axis)"
-                                        stroke="#10b981"
-                                        strokeWidth={2.5}
-                                        dot={{ r: 3, fill: '#10b981' }}
-                                        activeDot={{ r: 5 }}
-                                    />
-                                    <Line
-                                        yAxisId="left"
-                                        type="monotone"
-                                        dataKey="target"
-                                        name="Revenue Target"
-                                        stroke="#ec4899"
-                                        strokeWidth={2}
-                                        strokeDasharray="4 4"
-                                        dot={false}
-                                    />
-                                </>
-                            )}
-                        </ComposedChart>
-                    </ResponsiveContainer>
+            {/* ── 4 KPI Cards Grid ── */}
+            <section className="kpi-grid" aria-label="Key Performance Indicators">
+                {/* 1. Total Revenue */}
+                <div className="kpi-card">
+                    <div className="kpi-icon-wrap revenue">
+                        <BsBarChartFill />
+                    </div>
+                    <div className="kpi-content">
+                        <span className="kpi-label">Total Revenue</span>
+                        {loading ? (
+                            <div className="skeleton-box" style={{ width: 110, height: 26, margin: '4px 0' }} />
+                        ) : (
+                            <h2 className="kpi-value">{formatCurrency(summary.total_revenue)}</h2>
+                        )}
+                        <span className="kpi-subtitle trend-up">
+                            <BsArrowUp style={{ display: 'inline', marginRight: 3 }} />
+                            {PERIOD_LABELS[period]}
+                        </span>
+                    </div>
                 </div>
 
-                {/* Revenue vs Cost – Donut Chart */}
-                <div className="chart-card">
-                    <div className="chart-card-header">
-                        <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                <h2 className="chart-title" style={{ margin: 0 }}>Revenue Vs Cost</h2>
-                                <span style={{
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    padding: '2px 8px',
-                                    borderRadius: 6,
-                                    background: '#e0f2fe',
-                                    color: '#0369a1',
-                                }}>
-                                    Rev: {revSharePct}% | Cost: {costSharePct}%
-                                </span>
+                {/* 2. Today's Sales */}
+                <div className="kpi-card">
+                    <div className="kpi-icon-wrap sales">
+                        <BsCart3 />
+                    </div>
+                    <div className="kpi-content">
+                        <span className="kpi-label">Today's Sales</span>
+                        {loading ? (
+                            <div className="skeleton-box" style={{ width: 90, height: 26, margin: '4px 0' }} />
+                        ) : (
+                            <h2 className="kpi-value">{formatCurrency(summary.today_sales)}</h2>
+                        )}
+                        <span className="kpi-subtitle">
+                            {todayOrdersCount} orders today
+                        </span>
+                    </div>
+                </div>
+
+                {/* 3. Total Customers */}
+                <div className="kpi-card">
+                    <div className="kpi-icon-wrap customers">
+                        <BsPeopleFill />
+                    </div>
+                    <div className="kpi-content">
+                        <span className="kpi-label">Total Customers</span>
+                        {loading ? (
+                            <div className="skeleton-box" style={{ width: 60, height: 26, margin: '4px 0' }} />
+                        ) : (
+                            <h2 className="kpi-value">{formatInteger(summary.total_customers)}</h2>
+                        )}
+                        <span className="kpi-subtitle">Registered customers</span>
+                    </div>
+                </div>
+
+                {/* 4. Low Stock Products */}
+                <div className="kpi-card">
+                    <div className="kpi-icon-wrap lowstock">
+                        <BsBoxSeam />
+                    </div>
+                    <div className="kpi-content">
+                        <span className="kpi-label">Low Stock Products</span>
+                        {loading ? (
+                            <div className="skeleton-box" style={{ width: 60, height: 26, margin: '4px 0' }} />
+                        ) : (
+                            <h2 className="kpi-value">{formatInteger(summary.low_stock_products)}</h2>
+                        )}
+                        <span className="kpi-subtitle">Products need attention</span>
+                    </div>
+                </div>
+            </section>
+
+            {/* ── Charts Row (2 Columns) ── */}
+            <section className="charts-row">
+                {/* 1. Monthly Sales Chart */}
+                <div className="dashboard-card">
+                    <div className="dashboard-card-header">
+                        <div className="card-title-group">
+                            <div className="card-header-icon blue">
+                                <BsBarChartFill />
                             </div>
-                            <p style={{ fontSize: 11, color: '#6366f1', margin: '4px 0 0 0', fontWeight: 600 }}>
-                                {paretoPeriod === 'This Month'
-                                    ? `October 2026 • Revenue: ${revSharePct}% (₹${activeSalesInLakhs}L) • Cost: ${costSharePct}% (₹${activeCostInLakhs}L)`
-                                    : paretoPeriod === 'Last Month'
-                                    ? `September 2026 • Revenue: ${revSharePct}% (₹${activeSalesInLakhs}L) • Cost: ${costSharePct}% (₹${activeCostInLakhs}L)`
-                                    : `Year 2026 • Revenue: ${revSharePct}% (₹${activeSalesInLakhs}L) • Cost: ${costSharePct}% (₹${activeCostInLakhs}L)`}
-                            </p>
+                            <div>
+                                <h3 className="card-title">Monthly Sales</h3>
+                                <p className="card-subtitle">
+                                    {overviewChartPeriod === 'this_year'
+                                        ? 'Sales revenue for this year (Jan - Dec)'
+                                        : `Sales revenue for ${PERIOD_LABELS[overviewChartPeriod].toLowerCase()}`}
+                                </p>
+                            </div>
                         </div>
+
                         <select
-                            className="chart-period-select"
-                            value={paretoPeriod}
-                            onChange={e => setParetoPeriod(e.target.value)}
+                            className="card-period-select"
+                            value={overviewChartPeriod}
+                            onChange={(e) => setOverviewChartPeriod(e.target.value)}
+                            aria-label="Overview chart period"
                         >
-                            <option>This Month</option>
-                            <option>Last Month</option>
-                            <option>This Year</option>
+                            <option value="this_year">This Year</option>
+                            <option value="this_month">This Month</option>
+                            <option value="last_month">Last Month</option>
                         </select>
                     </div>
 
-                    {realStats.loading ? (
-                        <div className="dash-chart-skeleton" />
-                    ) : realStats.totalSales === 0 ? (
-                        <div className="dash-empty-chart">
-                            <span>📊</span>
-                            <p>No sales data yet</p>
-                        </div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height={250}>
-                            <PieChart>
-                                <Pie
-                                    data={activePieData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={65}
-                                    outerRadius={95}
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                                        const RADIAN = Math.PI / 180;
-                                        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                                        const x = cx + radius * Math.cos(-midAngle * RADIAN);
-                                        const y = cy + radius * Math.sin(-midAngle * RADIAN);
-                                        return (
-                                            <text
-                                                x={x}
-                                                y={y}
-                                                fill="#ffffff"
-                                                textAnchor="middle"
-                                                dominantBaseline="central"
-                                                style={{ fontSize: 12, fontWeight: 800, textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}
-                                            >
-                                                {`${(percent * 100).toFixed(1)}%`}
-                                            </text>
-                                        );
-                                    }}
-                                    labelLine={false}
-                                    animationBegin={0}
-                                    animationDuration={800}
+                    <div className="chart-content-wrap">
+                        {loading ? (
+                            <div className="skeleton-box" style={{ width: '100%', height: '100%' }} />
+                        ) : overviewData.length === 0 ? (
+                            <div className="empty-state-card">
+                                <BsBarChartFill className="empty-state-icon" />
+                                <p className="empty-state-title">No Sales Data</p>
+                                <p className="empty-state-sub">No sales recorded for the selected period.</p>
+                            </div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    data={overviewData}
+                                    margin={{ top: 22, right: 10, left: 10, bottom: 4 }}
                                 >
-                                    <Cell fill="#38bdf8" />
-                                    <Cell fill="#f43f5e" />
-                                </Pie>
-                                <Tooltip
-                                    formatter={(value, name) => {
-                                        const num = Number(value);
-                                        const lakhs = (num / 100000).toFixed(2);
-                                        const pct = pieTotal > 0 ? ((num / pieTotal) * 100).toFixed(1) : '0.0';
-                                        return [
-                                            `₹${num.toLocaleString('en-IN')} (₹${lakhs} Lakhs) • ${pct}% share`,
-                                            name,
-                                        ];
-                                    }}
-                                />
-                                <Legend
-                                    verticalAlign="bottom"
-                                    height={44}
-                                    content={() => (
-                                        <div style={{
-                                            display: 'flex',
-                                            justifyContent: 'center',
-                                            alignItems: 'center',
-                                            gap: 16,
-                                            paddingTop: 8,
-                                            flexWrap: 'wrap',
-                                        }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}>
-                                                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#38bdf8', display: 'inline-block' }} />
-                                                <span style={{ color: '#0369a1' }}>Revenue:</span>
-                                                <span style={{ fontWeight: 800, color: '#0f172a' }}>
-                                                    ₹{activeSales.toLocaleString('en-IN')}
-                                                </span>
-                                                <span style={{
-                                                    fontSize: 11,
-                                                    fontWeight: 700,
-                                                    padding: '1px 7px',
-                                                    borderRadius: 8,
-                                                    background: '#e0f2fe',
-                                                    color: '#0284c7',
-                                                }}>
-                                                    {revSharePct}%
-                                                </span>
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600 }}>
-                                                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#f43f5e', display: 'inline-block' }} />
-                                                <span style={{ color: '#be123c' }}>Cost:</span>
-                                                <span style={{ fontWeight: 800, color: '#0f172a' }}>
-                                                    ₹{activeCost.toLocaleString('en-IN')}
-                                                </span>
-                                                <span style={{
-                                                    fontSize: 11,
-                                                    fontWeight: 700,
-                                                    padding: '1px 7px',
-                                                    borderRadius: 8,
-                                                    background: '#ffe4e6',
-                                                    color: '#e11d48',
-                                                }}>
-                                                    {costSharePct}%
-                                                </span>
-                                            </div>
-                                        </div>
-                                    )}
-                                />
-                                <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" style={{ fontSize: 18, fontWeight: 800, fill: '#0f172a' }}>
-                                    {activeProfit >= 0 ? `${profitMarginPct}%` : '0%'}
-                                </text>
-                                <text x="50%" y="58%" textAnchor="middle" dominantBaseline="middle" style={{ fontSize: 11, fontWeight: 600, fill: '#64748b' }}>
-                                    Gross Margin
-                                </text>
-                            </PieChart>
-                        </ResponsiveContainer>
-                    )}
-
-                    {/* Percentage Breakdown Progress Bar */}
-                    {!realStats.loading && activeSales > 0 && (
-                        <div style={{ marginTop: 10 }}>
-                            <div style={{
-                                display: 'flex',
-                                height: 8,
-                                borderRadius: 6,
-                                overflow: 'hidden',
-                                background: '#f1f5f9',
-                            }}>
-                                <div
-                                    style={{
-                                        width: `${revSharePct}%`,
-                                        background: '#38bdf8',
-                                        transition: 'width 0.6s ease',
-                                    }}
-                                    title={`Revenue: ${revSharePct}%`}
-                                />
-                                <div
-                                    style={{
-                                        width: `${costSharePct}%`,
-                                        background: '#f43f5e',
-                                        transition: 'width 0.6s ease',
-                                    }}
-                                    title={`Cost: ${costSharePct}%`}
-                                />
-                            </div>
-                            <div style={{
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                fontSize: 11,
-                                fontWeight: 700,
-                                marginTop: 4,
-                            }}>
-                                <span style={{ color: '#0284c7' }}>
-                                    ● Revenue: {revSharePct}% (₹{activeSalesInLakhs}L)
-                                </span>
-                                <span style={{ color: '#e11d48' }}>
-                                    ● Cost: {costSharePct}% (₹{activeCostInLakhs}L)
-                                </span>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Gross Profit indicator */}
-                    {!realStats.loading && activeSales > 0 && (
-                        <div className="dash-profit-row" style={{ marginTop: 10 }}>
-                            <span className="dash-profit-label">Gross Profit</span>
-                            <span className="dash-profit-value" style={{ color: activeProfit >= 0 ? '#10b981' : '#ef4444' }}>
-                                ₹{Math.round(activeProfit).toLocaleString('en-IN')}
-                                <span style={{ fontSize: 11, fontWeight: 600, marginLeft: 4, color: activeProfit >= 0 ? '#059669' : '#dc2626' }}>
-                                    (₹{(activeProfit / 100000).toFixed(2)}L)
-                                </span>
-                            </span>
-                            <span className="dash-profit-pct" style={{ color: '#059669', fontWeight: 700 }}>
-                                ({profitMarginPct}% margin)
-                            </span>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* ── Bottom row: Recent Transactions + Top Products ── */}
-            <div className="dash-bottom-row">
-
-                {/* Recent Transactions – live from API */}
-                <div className="chart-card">
-                    <div className="chart-card-header">
-                        <h2 className="chart-title">Recent Transactions</h2>
-                        <button className="chart-view-all" onClick={() => fetchDashboardData(false)}>↻ Refresh</button>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                                    <XAxis
+                                        dataKey="month"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#64748b', fontSize: 11 }}
+                                    />
+                                    <YAxis
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#64748b', fontSize: 11 }}
+                                        tickFormatter={(v) => '₹' + Number(v).toLocaleString('en-IN')}
+                                        domain={[0, 'auto']}
+                                    />
+                                    <Tooltip
+                                        formatter={(val) => [formatCurrency(val), 'Sales Revenue']}
+                                        contentStyle={{
+                                            borderRadius: 8,
+                                            border: '1px solid #e2e8f0',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                                            fontSize: 12,
+                                        }}
+                                    />
+                                    <Bar
+                                        dataKey="sales"
+                                        fill="#2563eb"
+                                        radius={[4, 4, 0, 0]}
+                                        maxBarSize={32}
+                                    >
+                                        <LabelList
+                                            dataKey="sales"
+                                            position="top"
+                                            formatter={(val) => formatCurrency(val)}
+                                            style={{
+                                                fontSize: 10,
+                                                fill: '#0f172a',
+                                                fontWeight: 700,
+                                            }}
+                                        />
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
                     </div>
 
-                    {realStats.loading ? (
-                        <div className="dash-table-skeleton">
-                            {[0, 1, 2, 3, 4].map(i => <div key={i} className="dash-table-skeleton-row" />)}
+                    <div className="chart-legend">
+                        <span className="legend-item">
+                            <span className="legend-dot" style={{ backgroundColor: '#2563eb' }} />
+                            <span>Sales Revenue</span>
+                        </span>
+                    </div>
+                </div>
+
+                {/* 2. Revenue vs Cost Chart */}
+                <div className="dashboard-card">
+                    <div className="dashboard-card-header">
+                        <div className="card-title-group">
+                            <div className="card-header-icon blue">
+                                <BsBarChartFill />
+                            </div>
+                            <div>
+                                <h3 className="card-title">Revenue vs Cost</h3>
+                                <p className="card-subtitle">
+                                    Total revenue and cost for the selected period
+                                </p>
+                            </div>
                         </div>
-                    ) : realStats.recentOrders.length === 0 ? (
-                        <div className="dash-empty-state">
-                            <span>🧾</span>
-                            <p>No transactions found</p>
+
+                        <select
+                            className="card-period-select"
+                            value={revCostChartPeriod}
+                            onChange={(e) => setRevCostChartPeriod(e.target.value)}
+                            aria-label="Revenue vs cost period"
+                        >
+                            <option value="this_year">This Year</option>
+                            <option value="this_month">This Month</option>
+                            <option value="last_month">Last Month</option>
+                        </select>
+                    </div>
+
+                    <div className="chart-content-wrap">
+                        {loading ? (
+                            <div className="skeleton-box" style={{ width: '100%', height: '100%' }} />
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    data={revVsCostChartData}
+                                    margin={{ top: 22, right: 20, left: 20, bottom: 4 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                                    <XAxis
+                                        dataKey="name"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }}
+                                    />
+                                    <YAxis
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#64748b', fontSize: 11 }}
+                                        tickFormatter={(v) => '₹' + Number(v).toLocaleString('en-IN')}
+                                        domain={[0, 'auto']}
+                                    />
+                                    <Tooltip
+                                        formatter={(val, name) => [formatCurrency(val), name]}
+                                        contentStyle={{
+                                            borderRadius: 8,
+                                            border: '1px solid #e2e8f0',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                                            fontSize: 12,
+                                        }}
+                                    />
+                                    <Bar
+                                        dataKey="amount"
+                                        radius={[4, 4, 0, 0]}
+                                        maxBarSize={48}
+                                    >
+                                        <LabelList
+                                            dataKey="amount"
+                                            position="top"
+                                            formatter={(val) => formatCurrency(val)}
+                                            style={{
+                                                fontSize: 11,
+                                                fill: '#0f172a',
+                                                fontWeight: 700,
+                                            }}
+                                        />
+                                        {revVsCostChartData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
+                    </div>
+
+                    <div className="chart-legend">
+                        <span className="legend-item">
+                            <span className="legend-dot" style={{ backgroundColor: '#2563eb' }} />
+                            <span>Revenue</span>
+                        </span>
+                        <span className="legend-item">
+                            <span className="legend-dot" style={{ backgroundColor: '#ef4444' }} />
+                            <span>Cost</span>
+                        </span>
+                    </div>
+                </div>
+            </section>
+
+            {/* ── Bottom Row: Tables (2 Columns) ── */}
+            <section className="bottom-tables-row">
+                {/* 1. Recent Transactions Table */}
+                <div className="dashboard-card">
+                    <div className="dashboard-card-header">
+                        <div className="card-title-group">
+                            <div className="card-header-icon blue">
+                                <BsReceiptCutoff />
+                            </div>
+                            <div>
+                                <h3 className="card-title">Recent Transactions</h3>
+                            </div>
                         </div>
-                    ) : (
-                        <table className="dash-table">
-                            <thead>
-                                <tr>
-                                    <th>Order ID</th>
-                                    <th>Amount</th>
-                                    <th>Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {realStats.recentOrders.map((row, i) => (
-                                    <tr key={i}>
-                                        <td className="dash-table-id">{row.id}</td>
-                                        <td className="dash-table-amount">{row.amount}</td>
-                                        <td>
-                                            <span className="dash-badge" style={{ background: `${row.color}18`, color: row.color }}>
-                                                {row.status}
-                                            </span>
-                                        </td>
-                                    </tr>
+
+                        <Link to="/orders" className="card-view-all">
+                            View All
+                        </Link>
+                    </div>
+
+                    <div className="dashboard-table-wrap">
+                        {loading ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10 }}>
+                                {[0, 1, 2, 3].map((i) => (
+                                    <div key={i} className="skeleton-box" style={{ width: '100%', height: 36 }} />
                                 ))}
-                            </tbody>
-                        </table>
-                    )}
+                            </div>
+                        ) : transactions.length === 0 ? (
+                            <div className="empty-state-card">
+                                <BsReceiptCutoff className="empty-state-icon" />
+                                <p className="empty-state-title">No transactions found</p>
+                                <p className="empty-state-sub">New sales transactions will appear here.</p>
+                            </div>
+                        ) : (
+                            <table className="dashboard-table">
+                                <thead>
+                                    <tr>
+                                        <th>Invoice No.</th>
+                                        <th>Date &amp; Time</th>
+                                        <th>Customer</th>
+                                        <th>Items</th>
+                                        <th>Amount</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {transactions.map((ord) => {
+                                        const invoiceNo = ord.order_number || ord.invoice_number || `ORD-${ord.id}`;
+                                        const customerName = ord.customer_name || ord.customer?.name || 'Walk-in Customer';
+                                        const itemsCount = Array.isArray(ord.items) && ord.items.length > 0
+                                            ? ord.items.length
+                                            : 1;
+                                        const statusStr = (ord.status || ord.payment_status || 'completed').toLowerCase();
+
+                                        return (
+                                            <tr key={ord.id}>
+                                                <td>
+                                                    <Link to={`/orders/${ord.id}`} className="table-id-link">
+                                                        {invoiceNo}
+                                                    </Link>
+                                                </td>
+                                                <td>{formatDate(ord.created_at)}</td>
+                                                <td>{customerName}</td>
+                                                <td>{itemsCount}</td>
+                                                <td className="table-amount">{formatCurrency(ord.total_amount)}</td>
+                                                <td>
+                                                    <span className={`status-pill ${statusStr}`}>
+                                                        {ord.status || 'Completed'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 </div>
 
-                {/* Top Products – computed from live orders */}
-                <div className="chart-card">
-                    <div className="chart-card-header">
-                        <h2 className="chart-title">Top Products</h2>
-                        <button className="chart-view-all">View All</button>
+                {/* 2. Top Selling Products Table */}
+                <div className="dashboard-card">
+                    <div className="dashboard-card-header">
+                        <div className="card-title-group">
+                            <div className="card-header-icon yellow">
+                                <BsTrophyFill />
+                            </div>
+                            <div>
+                                <h3 className="card-title">Top Selling Products</h3>
+                            </div>
+                        </div>
+
+                        <Link to="/products" className="card-view-all">
+                            View All
+                        </Link>
                     </div>
 
-                    {realStats.loading ? (
-                        <div className="dash-table-skeleton">
-                            {[0, 1, 2, 3, 4].map(i => <div key={i} className="dash-table-skeleton-row" />)}
-                        </div>
-                    ) : realStats.topProducts.length === 0 ? (
-                        <div className="dash-empty-state">
-                            <span>📦</span>
-                            <p>No product data yet</p>
-                        </div>
-                    ) : (
-                        <div className="top-products-list">
-                            {realStats.topProducts.map((p, i) => (
-                                <div key={i} className="top-product-item">
-                                    <div className="top-product-rank">{i + 1}</div>
-                                    <div className="top-product-info">
-                                        <p className="top-product-name">{p.name}</p>
-                                        <p className="top-product-cat">{p.sold} units sold</p>
-                                        <div className="top-product-bar-track">
-                                            <div className="top-product-bar-fill" style={{ width: `${p.pct}%` }} />
-                                        </div>
-                                    </div>
-                                    <p className="top-product-rev">{p.revenueFormatted}</p>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    <div className="dashboard-table-wrap">
+                        {loading ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10 }}>
+                                {[0, 1, 2, 3].map((i) => (
+                                    <div key={i} className="skeleton-box" style={{ width: '100%', height: 36 }} />
+                                ))}
+                            </div>
+                        ) : topProducts.length === 0 ? (
+                            <div className="empty-state-card">
+                                <BsBox className="empty-state-icon" />
+                                <p className="empty-state-title">No products sold yet</p>
+                                <p className="empty-state-sub">Top products will appear once orders are made.</p>
+                            </div>
+                        ) : (
+                            <table className="dashboard-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: 32 }}>#</th>
+                                        <th>Product</th>
+                                        <th style={{ textAlign: 'center' }}>Quantity Sold</th>
+                                        <th style={{ textAlign: 'right' }}>Revenue</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {topProducts.map((p, idx) => (
+                                        <tr key={idx}>
+                                            <td style={{ fontWeight: 700, color: '#64748b' }}>{idx + 1}</td>
+                                            <td>
+                                                <div className="top-product-row-info">
+                                                    <div className="product-thumb">
+                                                        <BsBox />
+                                                    </div>
+                                                    <div className="product-name-sku">
+                                                        <span className="product-name" title={p.product_name}>
+                                                            {p.product_name}
+                                                        </span>
+                                                        {p.sku && (
+                                                            <span className="product-sku">SKU: {p.sku}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                                                {formatInteger(p.quantity_sold)}
+                                            </td>
+                                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                                                {formatCurrency(p.revenue)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 </div>
-            </div>
+            </section>
         </div>
     );
 };
