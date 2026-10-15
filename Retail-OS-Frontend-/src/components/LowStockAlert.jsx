@@ -1,4 +1,5 @@
-﻿import React from "react";
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import "./LowStockAlert.css";
 
 /* =========================================================
@@ -54,7 +55,34 @@ const LowStockAlert = ({
   loading = false,
   error = "",
   items = [],
+  onReorder,
+  stockStatus,
 }) => {
+  const navigate = useNavigate();
+
+  const handleReorderClick = (item) => {
+    if (typeof onReorder === "function") {
+      onReorder(item);
+      return;
+    }
+
+    navigate("/purchases", {
+      state: {
+        reorderItem: item,
+        productId: item?.product_id || item?.id,
+        productName:
+          item?.product_name ||
+          item?.name ||
+          item?.product?.name ||
+          item?.product?.product_name ||
+          item?.productName ||
+          item?.title ||
+          "-",
+        sku: item?.sku,
+        supplier: item?.supplier_name || item?.supplierName,
+      },
+    });
+  };
   return (
     <div className="low-stock-alert">
       {loading && (
@@ -84,7 +112,7 @@ const LowStockAlert = ({
       <table className="low-stock-table">
         <thead>
           <tr>
-            <th>Product</th>
+            <th>Product Name</th>
             <th>SKU</th>
             <th>Supplier</th>
             <th>Warehouse</th>
@@ -119,6 +147,7 @@ const LowStockAlert = ({
                 item?.quantity ??
                   item?.stock ??
                   item?.available_quantity ??
+                  item?.current_stock ??
                   0
               );
 
@@ -143,10 +172,10 @@ const LowStockAlert = ({
               const isOutOfStock = qty <= 0;
 
               const isCritical =
-                qty > 0 && qty < reorderLevel;
+                reorderLevel > 0 && qty > 0 && qty < reorderLevel;
 
               const isLowStock =
-                qty > 0 && qty === reorderLevel;
+                reorderLevel > 0 && qty > 0 && qty === reorderLevel;
 
               const isInStock =
                 qty > reorderLevel;
@@ -177,36 +206,60 @@ const LowStockAlert = ({
                  STATUS
               ========================= */
 
+              const resolvedStatus =
+                item?.stock_status ||
+                (typeof stockStatus === "function"
+                  ? stockStatus(item)
+                  : null);
+
               let statusClass =
                 "low-stock-badge";
 
               let statusText =
                 "Low Stock";
 
-              if (isOutOfStock) {
-                statusClass =
-                  "out-of-stock-badge";
+              if (resolvedStatus) {
+                statusText = resolvedStatus;
 
-                statusText =
-                  "Out of Stock";
-              } else if (isCritical) {
-                statusClass =
-                  "critical-stock-badge";
+                if (resolvedStatus === "Out of Stock") {
+                  statusClass =
+                    "out-of-stock-badge";
+                } else if (resolvedStatus === "Critical") {
+                  statusClass =
+                    "critical-stock-badge";
+                } else if (resolvedStatus === "Low Stock") {
+                  statusClass =
+                    "low-stock-badge";
+                } else if (resolvedStatus === "In Stock") {
+                  statusClass =
+                    "in-stock-badge";
+                }
+              } else {
+                if (isOutOfStock) {
+                  statusClass =
+                    "out-of-stock-badge";
 
-                statusText =
-                  "Critical";
-              } else if (isLowStock) {
-                statusClass =
-                  "low-stock-badge";
+                  statusText =
+                    "Out of Stock";
+                } else if (isCritical) {
+                  statusClass =
+                    "critical-stock-badge";
 
-                statusText =
-                  "Low Stock";
-              } else if (isInStock) {
-                statusClass =
-                  "in-stock-badge";
+                  statusText =
+                    "Critical";
+                } else if (isLowStock) {
+                  statusClass =
+                    "low-stock-badge";
 
-                statusText =
-                  "In Stock";
+                  statusText =
+                    "Low Stock";
+                } else if (isInStock) {
+                  statusClass =
+                    "in-stock-badge";
+
+                  statusText =
+                    "In Stock";
+                }
               }
 
               /* =========================
@@ -225,6 +278,10 @@ const LowStockAlert = ({
                   <td>
                     {item?.product_name ||
                       item?.name ||
+                      item?.product?.name ||
+                      item?.product?.product_name ||
+                      item?.productName ||
+                      item?.title ||
                       "-"}
                   </td>
 
@@ -268,6 +325,7 @@ const LowStockAlert = ({
                     <button
                       type="button"
                       className="reorder-btn"
+                      onClick={() => handleReorderClick(item)}
                     >
                       Reorder
                     </button>

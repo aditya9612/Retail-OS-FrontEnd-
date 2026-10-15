@@ -537,22 +537,30 @@ const StockUpdateModal = ({
                 <div className="ec-modal-header">
                     <div>
                         <h3 className="ec-modal-title">
-                            Update Stock
+                            {item?.name === "Add Inventory"
+                                ? "Add Inventory"
+                                : "Update Stock"}
                         </h3>
 
                         <p className="ec-modal-subtitle">
-                            {item?.name ||
-                                item?.product_name ||
-                                `Product #${
-                                    item?.product_id ||
-                                    item?.id
-                                }`}
-                            {" · "}
-                            Current:{" "}
-                            <strong>
-                                {currentStock}
-                            </strong>{" "}
-                            {item?.unit || "Pcs"}
+                            {item?.name === "Add Inventory" && !item?.product_id ? (
+                                "Add new stock item to inventory"
+                            ) : (
+                                <>
+                                    {item?.name ||
+                                        item?.product_name ||
+                                        `Product #${
+                                            item?.product_id ||
+                                            item?.id
+                                        }`}
+                                    {" · "}
+                                    Current:{" "}
+                                    <strong>
+                                        {currentStock}
+                                    </strong>{" "}
+                                    {item?.unit || "Pcs"}
+                                </>
+                            )}
                         </p>
                     </div>
 
@@ -2546,6 +2554,8 @@ if (action === "transfer") {
                                         "column",
                                     justifyContent:
                                         "space-between",
+                                    overflow:
+                                        "hidden",
                                 }}
                             >
                                 <div
@@ -2602,14 +2612,35 @@ if (action === "transfer") {
                                 </div>
 
                                 <div
+                                    title={
+                                        typeof item.value === "string" || typeof item.value === "number"
+                                            ? String(item.value)
+                                            : undefined
+                                    }
                                     style={{
                                         fontSize:
-                                            "28px",
+                                            item.label === "Inventory Value"
+                                                ? String(item.value || "").length > 11
+                                                    ? "19px"
+                                                    : String(item.value || "").length > 8
+                                                    ? "21px"
+                                                    : "24px"
+                                                : "28px",
                                         lineHeight:
-                                            "34px",
+                                            item.label === "Inventory Value"
+                                                ? "28px"
+                                                : "34px",
                                         fontWeight: 700,
                                         color:
                                             "#111827",
+                                        whiteSpace:
+                                            "nowrap",
+                                        overflow:
+                                            "hidden",
+                                        textOverflow:
+                                            "ellipsis",
+                                        maxWidth:
+                                            "100%",
                                     }}
                                 >
                                     {
@@ -2720,6 +2751,22 @@ if (action === "transfer") {
                         }
                         setStockModal={
                             setStockModal
+                        }
+                        onAddProduct={() =>
+                            setStockModal({
+                                name: "Add Inventory",
+                                quantity: 0,
+                                unit: "Pcs",
+                                action: "add",
+                            })
+                        }
+                        onAddInventory={() =>
+                            setStockModal({
+                                name: "Add Inventory",
+                                quantity: 0,
+                                unit: "Pcs",
+                                action: "add",
+                            })
                         }
                     />
 
