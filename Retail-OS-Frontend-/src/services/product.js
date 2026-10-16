@@ -8,9 +8,13 @@ const productService = {
     },
 
     search: (query, page = 1, pageSize = 100) => {
-        const encoded = encodeURIComponent(query);
+        const trimmed = (query || "").trim();
+        if (trimmed.length < 2) {
+            return Promise.resolve({ data: [] });
+        }
+        const encoded = encodeURIComponent(trimmed);
         return apiClient
-            .get(`/api/v1/products/search?search=${encoded}&q=${encoded}&page=${page}&page_size=${pageSize}`)
+            .get(`/api/v1/products/search?search=${encoded}&page=${page}&page_size=${pageSize}`)
             .catch((err) => {
                 if (err?.response?.status === 404) {
                     return { data: [] };
@@ -24,7 +28,14 @@ const productService = {
     },
 
     getByBarcode: (barcode) => {
-        return apiClient.get(`/api/v1/products/barcode/${encodeURIComponent(barcode)}`);
+        return apiClient
+            .get(`/api/v1/products/barcode/${encodeURIComponent(barcode)}`)
+            .catch((err) => {
+                if (err?.response?.status === 404) {
+                    return { data: null };
+                }
+                throw err;
+            });
     },
 
     create: (data) => {

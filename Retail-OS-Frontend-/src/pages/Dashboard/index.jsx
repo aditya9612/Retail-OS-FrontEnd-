@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import {
     ResponsiveContainer,
@@ -25,6 +26,10 @@ import {
     BsArrowRepeat,
     BsExclamationCircleFill,
     BsBox,
+    BsBell,
+    BsCheckCircleFill,
+    BsArrowRight,
+    BsX,
 } from 'react-icons/bs';
 
 import {
@@ -87,6 +92,12 @@ const Dashboard = () => {
     const [isStoreOpen, setIsStoreOpen] = useState(false);
     const [isPeriodOpen, setIsPeriodOpen] = useState(false);
 
+    // ── Notification Bell & Dropdown State ──
+    const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+    const [bellPosition, setBellPosition] = useState(null);
+    const notificationDropdownRef = useRef(null);
+    const bellButtonRef = useRef(null);
+
     // ── API State ──
     const [summary, setSummary] = useState({
         today_sales: 0,
@@ -111,6 +122,145 @@ const Dashboard = () => {
     const reqSeqRef = useRef(0);
     const storeDropdownRef = useRef(null);
     const periodDropdownRef = useRef(null);
+
+    // Notification items derived from actual Dashboard data
+    const notificationItems = useMemo(() => {
+        const items = [];
+
+        // Low stock products alert from Dashboard summary
+        if (summary.low_stock_products > 0) {
+            items.push({
+                id: 'low-stock-alert',
+                type: 'warning',
+                title: 'Low Stock Alert',
+                message: `${summary.low_stock_products} ${summary.low_stock_products === 1 ? 'product is' : 'products are'} running low on inventory and need attention.`,
+                time: 'Requires Action',
+                link: '/low-stock-alerts',
+                linkText: 'View Low Stock Alerts',
+            });
+        }
+
+        // Active connection or dashboard error
+        if (error) {
+            items.push({
+                id: 'dashboard-error-alert',
+                type: 'error',
+                title: 'System Notice',
+                message: error,
+                time: 'Warning',
+                link: null,
+            });
+        }
+
+        return items;
+    }, [summary.low_stock_products, error]);
+
+    // ── Bind Header Notification Bell Icon Button ──
+    useEffect(() => {
+        const getBellElement = () => (
+            document.querySelector('.header-icon-btn--bell') ||
+            document.querySelector('button[title="Notifications"]')
+        );
+
+        let bellBtn = getBellElement();
+        if (!bellBtn) return;
+        bellButtonRef.current = bellBtn;
+
+        bellBtn.setAttribute('aria-haspopup', 'dialog');
+        bellBtn.setAttribute('aria-controls', 'dashboard-notification-panel');
+
+        const updatePosition = () => {
+            const rect = bellBtn.getBoundingClientRect();
+            setBellPosition({
+                top: Math.round(rect.bottom + 8),
+                right: Math.max(16, Math.round(window.innerWidth - rect.right)),
+            });
+        };
+
+        const handleBellClick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            updatePosition();
+            setIsNotificationOpen((prev) => !prev);
+        };
+
+        const handleBellKeyDown = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                updatePosition();
+                setIsNotificationOpen((prev) => !prev);
+            }
+        };
+
+        bellBtn.addEventListener('click', handleBellClick);
+        bellBtn.addEventListener('keydown', handleBellKeyDown);
+
+        return () => {
+            bellBtn.removeEventListener('click', handleBellClick);
+            bellBtn.removeEventListener('keydown', handleBellKeyDown);
+            bellBtn.removeAttribute('aria-haspopup');
+            bellBtn.removeAttribute('aria-expanded');
+            bellBtn.removeAttribute('aria-controls');
+            bellBtn.classList.remove('active');
+        };
+    }, []);
+
+    // Synchronize bell button accessibility and active state
+    useEffect(() => {
+        if (bellButtonRef.current) {
+            bellButtonRef.current.setAttribute('aria-expanded', isNotificationOpen ? 'true' : 'false');
+            bellButtonRef.current.classList.toggle('active', isNotificationOpen);
+        }
+    }, [isNotificationOpen]);
+
+    // Close notification panel on outside click, Escape key, or reposition on resize/scroll
+    useEffect(() => {
+        if (!isNotificationOpen) return;
+
+        const handleClickOutside = (e) => {
+            if (
+                notificationDropdownRef.current &&
+                !notificationDropdownRef.current.contains(e.target) &&
+                bellButtonRef.current &&
+                !bellButtonRef.current.contains(e.target)
+            ) {
+                setIsNotificationOpen(false);
+            }
+        };
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setIsNotificationOpen(false);
+                if (bellButtonRef.current) {
+                    bellButtonRef.current.focus();
+                }
+            }
+        };
+
+        const handleReposition = () => {
+            if (bellButtonRef.current) {
+                const rect = bellButtonRef.current.getBoundingClientRect();
+                setBellPosition({
+                    top: Math.round(rect.bottom + 8),
+                    right: Math.max(16, Math.round(window.innerWidth - rect.right)),
+                });
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('resize', handleReposition);
+        window.addEventListener('scroll', handleReposition, true);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('resize', handleReposition);
+            window.removeEventListener('scroll', handleReposition, true);
+        };
+    }, [isNotificationOpen]);
 
     // Close dropdowns on outside click
     useEffect(() => {
@@ -441,7 +591,7 @@ const Dashboard = () => {
             {/* ── 4 KPI Cards Grid ── */}
             <section className="kpi-grid" aria-label="Key Performance Indicators">
                 {/* 1. Total Revenue */}
-                <div className="kpi-card">
+                <Link to="/reports" className="kpi-card" title="View Sales Reports">
                     <div className="kpi-icon-wrap revenue">
                         <BsBarChartFill />
                     </div>
@@ -457,10 +607,10 @@ const Dashboard = () => {
                             {PERIOD_LABELS[period]}
                         </span>
                     </div>
-                </div>
+                </Link>
 
                 {/* 2. Today's Sales */}
-                <div className="kpi-card">
+                <Link to="/invoices" className="kpi-card" title="View Invoices & Orders">
                     <div className="kpi-icon-wrap sales">
                         <BsCart3 />
                     </div>
@@ -475,10 +625,10 @@ const Dashboard = () => {
                             {todayOrdersCount} orders today
                         </span>
                     </div>
-                </div>
+                </Link>
 
                 {/* 3. Total Customers */}
-                <div className="kpi-card">
+                <Link to="/customers" className="kpi-card" title="View Customers">
                     <div className="kpi-icon-wrap customers">
                         <BsPeopleFill />
                     </div>
@@ -491,10 +641,10 @@ const Dashboard = () => {
                         )}
                         <span className="kpi-subtitle">Registered customers</span>
                     </div>
-                </div>
+                </Link>
 
                 {/* 4. Low Stock Products */}
-                <div className="kpi-card">
+                <Link to="/low-stock-alerts" className="kpi-card" title="View Low Stock Alerts">
                     <div className="kpi-icon-wrap lowstock">
                         <BsBoxSeam />
                     </div>
@@ -507,7 +657,7 @@ const Dashboard = () => {
                         )}
                         <span className="kpi-subtitle">Products need attention</span>
                     </div>
-                </div>
+                </Link>
             </section>
 
             {/* ── Charts Row (2 Columns) ── */}
@@ -856,6 +1006,104 @@ const Dashboard = () => {
                     </div>
                 </div>
             </section>
+
+            {/* ── Notification Dropdown Panel (Dashboard Module Scope) ── */}
+            {isNotificationOpen &&
+                createPortal(
+                    <div
+                        id="dashboard-notification-panel"
+                        ref={notificationDropdownRef}
+                        className="dashboard-notification-panel"
+                        style={{
+                            top: bellPosition ? `${bellPosition.top}px` : '64px',
+                            right: bellPosition ? `${bellPosition.right}px` : '20px',
+                        }}
+                        role="dialog"
+                        aria-label="Notifications"
+                        aria-modal="false"
+                    >
+                        {/* Header Banner */}
+                        <div className="dashboard-notification-header">
+                            <div className="dashboard-notification-title-wrap">
+                                <BsBell className="dashboard-notification-header-icon" />
+                                <h3 className="dashboard-notification-title">Notifications</h3>
+                                <span className="dashboard-notification-badge">
+                                    {notificationItems.length > 0 ? `${notificationItems.length} New` : '0 New'}
+                                </span>
+                            </div>
+                            <button
+                                type="button"
+                                className="dashboard-notification-close-btn"
+                                onClick={() => {
+                                    setIsNotificationOpen(false);
+                                    if (bellButtonRef.current) bellButtonRef.current.focus();
+                                }}
+                                title="Close notifications"
+                                aria-label="Close notifications"
+                            >
+                                <BsX size={18} />
+                            </button>
+                        </div>
+
+                        {/* Notifications List */}
+                        <div className="dashboard-notification-list">
+                            {notificationItems.length === 0 ? (
+                                <div className="dashboard-notification-empty">
+                                    <div className="dashboard-notification-empty-icon-wrap">
+                                        <BsCheckCircleFill size={22} color="#10b981" />
+                                    </div>
+                                    <p className="dashboard-notification-empty-title">All caught up!</p>
+                                    <p className="dashboard-notification-empty-desc">
+                                        No active inventory alerts or urgent notifications.
+                                    </p>
+                                </div>
+                            ) : (
+                                notificationItems.map((item) => (
+                                    <div key={item.id} className={`dashboard-notification-card ${item.type}`}>
+                                        <div className="dashboard-notification-card-icon">
+                                            {item.type === 'error' ? (
+                                                <BsExclamationCircleFill size={16} />
+                                            ) : (
+                                                <BsBoxSeam size={16} />
+                                            )}
+                                        </div>
+                                        <div className="dashboard-notification-card-body">
+                                            <div className="dashboard-notification-card-header">
+                                                <span className="dashboard-notification-card-title">{item.title}</span>
+                                                <span className="dashboard-notification-card-time">{item.time}</span>
+                                            </div>
+                                            <p className="dashboard-notification-card-msg">{item.message}</p>
+                                            {item.link && (
+                                                <Link
+                                                    to={item.link}
+                                                    className="dashboard-notification-card-link"
+                                                    onClick={() => setIsNotificationOpen(false)}
+                                                >
+                                                    <span>{item.linkText}</span>
+                                                    <BsArrowRight size={12} />
+                                                </Link>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        {notificationItems.length > 0 && (
+                            <div className="dashboard-notification-footer">
+                                <Link
+                                    to="/low-stock-alerts"
+                                    className="dashboard-notification-footer-link"
+                                    onClick={() => setIsNotificationOpen(false)}
+                                >
+                                    View all inventory alerts
+                                </Link>
+                            </div>
+                        )}
+                    </div>,
+                    document.body
+                )}
         </div>
     );
 };

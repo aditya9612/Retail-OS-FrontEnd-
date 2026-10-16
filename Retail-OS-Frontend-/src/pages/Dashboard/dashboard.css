@@ -297,11 +297,19 @@
     gap: 16px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
     transition: transform 0.15s ease, box-shadow 0.15s ease;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
 }
 
 .kpi-card:hover {
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
     transform: translateY(-1px);
+}
+
+.kpi-card:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
 }
 
 .kpi-icon-wrap {
@@ -689,3 +697,283 @@
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   Dashboard Module — Notification Bell Dropdown Panel
+   Rendered conditionally within Dashboard module scope
+───────────────────────────────────────────────────────────── */
+
+/* Active / Focused style for header bell button when panel is open */
+.header-icon-btn--bell.active,
+.header-icon-btn--bell:focus-visible {
+    border-color: #6366f1 !important;
+    background: #eef2ff !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+    outline: none;
+}
+
+.dashboard-notification-panel {
+    position: fixed;
+    width: 350px;
+    max-width: calc(100vw - 32px);
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    box-shadow: 0 12px 30px -4px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+    z-index: 9999;
+    animation: dashboardNotificationFadeIn 0.15s ease-out;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@keyframes dashboardNotificationFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.dashboard-notification-header {
+    background: #eef2ff;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #c7d2fe;
+}
+
+.dashboard-notification-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dashboard-notification-header-icon {
+    color: #6366f1;
+    font-size: 15px;
+}
+
+.dashboard-notification-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e1b4b;
+    margin: 0;
+}
+
+.dashboard-notification-badge {
+    background: #6366f1;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.dashboard-notification-close-btn {
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dashboard-notification-close-btn:hover {
+    background: #e0e7ff;
+    color: #1e1b4b;
+}
+
+.dashboard-notification-close-btn:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 1px;
+}
+
+.dashboard-notification-list {
+    max-height: 380px;
+    overflow-y: auto;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dashboard-notification-card {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    background: #ffffff;
+    border: 1px solid #f1f5f9;
+    transition: all 0.15s ease;
+}
+
+.dashboard-notification-card:hover {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+.dashboard-notification-card.warning {
+    border-left: 3px solid #f59e0b;
+}
+
+.dashboard-notification-card.error {
+    border-left: 3px solid #ef4444;
+}
+
+.dashboard-notification-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dashboard-notification-card.warning .dashboard-notification-card-icon {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.dashboard-notification-card.error .dashboard-notification-card-icon {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+.dashboard-notification-card-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dashboard-notification-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.dashboard-notification-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.dashboard-notification-card-time {
+    font-size: 10px;
+    font-weight: 600;
+    color: #d97706;
+    background: #fffbeb;
+    padding: 1px 6px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.dashboard-notification-card.error .dashboard-notification-card-time {
+    color: #ef4444;
+    background: #fef2f2;
+}
+
+.dashboard-notification-card-msg {
+    font-size: 12px;
+    color: #475569;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.dashboard-notification-card-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #2563eb;
+    text-decoration: none;
+    margin-top: 4px;
+    transition: color 0.15s ease;
+    align-self: flex-start;
+}
+
+.dashboard-notification-card-link:hover {
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
+.dashboard-notification-card-link:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
+    border-radius: 2px;
+}
+
+.dashboard-notification-empty {
+    padding: 32px 16px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.dashboard-notification-empty-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #ecfdf5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
+.dashboard-notification-empty-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+.dashboard-notification-empty-desc {
+    font-size: 12px;
+    color: #64748b;
+    margin: 0;
+    max-width: 240px;
+    line-height: 1.4;
+}
+
+.dashboard-notification-footer {
+    padding: 10px 16px;
+    background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
+    text-align: center;
+}
+
+.dashboard-notification-footer-link {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6366f1;
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.dashboard-notification-footer-link:hover {
+    color: #4f46e5;
+    text-decoration: underline;
+}
+
+.dashboard-notification-footer-link:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+

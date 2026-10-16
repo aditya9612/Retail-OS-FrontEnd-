@@ -221,7 +221,7 @@ body {
 .sidebar-group-label {
   font-size: 10px;
   font-weight: 700;
-  color: #94a3b8;
+  color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin: 0;
@@ -263,7 +263,7 @@ body {
   border-radius: 7px;
   font-size: 12.5px;
   font-weight: 500;
-  color: #4b5563;
+  color: #334155;
   text-decoration: none;
   transition: all 0.15s ease;
   white-space: nowrap;
@@ -423,6 +423,208 @@ body {
 .header-search::placeholder {
   color: #d1d5db;
 }
+
+/* Header Search Dropdown & Controls */
+.header-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.header-search-clear:hover {
+  color: #374151;
+  background: #f1f5f9;
+}
+
+.header-search-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+  max-height: 460px;
+  display: flex;
+  flex-direction: column;
+}
+
+.header-search-results-list {
+  overflow-y: auto;
+  max-height: 420px;
+  padding: 6px 0;
+}
+
+.header-search-group {
+  margin-bottom: 6px;
+}
+
+.header-search-group:last-child {
+  margin-bottom: 0;
+}
+
+.header-search-group-title {
+  padding: 6px 14px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-search-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font-family: inherit;
+}
+
+.header-search-item:hover,
+.header-search-item.active {
+  background: #f1f5f9;
+}
+
+.header-search-item-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.header-search-item-icon--module {
+  background: #eef2ff;
+  color: #6366f1;
+}
+
+.header-search-item-icon--product {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.header-search-item-icon--category {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.header-search-item-icon--customer {
+  background: #f3e8ff;
+  color: #9333ea;
+}
+
+.header-search-item-icon--order {
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.header-search-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.header-search-item-primary {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-search-item-secondary {
+  font-size: 11px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.header-search-item-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #475569;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.header-search-empty {
+  padding: 28px 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.header-search-empty-icon {
+  color: #cbd5e1;
+  font-size: 26px;
+  margin-bottom: 2px;
+}
+
+.header-search-empty-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #334155;
+  margin: 0;
+}
+
+.header-search-empty-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+  max-width: 280px;
+  line-height: 1.4;
+}
+
+.header-search-loading {
+  padding: 20px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
 
 .header-right {
   display: flex;
@@ -1106,7 +1308,7 @@ body {
 .sidebar-group-label {
   font-size: 10px;
   font-weight: 700;
-  color: #cbd5e1;
+  color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   padding: 14px 10px 4px;
