@@ -78,14 +78,7 @@ export const updateOrderStatus = async (orderId, status, remarks = '') => {
     }
 };
 
-export const returnOrder = async (orderId) => {
-    try {
-        const response = await apiClient.post(`/orders/${orderId}/return`);
-        return response.data;
-    } catch (error) {
-        throw error;
-    }
-};
+export { returnOrder } from './billingService';
 
 export const getOrderTracking = async (orderId) => {
     try {

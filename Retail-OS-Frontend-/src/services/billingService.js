@@ -6,6 +6,29 @@ import apiClient from './api';
 const STORE_ID = 1;
 
 /**
+ * Handle API error and extract meaningful message
+ */
+const handleApiError = (error) => {
+    let message = null;
+    const data = error?.response?.data;
+    if (data) {
+        if (typeof data.message === 'string' && data.message) {
+            message = data.message;
+        } else if (typeof data.detail === 'string' && data.detail) {
+            message = data.detail;
+        } else if (Array.isArray(data.detail) && data.detail.length > 0) {
+            message = data.detail.map(d => d.msg || `${d.loc?.join('.')}: ${d.type}`).join('; ');
+        } else if (Array.isArray(data.errors) && data.errors.length > 0) {
+            message = data.errors.map(e => e.message || e.msg).join('; ');
+        }
+    }
+    if (!message) {
+        message = error?.message || 'An unexpected API error occurred.';
+    }
+    throw new Error(message);
+};
+
+/**
  * Returns Authorization headers using the token stored in localStorage after login.
  */
 const getAuthHeaders = () => {
@@ -153,14 +176,52 @@ export const downloadInvoicePdf = async (invoiceId) => {
 };
 
 /**
- * Return an order (process a return for the invoice).
- * POST /api/v1/billing/orders/{order_id}/return
+ * Normalizes and validates return remarks.
+ * Ensures string is between 5 and 500 characters.
+ * @param {string|Object} [reason]
+ * @returns {string}
  */
-export const returnOrder = async (orderId) => {
+const resolveReturnRemarks = (reason) => {
+    if (!reason) {
+        return 'Customer return requested';
+    }
+    const raw = typeof reason === 'string'
+        ? reason
+        : (reason.remarks || reason.reason || '');
+    const trimmed = String(raw).trim();
+    if (!trimmed) {
+        return 'Customer return requested';
+    }
+    if (trimmed.length > 500) {
+        throw new Error('Return remarks cannot exceed 500 characters.');
+    }
+    if (trimmed.length < 5) {
+        throw new Error('Return remarks must be between 5 and 500 characters.');
+    }
+    return trimmed;
+};
+
+/**
+ * Return a complete order.
+ * POST /api/v1/orders/{order_id}/return
+ *
+ * @param {number|string} orderId - ID of order to return
+ * @param {string|Object} [remarks='Customer return requested'] - Reason / remarks for return (5-500 chars)
+ * @returns {Promise<Object>} updated order response
+ */
+export const returnOrder = async (orderId, remarks = 'Customer return requested') => {
+    if (!orderId) {
+        throw new Error('Order ID is required to process return.');
+    }
+    const validatedRemarks = resolveReturnRemarks(remarks);
     try {
-        const response = await apiClient.post(`/billing/orders/${encodeURIComponent(orderId)}/return`);
+        const response = await apiClient.post(`/orders/${encodeURIComponent(orderId)}/return`, {
+            remarks: validatedRemarks,
+        });
         return response.data;
-    } catch (e) { handleApiError(e); }
+    } catch (e) {
+        handleApiError(e);
+    }
 };
 
 /**
@@ -222,7 +283,37 @@ export const updateGstRate = async (rateId, { gst_rate, status }) => {
  */
 export const getInvoices = async (params = {}) => {
     try {
-        const response = await apiClient.get('/invoices', { params });
+        const cleanParams = {};
+        if (params.invoice_number && String(params.invoice_number).trim()) {
+            cleanParams.invoice_number = String(params.invoice_number).trim();
+        }
+        if (params.customer_name && String(params.customer_name).trim().length >= 2) {
+            cleanParams.customer_name = String(params.customer_name).trim();
+        }
+        if (params.mobile) {
+            const m = String(params.mobile).trim().replace(/\D/g, '');
+            if (m.length === 10) cleanParams.mobile = m;
+        }
+        if (params.gstin) {
+            const g = String(params.gstin).trim();
+            if (g.length === 15) cleanParams.gstin = g;
+        }
+        if (params.payment_status && params.payment_status !== 'All' && params.payment_status !== 'all') {
+            cleanParams.payment_status = params.payment_status.toLowerCase();
+        }
+        if (params.store_id && Number(params.store_id) > 0) {
+            cleanParams.store_id = Number(params.store_id);
+        }
+        if (params.date_from && String(params.date_from).trim()) {
+            cleanParams.date_from = params.date_from;
+        }
+        if (params.date_to && String(params.date_to).trim()) {
+            cleanParams.date_to = params.date_to;
+        }
+        if (Object.keys(cleanParams).length === 0) {
+            cleanParams.store_id = 1;
+        }
+        const response = await apiClient.get('/invoices', { params: cleanParams });
         return response.data;
     } catch (e) { handleApiError(e); }
 };
