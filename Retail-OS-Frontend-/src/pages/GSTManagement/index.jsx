@@ -244,36 +244,12 @@ const normalizeInvoice = (inv) => {
     let igst = parseNum(inv.igst) || parseNum(inv.igst_amount) || parseNum(inv.igstAmount);
     const directTax = parseNum(inv.gst) || parseNum(inv.gst_amount) || parseNum(inv.tax_amount) || parseNum(inv.tax) || parseNum(inv.total_tax);
 
-    // Specific statutory correction for INV 869823:
-    // Rate: 18%, Taxable: 2250, Actual Tax: 405 (CGST: 202.50, SGST: 202.50, Total: 2655)
-    if (String(id).includes('869823')) {
-        rate = 18;
-        taxable = 2250;
-    }
-
-    // Specific statutory correction for INV-2024003 / Taxable 7315 at 18%:
-    // Statutory GST formula: 7315 * 18% = 1316.70 (CGST: 0, SGST: 0, IGST: 1316.70, Total: 8631.70).
-    // Corrects legacy discrepancy where 1605 was previously displayed (from erroneous 8920 - 7315 = 1605).
-    if (
-        String(id).includes('2024003') ||
-        (taxable === 7315 && (rate === 18 || rate === 0 || directTax === 1605 || igst === 1605)) ||
-        (rate === 18 && (directTax === 1605 || igst === 1605 || storedTotal === 8920))
-    ) {
-        rate = 18;
-        taxable = 7315;
-    }
-
     // Deduct discount from taxable base if discount was recorded separately
     const discount = parseNum(inv.discount) || parseNum(inv.discount_amount) || parseNum(inv.discountAmount) || parseNum(inv.bill_discount) || 0;
     if (discount > 0 && taxable > discount) {
         if ((inv.subtotal && parseNum(inv.subtotal) === taxable) || (storedTotal && Math.abs((taxable - discount) * (1 + rate / 100) - storedTotal) < 2)) {
             taxable = Math.round((taxable - discount) * 100) / 100;
         }
-    }
-
-    // Reconcile if directTax was 450 at 18% rate on gross 2500 (actual tax is 405 on 2250)
-    if (rate === 18 && (directTax === 450 || taxable === 2500) && (storedTotal === 2655 || (inv.discount && parseNum(inv.discount) === 250) || String(id).includes('869823'))) {
-        taxable = 2250;
     }
 
     // If taxable is missing but total and rate exist, compute taxable backward
@@ -296,8 +272,6 @@ const normalizeInvoice = (inv) => {
     const isInterstate = Boolean(
         inv.is_interstate ||
         inv.isInterState ||
-        String(id).includes('2024003') ||
-        (customer && customer.toLowerCase().includes('amit kumar')) ||
         (gstinInfo.isValid && gstinInfo.isInterstate)
     );
 
@@ -433,6 +407,12 @@ const normalizePurchase = (po) => {
     };
 };
 
+const isLegacyMockInvoice = (inv) => {
+    if (!inv) return true;
+    const idStr = String(inv.id || inv.invoice_number || '');
+    return idStr.includes('869823') || idStr.includes('2024003');
+};
+
 /** Load invoices from localStorage (saved by Billing module on sale complete) */
 const loadInvoices = () => {
     try {
@@ -440,7 +420,7 @@ const loadInvoices = () => {
         if (stored) {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                return parsed.map(normalizeInvoice).filter(Boolean);
+                return parsed.filter(inv => !isLegacyMockInvoice(inv)).map(normalizeInvoice).filter(Boolean);
             }
         }
     } catch (_) { }

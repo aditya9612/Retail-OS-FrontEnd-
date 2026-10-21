@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
     BsEye, BsToggleOn, BsToggleOff, BsStarFill, BsBoxSeam,
@@ -131,18 +131,28 @@ const ProductCatalog = () => {
                 categoryService.getAll(),
             ]);
 
-            let prodList = [];
-            if (prodRes.status === 'fulfilled') {
-                const data = prodRes.value;
-                prodList = Array.isArray(data) ? data : (data?.data || data?.items || []);
-            }
+            const extractList = (fulfilledRes) => {
+                if (!fulfilledRes) return [];
+                const resVal = fulfilledRes.value;
+                const payload = resVal?.data !== undefined ? resVal.data : resVal;
+                if (Array.isArray(payload)) return payload;
+                if (Array.isArray(payload?.data)) return payload.data;
+                if (Array.isArray(payload?.items)) return payload.items;
+                if (Array.isArray(payload?.categories)) return payload.categories;
+                if (Array.isArray(payload?.products)) return payload.products;
+                if (Array.isArray(payload?.results)) return payload.results;
+                if (payload && typeof payload === 'object') {
+                    const arrayVal = Object.values(payload).find(Array.isArray);
+                    if (arrayVal) return arrayVal;
+                }
+                return [];
+            };
 
-            let catNames = [];
-            if (catRes.status === 'fulfilled') {
-                const data = catRes.value;
-                const catList = Array.isArray(data) ? data : (data?.data || data?.items || []);
-                catNames = catList.map(c => c.name || c.category_name).filter(Boolean);
-            }
+            const prodList = prodRes.status === 'fulfilled' ? extractList(prodRes) : [];
+            const catList = catRes.status === 'fulfilled' ? extractList(catRes) : [];
+            const catNames = catList
+                .map(c => (typeof c === 'string' ? c : c?.name || c?.category_name || c?.title || ''))
+                .filter(Boolean);
 
             const mapped = prodList.map(p => {
                 const stock = Number(p.stock ?? p.current_stock ?? p.quantity ?? 0);

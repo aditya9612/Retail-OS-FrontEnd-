@@ -94,6 +94,12 @@ const formatDate = (dateStr) => {
     }
 };
 
+const isLegacyMockInvoice = (inv) => {
+    if (!inv) return true;
+    const idStr = String(inv.id || inv.invoice_number || '');
+    return idStr.includes('869823') || idStr.includes('2024003');
+};
+
 /* ── Fallback/Offline Invoices from Local Storage ── */
 const loadLocalInvoices = () => {
     try {
@@ -101,7 +107,7 @@ const loadLocalInvoices = () => {
         if (stored) {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed)) {
-                return parsed.map((inv) => ({
+                return parsed.filter(inv => !isLegacyMockInvoice(inv)).map((inv) => ({
                     id: inv.id || inv.invoice_number || `INV-${inv.order_id || Date.now()}`,
                     order_id: inv.order_id || inv.id || 0,
                     invoice_number: inv.invoice_number || inv.id || `INV-${Date.now()}`,

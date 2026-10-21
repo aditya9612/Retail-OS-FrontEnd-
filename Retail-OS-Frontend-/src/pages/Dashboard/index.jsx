@@ -40,6 +40,7 @@ import {
     getStores,
 } from '../../services/dashboard';
 import { getOrders } from '../../services/orderService';
+import { getInvoices } from '../../services/billingService';
 import './dashboard.css';
 
 const PERIOD_LABELS = {
@@ -369,13 +370,15 @@ const Dashboard = () => {
                 const prods = Array.isArray(topProductsResult.value.top_products)
                     ? topProductsResult.value.top_products
                     : [];
-                setTopProducts(prods);
+                const sorted = [...prods].sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0));
+                setTopProducts(sorted);
             } else {
                 hadError = true;
                 setTopProducts([]);
             }
 
             // 5. Recent Transactions (Orders)
+            let txList = [];
             if (ordersResult.status === 'fulfilled' && ordersResult.value) {
                 const rawOrders = ordersResult.value;
                 const ordList = Array.isArray(rawOrders)
@@ -385,10 +388,48 @@ const Dashboard = () => {
                     : Array.isArray(rawOrders?.data)
                     ? rawOrders.data
                     : [];
-                setTransactions(ordList.slice(0, 5));
-            } else {
-                setTransactions([]);
+                if (ordList.length > 0) {
+                    txList = ordList.slice(0, 5);
+                }
             }
+
+            if (txList.length === 0) {
+                let invoices = [];
+                try {
+                    const invRes = await getInvoices();
+                    if (invRes) {
+                        const data = Array.isArray(invRes) ? invRes : (invRes?.data || invRes?.items || []);
+                        if (Array.isArray(data) && data.length > 0) invoices = data;
+                    }
+                } catch (_) {}
+
+                try {
+                    const stored = localStorage.getItem('gst_invoices');
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            parsed.forEach(loc => {
+                                if (!invoices.some(inv => String(inv.id || inv.invoice_number) === String(loc.id))) {
+                                    invoices.push(loc);
+                                }
+                            });
+                        }
+                    }
+                } catch (_) {}
+
+                if (invoices.length > 0) {
+                    txList = invoices.slice(0, 5).map((inv, idx) => ({
+                        id: inv.id || inv.invoice_number || `INV-${idx + 1}`,
+                        order_number: inv.invoice_number || inv.id || `INV-${idx + 1}`,
+                        created_at: inv.date || inv.created_at || new Date().toISOString(),
+                        customer_name: inv.customer || inv.customer_name || 'Walk-in Customer',
+                        items: inv.items || [{}],
+                        total_amount: Number(inv.amount ?? inv.total ?? inv.grand_total ?? 0),
+                        status: inv.status || 'Paid',
+                    }));
+                }
+            }
+            setTransactions(txList);
 
             if (hadError && errorMsg) {
                 setError(errorMsg);
