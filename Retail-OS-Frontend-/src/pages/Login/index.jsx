@@ -722,35 +722,6 @@ const Login = () => {
                     overflow: hidden;
                 }
 
-                /* Top Navigation Bar */
-                .top-nav-bar {
-                    position: absolute;
-                    top: clamp(12px, 2vh, 22px);
-                    right: clamp(16px, 2.5vw, 40px);
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                    font-size: 11px;
-                    font-weight: 700;
-                    letter-spacing: 0.08em;
-                    color: #64748B;
-                    z-index: 10;
-                    user-select: none;
-                }
-
-                .top-nav-item {
-                    cursor: default;
-                    transition: color 0.15s;
-                }
-
-                .top-nav-item:hover {
-                    color: #2563EB;
-                }
-
-                .top-nav-sep {
-                    color: #CBD5E1;
-                    font-weight: 300;
-                }
 
                 /* Background Shapes */
                 .bg-circle-left {
@@ -1535,9 +1506,6 @@ const Login = () => {
                         align-items: center;
                         justify-content: center;
                     }
-                    .top-nav-bar {
-                        display: none;
-                    }
                     .split-screen-layout {
                         flex-direction: column;
                         align-items: center;
@@ -1586,18 +1554,6 @@ const Login = () => {
                 }
             `}</style>
 
-            {/* Top Navigation Header */}
-            <div className="top-nav-bar">
-                <span className="top-nav-item">INVENTORY</span>
-                <span className="top-nav-sep">|</span>
-                <span className="top-nav-item">CUSTOMERS</span>
-                <span className="top-nav-sep">|</span>
-                <span className="top-nav-item">BILLING</span>
-                <span className="top-nav-sep">|</span>
-                <span className="top-nav-item">GST</span>
-                <span className="top-nav-sep">|</span>
-                <span className="top-nav-item">ANALYTICS</span>
-            </div>
 
             {/* Background Decorative Shapes */}
             <div className="bg-circle-left"></div>
