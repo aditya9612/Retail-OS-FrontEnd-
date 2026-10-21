@@ -9,13 +9,20 @@ import apiClient from '../../services/api';
 const PAGE_SIZE = 6;
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
 
+const defaultStatusCfg = { color: '#6b7280', bg: '#f3f4f6', icon: <BsClockHistory size={10} /> };
+
 const statusCfg = {
     Pending: { color: '#f59e0b', bg: '#fffbeb', icon: <BsClockHistory size={10} /> },
     Approved: { color: '#6366f1', bg: '#eef2ff', icon: <BsCheckCircleFill size={10} /> },
     'Pickup Scheduled': { color: '#0ea5e9', bg: '#f0f9ff', icon: <BsTruck size={10} /> },
     Refunded: { color: '#10b981', bg: '#ecfdf5', icon: <BsCurrencyRupee size={10} /> },
     Rejected: { color: '#ef4444', bg: '#fef2f2', icon: <BsXCircleFill size={10} /> },
+    Processing: { color: '#3b82f6', bg: '#eff6ff', icon: <BsClockHistory size={10} /> },
+    Completed: { color: '#10b981', bg: '#ecfdf5', icon: <BsCheckCircleFill size={10} /> },
+    Cancelled: { color: '#ef4444', bg: '#fef2f2', icon: <BsXCircleFill size={10} /> },
 };
+
+const defaultReasonCfg = { color: '#6b7280', bg: '#f3f4f6', icon: '📦' };
 
 const reasonCfg = {
     'Defective Product': { color: '#ef4444', bg: '#fef2f2', icon: '🔧' },
@@ -91,12 +98,16 @@ const ReturnModal = ({ request, onClose, onAction }) => {
                 <div>
                     <p style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 8 }}>Update Status</p>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-                        {Object.keys(statusCfg).filter(s => s !== 'Rejected').map(s => (
-                            <button key={s} onClick={() => setDecision(s)}
-                                style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${decision === s ? statusCfg[s].color : '#e5e7eb'}`, background: decision === s ? statusCfg[s].bg : '#fff', color: decision === s ? statusCfg[s].color : '#6b7280' }}>
-                                {s}
-                            </button>
-                        ))}
+                        {['Pending', 'Approved', 'Pickup Scheduled', 'Refunded'].map(s => {
+                            const sc = statusCfg[s] || defaultStatusCfg;
+                            const isSelected = decision === s;
+                            return (
+                                <button key={s} onClick={() => setDecision(s)}
+                                    style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${isSelected ? sc.color : '#e5e7eb'}`, background: isSelected ? sc.bg : '#fff', color: isSelected ? sc.color : '#6b7280' }}>
+                                    {s}
+                                </button>
+                            );
+                        })}
                         <button onClick={() => setDecision('Rejected')}
                             style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${decision === 'Rejected' ? '#ef4444' : '#e5e7eb'}`, background: decision === 'Rejected' ? '#fef2f2' : '#fff', color: decision === 'Rejected' ? '#ef4444' : '#6b7280' }}>
                             Reject
@@ -146,11 +157,35 @@ const ReturnManagement = () => {
     const [page, setPage] = useState(1);
     const [selected, setSelected] = useState(null);
 
+    const normalizeStatus = (raw) => {
+        if (!raw) return 'Pending';
+        const s = String(raw).trim().toLowerCase().replace(/[_-]/g, ' ');
+        if (s.includes('pickup') || s.includes('schedule')) return 'Pickup Scheduled';
+        if (s.includes('refund') || s.includes('complete') || s.includes('return')) return 'Refunded';
+        if (s.includes('reject') || s.includes('declin') || s.includes('cancel')) return 'Rejected';
+        if (s.includes('approv') || s.includes('accept')) return 'Approved';
+        if (s.includes('process') || s.includes('progress')) return 'Processing';
+        if (s.includes('pend') || s.includes('request') || s.includes('open') || s.includes('init')) return 'Pending';
+        return s.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    };
+
     const fetchReturns = React.useCallback(async () => {
         setLoading(true);
         try {
             const res = await apiClient.get('/order-returns');
-            const list = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.items || []);
+            const raw = res?.data !== undefined ? res.data : res;
+            const list = Array.isArray(raw)
+                ? raw
+                : Array.isArray(raw?.data)
+                ? raw.data
+                : Array.isArray(raw?.items)
+                ? raw.items
+                : Array.isArray(raw?.returns)
+                ? raw.returns
+                : Array.isArray(raw?.results)
+                ? raw.results
+                : (raw && typeof raw === 'object' && Object.values(raw).find(Array.isArray)) || [];
+
             const mapped = list.map(item => ({
                 id: item.id ? `RET-${String(item.id).padStart(3, '0')}` : item.return_number || `RET-${Date.now()}`,
                 rawId: item.id,
@@ -163,10 +198,10 @@ const ReturnManagement = () => {
                 amount: Number(item.refund_amount || item.amount || 0),
                 reason: item.reason || 'Wrong Product',
                 description: item.notes || item.description || '—',
-                status: item.status ? (item.status.charAt(0).toUpperCase() + item.status.slice(1)) : 'Pending',
+                status: normalizeStatus(item.status),
                 pickupDate: item.pickup_date || null,
                 refundMethod: item.refund_method || 'Original Payment',
-                refundStatus: item.refund_status || (item.status === 'Refunded' ? 'Completed' : 'Pending'),
+                refundStatus: item.refund_status || (String(item.status || '').toLowerCase().includes('refund') ? 'Completed' : 'Pending'),
             }));
             setRequests(mapped);
         } catch (err) {
@@ -269,8 +304,8 @@ const ReturnManagement = () => {
                             </tr>
                         )}
                         {!loading && paginated.map((r, i) => {
-                            const sc = statusCfg[r.status];
-                            const rc = reasonCfg[r.reason];
+                            const sc = statusCfg[r.status] || defaultStatusCfg;
+                            const rc = reasonCfg[r.reason] || defaultReasonCfg;
                             return (
                                 <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}
                                     onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
@@ -288,7 +323,7 @@ const ReturnManagement = () => {
                                         <p style={{ color: '#9ca3af', fontSize: 11, marginTop: 1 }}>{r.qty} item(s)</p>
                                     </td>
                                     <td style={{ padding: '12px 14px' }}>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: rc?.bg, color: rc?.color }}>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: rc?.bg || '#f3f4f6', color: rc?.color || '#374151' }}>
                                             {rc?.icon} {r.reason}
                                         </span>
                                     </td>
@@ -299,8 +334,8 @@ const ReturnManagement = () => {
                                     </td>
                                     <td style={{ padding: '12px 14px', fontSize: 12, color: '#6b7280' }}>{r.date}</td>
                                     <td style={{ padding: '12px 14px' }}>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: sc.bg, color: sc.color }}>
-                                            {sc.icon} {r.status}
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: sc?.bg || '#f3f4f6', color: sc?.color || '#374151' }}>
+                                            {sc?.icon || <BsClockHistory size={10} />} {r.status}
                                         </span>
                                     </td>
                                     <td style={{ padding: '12px 14px' }}>

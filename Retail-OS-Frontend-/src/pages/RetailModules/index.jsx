@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import apiClient from '../../services/api';
+import { getInvoices } from '../../services/billingService';
 import {
     BsSearch, BsPlus, BsDownload, BsFilter, BsCheckCircleFill, BsClockHistory,
     BsXCircleFill, BsPrinter, BsUpcScan, BsBuildings, BsTruck, BsArrowRepeat,
@@ -76,12 +78,80 @@ const StatCard = ({ label, value, sub, color = '#6366f1' }) => (
 ───────────────────────────────────────────────────────────── */
 export const ReturnsRefundsPage = () => {
     const [search, setSearch] = useState('');
-    const returnsData = [
-        { id: 'RET-8901', inv: 'INV-2026-094', customer: 'Rahul Sharma', items: 2, amount: '₹1,450.00', type: 'Instant UPI', status: 'Completed', date: 'Today, 11:20 AM' },
-        { id: 'RET-8902', inv: 'INV-2026-081', customer: 'Pooja Verma', items: 1, amount: '₹890.00', type: 'Credit Note', status: 'Completed', date: 'Yesterday' },
-        { id: 'RET-8903', inv: 'INV-2026-077', customer: 'Kiran Deep', items: 3, amount: '₹3,200.00', type: 'Cash Refund', status: 'Pending Approval', date: '03 Oct 2026' },
-        { id: 'RET-8904', inv: 'INV-2026-064', customer: 'Amitabh S.', items: 1, amount: '₹550.00', type: 'Original Card', status: 'Processing', date: '02 Oct 2026' },
-    ];
+    const [returnsData, setReturnsData] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let isMounted = true;
+        const loadReturns = async () => {
+            setLoading(true);
+            try {
+                const res = await apiClient.get('/order-returns').catch(() => null);
+                const raw = res?.data || [];
+                const list = Array.isArray(raw) ? raw : (raw?.data || raw?.items || []);
+                if (isMounted && list.length > 0) {
+                    setReturnsData(list.map((r, i) => ({
+                        id: r.id ? `RET-${r.id}` : (r.return_number || `RET-${i + 1}`),
+                        inv: r.invoice_number || r.order_number || (r.order_id ? `INV-${r.order_id}` : '—'),
+                        customer: r.customer_name || r.customer || 'Customer',
+                        items: Number(r.quantity || r.items || 1),
+                        amount: '₹' + Number(r.refund_amount || r.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                        rawAmount: Number(r.refund_amount || r.amount || 0),
+                        type: r.refund_method || r.type || 'Original Payment',
+                        status: r.status ? (r.status.charAt(0).toUpperCase() + r.status.slice(1).toLowerCase()) : 'Completed',
+                        date: r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN') : (r.date || '—'),
+                    })));
+                } else if (isMounted) {
+                    const stored = localStorage.getItem('gst_invoices');
+                    const parsed = stored ? JSON.parse(stored) : [];
+                    const returnedInvs = Array.isArray(parsed) ? parsed.filter(inv => (inv.status || '').toLowerCase() === 'returned') : [];
+                    if (returnedInvs.length > 0) {
+                        setReturnsData(returnedInvs.map((inv, i) => ({
+                            id: `RET-${inv.id || i + 1}`,
+                            inv: inv.id || '—',
+                            customer: inv.customer || inv.customer_name || 'Walk-in Customer',
+                            items: Array.isArray(inv.items) ? inv.items.length : 1,
+                            amount: '₹' + Number(inv.total || inv.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                            rawAmount: Number(inv.total || inv.amount || 0),
+                            type: inv.paymentMode || inv.mode || 'Refund',
+                            status: 'Completed',
+                            date: inv.date || 'Today',
+                        })));
+                    } else {
+                        setReturnsData([]);
+                    }
+                }
+            } catch (_) {
+                if (isMounted) setReturnsData([]);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        };
+        loadReturns();
+        return () => { isMounted = false; };
+    }, []);
+
+    const filteredReturns = useMemo(() => {
+        if (!search.trim()) return returnsData;
+        const q = search.toLowerCase();
+        return returnsData.filter(r =>
+            String(r.id || '').toLowerCase().includes(q) ||
+            String(r.inv || '').toLowerCase().includes(q) ||
+            String(r.customer || '').toLowerCase().includes(q)
+        );
+    }, [returnsData, search]);
+
+    const totalReturnsAmount = useMemo(() => {
+        return returnsData.reduce((s, r) => s + (Number(r.rawAmount) || 0), 0);
+    }, [returnsData]);
+
+    const pendingCount = useMemo(() => {
+        return returnsData.filter(r => (r.status || '').toLowerCase().includes('pending')).length;
+    }, [returnsData]);
+
+    const completedCount = useMemo(() => {
+        return returnsData.filter(r => (r.status || '').toLowerCase().includes('completed')).length;
+    }, [returnsData]);
 
     return (
         <ModuleContainer
@@ -98,10 +168,10 @@ export const ReturnsRefundsPage = () => {
             }
         >
             <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-                <StatCard label="Today Returns" value="₹2,340.00" sub="3 Transactions" />
-                <StatCard label="Pending Approval" value="1 Request" sub="Requires manager PIN" color="#f59e0b" />
-                <StatCard label="Credit Notes Issued" value="₹890.00" sub="Valid for 90 days" color="#10b981" />
-                <StatCard label="Return Rate" value="1.8%" sub="Within healthy limit (<3%)" color="#6366f1" />
+                <StatCard label="Total Returns" value={'₹' + totalReturnsAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })} sub={`${returnsData.length} Transactions`} />
+                <StatCard label="Pending Approval" value={`${pendingCount} Request${pendingCount === 1 ? '' : 's'}`} sub={pendingCount > 0 ? "Requires manager PIN" : "No pending requests"} color="#f59e0b" />
+                <StatCard label="Completed Returns" value={`${completedCount} Request${completedCount === 1 ? '' : 's'}`} sub="Processed" color="#10b981" />
+                <StatCard label="Total Records" value={String(returnsData.length)} sub="In ledger" color="#6366f1" />
             </div>
 
             <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
@@ -116,7 +186,7 @@ export const ReturnsRefundsPage = () => {
                             style={{ width: '100%', padding: '8px 12px 8px 36px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13 }}
                         />
                     </div>
-                    <span style={{ fontSize: 13, color: '#6b7280' }}>Showing {returnsData.length} records</span>
+                    <span style={{ fontSize: 13, color: '#6b7280' }}>Showing {filteredReturns.length} records</span>
                 </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                     <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
@@ -132,30 +202,38 @@ export const ReturnsRefundsPage = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {returnsData.map((row, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#6366f1' }}>{row.id}</td>
-                                <td style={{ padding: '14px 18px', color: '#374151' }}>{row.inv}</td>
-                                <td style={{ padding: '14px 18px', fontWeight: 500 }}>{row.customer}</td>
-                                <td style={{ padding: '14px 18px' }}>{row.items} pcs</td>
-                                <td style={{ padding: '14px 18px', fontWeight: 700 }}>{row.amount}</td>
-                                <td style={{ padding: '14px 18px' }}><span style={{ background: '#f3f4f6', padding: '3px 8px', borderRadius: 6, fontSize: 12 }}>{row.type}</span></td>
-                                <td style={{ padding: '14px 18px' }}>
-                                    <span style={{
-                                        padding: '3px 10px', borderRadius: 12, fontSize: 11.5, fontWeight: 700,
-                                        background: row.status === 'Completed' ? '#ecfdf5' : '#fffbeb',
-                                        color: row.status === 'Completed' ? '#059669' : '#d97706'
-                                    }}>
-                                        {row.status}
-                                    </span>
-                                </td>
-                                <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                                    <button style={{ background: 'transparent', border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
-                                        Receipt
-                                    </button>
+                        {filteredReturns.length === 0 ? (
+                            <tr>
+                                <td colSpan="8" style={{ padding: '36px 18px', textAlign: 'center', color: '#9ca3af' }}>
+                                    {loading ? 'Loading returns records...' : 'No return or refund records found'}
                                 </td>
                             </tr>
-                        ))}
+                        ) : (
+                            filteredReturns.map((row, i) => (
+                                <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                    <td style={{ padding: '14px 18px', fontWeight: 700, color: '#6366f1' }}>{row.id}</td>
+                                    <td style={{ padding: '14px 18px', color: '#374151' }}>{row.inv}</td>
+                                    <td style={{ padding: '14px 18px', fontWeight: 500 }}>{row.customer}</td>
+                                    <td style={{ padding: '14px 18px' }}>{row.items} pcs</td>
+                                    <td style={{ padding: '14px 18px', fontWeight: 700 }}>{row.amount}</td>
+                                    <td style={{ padding: '14px 18px' }}><span style={{ background: '#f3f4f6', padding: '3px 8px', borderRadius: 6, fontSize: 12 }}>{row.type}</span></td>
+                                    <td style={{ padding: '14px 18px' }}>
+                                        <span style={{
+                                            padding: '3px 10px', borderRadius: 12, fontSize: 11.5, fontWeight: 700,
+                                            background: row.status === 'Completed' ? '#ecfdf5' : '#fffbeb',
+                                            color: row.status === 'Completed' ? '#059669' : '#d97706'
+                                        }}>
+                                            {row.status}
+                                        </span>
+                                    </td>
+                                    <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                                        <button style={{ background: 'transparent', border: '1px solid #d1d5db', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>
+                                            Receipt
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -167,6 +245,33 @@ export const ReturnsRefundsPage = () => {
    2. BILLING & GST: Credit Notes
 ───────────────────────────────────────────────────────────── */
 export const CreditNotesPage = () => {
+    const [creditNotes, setCreditNotes] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let isMounted = true;
+        const loadCN = async () => {
+            setLoading(true);
+            try {
+                const stored = localStorage.getItem('credit_notes');
+                const parsed = stored ? JSON.parse(stored) : [];
+                if (isMounted) {
+                    setCreditNotes(Array.isArray(parsed) ? parsed : []);
+                }
+            } catch (_) {
+                if (isMounted) setCreditNotes([]);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        };
+        loadCN();
+        return () => { isMounted = false; };
+    }, []);
+
+    const totalActiveCredit = useMemo(() => {
+        return creditNotes.reduce((s, cn) => s + (Number(cn.remaining || cn.rem || 0)), 0);
+    }, [creditNotes]);
+
     return (
         <ModuleContainer
             title="Credit Notes"
@@ -182,10 +287,10 @@ export const CreditNotesPage = () => {
             }
         >
             <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-                <StatCard label="Total Active Credit" value="₹14,820.00" sub="Available for redemption" color="#10b981" />
-                <StatCard label="Issued This Month" value="18 Notes" sub="₹21,450.00 Total" />
-                <StatCard label="Redeemed (30d)" value="₹12,600.00" sub="92% utilization rate" color="#6366f1" />
-                <StatCard label="Expiring Soon" value="2 Notes" sub="Within next 7 days" color="#ef4444" />
+                <StatCard label="Total Active Credit" value={'₹' + totalActiveCredit.toLocaleString('en-IN', { minimumFractionDigits: 2 })} sub="Available for redemption" color="#10b981" />
+                <StatCard label="Issued Credit Notes" value={`${creditNotes.length} Notes`} sub="Total recorded" />
+                <StatCard label="Redeemed Credit" value="₹0.00" sub="Utilization ledger" color="#6366f1" />
+                <StatCard label="Expiring Soon" value="0 Notes" sub="Within next 7 days" color="#ef4444" />
             </div>
 
             <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
@@ -202,29 +307,33 @@ export const CreditNotesPage = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {[
-                            { id: 'CN-2026-0041', name: 'Vikram Joshi', inv: 'INV-2026-081', init: '₹2,500.00', rem: '₹1,200.00', exp: '31 Dec 2026', status: 'Partially Used' },
-                            { id: 'CN-2026-0040', name: 'Sneha Patel', inv: 'INV-2026-065', init: '₹1,850.00', rem: '₹1,850.00', exp: '24 Nov 2026', status: 'Active' },
-                            { id: 'CN-2026-0039', name: 'Rohan Mehra', inv: 'INV-2026-052', init: '₹4,100.00', rem: '₹0.00', exp: '15 Oct 2026', status: 'Fully Redeemed' },
-                        ].map((row, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#6366f1' }}>{row.id}</td>
-                                <td style={{ padding: '14px 18px', fontWeight: 600 }}>{row.name}</td>
-                                <td style={{ padding: '14px 18px', color: '#6b7280' }}>{row.inv}</td>
-                                <td style={{ padding: '14px 18px' }}>{row.init}</td>
-                                <td style={{ padding: '14px 18px', fontWeight: 700, color: row.rem === '₹0.00' ? '#9ca3af' : '#10b981' }}>{row.rem}</td>
-                                <td style={{ padding: '14px 18px', color: '#6b7280' }}>{row.exp}</td>
-                                <td style={{ padding: '14px 18px' }}>
-                                    <span style={{
-                                        padding: '3px 10px', borderRadius: 12, fontSize: 11.5, fontWeight: 700,
-                                        background: row.status === 'Active' ? '#ecfdf5' : row.status === 'Partially Used' ? '#eff6ff' : '#f3f4f6',
-                                        color: row.status === 'Active' ? '#059669' : row.status === 'Partially Used' ? '#2563eb' : '#6b7280'
-                                    }}>
-                                        {row.status}
-                                    </span>
+                        {creditNotes.length === 0 ? (
+                            <tr>
+                                <td colSpan="7" style={{ padding: '36px 18px', textAlign: 'center', color: '#9ca3af' }}>
+                                    {loading ? 'Loading credit notes...' : 'No credit notes found. Credit notes generated during returns or manual issuance will appear here.'}
                                 </td>
                             </tr>
-                        ))}
+                        ) : (
+                            creditNotes.map((row, i) => (
+                                <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                    <td style={{ padding: '14px 18px', fontWeight: 700, color: '#6366f1' }}>{row.id}</td>
+                                    <td style={{ padding: '14px 18px', fontWeight: 600 }}>{row.name || row.customer}</td>
+                                    <td style={{ padding: '14px 18px', color: '#6b7280' }}>{row.inv || row.invoice_id}</td>
+                                    <td style={{ padding: '14px 18px' }}>{row.init || row.amount}</td>
+                                    <td style={{ padding: '14px 18px', fontWeight: 700, color: '#10b981' }}>{row.rem || row.remaining}</td>
+                                    <td style={{ padding: '14px 18px', color: '#6b7280' }}>{row.exp || row.expiry}</td>
+                                    <td style={{ padding: '14px 18px' }}>
+                                        <span style={{
+                                            padding: '3px 10px', borderRadius: 12, fontSize: 11.5, fontWeight: 700,
+                                            background: '#ecfdf5',
+                                            color: '#059669'
+                                        }}>
+                                            {row.status || 'Active'}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>
@@ -236,6 +345,74 @@ export const CreditNotesPage = () => {
    3. BILLING & GST: Payments
 ───────────────────────────────────────────────────────────── */
 export const BillingPaymentsPage = () => {
+    const [payments, setPayments] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        let isMounted = true;
+        const loadPayments = async () => {
+            setLoading(true);
+            try {
+                let list = [];
+                const res = await getInvoices().catch(() => null);
+                if (res) {
+                    list = Array.isArray(res) ? res : (res?.data || res?.items || []);
+                }
+                const stored = localStorage.getItem('gst_invoices');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed)) {
+                        parsed.forEach(loc => {
+                            if (!list.some(inv => String(inv.id || inv.invoice_number) === String(loc.id))) {
+                                list.push(loc);
+                            }
+                        });
+                    }
+                }
+
+                if (isMounted) {
+                    const mapped = list.map((inv, i) => {
+                        const amt = Number(inv.total || inv.grand_total || inv.amount || 0);
+                        const mode = inv.payment_mode || inv.paymentMode || inv.mode || 'Cash';
+                        return {
+                            ref: `TXN-${String(inv.id || i + 1).replace(/[^0-9A-Za-z]/g, '').slice(-8)}`,
+                            inv: inv.id || inv.invoice_number || `INV-${i + 1}`,
+                            method: mode,
+                            term: mode === 'UPI' ? 'UPI QR' : mode === 'Card' ? 'Card Terminal' : 'Cash Counter',
+                            rawAmt: amt,
+                            amt: '₹' + amt.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+                            time: inv.date || (inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-IN') : 'Today'),
+                            status: inv.status || 'Success',
+                        };
+                    });
+                    setPayments(mapped);
+                }
+            } catch (_) {
+                if (isMounted) setPayments([]);
+            } finally {
+                if (isMounted) setLoading(false);
+            }
+        };
+        loadPayments();
+        return () => { isMounted = false; };
+    }, []);
+
+    const totalCollections = useMemo(() => {
+        return payments.reduce((s, p) => s + (p.rawAmt || 0), 0);
+    }, [payments]);
+
+    const upiCollections = useMemo(() => {
+        return payments.filter(p => (p.method || '').toLowerCase().includes('upi')).reduce((s, p) => s + (p.rawAmt || 0), 0);
+    }, [payments]);
+
+    const cardCollections = useMemo(() => {
+        return payments.filter(p => (p.method || '').toLowerCase().includes('card')).reduce((s, p) => s + (p.rawAmt || 0), 0);
+    }, [payments]);
+
+    const cashCollections = useMemo(() => {
+        return payments.filter(p => (p.method || '').toLowerCase().includes('cash')).reduce((s, p) => s + (p.rawAmt || 0), 0);
+    }, [payments]);
+
     return (
         <ModuleContainer
             title="Payments & Settlements"
@@ -243,10 +420,10 @@ export const BillingPaymentsPage = () => {
             icon={<BsCreditCard2Front />}
         >
             <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-                <StatCard label="Today's Collections" value="₹84,290.00" sub="142 Transactions" color="#10b981" />
-                <StatCard label="UPI / Dynamic QR" value="₹54,120.00" sub="64% of total volume" color="#6366f1" />
-                <StatCard label="Card POS (Pine Labs)" value="₹18,450.00" sub="Settled automatically" color="#0ea5e9" />
-                <StatCard label="Cash In Drawer" value="₹11,720.00" sub="Float: ₹5,000.00" color="#f59e0b" />
+                <StatCard label="Total Collections" value={'₹' + totalCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })} sub={`${payments.length} Transactions`} color="#10b981" />
+                <StatCard label="UPI / Dynamic QR" value={'₹' + upiCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })} sub={totalCollections > 0 ? `${Math.round((upiCollections / totalCollections) * 100)}% of total volume` : '0%'} color="#6366f1" />
+                <StatCard label="Card POS" value={'₹' + cardCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })} sub="Settled automatically" color="#0ea5e9" />
+                <StatCard label="Cash In Drawer" value={'₹' + cashCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })} sub="Cash collections" color="#f59e0b" />
             </div>
 
             <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 20 }}>
@@ -264,26 +441,29 @@ export const BillingPaymentsPage = () => {
                         </tr>
                     </thead>
                     <tbody>
-                        {[
-                            { ref: 'TXN-904123', inv: 'INV-2026-094', method: 'UPI QR', term: 'Razorpay POS', amt: '₹1,450.00', time: '11:42 AM', status: 'Success' },
-                            { ref: 'TXN-904122', inv: 'INV-2026-093', method: 'Credit Card', term: 'PineLabs EDC #01', amt: '₹4,890.00', time: '11:28 AM', status: 'Success' },
-                            { ref: 'TXN-904121', inv: 'INV-2026-092', method: 'Cash', term: 'Counter Drawer 1', amt: '₹620.00', time: '11:15 AM', status: 'Success' },
-                            { ref: 'TXN-904120', inv: 'INV-2026-091', method: 'UPI QR', term: 'PhonePe Merchant', amt: '₹2,340.00', time: '10:52 AM', status: 'Success' },
-                        ].map((tx, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                <td style={{ padding: '12px 16px', fontWeight: 600 }}>{tx.ref}</td>
-                                <td style={{ padding: '12px 16px', color: '#6366f1' }}>{tx.inv}</td>
-                                <td style={{ padding: '12px 16px' }}><span style={{ background: '#f3f4f6', padding: '3px 8px', borderRadius: 6, fontWeight: 600, fontSize: 12 }}>{tx.method}</span></td>
-                                <td style={{ padding: '12px 16px', color: '#6b7280' }}>{tx.term}</td>
-                                <td style={{ padding: '12px 16px', fontWeight: 800 }}>{tx.amt}</td>
-                                <td style={{ padding: '12px 16px', color: '#6b7280' }}>{tx.time}</td>
-                                <td style={{ padding: '12px 16px' }}>
-                                    <span style={{ padding: '3px 8px', borderRadius: 10, background: '#ecfdf5', color: '#059669', fontWeight: 700, fontSize: 11 }}>
-                                        {tx.status}
-                                    </span>
+                        {payments.length === 0 ? (
+                            <tr>
+                                <td colSpan="7" style={{ padding: '36px 16px', textAlign: 'center', color: '#9ca3af' }}>
+                                    {loading ? 'Loading payment transactions...' : 'No payment transactions recorded yet'}
                                 </td>
                             </tr>
-                        ))}
+                        ) : (
+                            payments.map((tx, i) => (
+                                <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                    <td style={{ padding: '12px 16px', fontWeight: 600 }}>{tx.ref}</td>
+                                    <td style={{ padding: '12px 16px', color: '#6366f1' }}>{tx.inv}</td>
+                                    <td style={{ padding: '12px 16px' }}><span style={{ background: '#f3f4f6', padding: '3px 8px', borderRadius: 6, fontWeight: 600, fontSize: 12 }}>{tx.method}</span></td>
+                                    <td style={{ padding: '12px 16px', color: '#6b7280' }}>{tx.term}</td>
+                                    <td style={{ padding: '12px 16px', fontWeight: 800 }}>{tx.amt}</td>
+                                    <td style={{ padding: '12px 16px', color: '#6b7280' }}>{tx.time}</td>
+                                    <td style={{ padding: '12px 16px' }}>
+                                        <span style={{ padding: '3px 8px', borderRadius: 10, background: '#ecfdf5', color: '#059669', fontWeight: 700, fontSize: 11 }}>
+                                            {tx.status}
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
                     </tbody>
                 </table>
             </div>

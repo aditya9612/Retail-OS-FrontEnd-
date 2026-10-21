@@ -5,6 +5,7 @@ import {
     Legend, PieChart, Pie, Cell, Bar, Line,
 } from 'recharts';
 import { getInvoices } from '../../services/billingService';
+import { getOrders } from '../../services/orderService';
 
 /* ── October (This Month) Daily Breakdown ──
    Total Monthly Sales: ₹22,70,958 (₹22.71 Lakhs)
@@ -288,12 +289,43 @@ const defaultRecentOrders = [
     { id: '#ORD-005', amount: '₹5,100', status: 'Paid', color: '#10b981' },
 ];
 
+const formatTransactionStatus = (statusStr) => {
+    const raw = String(statusStr || '').trim();
+    if (!raw) return { status: 'Paid', color: '#10b981' };
+    const s = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+    const lower = s.toLowerCase();
+    if (['paid', 'completed', 'delivered'].includes(lower)) {
+        return { status: s, color: '#10b981' };
+    }
+    if (['pending', 'processing'].includes(lower)) {
+        return { status: s, color: '#f59e0b' };
+    }
+    if (['cancelled', 'failed', 'returned'].includes(lower)) {
+        return { status: s, color: '#ef4444' };
+    }
+    return { status: s, color: '#6366f1' };
+};
+
+const formatTxAmount = (val) => {
+    if (val === undefined || val === null || val === '') return '₹0';
+    if (typeof val === 'string' && val.includes('₹')) return val;
+    const num = Number(String(val).replace(/[^0-9.-]/g, ''));
+    if (isNaN(num)) return `₹${val}`;
+    return `₹${Math.round(num).toLocaleString('en-IN')}`;
+};
+
+const formatTxId = (id) => {
+    if (!id) return '#ORD-001';
+    const s = String(id).trim();
+    return s.startsWith('#') ? s : `#${s}`;
+};
+
 const defaultTopProducts = [
-    { name: 'Cotton T-Shirt', sold: 340, pct: 85, revenueFormatted: '₹34,000' },
-    { name: 'Wireless Earbuds', sold: 218, pct: 72, revenueFormatted: '₹87,200' },
-    { name: 'Denim Jeans', sold: 195, pct: 61, revenueFormatted: '₹58,500' },
-    { name: 'Water Bottle', sold: 412, pct: 93, revenueFormatted: '₹20,600' },
-    { name: 'Face Cream', sold: 156, pct: 48, revenueFormatted: '₹46,800' },
+    { name: 'Wireless Earbuds', sold: 218, pct: 100, revenueFormatted: '₹87,200', revenue: 87200 },
+    { name: 'Denim Jeans', sold: 195, pct: 67, revenueFormatted: '₹58,500', revenue: 58500 },
+    { name: 'Face Cream', sold: 156, pct: 54, revenueFormatted: '₹46,800', revenue: 46800 },
+    { name: 'Cotton T-Shirt', sold: 340, pct: 39, revenueFormatted: '₹34,000', revenue: 34000 },
+    { name: 'Water Bottle', sold: 412, pct: 24, revenueFormatted: '₹20,600', revenue: 20600 },
 ];
 
 /* ── Main Dashboard ── */
@@ -305,6 +337,7 @@ const Dashboard = () => {
     const [paretoPeriod, setParetoPeriod] = useState('This Month');
     const [lastUpdated, setLastUpdated] = useState(new Date());
     const [refreshing, setRefreshing] = useState(false);
+    const [recentOrdersLoading, setRecentOrdersLoading] = useState(false);
 
     // Initial calibrated retail business state:
     // Total Sales: ₹22,70,958 (₹22.71 Lakhs)
@@ -382,9 +415,89 @@ const Dashboard = () => {
         }
     }, []);
 
+    // Refresh ONLY the Recent Transactions data without touching dashboard KPIs or global refresh state
+    const fetchRecentTransactions = useCallback(async () => {
+        setRecentOrdersLoading(true);
+        try {
+            let transactions = [];
+
+            // 1. Try orders API
+            try {
+                const res = await getOrders({ page: 1, page_size: 10 });
+                const list = Array.isArray(res) ? res : (res?.items || res?.data || res?.orders || []);
+                if (Array.isArray(list) && list.length > 0) {
+                    transactions = list.slice(0, 5).map(o => {
+                        const { status, color } = formatTransactionStatus(o.status || 'Paid');
+                        return {
+                            id: formatTxId(o.order_number || o.id),
+                            amount: formatTxAmount(o.total_amount ?? o.grand_total ?? o.total ?? o.amount ?? 0),
+                            status,
+                            color,
+                        };
+                    });
+                }
+            } catch (_) {}
+
+            // 2. If no orders, try invoices API + local invoices
+            if (transactions.length === 0) {
+                let invoices = [];
+                try {
+                    const res = await getInvoices();
+                    if (res) {
+                        const data = Array.isArray(res) ? res : (res?.data || res?.items || []);
+                        if (Array.isArray(data) && data.length > 0) invoices = data;
+                    }
+                } catch (_) {}
+
+                try {
+                    const stored = localStorage.getItem('gst_invoices');
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            parsed.forEach(loc => {
+                                if (!invoices.some(inv => String(inv.id || inv.invoice_number) === String(loc.id))) {
+                                    invoices.push(loc);
+                                }
+                            });
+                        }
+                    }
+                } catch (_) {}
+
+                if (invoices.length > 0) {
+                    transactions = invoices.slice(0, 5).map((inv, idx) => {
+                        const { status, color } = formatTransactionStatus(inv.status || 'Paid');
+                        return {
+                            id: formatTxId(inv.invoice_number || inv.id || `INV-${idx + 1}`),
+                            amount: formatTxAmount(inv.amount ?? inv.total ?? inv.grand_total ?? 0),
+                            status,
+                            color,
+                        };
+                    });
+                }
+            }
+
+            if (transactions.length > 0) {
+                setRealStats(prev => ({
+                    ...prev,
+                    recentOrders: transactions,
+                }));
+            } else {
+                setRealStats(prev => ({
+                    ...prev,
+                    recentOrders: prev.recentOrders?.length ? prev.recentOrders : defaultRecentOrders,
+                }));
+            }
+        } catch (e) {
+            console.error('Error fetching recent transactions:', e);
+        } finally {
+            setRecentOrdersLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         fetchDashboardData(true);
-    }, [fetchDashboardData]);
+        fetchRecentTransactions();
+    }, [fetchDashboardData, fetchRecentTransactions]);
 
     /* ── Precise Target Calculations ── */
     // Monthly Sales Target: ₹25,00,000 (25.0 Lakhs)
@@ -424,6 +537,32 @@ const Dashboard = () => {
     const salesProgress = salesTarget > 0 ? (realStats.totalSales / salesTarget) * 100 : 0;
     const costProgress = costTarget > 0 ? (realStats.totalCost / costTarget) * 100 : 0;
     const soldProgress = soldTarget > 0 ? (realStats.productSold / soldTarget) * 100 : 0;
+
+    // Top Products strictly ordered by revenue descending to match rank (#1, #2, ...)
+    const sortedTopProducts = useMemo(() => {
+        const list = realStats.topProducts || defaultTopProducts;
+        if (!Array.isArray(list) || list.length === 0) return [];
+
+        const getRevNum = (p) => {
+            if (typeof p.revenue === 'number') return p.revenue;
+            const cleaned = String(p.revenueFormatted || '').replace(/[^0-9.-]/g, '');
+            const n = Number(cleaned);
+            return isNaN(n) ? 0 : n;
+        };
+
+        const sorted = [...list].sort((a, b) => getRevNum(b) - getRevNum(a));
+        const maxRev = getRevNum(sorted[0]) || 1;
+
+        return sorted.map((p) => {
+            const rev = getRevNum(p);
+            const pct = Math.min(100, Math.max(5, Math.round((rev / maxRev) * 100)));
+            return {
+                ...p,
+                pct,
+                revenueFormatted: p.revenueFormatted || `₹${Math.round(rev).toLocaleString('en-IN')}`,
+            };
+        });
+    }, [realStats.topProducts]);
 
     const salesInLakhs = (realStats.totalSales / 100000).toFixed(2);
     const costInLakhs = (realStats.totalCost / 100000).toFixed(2);
@@ -596,7 +735,10 @@ const Dashboard = () => {
                             </span>
                             <button
                                 className="dash-refresh-btn"
-                                onClick={() => fetchDashboardData(false)}
+                                onClick={() => {
+                                    fetchDashboardData(false);
+                                    fetchRecentTransactions();
+                                }}
                                 disabled={realStats.loading || refreshing}
                                 title="Refresh now"
                             >
@@ -1120,10 +1262,21 @@ const Dashboard = () => {
                 <div className="chart-card">
                     <div className="chart-card-header">
                         <h2 className="chart-title">Recent Transactions</h2>
-                        <button className="chart-view-all" onClick={() => fetchDashboardData(false)}>↻ Refresh</button>
+                        <button
+                            className="chart-view-all"
+                            onClick={fetchRecentTransactions}
+                            disabled={recentOrdersLoading}
+                            style={{
+                                cursor: recentOrdersLoading ? 'not-allowed' : 'pointer',
+                                opacity: recentOrdersLoading ? 0.6 : 1,
+                            }}
+                            title="Refresh Recent Transactions"
+                        >
+                            {recentOrdersLoading ? '↻ Refreshing…' : '↻ Refresh'}
+                        </button>
                     </div>
 
-                    {realStats.loading ? (
+                    {(realStats.loading || recentOrdersLoading) ? (
                         <div className="dash-table-skeleton">
                             {[0, 1, 2, 3, 4].map(i => <div key={i} className="dash-table-skeleton-row" />)}
                         </div>
@@ -1169,14 +1322,14 @@ const Dashboard = () => {
                         <div className="dash-table-skeleton">
                             {[0, 1, 2, 3, 4].map(i => <div key={i} className="dash-table-skeleton-row" />)}
                         </div>
-                    ) : realStats.topProducts.length === 0 ? (
+                    ) : sortedTopProducts.length === 0 ? (
                         <div className="dash-empty-state">
                             <span>📦</span>
                             <p>No product data yet</p>
                         </div>
                     ) : (
                         <div className="top-products-list">
-                            {realStats.topProducts.map((p, i) => (
+                            {sortedTopProducts.map((p, i) => (
                                 <div key={i} className="top-product-item">
                                     <div className="top-product-rank">{i + 1}</div>
                                     <div className="top-product-info">

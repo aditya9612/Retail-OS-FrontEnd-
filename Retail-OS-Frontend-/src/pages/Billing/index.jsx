@@ -26,9 +26,11 @@ import {
     BsCalculator,
     BsHash,
     BsDownload,
+    BsExclamationTriangleFill,
+    BsLockFill,
 } from 'react-icons/bs';
 
-const CATEGORIES = ['All', 'Apparel', 'Electronics', 'Accessories', 'Groceries'];
+const CATEGORIES = ['All'];
 
 const MAX_QTY = 50; // Maximum quantity allowed per item in cart
 
@@ -38,140 +40,23 @@ const PAYMENT_MODES = [
     { id: 'Card', label: 'Card', icon: <BsCreditCard2Front size={15} /> },
 ];
 
-const DEFAULT_PRODUCTS = [
-    {
-        id: 101,
-        name: 'Cotton Graphic T-Shirt',
-        price: 799,
-        hsn: '6109',
-        gstRate: 5,
-        category: 'Apparel',
-        barcode: '1001',
-        image: '/images/products/tshirt.jpg',
-        discount: 50,
-    },
-    {
-        id: 102,
-        name: 'Parle-G Glucose Biscuits 250g',
-        price: 30,
-        hsn: '1905',
-        gstRate: 18,
-        category: 'Groceries',
-        barcode: '1002',
-        image: '/images/products/parle-g.jpg',
-        discount: 0,
-    },
-    {
-        id: 103,
-        name: 'Genuine Leather Wallet',
-        price: 1299,
-        hsn: '4202',
-        gstRate: 18,
-        category: 'Accessories',
-        barcode: '1003',
-        image: '/images/products/wallet.jpg',
-        discount: 100,
-    },
-    {
-        id: 104,
-        name: 'Organic Green Tea (Pack of 25)',
-        price: 249,
-        hsn: '0902',
-        gstRate: 5,
-        category: 'Groceries',
-        barcode: '1004',
-        image: '/images/products/green-tea.jpg',
-        discount: 20,
-    },
-    {
-        id: 105,
-        name: 'Smart Fitness Tracker Band',
-        price: 2499,
-        hsn: '8517',
-        gstRate: 18,
-        category: 'Electronics',
-        barcode: '1005',
-        image: '/images/products/fitness-tracker.jpg',
-        discount: 200,
-    },
-    {
-        id: 106,
-        name: 'Slim Fit Denim Jeans',
-        price: 1899,
-        hsn: '6203',
-        gstRate: 12,
-        category: 'Apparel',
-        barcode: '1006',
-        image: '/images/products/jeans.jpg',
-        discount: 150,
-    },
-    {
-        id: 107,
-        name: 'Fast USB Type-C 65W Charger',
-        price: 899,
-        hsn: '8504',
-        gstRate: 18,
-        category: 'Electronics',
-        barcode: '1007',
-        image: '/images/products/usb-charger.jpg',
-        discount: 50,
-    },
-    {
-        id: 108,
-        name: 'Fresh Dairy Milk 1 Litre',
-        price: 68,
-        hsn: '0401',
-        gstRate: 0,
-        category: 'Groceries',
-        barcode: '1008',
-        image: '/images/products/milk-bottle.jpg',
-        discount: 0,
-    },
-    {
-        id: 109,
-        name: 'Marie Light Biscuits 300g',
-        price: 45,
-        hsn: '1905',
-        gstRate: 18,
-        category: 'Groceries',
-        barcode: '1009',
-        image: '/images/products/marie-biscuits.jpg',
-        discount: 5,
-    },
-    {
-        id: 110,
-        name: 'Oreo Choco Creme Cookies',
-        price: 50,
-        hsn: '1905',
-        gstRate: 18,
-        category: 'Groceries',
-        barcode: '1010',
-        image: '/images/products/oreo.jpg',
-        discount: 5,
-    },
-    {
-        id: 111,
-        name: 'Royal Butter Cookies Tin',
-        price: 349,
-        hsn: '1905',
-        gstRate: 18,
-        category: 'Groceries',
-        barcode: '1011',
-        image: '/images/products/butter-cookies.jpg',
-        discount: 30,
-    },
-    {
-        id: 112,
-        name: 'Insulated Stainless Steel Bottle 1L',
-        price: 649,
-        hsn: '7323',
-        gstRate: 18,
-        category: 'Accessories',
-        barcode: '1012',
-        image: '/images/products/steel-bottle.jpg',
-        discount: 50,
-    },
-];
+const isProductOutOfStock = (product) => {
+    if (!product) return false;
+    if (product.status === 'Out of Stock') return true;
+    if (product.stock !== undefined && product.stock !== null) {
+        return Number(product.stock) <= 0;
+    }
+    if (product.stock_quantity !== undefined && product.stock_quantity !== null) {
+        return Number(product.stock_quantity) <= 0;
+    }
+    if (product.quantity !== undefined && product.quantity !== null) {
+        return Number(product.quantity) <= 0;
+    }
+    if (product.current_stock !== undefined && product.current_stock !== null) {
+        return Number(product.current_stock) <= 0;
+    }
+    return false;
+};
 
 const Billing = () => {
     const [customer, setCustomer] = useState({ name: '', phone: '', gstin: '' });
@@ -205,35 +90,59 @@ const Billing = () => {
     const [manualBarcodeInput, setManualBarcodeInput] = useState('');
     // ── Quantity limit warning ─────────────────────────────────────────────
     const [qtyLimitWarning, setQtyLimitWarning] = useState('');
+    // ── Out of stock warning ───────────────────────────────────────────────
+    const [stockWarning, setStockWarning] = useState('');
+    // ── Payment mode validation warning ────────────────────────────────────
+    const [paymentWarning, setPaymentWarning] = useState('');
     // ─────────────────────────────────────────────────────────────────────
     const scanInputRef = useRef(null);
 
-    // Live product catalog fetched from backend with DEFAULT_PRODUCTS fallback
-    const [products, setProducts] = useState(DEFAULT_PRODUCTS);
-    const [productsLoading, setProductsLoading] = useState(false);
+    const showStockWarning = useCallback((productName) => {
+        setStockWarning(`"${productName}" is Out of Stock and cannot be added to cart.`);
+        setTimeout(() => setStockWarning(''), 3500);
+    }, []);
+
+    const showPaymentWarning = useCallback((msg = 'Cart must have at least 1 item to select a payment method.') => {
+        setPaymentWarning(msg);
+        setTimeout(() => setPaymentWarning(''), 3500);
+    }, []);
+
+    // Live product catalog fetched from backend
+    const [products, setProducts] = useState([]);
+    const [productsLoading, setProductsLoading] = useState(true);
 
     useEffect(() => {
         let isMounted = true;
         const loadProducts = async () => {
+            setProductsLoading(true);
             try {
                 const res = await productService.getAll();
                 const rawList = Array.isArray(res) ? res : (res?.data || res?.items || []);
                 if (isMounted && rawList && rawList.length > 0) {
-                    const mapped = rawList.map(p => ({
-                        id: p.id,
-                        name: p.name || p.title || 'Product #' + p.id,
-                        price: Number(p.sale_price ?? p.price ?? p.unit_price ?? 0),
-                        hsn: p.hsn_code || p.hsn || '',
-                        gstRate: Number(p.gst_rate ?? p.tax_rate ?? 18),
-                        category: p.category_name || p.category?.name || p.category || 'General',
-                        barcode: String(p.barcode || p.sku || p.id),
-                        image: p.image_url || p.image || null,
-                        discount: Number(p.discount || 0),
-                    }));
+                    const mapped = rawList.map(p => {
+                        const rawStock = p.stock_quantity ?? p.stock ?? p.current_stock ?? p.inventory_quantity ?? p.quantity;
+                        const stockVal = rawStock !== undefined && rawStock !== null ? Number(rawStock) : 0;
+                        return {
+                            id: p.id,
+                            name: p.name || p.title || 'Product #' + p.id,
+                            price: Number(p.sale_price ?? p.price ?? p.unit_price ?? 0),
+                            hsn: p.hsn_code || p.hsn || '',
+                            gstRate: Number(p.gst_rate ?? p.tax_rate ?? 18),
+                            category: p.category_name || p.category?.name || p.category || 'General',
+                            barcode: String(p.barcode || p.sku || p.id),
+                            image: p.image_url || p.image || null,
+                            discount: Number(p.discount || 0),
+                            stock: p.status === 'Out of Stock' ? 0 : stockVal,
+                            status: p.status || (stockVal <= 0 ? 'Out of Stock' : 'Active'),
+                        };
+                    });
                     setProducts(mapped);
+                } else if (isMounted) {
+                    setProducts([]);
                 }
             } catch (err) {
-                console.warn('[Billing] Live products API unavailable, retaining default catalog:', err?.message || err);
+                console.warn('[Billing] Live products API unavailable:', err?.message || err);
+                if (isMounted) setProducts([]);
             } finally {
                 if (isMounted) setProductsLoading(false);
             }
@@ -249,7 +158,7 @@ const Billing = () => {
 
     const dynamicCategories = useMemo(() => {
         const cats = new Set(products.map(p => p.category).filter(Boolean));
-        return cats.size > 0 ? ['All', ...Array.from(cats)] : CATEGORIES;
+        return ['All', ...Array.from(cats)];
     }, [products]);
 
     const handleScanner = (e) => {
@@ -262,6 +171,12 @@ const Billing = () => {
             String(p.id).toLowerCase() === trimmed
         );
         if (product) {
+            if (isProductOutOfStock(product)) {
+                showStockWarning(product.name);
+                setLastScanned({ barcode: product.barcode, name: product.name, error: `${product.name} is Out of Stock`, success: false });
+                setScannerValue('');
+                return;
+            }
             addToCart(product);
             setScannerValue('');
             setLastScanned({ barcode: product.barcode, name: product.name, success: true });
@@ -277,6 +192,13 @@ const Billing = () => {
             p.name.toLowerCase().includes(val)
         );
         if (product) {
+            if (isProductOutOfStock(product)) {
+                showStockWarning(product.name);
+                setLastScanned({ barcode: product.barcode, name: product.name, error: `${product.name} is Out of Stock`, success: false });
+                setScannerValue('');
+                setManualBarcodeInput('');
+                return;
+            }
             addToCart(product);
             setScannerValue('');
             setManualBarcodeInput('');
@@ -343,8 +265,8 @@ const Billing = () => {
                     sgstAmount: parseFloat(serverItem.sgst_amount || 0),
                     igstAmount: parseFloat(serverItem.igst_amount || 0),
                     totalAmount: parseFloat(serverItem.total_amount || 0),
-                    image: existing?.image || '/images/products/parle-g.jpg',
-                    category: existing?.category || 'Groceries',
+                    image: existing?.image || null,
+                    category: existing?.category || 'General',
                 };
             });
         });
@@ -357,8 +279,22 @@ const Billing = () => {
     }, []);
 
     const addToCart = useCallback(async (product) => {
-        // ── Enforce per-item quantity limit ───────────────────────────────────
+        // ── Enforce Out of Stock check ───────────────────────────────────────
+        if (isProductOutOfStock(product)) {
+            showStockWarning(product.name);
+            return; // Block add — product is out of stock
+        }
+
+        // ── Enforce available stock quantity limit ───────────────────────────
         const existingItem = cart.find(i => i.id === product.id);
+        const availableStock = product.stock !== undefined && product.stock !== null ? Number(product.stock) : MAX_QTY;
+        if (existingItem && existingItem.qty >= availableStock) {
+            setStockWarning(`Cannot add more. Only ${availableStock} units of "${product.name}" in stock.`);
+            setTimeout(() => setStockWarning(''), 3000);
+            return;
+        }
+
+        // ── Enforce per-item maximum quantity limit ───────────────────────────
         if (existingItem && existingItem.qty >= MAX_QTY) {
             showQtyLimitWarning(product.name);
             return; // Block add — already at limit
@@ -371,6 +307,7 @@ const Billing = () => {
             if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1, unsynced: true } : i);
             return [...prev, { ...product, qty: 1, discountPerItem: product.discount || 0, unsynced: true }];
         });
+        setPaymentWarning('');
 
         setAddingItemId(product.id);
 
@@ -401,7 +338,7 @@ const Billing = () => {
         }
 
         setAddingItemId(null);
-    }, [cart, syncCartWithServer, showQtyLimitWarning]);
+    }, [cart, syncCartWithServer, showQtyLimitWarning, showStockWarning]);
 
     const removeFromCart = useCallback(async (id) => {
         // Optimistic local removal — instant UI feedback
@@ -427,6 +364,15 @@ const Billing = () => {
         const newQty = item.qty + delta;
         if (newQty <= 0) {
             return removeFromCart(id);
+        }
+
+        // ── Enforce available stock quantity limit on increment ──────────────
+        const prod = products.find(p => p.id === id);
+        const availableStock = prod?.stock !== undefined && prod?.stock !== null ? Number(prod.stock) : MAX_QTY;
+        if (delta > 0 && newQty > availableStock) {
+            setStockWarning(`Cannot increase. Only ${availableStock} units of "${item.name}" available in stock.`);
+            setTimeout(() => setStockWarning(''), 3000);
+            return;
         }
 
         // ── Enforce per-item quantity limit on increment ──────────────────────
@@ -478,12 +424,23 @@ const Billing = () => {
 
         const discountedTaxable = Math.max(0, subtotal - discountAmount);
 
-        // GST is counted on all bill based on the statutory bill GST rate
-        const effectiveRate = billGstRate != null
-            ? billGstRate
-            : (cart.length > 0 ? (cart[0].gstRate || 18) : 18);
+        // GST rate is automatically determined by product statutory tax classification (manual selection disabled)
+        let calculatedGST = 0;
+        if (cart.length > 0) {
+            const discountRatio = subtotal > 0 ? (discountAmount / subtotal) : 0;
+            cart.forEach(item => {
+                const itemBase = (item.price - (item.discountPerItem || 0)) * item.qty;
+                const itemTaxable = itemBase * (1 - discountRatio);
+                const rate = item.gstRate != null ? Number(item.gstRate) : 18;
+                calculatedGST += (itemTaxable * rate) / 100;
+            });
+        }
 
-        const totalGST = Math.round(((discountedTaxable * effectiveRate) / 100) * 100) / 100;
+        const effectiveRate = cart.length > 0 && cart[0]?.gstRate != null
+            ? Number(cart[0].gstRate)
+            : 18;
+
+        const totalGST = Math.round(calculatedGST * 100) / 100;
         const cgstAmount = Math.round((totalGST / 2) * 100) / 100;
         const sgstAmount = Math.round((totalGST - cgstAmount) * 100) / 100;
 
@@ -498,7 +455,7 @@ const Billing = () => {
             gstRate: effectiveRate,
             grandTotal: Math.round((discountedTaxable + totalGST) * 100) / 100
         };
-    }, [cart, billDiscount, discountType, billGstRate]);
+    }, [cart, billDiscount, discountType]);
 
     // Change Due calculation when cash is tendered
     const changeDue = useMemo(() => {
@@ -539,7 +496,9 @@ const Billing = () => {
                     return s ? Number(s) : 0;
                 });
             } else if (val === 'ENTER') {
-                handleApplyDiscount();
+                if (couponCode.trim() && cart.length > 0) {
+                    handleApplyDiscount();
+                }
                 setShowNumpad(false);
             } else {
                 setBillDiscount(prev => {
@@ -551,7 +510,10 @@ const Billing = () => {
     };
 
     const handleFinishSale = () => {
-        if (cart.length === 0) return;
+        if (cart.length === 0 || totals.grandTotal <= 0) {
+            showPaymentWarning('Cart must have at least 1 item to complete sale.');
+            return;
+        }
 
         const newInvoice = {
             id: invoiceNo,
@@ -610,6 +572,7 @@ const Billing = () => {
         setBillDiscount(0);
         setCouponCode('');
         setDiscountApplied(false);
+        setPaymentWarning('');
         setShowPreview(false);
         setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
     };
@@ -674,60 +637,77 @@ const Billing = () => {
     };
 
     const totalUnits = cart.reduce((s, i) => s + i.qty, 0);
+    const isCartEmpty = cart.length === 0 || totals.grandTotal <= 0;
 
     // ── Apply discount via API with resilient local fallback ──────────────
     const handleApplyDiscount = useCallback(async () => {
+        if (isCartEmpty || cart.length === 0) {
+            showPaymentWarning('Cart must have at least 1 item to apply a coupon code.');
+            setApiError('Add items to cart before applying a coupon.');
+            setTimeout(() => setApiError(''), 3500);
+            return;
+        }
+
         const trimmedCoupon = couponCode.trim().toUpperCase();
+        if (!trimmedCoupon) {
+            setApiError('Please enter a coupon code to apply.');
+            setTimeout(() => setApiError(''), 3500);
+            return;
+        }
+
         let discVal = Number(billDiscount);
         let discType = discountType;
 
         // Support demo discount coupons
-        if (trimmedCoupon) {
-            if (trimmedCoupon === 'SAVE10') {
-                discVal = 10;
-                discType = 'percentage';
-                setDiscountType('percentage');
-                setBillDiscount(10);
-            } else if (trimmedCoupon === 'SAVE20') {
-                discVal = 20;
-                discType = 'percentage';
-                setDiscountType('percentage');
-                setBillDiscount(20);
-            } else if (trimmedCoupon === 'FLAT50') {
-                discVal = 50;
-                discType = 'fixed';
-                setDiscountType('fixed');
-                setBillDiscount(50);
-            } else if (trimmedCoupon === 'FLAT100') {
-                discVal = 100;
-                discType = 'fixed';
-                setDiscountType('fixed');
-                setBillDiscount(100);
-            } else if (trimmedCoupon === 'WELCOME15') {
-                discVal = 15;
-                discType = 'percentage';
-                setDiscountType('percentage');
-                setBillDiscount(15);
-            } else if (discVal <= 0) {
-                discVal = 10;
-                discType = 'percentage';
-                setDiscountType('percentage');
-                setBillDiscount(10);
-            }
+        if (trimmedCoupon === 'SAVE10') {
+            discVal = 10;
+            discType = 'percentage';
+            setDiscountType('percentage');
+            setBillDiscount(10);
+        } else if (trimmedCoupon === 'SAVE20') {
+            discVal = 20;
+            discType = 'percentage';
+            setDiscountType('percentage');
+            setBillDiscount(20);
+        } else if (trimmedCoupon === 'FLAT50') {
+            discVal = 50;
+            discType = 'fixed';
+            setDiscountType('fixed');
+            setBillDiscount(50);
+        } else if (trimmedCoupon === 'FLAT100') {
+            discVal = 100;
+            discType = 'fixed';
+            setDiscountType('fixed');
+            setBillDiscount(100);
+        } else if (trimmedCoupon === 'WELCOME15' || trimmedCoupon === 'WELCOME10') {
+            discVal = trimmedCoupon === 'WELCOME15' ? 15 : 10;
+            discType = 'percentage';
+            setDiscountType('percentage');
+            setBillDiscount(discVal);
+        } else if (trimmedCoupon === 'FESTIVE50') {
+            discVal = 50;
+            discType = 'fixed';
+            setDiscountType('fixed');
+            setBillDiscount(50);
+        } else if (trimmedCoupon === 'RETAIL10') {
+            discVal = 10;
+            discType = 'percentage';
+            setDiscountType('percentage');
+            setBillDiscount(10);
+        } else if (discVal <= 0) {
+            discVal = 10;
+            discType = 'percentage';
+            setDiscountType('percentage');
+            setBillDiscount(10);
         }
 
-        if (discVal <= 0 && !trimmedCoupon) {
-            setApiError('Enter a discount value or coupon code to apply.');
-            setTimeout(() => setApiError(''), 3500);
-            return;
-        }
         setDiscountLoading(true);
         setApiError('');
         try {
             const payload = {
                 discount_type: discType,   // 'percentage' | 'fixed'
                 value: Number(discVal),
-                coupon_code: trimmedCoupon || null,
+                coupon_code: trimmedCoupon,
             };
             const response = await applyDiscount(payload);
             if (response) {
@@ -744,7 +724,16 @@ const Billing = () => {
         } finally {
             setDiscountLoading(false);
         }
-    }, [billDiscount, couponCode, discountType, syncCartWithServer]);
+    }, [isCartEmpty, cart.length, billDiscount, couponCode, discountType, syncCartWithServer, showPaymentWarning]);
+
+    // Automatically remove discounts / coupon if cart becomes empty
+    useEffect(() => {
+        if (cart.length === 0 && (discountApplied || billDiscount > 0 || couponCode)) {
+            setDiscountApplied(false);
+            setBillDiscount(0);
+            setCouponCode('');
+        }
+    }, [cart.length, discountApplied, billDiscount, couponCode]);
 
     const handleClearDiscount = useCallback(() => {
         setBillDiscount(0);
@@ -825,20 +814,32 @@ const Billing = () => {
                         </div>
                     </div>
                     <div className="pos-search-row" style={{ alignItems: 'center' }}>
-                        <div className="pos-search-wrap">
+                        <div className="pos-search-wrap" style={{ position: 'relative' }}>
                             <BsSearch className="pos-search-icon" size={13} />
                             <input
                                 type="text"
                                 className="pos-search-input"
-                                placeholder="Search products by name or barcode…"
+                                placeholder="Search by name or barcode…"
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
+                                style={{ width: '320px', minWidth: '280px', paddingRight: searchQuery ? '32px' : '14px' }}
                             />
                             {searchQuery && (
                                 <button
                                     type="button"
                                     onClick={() => setSearchQuery('')}
-                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', padding: 0 }}
+                                    style={{
+                                        position: 'absolute',
+                                        right: 10,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        color: '#94a3b8',
+                                        display: 'flex',
+                                        padding: 0,
+                                    }}
                                     title="Clear search"
                                 >
                                     <BsX size={15} />
@@ -1004,15 +1005,52 @@ const Billing = () => {
                     ) : (
                         filteredProducts.map(product => {
                             const inCart = cart.find(i => i.id === product.id);
+                            const isOutOfStock = isProductOutOfStock(product);
                             return (
                                 <div
                                     key={product.id}
-                                    className={`pos-product-card${inCart ? ' pos-product-card--in-cart' : ''}`}
-                                    onClick={() => addToCart(product)}
+                                    className={`pos-product-card${inCart ? ' pos-product-card--in-cart' : ''}${isOutOfStock ? ' pos-product-card--out-of-stock' : ''}`}
+                                    style={{
+                                        position: 'relative',
+                                        ...(isOutOfStock ? {
+                                            opacity: 0.72,
+                                            cursor: 'not-allowed',
+                                            borderColor: '#fca5a5',
+                                            background: '#fffaf9',
+                                        } : {}),
+                                    }}
+                                    onClick={() => {
+                                        if (isOutOfStock) {
+                                            showStockWarning(product.name);
+                                        } else {
+                                            addToCart(product);
+                                        }
+                                    }}
                                 >
-                                    {inCart && (
+                                    {isOutOfStock ? (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 8,
+                                            left: 8,
+                                            background: '#ef4444',
+                                            color: '#ffffff',
+                                            fontSize: 10,
+                                            fontWeight: 800,
+                                            padding: '3px 8px',
+                                            borderRadius: 6,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.04em',
+                                            boxShadow: '0 2px 6px rgba(239, 68, 68, 0.35)',
+                                            zIndex: 3,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                        }}>
+                                            <BsExclamationTriangleFill size={10} /> Out of Stock
+                                        </div>
+                                    ) : inCart ? (
                                         <div className="pos-product-qty-badge">{inCart.qty}</div>
-                                    )}
+                                    ) : null}
                                     <div className="pos-product-image">
                                         {product.image && (product.image.startsWith('/') || product.image.startsWith('http')) ? (
                                             <img
@@ -1050,19 +1088,50 @@ const Billing = () => {
                                             <BsUpcScan size={10} /> Barcode: {product.barcode}
                                         </span>
                                     </div>
-                                    {/* ── Discount badge on product card ── */}
-                                    {product.discount > 0 && (
-                                        <div style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                                            fontSize: 10, fontWeight: 700,
-                                            color: '#dc2626', background: '#fef2f2',
-                                            border: '1px solid #fecaca',
-                                            padding: '2px 6px', borderRadius: 4,
-                                            width: 'fit-content', marginBottom: 2,
-                                        }}>
-                                            <BsPercent size={9} /> ₹{product.discount} OFF per item
-                                        </div>
-                                    )}
+                                    {/* ── Stock status & Discount badge ── */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginBottom: 2 }}>
+                                        {isOutOfStock ? (
+                                            <span style={{
+                                                fontSize: 10,
+                                                fontWeight: 700,
+                                                color: '#dc2626',
+                                                background: '#fef2f2',
+                                                border: '1px solid #fecaca',
+                                                padding: '1px 6px',
+                                                borderRadius: 4,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 3,
+                                            }}>
+                                                ● Out of Stock
+                                            </span>
+                                        ) : (
+                                            <span style={{
+                                                fontSize: 10,
+                                                fontWeight: 600,
+                                                color: product.stock !== undefined && product.stock <= 5 ? '#d97706' : '#059669',
+                                                background: product.stock !== undefined && product.stock <= 5 ? '#fffbeb' : '#ecfdf5',
+                                                padding: '1px 6px',
+                                                borderRadius: 4,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 3,
+                                            }}>
+                                                ● {product.stock !== undefined ? `${product.stock} in stock` : 'In stock'}
+                                            </span>
+                                        )}
+                                        {product.discount > 0 && (
+                                            <span style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 2,
+                                                fontSize: 10, fontWeight: 700,
+                                                color: '#dc2626', background: '#fef2f2',
+                                                border: '1px solid #fecaca',
+                                                padding: '1px 6px', borderRadius: 4,
+                                            }}>
+                                                <BsPercent size={9} /> ₹{product.discount} OFF
+                                            </span>
+                                        )}
+                                    </div>
                                     <div className="pos-product-footer">
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                             {product.discount > 0 ? (
@@ -1077,7 +1146,9 @@ const Billing = () => {
                                             ) : (
                                                 <span className="pos-product-price">₹{product.price.toLocaleString()}</span>
                                             )}
-                                            <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 500 }}>excl. GST</span>
+                                            <span style={{ fontSize: 9, color: isOutOfStock ? '#ef4444' : '#9ca3af', fontWeight: isOutOfStock ? 700 : 500 }}>
+                                                {isOutOfStock ? 'Out of Stock' : 'excl. GST'}
+                                            </span>
                                         </div>
                                         <button
                                             type="button"
@@ -1085,19 +1156,29 @@ const Billing = () => {
                                             style={{
                                                 border: 'none',
                                                 outline: 'none',
-                                                cursor: 'pointer',
+                                                cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                                                background: isOutOfStock ? '#fee2e2' : undefined,
+                                                color: isOutOfStock ? '#ef4444' : undefined,
                                                 ...(addingItemId === product.id ? { opacity: 0.6 } : {})
                                             }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                addToCart(product);
+                                                if (isOutOfStock) {
+                                                    showStockWarning(product.name);
+                                                } else {
+                                                    addToCart(product);
+                                                }
                                             }}
-                                            title={`Add ${product.name} to cart`}
+                                            disabled={isOutOfStock}
+                                            title={isOutOfStock ? `${product.name} is Out of Stock` : `Add ${product.name} to cart`}
                                         >
-                                            {addingItemId === product.id
-                                                ? <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0 }}>…</span>
-                                                : <BsPlus size={18} />
-                                            }
+                                            {isOutOfStock ? (
+                                                <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px' }}>OOS</span>
+                                            ) : addingItemId === product.id ? (
+                                                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0 }}>…</span>
+                                            ) : (
+                                                <BsPlus size={18} />
+                                            )}
                                         </button>
                                     </div>
                                     <span className="pos-product-gst-tag">GST {product.gstRate}% excl.</span>
@@ -1189,6 +1270,50 @@ const Billing = () => {
                         <button
                             onClick={() => setQtyLimitWarning('')}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', display: 'flex', padding: 0, marginLeft: 8 }}
+                        >
+                            <BsX size={16} />
+                        </button>
+                    </div>
+                )}
+
+                {/* ── Out of Stock Warning Toast ── */}
+                {stockWarning && (
+                    <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        background: '#fef2f2', border: '1px solid #fecaca',
+                        borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
+                        fontSize: 12, fontWeight: 600, color: '#991b1b',
+                        animation: 'slideUp .18s ease',
+                    }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 14 }}>🚫</span>
+                            {stockWarning}
+                        </span>
+                        <button
+                            onClick={() => setStockWarning('')}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', display: 'flex', padding: 0, marginLeft: 8 }}
+                        >
+                            <BsX size={16} />
+                        </button>
+                    </div>
+                )}
+
+                {/* ── Payment Validation Warning Toast ── */}
+                {paymentWarning && (
+                    <div style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        background: '#fef2f2', border: '1px solid #fecaca',
+                        borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
+                        fontSize: 12, fontWeight: 600, color: '#991b1b',
+                        animation: 'slideUp .18s ease',
+                    }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <BsExclamationTriangleFill size={14} color="#dc2626" />
+                            {paymentWarning}
+                        </span>
+                        <button
+                            onClick={() => setPaymentWarning('')}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', display: 'flex', padding: 0, marginLeft: 8 }}
                         >
                             <BsX size={16} />
                         </button>
@@ -1339,17 +1464,25 @@ const Billing = () => {
 
                         {/* Discount type + value row */}
                         {!discountApplied && (
-                            <div className="pos-discount-row" style={{ marginBottom: 6 }}>
+                            <div className="pos-discount-row" style={{ marginBottom: 6, opacity: isCartEmpty ? 0.6 : 1 }}>
                                 <div className="pos-discount-type-btns">
                                     <button
+                                        type="button"
+                                        disabled={isCartEmpty}
                                         className={`pos-disc-type-btn${discountType === 'percentage' ? ' pos-disc-type-btn--active' : ''}`}
-                                        onClick={() => setDiscountType('percentage')}
+                                        onClick={() => !isCartEmpty && setDiscountType('percentage')}
+                                        style={isCartEmpty ? { cursor: 'not-allowed' } : {}}
+                                        title={isCartEmpty ? 'Cart is empty' : 'Percentage discount'}
                                     >
                                         %
                                     </button>
                                     <button
+                                        type="button"
+                                        disabled={isCartEmpty}
                                         className={`pos-disc-type-btn${discountType === 'fixed' ? ' pos-disc-type-btn--active' : ''}`}
-                                        onClick={() => setDiscountType('fixed')}
+                                        onClick={() => !isCartEmpty && setDiscountType('fixed')}
+                                        style={isCartEmpty ? { cursor: 'not-allowed' } : {}}
+                                        title={isCartEmpty ? 'Cart is empty' : 'Flat ₹ discount'}
                                     >
                                         ₹ Flat
                                     </button>
@@ -1357,10 +1490,12 @@ const Billing = () => {
                                 <input
                                     type="number"
                                     min="0"
+                                    disabled={isCartEmpty}
                                     className="pos-discount-input"
-                                    placeholder={discountType === 'percentage' ? '% off' : '₹ off'}
+                                    placeholder={isCartEmpty ? 'Cart empty' : (discountType === 'percentage' ? '% off' : '₹ off')}
                                     value={billDiscount || ''}
-                                    onChange={e => setBillDiscount(Number(e.target.value))}
+                                    onChange={e => !isCartEmpty && setBillDiscount(Number(e.target.value))}
+                                    style={isCartEmpty ? { cursor: 'not-allowed', background: '#f8fafc' } : {}}
                                 />
                             </div>
                         )}
@@ -1370,35 +1505,50 @@ const Billing = () => {
                             <div style={{ display: 'flex', gap: 6 }}>
                                 <div style={{
                                     flex: 1, display: 'flex', alignItems: 'center', gap: 6,
-                                    background: '#f8fafc', border: '1px solid #e2e8f0',
+                                    background: isCartEmpty ? '#f1f5f9' : '#f8fafc',
+                                    border: '1px solid #e2e8f0',
                                     borderRadius: 8, padding: '0 10px',
+                                    opacity: isCartEmpty ? 0.6 : 1,
+                                    cursor: isCartEmpty ? 'not-allowed' : 'default',
                                 }}>
-                                    <BsTagFill size={11} color="#9ca3af" />
+                                    <BsTagFill size={11} color={isCartEmpty ? '#cbd5e1' : '#9ca3af'} />
                                     <input
                                         type="text"
-                                        placeholder="Coupon code (optional)"
+                                        placeholder={isCartEmpty ? 'Add items to cart to apply coupon' : 'Enter coupon code'}
                                         value={couponCode}
+                                        disabled={isCartEmpty}
                                         onChange={e => setCouponCode(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && handleApplyDiscount()}
+                                        onKeyDown={e => e.key === 'Enter' && !isCartEmpty && couponCode.trim() && handleApplyDiscount()}
                                         style={{
                                             flex: 1, border: 'none', background: 'transparent',
-                                            fontSize: 12, outline: 'none', color: '#374151',
+                                            fontSize: 12, outline: 'none', color: isCartEmpty ? '#94a3b8' : '#374151',
                                             padding: '7px 0',
+                                            cursor: isCartEmpty ? 'not-allowed' : 'text',
                                         }}
                                     />
                                 </div>
                                 <button
-                                    onClick={handleApplyDiscount}
-                                    disabled={discountLoading}
+                                    type="button"
+                                    onClick={isCartEmpty ? () => showPaymentWarning('Cart must have at least 1 item to apply a coupon code.') : handleApplyDiscount}
+                                    disabled={isCartEmpty || discountLoading || !couponCode.trim()}
                                     style={{
-                                        background: discountLoading ? '#a5b4fc' : '#6366f1',
-                                        color: '#fff', border: 'none', borderRadius: 8,
-                                        padding: '0 14px', cursor: discountLoading ? 'not-allowed' : 'pointer',
+                                        background: (isCartEmpty || discountLoading || !couponCode.trim()) ? '#e2e8f0' : '#6366f1',
+                                        color: (isCartEmpty || discountLoading || !couponCode.trim()) ? '#94a3b8' : '#fff',
+                                        border: 'none', borderRadius: 8,
+                                        padding: '0 14px',
+                                        cursor: (isCartEmpty || discountLoading || !couponCode.trim()) ? 'not-allowed' : 'pointer',
                                         fontWeight: 600, fontSize: 12, display: 'flex',
                                         alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
-                                        transition: 'background .2s',
+                                        opacity: isCartEmpty ? 0.6 : 1,
+                                        transition: 'background .2s, color .2s, opacity .2s',
                                     }}
-                                    title="Apply discount to cart"
+                                    title={
+                                        isCartEmpty
+                                            ? 'Cart is empty. Add at least 1 item to apply a coupon code.'
+                                            : !couponCode.trim()
+                                            ? 'Enter a coupon code to apply'
+                                            : 'Apply coupon code'
+                                    }
                                 >
                                     {discountLoading
                                         ? <span style={{ fontSize: 11 }}>…</span>
@@ -1426,25 +1576,65 @@ const Billing = () => {
                         </div>
                         <div className="pos-summary-row" style={{ alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <span>GST ({totals.gstRate}%)</span>
-                                <div style={{ display: 'inline-flex', gap: 3, background: '#f1f5f9', padding: '2px 4px', borderRadius: 6 }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    GST ({totals.gstRate}%)
+                                    <span
+                                        style={{
+                                            fontSize: 9,
+                                            fontWeight: 700,
+                                            color: '#64748b',
+                                            background: '#f1f5f9',
+                                            border: '1px solid #cbd5e1',
+                                            padding: '1px 5px',
+                                            borderRadius: 4,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 3,
+                                            userSelect: 'none',
+                                        }}
+                                        title="GST rate is statutory and auto-applied based on items in cart. Manual selection is disabled."
+                                    >
+                                        <BsLockFill size={8} /> Disabled
+                                    </span>
+                                </span>
+                                <div
+                                    style={{
+                                        display: 'inline-flex',
+                                        gap: 3,
+                                        background: '#f8fafc',
+                                        border: '1px solid #e2e8f0',
+                                        padding: '2px 4px',
+                                        borderRadius: 6,
+                                        cursor: 'not-allowed',
+                                        userSelect: 'none',
+                                    }}
+                                    title="Manual GST selection is disabled. GST is auto-applied based on statutory tax rates."
+                                >
                                     {[0, 5, 12, 18, 28].map(r => (
                                         <button
                                             key={r}
                                             type="button"
-                                            onClick={() => setBillGstRate(r)}
+                                            disabled={true}
+                                            aria-disabled="true"
+                                            tabIndex={-1}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                            }}
                                             style={{
                                                 border: 'none',
-                                                background: billGstRate === r ? '#4f46e5' : 'transparent',
-                                                color: billGstRate === r ? '#fff' : '#64748b',
+                                                background: totals.gstRate === r ? '#cbd5e1' : 'transparent',
+                                                color: totals.gstRate === r ? '#1e293b' : '#94a3b8',
                                                 borderRadius: 4,
                                                 padding: '1px 5px',
                                                 fontSize: 10,
                                                 fontWeight: 700,
-                                                cursor: 'pointer',
+                                                cursor: 'not-allowed',
+                                                opacity: totals.gstRate === r ? 1 : 0.45,
+                                                pointerEvents: 'none',
                                                 transition: 'all .15s',
                                             }}
-                                            title={`Set Bill GST to ${r}%`}
+                                            title={`Statutory GST slab: ${r}% (Manual selection is disabled)`}
                                         >
                                             {r}%
                                         </button>
@@ -1467,12 +1657,35 @@ const Billing = () => {
                     </div>
 
                     {/* Payment mode */}
-                    <div className="pos-payment-modes">
+                    <div
+                        className="pos-payment-modes"
+                        onClick={isCartEmpty ? () => {
+                            showPaymentWarning('Cart must have at least 1 item to select a payment method.');
+                        } : undefined}
+                    >
                         {PAYMENT_MODES.map(m => (
                             <button
                                 key={m.id}
-                                onClick={() => setPaymentMode(m.id)}
-                                className={`pos-pay-btn${paymentMode === m.id ? ' pos-pay-btn--active' : ''}`}
+                                type="button"
+                                disabled={isCartEmpty}
+                                onClick={(e) => {
+                                    if (isCartEmpty) {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        showPaymentWarning('Cart must have at least 1 item to select a payment method.');
+                                        return;
+                                    }
+                                    setPaymentMode(m.id);
+                                }}
+                                className={`pos-pay-btn${!isCartEmpty && paymentMode === m.id ? ' pos-pay-btn--active' : ''}`}
+                                style={isCartEmpty ? {
+                                    opacity: 0.5,
+                                    cursor: 'not-allowed',
+                                    background: '#f8fafc',
+                                    color: '#94a3b8',
+                                    borderColor: '#e2e8f0',
+                                } : undefined}
+                                title={isCartEmpty ? 'Cart must have at least 1 item to select a payment method' : `Pay with ${m.label}`}
                             >
                                 {m.icon}
                                 {m.label}
@@ -1480,8 +1693,29 @@ const Billing = () => {
                         ))}
                     </div>
 
+                    {/* Empty cart validation error alert */}
+                    {isCartEmpty && (
+                        <div style={{
+                            fontSize: 11,
+                            color: '#dc2626',
+                            background: '#fef2f2',
+                            border: '1px solid #fecaca',
+                            borderRadius: 6,
+                            padding: '6px 10px',
+                            marginTop: 8,
+                            marginBottom: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontWeight: 600,
+                        }}>
+                            <BsExclamationTriangleFill size={12} color="#dc2626" />
+                            <span>Cart must have at least 1 item to select a payment method</span>
+                        </div>
+                    )}
+
                     {/* Cash Tender & Change Due Section */}
-                    {paymentMode === 'Cash' && (
+                    {!isCartEmpty && paymentMode === 'Cash' && (
                         <div style={{
                             background: '#f8fafc',
                             border: '1.5px solid #e2e8f0',
@@ -1591,7 +1825,7 @@ const Billing = () => {
                         </button>
                         <button
                             className="pos-btn-checkout"
-                            disabled={cart.length === 0}
+                            disabled={isCartEmpty}
                             onClick={handleFinishSale}
                         >
                             <BsCheckCircleFill size={16} />
@@ -1911,27 +2145,38 @@ const Billing = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => {
+                                                    if (isProductOutOfStock(p)) {
+                                                        showStockWarning(p.name);
+                                                        return;
+                                                    }
                                                     addToCart(p);
                                                     setLastScanned({ barcode: p.barcode, name: p.name, success: true });
                                                 }}
+                                                disabled={isProductOutOfStock(p)}
                                                 style={{
                                                     width: '100%',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     gap: 6,
-                                                    background: '#eef2ff',
-                                                    color: '#4f46e5',
-                                                    border: '1px solid #c7d2fe',
+                                                    background: isProductOutOfStock(p) ? '#fee2e2' : '#eef2ff',
+                                                    color: isProductOutOfStock(p) ? '#ef4444' : '#4f46e5',
+                                                    border: `1px solid ${isProductOutOfStock(p) ? '#fecaca' : '#c7d2fe'}`,
                                                     borderRadius: 8,
                                                     padding: '6px 0',
                                                     fontSize: 12,
                                                     fontWeight: 700,
-                                                    cursor: 'pointer',
+                                                    cursor: isProductOutOfStock(p) ? 'not-allowed' : 'pointer',
                                                     transition: 'background .15s',
                                                 }}
                                             >
-                                                <BsPlus size={15} /> Scan to Cart
+                                                {isProductOutOfStock(p) ? (
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                        <BsExclamationTriangleFill size={11} /> Out of Stock
+                                                    </span>
+                                                ) : (
+                                                    <><BsPlus size={15} /> Scan to Cart</>
+                                                )}
                                             </button>
                                         </div>
                                     ))}

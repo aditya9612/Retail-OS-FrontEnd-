@@ -20,6 +20,12 @@ const statusConfig = {
 
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const isLegacyMockInvoice = (inv) => {
+    if (!inv) return true;
+    const idStr = String(inv.id || inv.invoice_number || '');
+    return idStr.includes('869823') || idStr.includes('2024003');
+};
+
 /* ── Load local storage invoices generated from POS billing ── */
 const loadLocalInvoices = () => {
     try {
@@ -27,7 +33,7 @@ const loadLocalInvoices = () => {
         if (stored) {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed)) {
-                return parsed.map(inv => ({
+                return parsed.filter(inv => !isLegacyMockInvoice(inv)).map(inv => ({
                     id: inv.id || inv.invoice_number || `INV-${inv.order_id || Date.now()}`,
                     customer: inv.customer || inv.customer_name || 'Walk-in Customer',
                     date: inv.date || (inv.created_at ? inv.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
