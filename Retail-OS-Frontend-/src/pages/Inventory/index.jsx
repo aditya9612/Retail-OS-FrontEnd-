@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 
 import InventoryHeader from "../../components/InventoryHeader";
 import InventoryFilters from "../../components/InventoryFilters";
@@ -1212,6 +1212,10 @@ const Inventory = () => {
     const [inventory, setInventory] =
         useState([]);
 
+    const rawInventoryRef = useRef(null);
+    const initialLoadRef = useRef(false);
+    const prevWarehouseFilterRef = useRef("All Warehouses");
+
     const [dashboard, setDashboard] =
         useState(null);
 
@@ -1461,15 +1465,24 @@ const Inventory = () => {
        FETCH INVENTORY
     ===================================================== */
 
-    const fetchInventory = async () => {
+    const fetchInventory = async (overrideStores = null, overrideWarehouses = null, fromCache = false) => {
         try {
             setLoading(true);
             setError("");
 
+            const currentStores =
+                Array.isArray(overrideStores) && overrideStores.length > 0
+                    ? overrideStores
+                    : stores;
+            const currentWarehouses =
+                Array.isArray(overrideWarehouses) && overrideWarehouses.length > 0
+                    ? overrideWarehouses
+                    : warehouses;
+
             const allStoreWarehouseIds = Array.from(
                 new Set([
-                    ...(stores || []).map((s) => Number(s?.id ?? s?.store_id)),
-                    ...(warehouses || []).map((w) => Number(w?.store_id ?? w?.id)),
+                    ...(currentStores || []).map((s) => Number(s?.id ?? s?.store_id)),
+                    ...(currentWarehouses || []).map((w) => Number(w?.store_id ?? w?.id)),
                 ])
             ).filter((id) => Number.isFinite(id) && id > 0);
 
@@ -1478,7 +1491,10 @@ const Inventory = () => {
             let rawData = [];
             let rawLowStockData = [];
 
-            if (isAllWarehouses) {
+            if (fromCache && rawInventoryRef.current) {
+                rawData = rawInventoryRef.current.rawData || [];
+                rawLowStockData = rawInventoryRef.current.rawLowStockData || [];
+            } else if (isAllWarehouses) {
                 // Fetch unscoped inventory AND inventory for all stores/warehouses
                 const storeRequests = allStoreWarehouseIds.map((sid) =>
                     listInventory(sid).then((res) => ({ sid, res })).catch(() => null)
@@ -1544,16 +1560,16 @@ const Inventory = () => {
                     }
                 });
             } else {
-                const selectedWarehouseObj = warehouses.find(
+                const selectedWarehouseObj = currentWarehouses.find(
                     (w) => String(w?.id) === String(filterWarehouse)
                 );
                 const selectedStore =
-                    stores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
+                    currentStores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
                     (selectedWarehouseObj?.store_id != null
-                        ? stores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
+                        ? currentStores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
                         : null) ||
                     selectedWarehouseObj ||
-                    stores?.[0];
+                    currentStores?.[0];
 
                 const validStoreId = Number(selectedStore?.id ?? selectedStore?.store_id ?? filterWarehouse);
 
@@ -1568,6 +1584,10 @@ const Inventory = () => {
                 if (lowStockResponse.status === "fulfilled") {
                     rawLowStockData = getArrayFromResponse(lowStockResponse.value) || [];
                 }
+            }
+
+            if (!fromCache) {
+                rawInventoryRef.current = { rawData, rawLowStockData };
             }
 
             const data = rawData;
@@ -1706,17 +1726,17 @@ const Inventory = () => {
                             null;
 
                         const store =
-                            stores.find(
+                            currentStores.find(
                                 (s) =>
                                     Number(s?.id) ===
                                     storeId
                             ) ||
-                            warehouses.find(
+                            currentWarehouses.find(
                                 (w) =>
                                     Number(w?.id) === storeId ||
                                     Number(w?.store_id) === storeId
                             ) ||
-                            warehouses.find(
+                            currentWarehouses.find(
                                 (w) =>
                                     Number(w?.id) === Number(item?.warehouse_id ?? item?.warehouseId)
                             );
@@ -1968,8 +1988,8 @@ const Inventory = () => {
                     (sku ? productMap.get(`sku:${sku.toLowerCase()}`) : null) ||
                     null;
                 const store =
-                    stores.find((s) => Number(s?.id) === sid) ||
-                    warehouses.find(
+                    currentStores.find((s) => Number(s?.id) === sid) ||
+                    currentWarehouses.find(
                         (w) =>
                             Number(w?.id) === sid ||
                             Number(w?.store_id) === sid
@@ -2209,8 +2229,10 @@ const Inventory = () => {
 
             if (Array.isArray(data)) {
                 setWarehouses(data);
+                return data;
             } else {
                 setWarehouses([]);
+                return [];
             }
         } catch (err) {
             console.error(
@@ -2219,6 +2241,7 @@ const Inventory = () => {
             );
 
             setWarehouses([]);
+            return [];
         }
     };
 
@@ -2315,8 +2338,10 @@ const Inventory = () => {
                     "Stores API Data =>",
                     data
                 );
+                return data;
             } else {
                 setStores([]);
+                return [];
             }
         } catch (err) {
             console.error(
@@ -2325,6 +2350,7 @@ const Inventory = () => {
             );
 
             setStores([]);
+            return [];
         }
     };
 
@@ -2401,15 +2427,24 @@ const fetchValuation = async () => {
        FETCH LOW STOCK
     ===================================================== */
 
-    const fetchLowStock = async () => {
+    const fetchLowStock = async (overrideStores = null, overrideWarehouses = null) => {
         try {
             setLowStockLoading(true);
             setLowStockError("");
 
+            const currentStores =
+                Array.isArray(overrideStores) && overrideStores.length > 0
+                    ? overrideStores
+                    : stores;
+            const currentWarehouses =
+                Array.isArray(overrideWarehouses) && overrideWarehouses.length > 0
+                    ? overrideWarehouses
+                    : warehouses;
+
             const allStoreWarehouseIds = Array.from(
                 new Set([
-                    ...(stores || []).map((s) => Number(s?.id ?? s?.store_id)),
-                    ...(warehouses || []).map((w) => Number(w?.store_id ?? w?.id)),
+                    ...(currentStores || []).map((s) => Number(s?.id ?? s?.store_id)),
+                    ...(currentWarehouses || []).map((w) => Number(w?.store_id ?? w?.id)),
                 ])
             ).filter((id) => Number.isFinite(id) && id > 0);
 
@@ -2440,16 +2475,16 @@ const fetchValuation = async () => {
                     }
                 });
             } else {
-                const selectedWarehouseObj = warehouses.find(
+                const selectedWarehouseObj = currentWarehouses.find(
                     (w) => String(w?.id) === String(filterWarehouse)
                 );
                 const selectedStore =
-                    stores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
+                    currentStores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
                     (selectedWarehouseObj?.store_id != null
-                        ? stores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
+                        ? currentStores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
                         : null) ||
                     selectedWarehouseObj ||
-                    stores?.[0];
+                    currentStores?.[0];
 
                 const validStoreId = Number(selectedStore?.id ?? selectedStore?.store_id ?? filterWarehouse);
 
@@ -2481,14 +2516,14 @@ const fetchValuation = async () => {
                             );
 
                         const store =
-                            stores.find(
+                            currentStores.find(
                                 (s) =>
                                     Number(
                                         s?.id
                                     ) ===
                                     storeId
                             ) ||
-                            warehouses.find(
+                            currentWarehouses.find(
                                 (w) =>
                                     Number(w?.id) === storeId ||
                                     Number(w?.store_id) === storeId
@@ -2676,23 +2711,32 @@ const fetchValuation = async () => {
     /* =====================================================
        FETCH RECENT STOCK MOVEMENTS
     ===================================================== */
-    const fetchMovements = async () => {
+    const fetchMovements = async (overrideStores = null, overrideWarehouses = null) => {
         try {
             setMovementsLoading(true);
             setMovementsError("");
 
-            const selectedWarehouseObj = warehouses.find(
+            const currentStores =
+                Array.isArray(overrideStores) && overrideStores.length > 0
+                    ? overrideStores
+                    : stores;
+            const currentWarehouses =
+                Array.isArray(overrideWarehouses) && overrideWarehouses.length > 0
+                    ? overrideWarehouses
+                    : warehouses;
+
+            const selectedWarehouseObj = currentWarehouses.find(
                 (w) => String(w?.id) === String(filterWarehouse)
             );
 
             const selectedStore =
                 filterWarehouse && filterWarehouse !== "All Warehouses"
-                    ? (stores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
+                    ? (currentStores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
                        (selectedWarehouseObj?.store_id != null
-                           ? stores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
+                           ? currentStores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
                            : null) ||
-                       stores.find((s) => s?.is_active !== false) || stores?.[0])
-                    : (stores.find((s) => s?.is_active !== false) || stores?.[0]);
+                       currentStores.find((s) => s?.is_active !== false) || currentStores?.[0])
+                    : (currentStores.find((s) => s?.is_active !== false) || currentStores?.[0]);
 
             const validStoreId = Number(selectedStore?.id ?? selectedStore?.store_id);
 
@@ -2725,7 +2769,7 @@ const fetchValuation = async () => {
                         Number(movement?.product_id)
                     );
 
-                    const store = stores.find(
+                    const store = currentStores.find(
                         (item) =>
                             Number(item?.id ?? item?.store_id) ===
                             Number(movement?.store_id ?? movement?.storeId)
@@ -2762,58 +2806,60 @@ const fetchValuation = async () => {
     };
 
     /* =====================================================
-       INITIAL LOAD
+       INITIAL LOAD (RUNS ONCE PER STOCK CLICK)
     ===================================================== */
 
     useEffect(() => {
-        fetchInventory();
-        fetchProducts();
-        fetchStores();
-        fetchCategories();
-        fetchWarehouses();
-        fetchSuppliers();
-        fetchPurchaseOrders();
-        fetchDashboard();
-        fetchValuation();
-        getInventoryExpiry();
+        if (initialLoadRef.current) return;
+        initialLoadRef.current = true;
+
+        const loadInitialData = async () => {
+            const [storesRes, warehousesRes] = await Promise.allSettled([
+                fetchStores(),
+                fetchWarehouses(),
+                fetchProducts(),
+                fetchCategories(),
+                fetchSuppliers(),
+                fetchPurchaseOrders(),
+                fetchDashboard(),
+                fetchValuation(),
+                getInventoryExpiry(),
+            ]);
+
+            const storeData = storesRes.status === "fulfilled" && Array.isArray(storesRes.value) ? storesRes.value : [];
+            const warehouseData = warehousesRes.status === "fulfilled" && Array.isArray(warehousesRes.value) ? warehousesRes.value : [];
+
+            await Promise.allSettled([
+                fetchInventory(storeData, warehouseData),
+                fetchLowStock(storeData, warehouseData),
+                fetchMovements(storeData, warehouseData),
+            ]);
+        };
+
+        loadInitialData();
     }, []);
 
     /* =====================================================
-       FETCH INVENTORY AFTER PRODUCTS + STORES
+       RE-ENRICH INVENTORY IN-MEMORY AFTER METADATA UPDATES
+       (ZERO NETWORK CALLS / PREVENTS DUPLICATE API CALLS)
     ===================================================== */
     useEffect(() => {
-        fetchInventory();
-    }, [products, stores, warehouses, categories, suppliers, poSupplierMap, poSupplierNameMap, filterWarehouse]);
+        if (rawInventoryRef.current) {
+            fetchInventory(null, null, true);
+        }
+    }, [products, stores, warehouses, categories, suppliers, poSupplierMap, poSupplierNameMap]);
 
     /* =====================================================
-       LOW STOCK AFTER PRODUCTS + STORES
+       WAREHOUSE FILTER CHANGE ONLY
     ===================================================== */
-
     useEffect(() => {
-        if (
-            products.length > 0 &&
-            (stores.length > 0 || warehouses.length > 0)
-        ) {
+        if (prevWarehouseFilterRef.current !== filterWarehouse) {
+            prevWarehouseFilterRef.current = filterWarehouse;
+            fetchInventory();
             fetchLowStock();
-        } else {
-            setLowStockItems([]);
-        }
-    }, [products, stores, warehouses, categories, suppliers, filterWarehouse]);
-
-    /* =====================================================
-       MOVEMENTS AFTER PRODUCTS + STORES
-    ===================================================== */
-
-    useEffect(() => {
-        if (
-            products.length > 0 &&
-            (stores.length > 0 || warehouses.length > 0)
-        ) {
             fetchMovements();
-        } else {
-            setMovements([]);
         }
-    }, [products, stores, warehouses, filterWarehouse]);
+    }, [filterWarehouse]);
 
     /* =====================================================
        SEARCH
