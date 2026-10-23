@@ -166,71 +166,8 @@ export const ReturnsRefundsPage = () => {
 /* ─────────────────────────────────────────────────────────────
    2. BILLING & GST: Credit Notes
 ───────────────────────────────────────────────────────────── */
-export const CreditNotesPage = () => {
-    return (
-        <ModuleContainer
-            title="Credit Notes"
-            subtitle="Issue, track and redeem customer credit balances and GST credit notes"
-            icon={<BsReceiptCutoff />}
-            actionBtn={
-                <button style={{
-                    background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                    borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                }}>
-                    <BsPlus size={18} /> Generate Credit Note
-                </button>
-            }
-        >
-            <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-                <StatCard label="Total Active Credit" value="₹14,820.00" sub="Available for redemption" color="#10b981" />
-                <StatCard label="Issued This Month" value="18 Notes" sub="₹21,450.00 Total" />
-                <StatCard label="Redeemed (30d)" value="₹12,600.00" sub="92% utilization rate" color="#6366f1" />
-                <StatCard label="Expiring Soon" value="2 Notes" sub="Within next 7 days" color="#ef4444" />
-            </div>
+export { CreditNotesPage } from '../CreditNotes';
 
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                    <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
-                        <tr>
-                            <th style={{ padding: '12px 18px' }}>CN Number</th>
-                            <th style={{ padding: '12px 18px' }}>Customer Name</th>
-                            <th style={{ padding: '12px 18px' }}>Original Invoice</th>
-                            <th style={{ padding: '12px 18px' }}>Initial Value</th>
-                            <th style={{ padding: '12px 18px' }}>Remaining Balance</th>
-                            <th style={{ padding: '12px 18px' }}>Expiry Date</th>
-                            <th style={{ padding: '12px 18px' }}>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {[
-                            { id: 'CN-2026-0041', name: 'Vikram Joshi', inv: 'INV-2026-081', init: '₹2,500.00', rem: '₹1,200.00', exp: '31 Dec 2026', status: 'Partially Used' },
-                            { id: 'CN-2026-0040', name: 'Sneha Patel', inv: 'INV-2026-065', init: '₹1,850.00', rem: '₹1,850.00', exp: '24 Nov 2026', status: 'Active' },
-                            { id: 'CN-2026-0039', name: 'Rohan Mehra', inv: 'INV-2026-052', init: '₹4,100.00', rem: '₹0.00', exp: '15 Oct 2026', status: 'Fully Redeemed' },
-                        ].map((row, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#6366f1' }}>{row.id}</td>
-                                <td style={{ padding: '14px 18px', fontWeight: 600 }}>{row.name}</td>
-                                <td style={{ padding: '14px 18px', color: '#6b7280' }}>{row.inv}</td>
-                                <td style={{ padding: '14px 18px' }}>{row.init}</td>
-                                <td style={{ padding: '14px 18px', fontWeight: 700, color: row.rem === '₹0.00' ? '#9ca3af' : '#10b981' }}>{row.rem}</td>
-                                <td style={{ padding: '14px 18px', color: '#6b7280' }}>{row.exp}</td>
-                                <td style={{ padding: '14px 18px' }}>
-                                    <span style={{
-                                        padding: '3px 10px', borderRadius: 12, fontSize: 11.5, fontWeight: 700,
-                                        background: row.status === 'Active' ? '#ecfdf5' : row.status === 'Partially Used' ? '#eff6ff' : '#f3f4f6',
-                                        color: row.status === 'Active' ? '#059669' : row.status === 'Partially Used' ? '#2563eb' : '#6b7280'
-                                    }}>
-                                        {row.status}
-                                    </span>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </ModuleContainer>
-    );
-};
 
 /* ─────────────────────────────────────────────────────────────
    3. BILLING & GST: Payments
