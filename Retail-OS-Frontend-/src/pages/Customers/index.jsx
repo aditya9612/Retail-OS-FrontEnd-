@@ -399,8 +399,9 @@ const EditCustomerModal = ({ customer, onClose, onSaved }) => {
 // Send Marketing Campaign Modal
 const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCampaignSent }) => {
     const [selectedCustomerIds, setSelectedCustomerIds] = useState(preSelectedIds || []);
-    const [communicationType, setCommunicationType] = useState('sms');
+    const [communicationType, setCommunicationType] = useState('');
     const [message, setMessage] = useState('');
+    const [errors, setErrors] = useState({});
     const [submitting, setSubmitting] = useState(false);
     const [customerSearch, setCustomerSearch] = useState('');
     const [customerList, setCustomerList] = useState(customers);
@@ -429,9 +430,13 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
     };
 
     const handleToggleCustomer = (id) => {
-        setSelectedCustomerIds(prev =>
-            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-        );
+        setSelectedCustomerIds(prev => {
+            const next = prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id];
+            if (errors.customers && next.length > 0) {
+                setErrors(errs => ({ ...errs, customers: '' }));
+            }
+            return next;
+        });
     };
 
     const filteredList = useMemo(() => {
@@ -455,18 +460,48 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
             setSelectedCustomerIds(prev => prev.filter(id => !filteredIds.has(id)));
         } else {
             const filteredIds = filteredList.map(c => getCustomerId(c));
-            setSelectedCustomerIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+            setSelectedCustomerIds(prev => {
+                const next = Array.from(new Set([...prev, ...filteredIds]));
+                if (errors.customers && next.length > 0) {
+                    setErrors(errs => ({ ...errs, customers: '' }));
+                }
+                return next;
+            });
+        }
+    };
+
+    const handleChannelChange = (e) => {
+        const val = e.target.value;
+        setCommunicationType(val);
+        if (errors.communicationType && val.trim()) {
+            setErrors(errs => ({ ...errs, communicationType: '' }));
+        }
+    };
+
+    const handleMessageChange = (e) => {
+        const val = e.target.value;
+        setMessage(val);
+        if (errors.message && val.trim()) {
+            setErrors(errs => ({ ...errs, message: '' }));
         }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (selectedCustomerIds.length === 0) {
-            alert('Please select at least one customer.');
-            return;
+
+        const newErrors = {};
+        if (!selectedCustomerIds || selectedCustomerIds.length === 0) {
+            newErrors.customers = 'Please select at least one customer.';
         }
-        if (!message.trim()) {
-            alert('Please enter a campaign message.');
+        if (!communicationType || !communicationType.trim()) {
+            newErrors.communicationType = 'Please select a communication channel.';
+        }
+        if (!message || !message.trim()) {
+            newErrors.message = 'Please enter a campaign message.';
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
             return;
         }
 
@@ -505,12 +540,14 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
                     <button type="button" className="ec-modal-close" onClick={onClose}>✕</button>
                 </div>
 
-                <form onSubmit={handleSubmit} style={{ marginTop: 14 }}>
+                <form onSubmit={handleSubmit} noValidate style={{ marginTop: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                         {/* Select Customers */}
                         <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Select Customers *</label>
+                                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
+                                    Select Customers <span style={{ color: '#ef4444' }}>*</span>
+                                </label>
                                 {selectedCustomerIds.length > 0 && (
                                     <span style={{ fontSize: 11, fontWeight: 600, color: '#6366f1' }}>
                                         {selectedCustomerIds.length} selected
@@ -540,13 +577,14 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
                             <div style={{
                                 maxHeight: 150,
                                 overflowY: 'auto',
-                                border: '1px solid #d1d5db',
+                                border: `1px solid ${errors.customers ? '#ef4444' : '#d1d5db'}`,
                                 borderRadius: 8,
                                 padding: '6px 8px',
                                 background: '#ffffff',
                                 display: 'flex',
                                 flexDirection: 'column',
-                                gap: 4
+                                gap: 4,
+                                ...(errors.customers ? { boxShadow: '0 0 0 1px #ef4444' } : {})
                             }}>
                                 {loadingCustomers ? (
                                     <p style={{ fontSize: 12, color: '#9ca3af', margin: 0, padding: 8, textAlign: 'center' }}>Loading customers...</p>
@@ -585,28 +623,62 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
                                     })
                                 )}
                             </div>
+                            {errors.customers && (
+                                <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4, marginBottom: 0 }}>{errors.customers}</p>
+                            )}
                         </div>
 
                         {/* Communication Channel */}
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Communication Channel *</label>
-                            <select className="ec-input" value={communicationType} onChange={e => setCommunicationType(e.target.value)}>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                                Communication Channel <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <select
+                                className="ec-input"
+                                value={communicationType}
+                                onChange={handleChannelChange}
+                                style={{
+                                    borderColor: errors.communicationType ? '#ef4444' : undefined,
+                                    ...(errors.communicationType ? { boxShadow: '0 0 0 1px #ef4444' } : {})
+                                }}
+                            >
+                                <option value="">Select Communication Channel</option>
                                 <option value="sms">SMS</option>
                                 <option value="whatsapp">WhatsApp</option>
                                 <option value="email">Email</option>
                             </select>
+                            {errors.communicationType && (
+                                <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4, marginBottom: 0 }}>{errors.communicationType}</p>
+                            )}
                         </div>
 
                         {/* Campaign Message */}
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Campaign Message *</label>
-                            <textarea className="ec-input" rows={4} placeholder="Enter your campaign announcement or offer code details..." value={message} onChange={e => setMessage(e.target.value)} required style={{ width: '100%', resize: 'vertical' }} />
+                            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                                Campaign Message <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <textarea
+                                className="ec-input"
+                                rows={4}
+                                placeholder="Enter your campaign announcement or offer code details..."
+                                value={message}
+                                onChange={handleMessageChange}
+                                style={{
+                                    width: '100%',
+                                    resize: 'vertical',
+                                    borderColor: errors.message ? '#ef4444' : undefined,
+                                    ...(errors.message ? { boxShadow: '0 0 0 1px #ef4444' } : {})
+                                }}
+                            />
+                            {errors.message && (
+                                <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4, marginBottom: 0 }}>{errors.message}</p>
+                            )}
                         </div>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-                        <button type="button" className="adm-btn-secondary" onClick={onClose}>Cancel</button>
-                        <button type="submit" className="adm-btn-primary" disabled={submitting || selectedCustomerIds.length === 0 || !message.trim()}>
+                        <button type="button" className="adm-btn-secondary" onClick={onClose} disabled={submitting}>Cancel</button>
+                        <button type="submit" className="adm-btn-primary" disabled={submitting}>
                             {submitting ? 'Sending Campaign...' : '🚀 Send Campaign'}
                         </button>
                     </div>
