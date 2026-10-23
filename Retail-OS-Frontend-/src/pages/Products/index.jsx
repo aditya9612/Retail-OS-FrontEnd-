@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
     BsChevronLeft, BsChevronRight, BsToggleOn, BsToggleOff, BsImage,
-    BsStarFill
+    BsStarFill, BsGrid3X3Gap
 } from 'react-icons/bs';
 import productService from "../../services/product";
 import categoryService from "../../services/categoryService";
 import apiClient from "../../api/axios";
+import ProductVariantModal from "./ProductVariantModal";
 
 export const fetchDatabaseCategories = async () => {
     try {
@@ -219,6 +220,56 @@ const validateDates = (mfgDateStr, expDateStr) => {
     return { mfgError, expError };
 };
 
+export const isProductExpired = (pOrDate) => {
+    if (!pOrDate) return false;
+    let expDateVal = pOrDate;
+    if (typeof pOrDate === 'object' && !(pOrDate instanceof Date)) {
+        expDateVal = (
+            pOrDate.expiry_date ||
+            pOrDate.expiryDate ||
+            pOrDate.expiry ||
+            pOrDate.expire_date ||
+            pOrDate.exp_date ||
+            pOrDate.expiration_date ||
+            pOrDate.expirationDate ||
+            pOrDate.variants?.expiry_date ||
+            pOrDate.variants?.expiryDate
+        );
+    }
+    const exp = parseDateSafe(expDateVal);
+    if (!exp) return false;
+    const today = new Date();
+    const todayZero = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const expZero = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate(), 0, 0, 0, 0);
+    return expZero < todayZero;
+};
+
+export const generateSuggestedSKU = (existingProducts = []) => {
+    let maxNum = 0;
+    if (Array.isArray(existingProducts)) {
+        for (const p of existingProducts) {
+            const sku = String(p.sku || '').trim().toUpperCase();
+            const match = sku.match(/^SKU-(\d+)$/);
+            if (match) {
+                const num = parseInt(match[1], 10);
+                if (num > maxNum) maxNum = num;
+            }
+        }
+    }
+    const nextNum = maxNum + 1;
+    return `SKU-${String(nextNum).padStart(3, '0')}`;
+};
+
+export const generateEAN13 = () => {
+    let code = '890' + Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)).join('');
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+        sum += parseInt(code[i], 10) * (i % 2 === 0 ? 1 : 3);
+    }
+    let checkDigit = (10 - (sum % 10)) % 10;
+    return code + checkDigit;
+};
+
 const EMPTY_FORM = {
     name: '',
     sku: '',
@@ -351,7 +402,7 @@ const getValidRemoteImageUrl = (url) => {
 };
 
 // Payload builder for POST /api/v1/products (ProductCreate schema)
-const toCreatePayload = (form, categories = []) => {
+export const toCreatePayload = (form, categories = []) => {
     let resolvedCategoryId = null;
     if (form.category_id != null && Number.isInteger(Number(form.category_id)) && Number(form.category_id) > 0) {
         resolvedCategoryId = Number(form.category_id);
@@ -366,16 +417,21 @@ const toCreatePayload = (form, categories = []) => {
     }
 
     const validImageUrl = getValidRemoteImageUrl(form.imageUrl);
+    const sellingPriceNum = Number(form.sellingPrice) || 0;
+    const mrpNum = Number(form.mrp) || sellingPriceNum;
+    const gstNum = Number(String(form.gst || '0').replace('%', '')) || 0;
+    const expDateStr = form.expiryDate?.trim() || null;
+    const mfgDateStr = form.manufacturingDate?.trim() || null;
 
     const metaVariants = {
         ...((typeof form.variants === 'object' && form.variants !== null) ? form.variants : {}),
         featured: Boolean(form.featured),
         brand: form.brand?.trim() || '',
         unit: form.unit || 'Pcs',
-        mrp: Number(form.mrp) || 0,
-        selling_price: Number(form.sellingPrice) || 0,
-        manufacturing_date: form.manufacturingDate || null,
-        expiry_date: form.expiryDate || null,
+        mrp: mrpNum,
+        selling_price: sellingPriceNum,
+        manufacturing_date: mfgDateStr,
+        expiry_date: expDateStr,
     };
 
     return {
@@ -384,19 +440,26 @@ const toCreatePayload = (form, categories = []) => {
         barcode: form.barcode?.trim() || null,
         description: form.description?.trim() || null,
         category_id: resolvedCategoryId,
+        brand: form.brand?.trim() || null,
         hsn_code: form.hsnCode?.trim() || null,
-        gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
-        price: String(Number(form.sellingPrice) || 0),
-        cost_price: String(Number(form.mrp) || 0),
+        gst_rate: gstNum,
+        tax_rate: gstNum,
+        price: sellingPriceNum,
+        selling_price: sellingPriceNum,
+        mrp: mrpNum,
+        cost_price: mrpNum,
+        unit: form.unit?.trim() || 'Pcs',
         variants: metaVariants,
         track_batch: false,
-        track_expiry: Boolean(form.expiryDate),
+        track_expiry: Boolean(expDateStr),
+        expiry_date: expDateStr,
         image_url: validImageUrl,
+        is_active: isProductExpired(expDateStr) ? false : Boolean(form.status),
     };
 };
 
 // Payload builder for PATCH /api/v1/products/{product_id} (ProductUpdate schema)
-const toUpdatePayload = (form, categories = [], existingProduct = null) => {
+export const toUpdatePayload = (form, categories = [], existingProduct = null) => {
     let resolvedCategoryId = null;
     if (form.category_id != null && Number.isInteger(Number(form.category_id)) && Number(form.category_id) > 0) {
         resolvedCategoryId = Number(form.category_id);
@@ -424,38 +487,191 @@ const toUpdatePayload = (form, categories = [], existingProduct = null) => {
         finalImageUrl = getValidRemoteImageUrl(existingProduct.image_url || existingProduct.imageUrl);
     }
 
+    const sellingPriceNum = Number(form.sellingPrice) || 0;
+    const mrpNum = Number(form.mrp) || sellingPriceNum;
+    const gstNum = Number(String(form.gst || '0').replace('%', '')) || 0;
+    const expDateStr = form.expiryDate?.trim() || null;
+    const mfgDateStr = form.manufacturingDate?.trim() || null;
+
     const metaVariants = {
         ...((typeof form.variants === 'object' && form.variants !== null) ? form.variants : {}),
         featured: Boolean(form.featured),
         brand: form.brand?.trim() || '',
         unit: form.unit || 'Pcs',
-        mrp: Number(form.mrp) || 0,
-        selling_price: Number(form.sellingPrice) || 0,
-        manufacturing_date: form.manufacturingDate || null,
-        expiry_date: form.expiryDate || null,
+        mrp: mrpNum,
+        selling_price: sellingPriceNum,
+        manufacturing_date: mfgDateStr,
+        expiry_date: expDateStr,
     };
 
     return {
         name: form.name?.trim() || null,
+        sku: form.sku?.trim().toUpperCase() || null,
         barcode: form.barcode?.trim() || null,
         description: form.description?.trim() || null,
         category_id: resolvedCategoryId,
+        brand: form.brand?.trim() || null,
         hsn_code: form.hsnCode?.trim() || null,
-        gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
-        price: String(Number(form.sellingPrice) || 0),
-        cost_price: String(Number(form.mrp) || 0),
+        gst_rate: gstNum,
+        tax_rate: gstNum,
+        price: sellingPriceNum,
+        selling_price: sellingPriceNum,
+        mrp: mrpNum,
+        cost_price: mrpNum,
+        unit: form.unit?.trim() || 'Pcs',
         variants: metaVariants,
         track_batch: false,
-        track_expiry: Boolean(form.expiryDate),
+        track_expiry: Boolean(expDateStr),
+        expiry_date: expDateStr,
         image_url: finalImageUrl,
-        is_active: Boolean(form.status),
+        is_active: isProductExpired(expDateStr) ? false : Boolean(form.status),
     };
 };
 
-const toPayload = (form, categories = [], existingProduct = null) => {
+export const toPayload = (form, categories = [], existingProduct = null) => {
     return existingProduct
         ? toUpdatePayload(form, categories, existingProduct)
         : toCreatePayload(form, categories);
+};
+
+export const mapProductRecord = (p, activeCatMap = {}, inventoryExpiryMap = {}) => {
+    if (!p) return null;
+    const mrpVal = p.mrp ?? p.cost_price ?? p.mrp_price ?? null;
+    const priceVal = p.selling_price ?? p.price ?? p.sellingPrice ?? null;
+    const variants = (typeof p.variants === 'object' && p.variants !== null) ? p.variants : {};
+    const localMeta = getLocalProductMeta(p.id, p.sku);
+
+    const isFeatured = Boolean(
+        p.featured === true ||
+        p.featured === 1 ||
+        p.featured === 'true' ||
+        variants.featured === true ||
+        variants.featured === 1 ||
+        variants.featured === 'true' ||
+        localMeta.featured === true
+    );
+
+    let batchExpiry = null;
+    if (Array.isArray(p.batches) && p.batches.length > 0) {
+        const batchExps = p.batches
+            .map(b => b.expiry_date || b.expiry || b.expire_date)
+            .filter(Boolean);
+        if (batchExps.length > 0) {
+            batchExpiry = batchExps[0];
+        }
+    }
+
+    const expiryDate = (
+        p.expiry_date ||
+        p.expiryDate ||
+        p.expiry ||
+        p.expire_date ||
+        p.exp_date ||
+        variants.expiry_date ||
+        variants.expiryDate ||
+        variants.expiry ||
+        variants.expire_date ||
+        batchExpiry ||
+        inventoryExpiryMap[p.id] ||
+        localMeta.expiryDate ||
+        null
+    );
+
+    const manufacturingDate = (
+        p.manufacturing_date ||
+        p.manufacturingDate ||
+        p.mfg_date ||
+        p.mfgDate ||
+        variants.manufacturing_date ||
+        variants.manufacturingDate ||
+        variants.mfg_date ||
+        localMeta.manufacturingDate ||
+        null
+    );
+
+    const brandVal = (
+        p.brand ||
+        p.brand_name ||
+        variants.brand ||
+        localMeta.brand ||
+        ''
+    );
+
+    const rawImg = (
+        p.image_url ||
+        p.imageUrl ||
+        (Array.isArray(p.images) && p.images.length > 0 ? (p.images[0].image_url || p.images[0].url) : null) ||
+        p.image ||
+        variants.image_url ||
+        localMeta.imageUrl ||
+        null
+    );
+    const imageUrl = normalizeImageUrl(rawImg);
+
+    // Resolve category name safely, ensuring raw ID is never displayed when category name is available
+    const resolvedCatId = p.category_id != null
+        ? p.category_id
+        : (typeof p.category === 'object' && p.category?.id != null
+            ? p.category.id
+            : (typeof p.category === 'number' || (typeof p.category === 'string' && /^\d+$/.test(p.category.trim()))
+                ? Number(p.category)
+                : null));
+
+    let catName = '';
+    if (resolvedCatId != null && activeCatMap[resolvedCatId]) {
+        catName = activeCatMap[resolvedCatId];
+    } else if (p.category_name && typeof p.category_name === 'string') {
+        catName = p.category_name.trim();
+    } else if (typeof p.category === 'object' && p.category?.name) {
+        catName = String(p.category.name).trim();
+    } else if (typeof p.category === 'string' && !/^\d+$/.test(p.category.trim()) && p.category.trim()) {
+        catName = p.category.trim();
+    } else if (resolvedCatId != null && activeCatMap[String(resolvedCatId)]) {
+        catName = activeCatMap[String(resolvedCatId)];
+    }
+
+    if (!catName || /^\d+$/.test(catName)) {
+        catName = '—';
+    }
+
+    const barcodeVal = (
+        p.barcode ||
+        p.barcode_number ||
+        p.barcodeNumber ||
+        variants.barcode ||
+        (Array.isArray(p.variants) && p.variants.length > 0 ? p.variants[0]?.barcode : null) ||
+        null
+    );
+
+    const isExpired = isProductExpired(expiryDate);
+    const rawActive = Boolean(p.is_active ?? p.status ?? true);
+    const effectiveStatus = isExpired ? false : rawActive;
+    const statusLabel = isExpired ? 'Expired' : (effectiveStatus ? 'Active' : 'Inactive');
+
+    if (isExpired && p.id && (p.is_active === true || p.is_active === 1)) {
+        productService.update(p.id, { is_active: false }).catch(() => {});
+    }
+
+    return {
+        ...p,
+        category: catName,
+        barcode: barcodeVal,
+        is_active: effectiveStatus,
+        status: effectiveStatus,
+        is_expired: isExpired,
+        status_label: statusLabel,
+        sellingPrice: priceVal,
+        price: priceVal,
+        mrp: mrpVal,
+        cost_price: mrpVal,
+        brand: brandVal,
+        featured: isFeatured,
+        expiry_date: expiryDate,
+        manufacturing_date: manufacturingDate,
+        imageUrl: imageUrl,
+        image_url: imageUrl,
+        variants: variants,
+    };
 };
 
 export const ProductFormModal = ({ product, onClose, onSave, existingProducts = [], categories = [] }) => {
@@ -465,16 +681,36 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
     const localMeta = product ? getLocalProductMeta(product.id, product.sku) : {};
     const variants = (typeof product?.variants === 'object' && product?.variants !== null) ? product.variants : {};
 
+    const availableCategories = useMemo(() => {
+        const list = Array.isArray(categories) ? [...categories] : [];
+        const existingIds = new Set(list.map(c => c.id).filter(Boolean));
+        const existingNames = new Set(list.map(c => (c.name || '').trim().toLowerCase()).filter(Boolean));
+
+        let fallbackId = 1000;
+        if (Array.isArray(existingProducts)) {
+            existingProducts.forEach(p => {
+                const catName = (p.category_name || (typeof p.category === 'object' ? p.category?.name : p.category) || '').trim();
+                if (catName && catName !== '—' && !existingNames.has(catName.toLowerCase())) {
+                    const catId = p.category_id || (p.category && typeof p.category === 'object' ? p.category.id : null) || fallbackId++;
+                    existingIds.add(catId);
+                    existingNames.add(catName.toLowerCase());
+                    list.push({ id: catId, name: catName });
+                }
+            });
+        }
+        return list;
+    }, [categories, existingProducts]);
+
     const initialCatObj = product
-        ? (categories.find(c => c.id === product.category_id) || categories.find(c => c.name?.toLowerCase() === product.category?.toLowerCase()))
-        : (categories[0] || null);
+        ? (availableCategories.find(c => c.id === product.category_id) || availableCategories.find(c => (c.name || '').trim().toLowerCase() === (product.category || '').trim().toLowerCase()))
+        : (availableCategories[0] || null);
 
     const initialCategoryId = product
         ? (product.category_id ?? initialCatObj?.id ?? null)
         : (initialCatObj?.id ?? null);
 
     const initialCategoryName = product
-        ? (initialCatObj?.name || product.category || '')
+        ? (initialCatObj?.name || (!/^\d+$/.test(String(product.category || '').trim()) ? product.category : '') || '')
         : (initialCatObj?.name || '');
 
     const existingServerImage = getValidRemoteImageUrl(product?.image_url || product?.imageUrl || variants.image_url || localMeta.imageUrl);
@@ -496,7 +732,7 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
             ? `${Number(product.gst_rate)}%`
             : (product.gst || '18%'),
         unit: product.unit || 'Pcs',
-        status: Boolean(product.is_active ?? product.status ?? true),
+        status: isProductExpired(product) ? false : Boolean(product.is_active ?? product.status ?? true),
         featured: Boolean(
             product.featured === true ||
             product.featured === 1 ||
@@ -516,6 +752,8 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
         variants: variants,
     } : {
         ...EMPTY_FORM,
+        sku: generateSuggestedSKU(existingProducts),
+        barcode: generateEAN13(),
         category: initialCategoryName,
         category_id: initialCategoryId,
         imageUrl: '',
@@ -529,19 +767,141 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
+    // Multiple Images Management State
+    const [existingImages, setExistingImages] = useState([]);
+    const [selectedNewFiles, setSelectedNewFiles] = useState([]); // [{ id, file, preview, name, size }]
+    const [deletedImageIds, setDeletedImageIds] = useState([]);
+    const [loadingImages, setLoadingImages] = useState(false);
+    const [imageValidationMsg, setImageValidationMsg] = useState('');
+
     useEffect(() => {
-        if (!product && !form.category_id && categories.length > 0) {
-            setForm(f => ({
-                ...f,
-                category_id: categories[0].id,
-                category: categories[0].name
-            }));
+        if (product?.id) {
+            setLoadingImages(true);
+            productService.getImages(product.id)
+                .then(res => {
+                    const imgs = res?.data ?? res;
+                    if (Array.isArray(imgs) && imgs.length > 0) {
+                        setExistingImages(imgs);
+                    } else if (Array.isArray(product?.images) && product.images.length > 0) {
+                        setExistingImages(product.images);
+                    } else if (product.image_url || product.imageUrl) {
+                        setExistingImages([{
+                            id: null,
+                            image_url: product.image_url || product.imageUrl,
+                            is_primary: true
+                        }]);
+                    }
+                })
+                .catch(() => {
+                    if (Array.isArray(product?.images) && product.images.length > 0) {
+                        setExistingImages(product.images);
+                    } else if (product.image_url || product.imageUrl) {
+                        setExistingImages([{
+                            id: null,
+                            image_url: product.image_url || product.imageUrl,
+                            is_primary: true
+                        }]);
+                    }
+                })
+                .finally(() => {
+                    setLoadingImages(false);
+                });
+        } else {
+            setExistingImages([]);
+            setSelectedNewFiles([]);
+            setDeletedImageIds([]);
         }
-    }, [categories, product]);
+    }, [product]);
+
+    const handleFileSelect = (e) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        setImageValidationMsg('');
+
+        const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+        const newValidEntries = [];
+        const errs = [];
+
+        files.forEach(file => {
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            if (!file.type.startsWith('image/') && !allowedExts.includes(ext)) {
+                errs.push(`"${file.name}" is not a supported image file (JPG, PNG, WEBP allowed).`);
+                return;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                errs.push(`"${file.name}" exceeds the 10MB size limit.`);
+                return;
+            }
+            newValidEntries.push({
+                id: `new_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                file,
+                preview: URL.createObjectURL(file),
+                name: file.name,
+                size: file.size
+            });
+        });
+
+        if (errs.length > 0) {
+            setImageValidationMsg(errs.join(' '));
+        }
+
+        if (newValidEntries.length > 0) {
+            setSelectedNewFiles(prev => [...prev, ...newValidEntries]);
+            setForm(f => ({ ...f, imageRemoved: false }));
+        }
+
+        e.target.value = '';
+    };
+
+    const handleRemoveExistingImage = (img, index) => {
+        if (img && img.id) {
+            setDeletedImageIds(prev => [...prev, img.id]);
+        }
+        setExistingImages(prev => prev.filter((_, idx) => idx !== index));
+        if (existingImages.length === 1 && selectedNewFiles.length === 0) {
+            setForm(f => ({ ...f, imageRemoved: true, imageUrl: '' }));
+        }
+    };
+
+    const handleRemoveNewFile = (index) => {
+        setSelectedNewFiles(prev => {
+            const target = prev[index];
+            if (target?.preview && target.preview.startsWith('blob:')) {
+                URL.revokeObjectURL(target.preview);
+            }
+            return prev.filter((_, idx) => idx !== index);
+        });
+    };
+
+    useEffect(() => {
+        if (!product) {
+            setForm(f => {
+                const next = { ...f };
+                let changed = false;
+                if (!next.category_id && availableCategories.length > 0) {
+                    next.category_id = availableCategories[0].id;
+                    next.category = availableCategories[0].name;
+                    changed = true;
+                }
+                if (!next.sku) {
+                    next.sku = generateSuggestedSKU(existingProducts);
+                    changed = true;
+                }
+                if (!next.barcode) {
+                    next.barcode = generateEAN13();
+                    changed = true;
+                }
+                return changed ? next : f;
+            });
+        }
+    }, [availableCategories, product, existingProducts]);
 
     const set = (k, v) => {
         setForm(f => {
             const nextForm = { ...f, [k]: v };
+            if (k === 'expiryDate' && isProductExpired(v)) {
+                nextForm.status = false;
+            }
             return nextForm;
         });
 
@@ -641,35 +1001,39 @@ if (skuError) {
             newErrors.unit = 'Unit is required';
         }
 
-        if (!form.barcode.trim()) {
-            newErrors.barcode = 'Barcode is required';
-        } else if (!/^\d{13}$/.test(form.barcode.trim())) {
-            newErrors.barcode = 'Barcode must be exactly 13 digits';
+        if (!form.barcode || !form.barcode.trim()) {
+            form.barcode = generateEAN13();
+        } else if (!/^\d{8,14}$/.test(form.barcode.trim())) {
+            newErrors.barcode = 'Barcode must be between 8 and 14 digits';
         }
 
-        if (!form.hsnCode.trim()) {
-            newErrors.hsnCode = 'HSN Code is required';
-        } else if (!/^\d{4}$/.test(form.hsnCode.trim())) {
-            newErrors.hsnCode = 'HSN Code must be exactly 4 digits';
+        if (form.hsnCode && form.hsnCode.trim()) {
+            if (!/^\d{2,8}$/.test(form.hsnCode.trim())) {
+                newErrors.hsnCode = 'HSN Code must be between 2 and 8 digits';
+            }
         }
 
         const mrp = Number(form.mrp);
         const sellingPrice = Number(form.sellingPrice);
 
-        if (form.mrp === '' || mrp <= 0) {
-            newErrors.mrp = 'MRP must be greater than 0';
+        if (form.mrp === '' || isNaN(mrp) || mrp <= 0) {
+            newErrors.mrp = 'MRP must be a valid positive number greater than 0';
         }
 
-        if (form.sellingPrice === '' || sellingPrice <= 0) {
-            newErrors.sellingPrice = 'Selling price must be greater than 0';
+        if (form.sellingPrice === '' || isNaN(sellingPrice) || sellingPrice <= 0) {
+            newErrors.sellingPrice = 'Selling price must be a valid positive number greater than 0';
+        } else if (sellingPrice > 999999.99) {
+            newErrors.sellingPrice = 'Selling price cannot exceed ₹9,99,999.99';
         }
 
         if (
             form.mrp !== '' &&
             form.sellingPrice !== '' &&
-            mrp <= sellingPrice
+            !isNaN(mrp) &&
+            !isNaN(sellingPrice) &&
+            mrp < sellingPrice
         ) {
-            newErrors.mrp = 'MRP must be greater than selling price';
+            newErrors.mrp = 'MRP must be greater than or equal to selling price';
         }
 
         if (!form.gst) {
@@ -722,16 +1086,30 @@ if (skuError) {
             const payload = isNew
                 ? toCreatePayload(form, categories)
                 : toUpdatePayload(form, categories, product);
-            await onSave(payload, product?.id, form, product);
+            const enrichedForm = {
+                ...form,
+                selectedFiles: selectedNewFiles.map(x => x.file),
+                deletedImageIds
+            };
+            await onSave(payload, product?.id, enrichedForm, product);
             onClose();
         } catch (err) {
+            console.error('Save product error:', err);
             const detail = err?.response?.data?.detail;
-            alert(
-                'Could not save product: ' +
-                (typeof detail === 'string'
-                    ? detail
-                    : JSON.stringify(detail || err?.message || err))
-            );
+            let errMsg = '';
+            if (typeof detail === 'string') {
+                errMsg = detail;
+            } else if (Array.isArray(detail)) {
+                errMsg = detail.map(d => {
+                    const loc = Array.isArray(d.loc) ? d.loc.slice(1).join(' -> ') : '';
+                    return loc ? `${loc}: ${d.msg}` : d.msg;
+                }).join('\n');
+            } else if (detail && typeof detail === 'object') {
+                errMsg = detail.message || JSON.stringify(detail);
+            } else {
+                errMsg = err?.message || 'Failed to save product. Please check your inputs.';
+            }
+            alert('Could not save product:\n' + errMsg);
         } finally {
             setSaving(false);
         }
@@ -787,7 +1165,7 @@ if (skuError) {
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ padding: 20, display: 'grid', gap: 14 }}>
-                    {/* Product Name + SKU */}
+                    {/* Product + SKU */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
@@ -815,9 +1193,28 @@ if (skuError) {
                         </div>
 
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                SKU <span style={{ color: 'red' }}>*</span>
-                            </label>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    SKU <span style={{ color: 'red' }}>*</span>
+                                </label>
+                                {isNew && (
+                                    <button
+                                        type="button"
+                                        onClick={() => set('sku', generateSuggestedSKU(existingProducts))}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#6366f1',
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            padding: 0
+                                        }}
+                                    >
+                                        Auto-generate
+                                    </button>
+                                )}
+                            </div>
                             <input
                                 className="adm-search"
                                 value={form.sku}
@@ -856,15 +1253,31 @@ if (skuError) {
                     {/* Category + Brand */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Category <span style={{ color: 'red' }}>*</span>
-                            </label>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Category Name <span style={{ color: 'red' }}>*</span>
+                                </label>
+                                {form.category && (
+                                    <span style={{
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        color: '#4f46e5',
+                                        background: '#eef2ff',
+                                        padding: '1px 8px',
+                                        borderRadius: 12,
+                                        border: '1px solid #c7d2fe'
+                                    }}>
+                                        Selected: {form.category}
+                                    </span>
+                                )}
+                            </div>
                             <select
-                                value={form.category_id != null ? String(form.category_id) : (categories.find(c => c.name === form.category)?.id != null ? String(categories.find(c => c.name === form.category).id) : '')}
+                                id="product-category-select"
+                                value={form.category_id != null ? String(form.category_id) : (availableCategories.find(c => (c.name || '').trim().toLowerCase() === (form.category || '').trim().toLowerCase())?.id != null ? String(availableCategories.find(c => (c.name || '').trim().toLowerCase() === (form.category || '').trim().toLowerCase()).id) : '')}
                                 onChange={e => {
                                     const val = e.target.value;
                                     const selId = val ? Number(val) : null;
-                                    const selCat = categories.find(c => String(c.id) === String(val));
+                                    const selCat = availableCategories.find(c => String(c.id) === String(val));
                                     const catName = selCat ? selCat.name : val;
                                     setForm(f => ({ ...f, category: catName, category_id: selId }));
                                     set('category', catName);
@@ -872,16 +1285,20 @@ if (skuError) {
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
-                                    padding: '8px 10px',
+                                    padding: '9px 12px',
                                     borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
+                                    border: errors.category ? '1px solid #dc2626' : (form.category ? '1.5px solid #6366f1' : '1px solid #e5e7eb'),
+                                    background: form.category ? '#f8faff' : '#ffffff',
+                                    fontWeight: form.category ? 600 : 400,
+                                    color: '#111827',
+                                    boxSizing: 'border-box',
+                                    fontSize: 13
                                 }}
                             >
-                                {categories.length === 0 ? (
+                                {availableCategories.length === 0 ? (
                                     <option value="" disabled>No categories available</option>
                                 ) : (
-                                    categories.map(c => (
+                                    availableCategories.map(c => (
                                         <option key={c.id} value={c.id}>{c.name}</option>
                                     ))
                                 )}
@@ -930,9 +1347,26 @@ if (skuError) {
                     {/* Barcode + Unit */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#01050c' }}>
-                                Barcode <span style={{ color: 'red' }}>*</span>
-                            </label>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#01050c' }}>
+                                    Barcode Number <span style={{ color: 'red' }}>*</span>
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => set('barcode', generateEAN13())}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#6366f1',
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        padding: 0
+                                    }}
+                                >
+                                    Auto-generate
+                                </button>
+                            </div>
                             <input
                                 className="adm-search"
                                 value={form.barcode}
@@ -1159,11 +1593,19 @@ if (skuError) {
                         </div>
                     </div>
 
-                    {/* Product Image URL or File Upload (Optional) */}
+                    {/* Product Image URL or Multiple File Upload */}
                     <div>
-                        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                            Product Image <span style={{ color: '#9ca3af', fontWeight: 400 }}>(URL or choose file)</span>
-                        </label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                Product Images <span style={{ color: '#9ca3af', fontWeight: 400 }}>(Supports multiple photos, JPG/PNG/WEBP up to 10MB)</span>
+                            </label>
+                            {(existingImages.length > 0 || selectedNewFiles.length > 0) && (
+                                <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
+                                    {existingImages.length + selectedNewFiles.length} image{existingImages.length + selectedNewFiles.length === 1 ? '' : 's'}
+                                </span>
+                            )}
+                        </div>
+
                         <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                             <input
                                 className="adm-search"
@@ -1174,8 +1616,6 @@ if (skuError) {
                                         ...f,
                                         imageUrl: val,
                                         imagePreview: val,
-                                        selectedFile: null,
-                                        hasNewFile: false,
                                         imageRemoved: false
                                     }));
                                 }}
@@ -1205,84 +1645,203 @@ if (skuError) {
                                     whiteSpace: 'nowrap',
                                     userSelect: 'none'
                                 }}
-                                title="Upload image from computer"
+                                title="Upload multiple images from computer"
                             >
-                                📁 Choose File
+                                📁 Choose Images
                                 <input
                                     type="file"
+                                    multiple
                                     accept="image/*"
                                     style={{ display: 'none' }}
-                                    onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (!file) return;
-                                        if (!file.type.startsWith('image/')) {
-                                            alert('Please select a valid image file (PNG, JPG, WEBP, etc.)');
-                                            return;
-                                        }
-                                        if (file.size > 2 * 1024 * 1024) {
-                                            alert('Image file size should be less than 2MB');
-                                            return;
-                                        }
-                                        const reader = new FileReader();
-                                        reader.onload = (ev) => {
-                                            if (ev.target?.result) {
-                                                setForm(f => ({
-                                                    ...f,
-                                                    imagePreview: ev.target.result,
-                                                    selectedFile: file,
-                                                    hasNewFile: true,
-                                                    imageRemoved: false,
-                                                    imageUrl: ''
-                                                }));
-                                            }
-                                        };
-                                        reader.readAsDataURL(file);
-                                    }}
+                                    onChange={handleFileSelect}
                                 />
                             </label>
                         </div>
-                        {Boolean(form.imagePreview) && (
-                            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <img
-                                    src={normalizeImageUrl(form.imagePreview) || form.imagePreview}
-                                    alt="Selected preview"
-                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                    style={{
-                                        width: 44,
-                                        height: 44,
+
+                        {imageValidationMsg && (
+                            <div style={{ color: '#dc2626', fontSize: 11, marginTop: 4, fontWeight: 500 }}>
+                                ⚠️ {imageValidationMsg}
+                            </div>
+                        )}
+
+                        {/* Image Gallery Thumbnails Grid (Existing + Newly Selected) */}
+                        {(existingImages.length > 0 || selectedNewFiles.length > 0 || Boolean(form.imageUrl && getValidRemoteImageUrl(form.imageUrl))) && (
+                            <div style={{
+                                marginTop: 10,
+                                padding: 10,
+                                background: '#f9fafb',
+                                borderRadius: 8,
+                                border: '1px solid #e5e7eb',
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 10
+                            }}>
+                                {/* Existing Server Images */}
+                                {existingImages.map((img, idx) => (
+                                    <div
+                                        key={img.id || `exist_${idx}`}
+                                        style={{
+                                            position: 'relative',
+                                            width: 64,
+                                            height: 64,
+                                            borderRadius: 6,
+                                            overflow: 'hidden',
+                                            border: '1px solid #d1d5db',
+                                            background: '#ffffff'
+                                        }}
+                                    >
+                                        <img
+                                            src={normalizeImageUrl(img.image_url || img.imageUrl || img.url) || (img.image_url || img.imageUrl || img.url)}
+                                            alt={`Product image ${idx + 1}`}
+                                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        />
+                                        <span style={{
+                                            position: 'absolute',
+                                            bottom: 2,
+                                            left: 2,
+                                            fontSize: 9,
+                                            padding: '1px 3px',
+                                            borderRadius: 3,
+                                            background: idx === 0 ? '#4f46e5' : 'rgba(0,0,0,0.6)',
+                                            color: '#ffffff',
+                                            fontWeight: 700
+                                        }}>
+                                            {idx === 0 ? 'Primary' : 'Saved'}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemoveExistingImage(img, idx)}
+                                            title="Remove image"
+                                            style={{
+                                                position: 'absolute',
+                                                top: 2,
+                                                right: 2,
+                                                width: 18,
+                                                height: 18,
+                                                borderRadius: '50%',
+                                                background: '#ef4444',
+                                                color: '#ffffff',
+                                                border: 'none',
+                                                display: 'grid',
+                                                placeItems: 'center',
+                                                cursor: 'pointer',
+                                                fontSize: 10,
+                                                fontWeight: 700,
+                                                lineHeight: 1
+                                            }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ))}
+
+                                {/* Newly Selected Files */}
+                                {selectedNewFiles.map((item, idx) => (
+                                    <div
+                                        key={item.id}
+                                        style={{
+                                            position: 'relative',
+                                            width: 64,
+                                            height: 64,
+                                            borderRadius: 6,
+                                            overflow: 'hidden',
+                                            border: '1px solid #a7f3d0',
+                                            background: '#ffffff'
+                                        }}
+                                    >
+                                        <img
+                                            src={item.preview}
+                                            alt={item.name}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        />
+                                        <span style={{
+                                            position: 'absolute',
+                                            bottom: 2,
+                                            left: 2,
+                                            fontSize: 9,
+                                            padding: '1px 3px',
+                                            borderRadius: 3,
+                                            background: '#059669',
+                                            color: '#ffffff',
+                                            fontWeight: 700
+                                        }}>
+                                            New
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRemoveNewFile(idx)}
+                                            title="Remove image"
+                                            style={{
+                                                position: 'absolute',
+                                                top: 2,
+                                                right: 2,
+                                                width: 18,
+                                                height: 18,
+                                                borderRadius: '50%',
+                                                background: '#ef4444',
+                                                color: '#ffffff',
+                                                border: 'none',
+                                                display: 'grid',
+                                                placeItems: 'center',
+                                                cursor: 'pointer',
+                                                fontSize: 10,
+                                                fontWeight: 700,
+                                                lineHeight: 1
+                                            }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ))}
+
+                                {/* Single URL preview if pasted and no files */}
+                                {existingImages.length === 0 && selectedNewFiles.length === 0 && Boolean(form.imageUrl && getValidRemoteImageUrl(form.imageUrl)) && (
+                                    <div style={{
+                                        position: 'relative',
+                                        width: 64,
+                                        height: 64,
                                         borderRadius: 6,
-                                        objectFit: 'cover',
-                                        border: '1px solid #e5e7eb',
-                                        display: 'block'
-                                    }}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setForm(f => ({
-                                            ...f,
-                                            imageUrl: '',
-                                            imagePreview: '',
-                                            selectedFile: null,
-                                            hasNewFile: false,
-                                            imageRemoved: true
-                                        }));
-                                    }}
-                                    style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: '#ef4444',
-                                        fontSize: 12,
-                                        cursor: 'pointer',
-                                        padding: 0,
-                                        textDecoration: 'underline'
-                                    }}
-                                >
-                                    Remove image
-                                </button>
+                                        overflow: 'hidden',
+                                        border: '1px solid #d1d5db',
+                                        background: '#ffffff'
+                                    }}>
+                                        <img
+                                            src={normalizeImageUrl(form.imageUrl) || form.imageUrl}
+                                            alt="URL Preview"
+                                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setForm(f => ({ ...f, imageUrl: '', imagePreview: '', imageRemoved: true }))}
+                                            title="Remove image"
+                                            style={{
+                                                position: 'absolute',
+                                                top: 2,
+                                                right: 2,
+                                                width: 18,
+                                                height: 18,
+                                                borderRadius: '50%',
+                                                background: '#ef4444',
+                                                color: '#ffffff',
+                                                border: 'none',
+                                                display: 'grid',
+                                                placeItems: 'center',
+                                                cursor: 'pointer',
+                                                fontSize: 10,
+                                                fontWeight: 700,
+                                                lineHeight: 1
+                                            }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
+
 
                     {/* Description */}
                     <div>
@@ -1307,21 +1866,34 @@ if (skuError) {
 
                     {/* Active + Featured */}
                     <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-                        <label style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            fontSize: 13,
-                            color: '#374151',
-                            cursor: 'pointer'
-                        }}>
-                            <input
-                                type="checkbox"
-                                checked={form.status}
-                                onChange={e => set('status', e.target.checked)}
-                            />
-                            Active
-                        </label>
+                        {(() => {
+                            const isExpired = isProductExpired(form.expiryDate);
+                            return (
+                                <label style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    fontSize: 13,
+                                    color: isExpired ? '#9ca3af' : '#374151',
+                                    cursor: isExpired ? 'not-allowed' : 'pointer'
+                                }}
+                                title={isExpired ? "Expired products cannot be set to Active" : ""}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={isExpired ? false : Boolean(form.status)}
+                                        disabled={isExpired}
+                                        onChange={e => set('status', e.target.checked)}
+                                    />
+                                    <span>Active</span>
+                                    {isExpired && (
+                                        <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 600 }}>
+                                            (Expired — Inactive)
+                                        </span>
+                                    )}
+                                </label>
+                            );
+                        })()}
 
                         <label style={{
                             display: 'flex',
@@ -1450,6 +2022,7 @@ const Products = () => {
     const [kpiFilter, setKpiFilter] = useState('all'); // 'all' | 'featured' | 'categories' | 'expirySoon'
     const [page, setPage] = useState(1);
     const [modal, setModal] = useState(null);
+    const [showVariantModal, setShowVariantModal] = useState(false);
     const [editLoadingId, setEditLoadingId] = useState(null);
     const [togglingId, setTogglingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
@@ -1505,7 +2078,7 @@ const Products = () => {
             if (trimmedQuery && trimmedQuery.length >= 2) {
                 res = await productService.search(trimmedQuery);
             } else {
-                res = await productService.getAll();
+                res = await productService.getAll(1, 100, true);
             }
 
             const body = res?.data ?? res;
@@ -1545,103 +2118,7 @@ const Products = () => {
             const activeCatMap = currentCatMap || categoryMap;
 
             setProducts(
-                list.map(p => {
-                    const mrpVal = p.mrp ?? p.cost_price ?? p.mrp_price ?? null;
-                    const priceVal = p.selling_price ?? p.price ?? p.sellingPrice ?? null;
-                    const variants = (typeof p.variants === 'object' && p.variants !== null) ? p.variants : {};
-                    const localMeta = getLocalProductMeta(p.id, p.sku);
-
-                    const isFeatured = Boolean(
-                        p.featured === true ||
-                        p.featured === 1 ||
-                        p.featured === 'true' ||
-                        variants.featured === true ||
-                        variants.featured === 1 ||
-                        variants.featured === 'true' ||
-                        localMeta.featured === true
-                    );
-
-                    let batchExpiry = null;
-                    if (Array.isArray(p.batches) && p.batches.length > 0) {
-                        const batchExps = p.batches
-                            .map(b => b.expiry_date || b.expiry || b.expire_date)
-                            .filter(Boolean);
-                        if (batchExps.length > 0) {
-                            batchExpiry = batchExps[0];
-                        }
-                    }
-
-                    const expiryDate = (
-                        p.expiry_date ||
-                        p.expiryDate ||
-                        p.expiry ||
-                        p.expire_date ||
-                        p.exp_date ||
-                        variants.expiry_date ||
-                        variants.expiryDate ||
-                        variants.expiry ||
-                        variants.expire_date ||
-                        batchExpiry ||
-                        inventoryExpiryMap[p.id] ||
-                        localMeta.expiryDate ||
-                        null
-                    );
-
-                    const manufacturingDate = (
-                        p.manufacturing_date ||
-                        p.manufacturingDate ||
-                        p.mfg_date ||
-                        p.mfgDate ||
-                        variants.manufacturing_date ||
-                        variants.manufacturingDate ||
-                        variants.mfg_date ||
-                        localMeta.manufacturingDate ||
-                        null
-                    );
-
-                    const brandVal = (
-                        p.brand ||
-                        p.brand_name ||
-                        variants.brand ||
-                        localMeta.brand ||
-                        ''
-                    );
-
-                    const rawImg = (
-                        p.image_url ||
-                        p.imageUrl ||
-                        (Array.isArray(p.images) && p.images.length > 0 ? (p.images[0].image_url || p.images[0].url) : null) ||
-                        p.image ||
-                        variants.image_url ||
-                        localMeta.imageUrl ||
-                        null
-                    );
-                    const imageUrl = normalizeImageUrl(rawImg);
-
-                    const catName = (
-                        activeCatMap[p.category_id] ||
-                        p.category_name ||
-                        (typeof p.category === 'object' ? p.category?.name : p.category) ||
-                        '—'
-                    );
-
-                    return {
-                        ...p,
-                        category: catName,
-                        status: Boolean(p.is_active ?? p.status ?? true),
-                        sellingPrice: priceVal,
-                        price: priceVal,
-                        mrp: mrpVal,
-                        cost_price: mrpVal,
-                        brand: brandVal,
-                        featured: isFeatured,
-                        expiry_date: expiryDate,
-                        manufacturing_date: manufacturingDate,
-                        imageUrl: imageUrl,
-                        image_url: imageUrl,
-                        variants: variants,
-                    };
-                })
+                list.map(p => mapProductRecord(p, activeCatMap, inventoryExpiryMap)).filter(Boolean)
             );
         } catch (err) {
             console.error('Failed to load products', err);
@@ -1713,15 +2190,26 @@ const Products = () => {
         const categoriesCount = categories.length > 0 ? categories.length : categorySet.size;
 
         // Expiry Soon: products expiring within the next 30 days, excluding already expired
-        const expirySoon = products.filter(p => backendExpiringIds.has(p.id) || isNearlyExpiry(p)).length;
+        const expirySoon = products.filter(p => !p.is_expired && (backendExpiringIds.has(p.id) || isNearlyExpiry(p))).length;
 
         return { total, featured, categories: categoriesCount, expirySoon };
     }, [products, categories, backendExpiringIds]);
 
     const categoryFilterList = useMemo(() => {
-        const dbNames = categories.map(c => c.name).filter(Boolean);
-        if (dbNames.length > 0) return dbNames;
-        return Array.from(new Set(products.map(p => p.category).filter(c => c && c !== '—')));
+        const set = new Set();
+        if (Array.isArray(categories)) {
+            categories.forEach(c => {
+                if (c.name && c.name.trim()) set.add(c.name.trim());
+            });
+        }
+        if (Array.isArray(products)) {
+            products.forEach(p => {
+                if (p.category && p.category !== '—' && p.category.trim()) {
+                    set.add(p.category.trim());
+                }
+            });
+        }
+        return Array.from(set);
     }, [categories, products]);
 
     // Filter by KPI filter, Category, and Search query
@@ -1732,7 +2220,7 @@ const Products = () => {
         if (kpiFilter === 'featured') {
             list = list.filter(p => Boolean(p.featured));
         } else if (kpiFilter === 'expirySoon') {
-            list = list.filter(p => backendExpiringIds.has(p.id) || isNearlyExpiry(p));
+            list = list.filter(p => !p.is_expired && (backendExpiringIds.has(p.id) || isNearlyExpiry(p)));
         } else if (kpiFilter === 'categories') {
             if (selectedCategory && selectedCategory !== 'All') {
                 list = list.filter(p => (p.category || '').toLowerCase() === selectedCategory.toLowerCase());
@@ -1752,13 +2240,21 @@ const Products = () => {
         // 3. Search query (client-side fallback/refinement)
         const q = search.trim().toLowerCase();
         if (q) {
-            list = list.filter(p =>
-                (p.name || '').toLowerCase().includes(q) ||
-                (p.sku || '').toLowerCase().includes(q) ||
-                (p.barcode || '').toLowerCase().includes(q) ||
-                (p.brand || '').toLowerCase().includes(q) ||
-                (p.category || '').toLowerCase().includes(q)
-            );
+            list = list.filter(p => {
+                const isMatchStatus =
+                    (q === 'expired' && p.is_expired) ||
+                    (q === 'inactive' && (!p.status || p.is_expired)) ||
+                    (q === 'active' && p.status && !p.is_expired);
+
+                return (
+                    (p.name || '').toLowerCase().includes(q) ||
+                    (p.sku || '').toLowerCase().includes(q) ||
+                    (p.barcode || '').toLowerCase().includes(q) ||
+                    (p.brand || '').toLowerCase().includes(q) ||
+                    (p.category || '').toLowerCase().includes(q) ||
+                    isMatchStatus
+                );
+            });
         }
 
         return list;
@@ -1773,9 +2269,17 @@ const Products = () => {
         let savedProduct = null;
         if (id) {
             const res = await productService.update(id, payload);
-            savedProduct = res?.data ?? res;
-            // If image was removed and product had server images:
-            if (originalForm?.imageRemoved && Array.isArray(originalProduct?.images) && originalProduct.images.length > 0) {
+            savedProduct = (res?.data?.data || res?.data?.product || res?.data) ?? res;
+            // If images were deleted during edit:
+            if (Array.isArray(originalForm?.deletedImageIds) && originalForm.deletedImageIds.length > 0) {
+                for (const imgId of originalForm.deletedImageIds) {
+                    try {
+                        await productService.deleteImage(id, imgId);
+                    } catch (e) {
+                        console.warn('Failed to delete image', imgId, e);
+                    }
+                }
+            } else if (originalForm?.imageRemoved && Array.isArray(originalProduct?.images) && originalProduct.images.length > 0) {
                 for (const img of originalProduct.images) {
                     if (img?.id) {
                         try {
@@ -1786,9 +2290,36 @@ const Products = () => {
                     }
                 }
             }
+
+            // Upload new image files on update (supports multiple files):
+            const updateFiles = Array.isArray(originalForm?.selectedFiles) && originalForm.selectedFiles.length > 0
+                ? originalForm.selectedFiles
+                : (originalForm?.selectedFile ? [originalForm.selectedFile] : []);
+
+            if (updateFiles.length > 0 && id) {
+                try {
+                    await productService.uploadImages(id, updateFiles, false);
+                } catch (imgErr) {
+                    console.warn('Failed to upload product images on update:', imgErr);
+                }
+            }
         } else {
             const res = await productService.create(payload);
-            savedProduct = res?.data ?? res;
+            savedProduct = (res?.data?.data || res?.data?.product || res?.data) ?? res;
+            const targetId = savedProduct?.id;
+
+            // Upload multiple selected images on create:
+            const createFiles = Array.isArray(originalForm?.selectedFiles) && originalForm.selectedFiles.length > 0
+                ? originalForm.selectedFiles
+                : (originalForm?.selectedFile ? [originalForm.selectedFile] : []);
+
+            if (createFiles.length > 0 && targetId) {
+                try {
+                    await productService.uploadImages(targetId, createFiles, true);
+                } catch (imgErr) {
+                    console.warn('Failed to upload product images on create:', imgErr);
+                }
+            }
         }
 
         const targetId = savedProduct?.id || id;
@@ -1802,6 +2333,18 @@ const Products = () => {
                 expiryDate: originalForm.expiryDate || null,
                 imageUrl: originalForm.imagePreview || originalForm.imageUrl || null,
             });
+        }
+
+        // Optimistically insert newly created product into products state immediately
+        if (!id && savedProduct) {
+            const mappedNew = mapProductRecord(savedProduct, categoryMap);
+            if (mappedNew) {
+                setProducts(prev => [mappedNew, ...prev.filter(p => p.id !== mappedNew.id)]);
+            }
+            setPage(1);
+            setSearch('');
+            setDebouncedSearch('');
+            setKpiFilter('all');
         }
 
         await fetchProducts(categoryMap, debouncedSearch);
@@ -1849,6 +2392,10 @@ const Products = () => {
 
     const toggleStatus = async (p) => {
         if (togglingId === p.id) return;
+        if (p.is_expired || isProductExpired(p)) {
+            alert('Cannot activate an expired product. Please update the expiry date first.');
+            return;
+        }
         setTogglingId(p.id);
 
         try {
@@ -1869,10 +2416,10 @@ const Products = () => {
 
     const exportCSV = () => {
         const headers = [
-            'Name',
+            'Product Name',
+            'Category Name',
+            'Barcode Number',
             'SKU',
-            'Barcode',
-            'Category',
             'MRP',
             'Selling Price',
             'GST',
@@ -1882,14 +2429,14 @@ const Products = () => {
 
         const rows = filtered.map(p => [
             p.name,
-            p.sku,
-            p.barcode,
             p.category,
+            p.barcode,
+            p.sku,
             p.mrp ?? p.cost_price ?? '',
             p.sellingPrice ?? p.price ?? p.selling_price ?? '',
             p.gst_rate || p.gst,
             p.expiry_date || '',
-            p.status ? 'Active' : 'Inactive'
+            p.is_expired ? 'Expired' : (p.status ? 'Active' : 'Inactive')
         ]);
 
         const csv = [headers, ...rows]
@@ -1966,27 +2513,54 @@ const Products = () => {
                 }
 
                 .cat-pill {
-                    padding: 6px 16px;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    padding: 7px 18px;
                     border-radius: 20px;
                     font-size: 13px;
                     font-weight: 500;
                     cursor: pointer;
                     white-space: nowrap;
-                    border: 1px solid #e5e7eb;
-                    background: #fff;
+                    border: 1px solid #d1d5db;
+                    background: #ffffff;
                     color: #4b5563;
-                    transition: all 0.15s ease;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+                    user-select: none;
                 }
 
                 .cat-pill:hover {
-                    background: #f3f4f6;
+                    background: #f8fafc;
+                    color: #1e293b;
+                    border-color: #94a3b8;
+                    transform: translateY(-1px);
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
                 }
 
                 .cat-pill.active {
-                    background: #eef2ff;
-                    color: #6366f1;
-                    border-color: #818cf8;
+                    background: #4f46e5;
+                    color: #ffffff;
+                    border-color: #4f46e5;
                     font-weight: 600;
+                    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+                    transform: translateY(-1px);
+                }
+
+                .cat-pill.active:hover {
+                    background: #4338ca;
+                    border-color: #4338ca;
+                    color: #ffffff;
+                    box-shadow: 0 4px 10px rgba(79, 70, 229, 0.45);
+                }
+
+                .cat-pill-dot {
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 50%;
+                    background: #ffffff;
+                    display: inline-block;
+                    box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
                 }
 
                 .kpi-card-clickable {
@@ -2060,7 +2634,7 @@ const Products = () => {
                             color: '#111827',
                             margin: 0
                         }}>
-                            Products
+                            Product Master
                         </h2>
                     </div>
                     <p style={{
@@ -2098,6 +2672,27 @@ const Products = () => {
                     >
                         <BsDownload size={14} />
                         Export
+                    </button>
+
+                    <button
+                        className="adm-btn-secondary"
+                        onClick={() => setShowVariantModal(true)}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '8px 16px',
+                            background: '#fff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 8,
+                            fontSize: 13,
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            color: '#374151'
+                        }}
+                    >
+                        <BsGrid3X3Gap size={14} />
+                        Product Variant
                     </button>
 
                     <button
@@ -2244,15 +2839,25 @@ const Products = () => {
                 marginBottom: 16,
                 scrollbarWidth: 'none'
             }}>
-                {['All', ...categoryFilterList].map(cat => (
-                    <button
-                        key={cat}
-                        className={`cat-pill ${selectedCategory === cat ? 'active' : ''}`}
-                        onClick={() => setSelectedCategory(cat)}
-                    >
-                        {cat}
-                    </button>
-                ))}
+                {['All', ...categoryFilterList].map(cat => {
+                    const isSelected = String(selectedCategory || '').trim().toLowerCase() === String(cat || '').trim().toLowerCase();
+                    return (
+                        <button
+                            key={cat}
+                            type="button"
+                            className={`cat-pill ${isSelected ? 'active' : ''}`}
+                            onClick={() => {
+                                setSelectedCategory(cat);
+                                setPage(1);
+                            }}
+                            aria-pressed={isSelected}
+                            title={`Filter by ${cat}`}
+                        >
+                            {isSelected && <span className="cat-pill-dot" />}
+                            <span>{cat}</span>
+                        </button>
+                    );
+                })}
             </div>
 
             {/* 4. FULL-WIDTH SEARCH BAR */}
@@ -2375,9 +2980,9 @@ const Products = () => {
                                 background: '#f9fafb',
                                 borderBottom: '1px solid #e5e7eb'
                             }}>
-                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>PRODUCT</th>
-                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>CATEGORY</th>
-                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>BARCODE</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Product Name</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Category Name</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Barcode Number</th>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>MRP</th>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>SELLING PRICE</th>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>GST</th>
@@ -2525,6 +3130,39 @@ const Products = () => {
                                             <div>
                                                 <div style={{ fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                                     <span>{p.name}</span>
+                                                    {p.is_expired ? (
+                                                        <span style={{
+                                                            fontSize: 10,
+                                                            background: '#fef2f2',
+                                                            color: '#dc2626',
+                                                            border: '1px solid #fecaca',
+                                                            padding: '1px 6px',
+                                                            borderRadius: 12,
+                                                            fontWeight: 700,
+                                                            letterSpacing: '0.03em',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 2
+                                                        }}>
+                                                            ⚠️ EXPIRED
+                                                        </span>
+                                                    ) : !p.status ? (
+                                                        <span style={{
+                                                            fontSize: 10,
+                                                            background: '#f3f4f6',
+                                                            color: '#6b7280',
+                                                            border: '1px solid #e5e7eb',
+                                                            padding: '1px 6px',
+                                                            borderRadius: 12,
+                                                            fontWeight: 700,
+                                                            letterSpacing: '0.03em',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 2
+                                                        }}>
+                                                            INACTIVE
+                                                        </span>
+                                                    ) : null}
                                                     {p.featured && (
                                                         <span style={{
                                                             fontSize: 10,
@@ -2550,15 +3188,42 @@ const Products = () => {
                                     </td>
 
                                     <td style={{ padding: '12px 16px' }}>
-                                        <span style={{
-                                            padding: '4px 10px',
-                                            borderRadius: 20,
-                                            background: '#eef2ff',
-                                            color: '#6366f1',
-                                            fontSize: 11,
-                                            fontWeight: 600
-                                        }}>
-                                            {p.category}
+                                        <span
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (p.category && p.category !== '—') {
+                                                    setSelectedCategory(p.category);
+                                                    setPage(1);
+                                                }
+                                            }}
+                                            title="Click to filter by this category"
+                                            style={{
+                                                padding: '4px 10px',
+                                                borderRadius: 20,
+                                                background:
+                                                    String(selectedCategory || '').trim().toLowerCase() === String(p.category || '').trim().toLowerCase()
+                                                        ? '#4f46e5'
+                                                        : '#eef2ff',
+                                                color:
+                                                    String(selectedCategory || '').trim().toLowerCase() === String(p.category || '').trim().toLowerCase()
+                                                        ? '#ffffff'
+                                                        : '#6366f1',
+                                                border:
+                                                    String(selectedCategory || '').trim().toLowerCase() === String(p.category || '').trim().toLowerCase()
+                                                        ? '1px solid #4f46e5'
+                                                        : '1px solid transparent',
+                                                fontSize: 11,
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s ease',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 4
+                                            }}
+                                        >
+                                            {p.category && !/^\d+$/.test(String(p.category).trim()) && p.category !== '—'
+                                                ? p.category
+                                                : (categoryMap[p.category_id] || categoryMap[p.category] || (p.category && !/^\d+$/.test(String(p.category).trim()) ? p.category : '—'))}
                                         </span>
                                     </td>
 
@@ -2670,12 +3335,25 @@ const Products = () => {
                                         }}>
                                             <button
                                                 className="adm-btn-secondary"
-                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: togglingId === p.id ? 'wait' : 'pointer' }}
+                                                style={{
+                                                    padding: '6px 8px',
+                                                    borderRadius: 6,
+                                                    border: '1px solid #e5e7eb',
+                                                    background: '#fff',
+                                                    cursor: p.is_expired ? 'not-allowed' : (togglingId === p.id ? 'wait' : 'pointer'),
+                                                    opacity: p.is_expired ? 0.7 : 1
+                                                }}
                                                 onClick={() => toggleStatus(p)}
-                                                disabled={togglingId === p.id}
-                                                title={p.status ? "Active (Click to deactivate)" : "Inactive (Click to activate)"}
+                                                disabled={togglingId === p.id || p.is_expired}
+                                                title={
+                                                    p.is_expired
+                                                        ? "Expired (Product has expired — Inactive)"
+                                                        : (p.status ? "Active (Click to deactivate)" : "Inactive (Click to activate)")
+                                                }
                                             >
-                                                {p.status ? (
+                                                {p.is_expired ? (
+                                                    <BsToggleOff size={16} color="#ef4444" />
+                                                ) : p.status ? (
                                                     <BsToggleOn size={16} color="#10b981" />
                                                 ) : (
                                                     <BsToggleOff size={16} color="#9ca3af" />
@@ -2807,6 +3485,15 @@ const Products = () => {
         categories={categories}
         onClose={() => setModal(null)}
         onSave={handleSave}
+    />
+)}
+
+{showVariantModal && (
+    <ProductVariantModal
+        isOpen={showVariantModal}
+        onClose={() => setShowVariantModal(false)}
+        products={products}
+        onRefresh={() => fetchProducts(categoryMap, debouncedSearch)}
     />
 )}
 

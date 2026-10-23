@@ -6,7 +6,6 @@ import {
     BsBoxArrowRight,
     BsPerson,
     BsChevronDown,
-    BsList,
     BsBoxSeam,
     BsTagFill,
     BsPeopleFill,
@@ -328,38 +327,6 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
 
     return (
         <header className="pos-header">
-            {/* Sidebar toggle button — always visible in header */}
-            <button
-                type="button"
-                id="header-sidebar-toggle"
-                onClick={onToggleSidebar}
-                title={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
-                style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 36,
-                    height: 36,
-                    border: 'none',
-                    borderRadius: 8,
-                    background: sidebarCollapsed ? '#eef2ff' : 'transparent',
-                    color: sidebarCollapsed ? '#6366f1' : '#6b7280',
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                    transition: 'background 0.2s ease, color 0.2s ease',
-                }}
-                onMouseEnter={e => {
-                    e.currentTarget.style.background = '#eef2ff';
-                    e.currentTarget.style.color = '#6366f1';
-                }}
-                onMouseLeave={e => {
-                    e.currentTarget.style.background = sidebarCollapsed ? '#eef2ff' : 'transparent';
-                    e.currentTarget.style.color = sidebarCollapsed ? '#6366f1' : '#6b7280';
-                }}
-            >
-                <BsList size={20} />
-            </button>
-
             {/* Search Bar */}
             <div className="header-search-wrap" ref={searchWrapRef} style={{ flex: 1, position: 'relative' }}>
                 <BsSearch className="header-search-icon" size={14} />

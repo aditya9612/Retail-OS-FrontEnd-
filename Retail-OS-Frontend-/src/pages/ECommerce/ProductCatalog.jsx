@@ -156,7 +156,9 @@ const ProductCatalog = () => {
 
             const mapped = prodList.map(p => {
                 const stock = Number(p.stock ?? p.current_stock ?? p.quantity ?? 0);
-                const status = (p.is_active === false || p.status === 'Inactive') ? 'Inactive' : (stock <= 0 ? 'Out of Stock' : 'Active');
+                const expDateStr = p.expiry_date || p.expiryDate || p.expiry || p.expire_date || p.variants?.expiry_date;
+                const isExpired = Boolean(expDateStr && new Date(expDateStr).getTime() < new Date().setHours(0, 0, 0, 0));
+                const status = (p.is_active === false || p.status === 'Inactive' || isExpired) ? 'Inactive' : (stock <= 0 ? 'Out of Stock' : 'Active');
                 const catName = p.category_name || p.category?.name || p.category || 'General';
                 return {
                     id: p.id,

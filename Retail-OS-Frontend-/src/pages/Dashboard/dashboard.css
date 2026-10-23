@@ -226,9 +226,23 @@
     animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+.live-refresh-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.live-data-badge-wrap {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.last-sync-timestamp {
+    font-size: 11px;
+    font-weight: 500;
+    color: #64748b;
+    white-space: nowrap;
 }
 
 /* Error Banner */
@@ -312,6 +326,13 @@
     outline-offset: 2px;
 }
 
+button.kpi-card {
+    font-family: inherit;
+    text-align: left;
+    width: 100%;
+    border: 1px solid #e2e8f0;
+}
+
 .kpi-icon-wrap {
     width: 48px;
     height: 48px;
@@ -326,6 +347,21 @@
 .kpi-icon-wrap.revenue {
     background-color: #eff6ff;
     color: #2563eb;
+}
+
+.kpi-icon-wrap.cost {
+    background-color: #fee2e2;
+    color: #ef4444;
+}
+
+.kpi-icon-wrap.profit {
+    background-color: #ecfdf5;
+    color: #10b981;
+}
+
+.kpi-icon-wrap.margin {
+    background-color: #f5f3ff;
+    color: #8b5cf6;
 }
 
 .kpi-icon-wrap.sales {
@@ -368,6 +404,14 @@
     text-overflow: ellipsis;
 }
 
+.kpi-value.profit-positive {
+    color: #059669;
+}
+
+.kpi-value.profit-negative {
+    color: #dc2626;
+}
+
 .kpi-subtitle {
     font-size: 12px;
     color: #64748b;
@@ -378,6 +422,97 @@
 .kpi-subtitle.trend-up {
     color: #10b981;
     font-weight: 700;
+}
+
+/* ── Operational Strip (Store Operations & Inventory) ── */
+.operational-strip {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+@media (max-width: 900px) {
+    .operational-strip {
+        grid-template-columns: 1fr;
+    }
+}
+
+.op-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.op-card:hover {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+}
+
+.op-card:hover .op-val {
+    color: #2563eb;
+}
+
+.op-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.op-icon.sales {
+    background-color: #ecfdf5;
+    color: #10b981;
+}
+
+.op-icon.customers {
+    background-color: #f5f3ff;
+    color: #8b5cf6;
+}
+
+.op-icon.lowstock {
+    background-color: #fff7ed;
+    color: #ea580c;
+}
+
+.op-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.op-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.op-val {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.2;
+}
+
+.op-sub {
+    font-size: 11px;
+    color: #94a3b8;
+    margin-top: 1px;
 }
 
 /* ── Charts Row (2 Columns) ── */
@@ -512,6 +647,68 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
+}
+
+.legend-total {
+    margin-left: 8px;
+    padding-left: 12px;
+    border-left: 1px solid #e2e8f0;
+    color: #1e293b;
+}
+
+.rev-cost-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.rev-cost-metrics-row {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 14px;
+}
+
+.rev-cost-metric {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.rev-cost-metric-label {
+    font-weight: 600;
+    color: #64748b;
+}
+
+.rev-cost-metric-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.rev-cost-metric-value.profit-positive {
+    color: #059669;
+}
+
+.rev-cost-metric-value.profit-negative {
+    color: #dc2626;
+}
+
+.cost-transparency-note {
+    font-size: 11px;
+    color: #64748b;
+    text-align: center;
+    line-height: 1.4;
+    margin: 0;
 }
 
 /* ── Bottom Row: Tables (2 Columns) ── */
@@ -976,4 +1173,317 @@
     outline-offset: 2px;
     border-radius: 4px;
 }
+
+/* Screen-reader only accessible utility */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* ── Financial Metric Details Modal ── */
+.financial-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(5px);
+    z-index: 1050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.18s ease-out;
+}
+
+.financial-modal-dialog {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    max-width: 540px;
+    width: 100%;
+    box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: modalSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(14px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.financial-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.financial-modal-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.financial-modal-icon-wrap {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.financial-modal-icon-wrap.cost {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+.financial-modal-icon-wrap.profit {
+    background: #ecfdf5;
+    color: #10b981;
+}
+
+.financial-modal-icon-wrap.margin {
+    background: #f5f3ff;
+    color: #8b5cf6;
+}
+
+.financial-modal-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0 0 2px 0;
+}
+
+.financial-modal-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    background: #f8fafc;
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    display: inline-block;
+}
+
+.financial-modal-close-btn {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.financial-modal-close-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.financial-modal-body {
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.financial-modal-value-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.financial-modal-value-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.financial-modal-primary-value {
+    font-size: 28px;
+    font-weight: 800;
+    color: #0f172a;
+    line-height: 1.15;
+}
+
+.financial-modal-dual-rates {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.financial-modal-dual-rates .rate-num {
+    display: block;
+    font-size: 26px;
+    font-weight: 800;
+    color: #8b5cf6;
+}
+
+.financial-modal-dual-rates .rate-sub {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.rate-divider {
+    width: 1px;
+    height: 36px;
+    background: #cbd5e1;
+}
+
+.financial-modal-formula-box {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.financial-modal-section-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+.financial-modal-formula-tag {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.financial-modal-formula-tag code {
+    font-family: inherit;
+}
+
+.financial-modal-desc {
+    font-size: 12px;
+    line-height: 1.5;
+    color: #475569;
+    margin: 0;
+}
+
+.financial-modal-calc-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    color: #334155;
+    padding: 6px 0;
+    border-bottom: 1px dashed #f1f5f9;
+}
+
+.financial-modal-calc-row:last-child {
+    border-bottom: none;
+}
+
+.financial-modal-calc-row.total-highlight {
+    font-weight: 700;
+    border-top: 1px solid #cbd5e1;
+    border-bottom: none;
+    padding-top: 8px;
+    margin-top: 4px;
+    color: #0f172a;
+}
+
+.financial-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
+}
+
+.financial-modal-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    border: none;
+}
+
+.financial-modal-btn.secondary {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+}
+
+.financial-modal-btn.secondary:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.financial-modal-btn.primary {
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.financial-modal-btn.primary:hover {
+    background: #1d4ed8;
+}
+
+/* Highlight pulse for revenue-vs-cost-card when navigated from modal */
+@keyframes highlightPulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.6);
+        border-color: #2563eb;
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(37, 99, 235, 0);
+        border-color: #2563eb;
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+        border-color: #e2e8f0;
+    }
+}
+
+.highlight-pulse {
+    animation: highlightPulse 2s ease-out;
+}
+
 
