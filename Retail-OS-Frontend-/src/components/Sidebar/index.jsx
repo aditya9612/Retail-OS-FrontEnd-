@@ -216,7 +216,12 @@ const Sidebar = ({ collapsed, onToggle }) => {
             style={{ width: collapsed ? '68px' : '242px' }}
         >
             {/* Sidebar Brand Header */}
-            <div className="sidebar-logo">
+            <div
+                className="sidebar-logo"
+                style={{ cursor: collapsed ? 'pointer' : 'default' }}
+                onClick={collapsed ? onToggle : undefined}
+                title={collapsed ? 'Expand sidebar rail' : undefined}
+            >
                 <div className="sidebar-logo-icon">
                     <BsShop size={18} />
                 </div>
@@ -392,23 +397,6 @@ const Sidebar = ({ collapsed, onToggle }) => {
                             Register Online
                         </span>
                     </div>
-                    <button
-                        type="button"
-                        onClick={onToggle}
-                        style={{
-                            background: '#f1f5f9',
-                            border: 'none',
-                            color: '#64748b',
-                            borderRadius: 6,
-                            padding: '4px 6px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                        }}
-                        title="Collapse sidebar rail"
-                    >
-                        <BsLayoutSidebarInset size={14} />
-                    </button>
                 </div>
             ) : (
                 <div style={{ padding: '12px 0', display: 'flex', justifyContent: 'center', borderTop: '1px solid var(--color-border)', background: '#fafafa' }}>

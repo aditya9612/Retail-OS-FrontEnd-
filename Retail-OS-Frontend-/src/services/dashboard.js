@@ -84,6 +84,22 @@ export const getStores = async () => {
     return Array.isArray(response.data) ? response.data : (response.data?.items || []);
 };
 
+/**
+ * Fetch product analytics data.
+ * Endpoint: GET /api/v1/analytics/products
+ * @param {Object} queryParams - Optional analytics query parameters
+ * @returns {Promise<Object>} AnalyticsProductsResponse
+ */
+export const getAnalyticsProducts = async (queryParams = {}) => {
+    try {
+        const response = await apiClient.get(resolveUrl("/api/v1/analytics/products"), { params: queryParams });
+        return response.data;
+    } catch (err) {
+        console.warn("Analytics products endpoint returned notice:", err?.message || err);
+        return null;
+    }
+};
+
 const dashboardService = {
     getDashboard: getDashboardSummary,
     getDashboardSummary,
@@ -92,6 +108,7 @@ const dashboardService = {
     getRevenueVsCost,
     getTopProducts,
     getStores,
+    getAnalyticsProducts,
 };
 
 export default dashboardService;

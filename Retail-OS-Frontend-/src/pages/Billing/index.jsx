@@ -222,7 +222,7 @@ const Billing = () => {
                     const mapped = rawList.map(p => ({
                         id: p.id,
                         name: p.name || p.title || 'Product #' + p.id,
-                        price: Number(p.sale_price ?? p.price ?? p.unit_price ?? 0),
+                        price: Number(p.selling_price ?? p.price ?? p.sale_price ?? p.unit_price ?? p.sellingPrice ?? 0),
                         hsn: p.hsn_code || p.hsn || '',
                         gstRate: Number(p.gst_rate ?? p.tax_rate ?? 18),
                         category: p.category_name || p.category?.name || p.category || 'General',
@@ -464,9 +464,13 @@ const Billing = () => {
         // Compute subtotal from cart items directly (pure taxable amount, no GST added per item)
         let subtotal = 0;
         cart.forEach(item => {
-            const base = (item.price - (item.discountPerItem || 0)) * item.qty;
+            const unitPrice = Math.max(0, Number(item.price) || 0);
+            const discount = Math.max(0, Number(item.discountPerItem) || 0);
+            const quantity = Math.max(0, parseInt(item.qty, 10) || 0);
+            const base = Math.max(0, unitPrice - discount) * quantity;
             subtotal += base;
         });
+        subtotal = Math.round(subtotal * 100) / 100;
 
         let discountAmount = 0;
         if (billDiscount > 0) {

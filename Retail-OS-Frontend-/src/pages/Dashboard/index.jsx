@@ -30,6 +30,10 @@ import {
     BsCheckCircleFill,
     BsArrowRight,
     BsX,
+    BsTagFill,
+    BsGraphUpArrow,
+    BsPercent,
+    BsCashStack,
 } from 'react-icons/bs';
 
 import {
@@ -38,6 +42,7 @@ import {
     getRevenueVsCost,
     getTopProducts,
     getStores,
+    getAnalyticsProducts,
 } from '../../services/dashboard';
 import { getOrders } from '../../services/orderService';
 import './dashboard.css';
@@ -48,16 +53,104 @@ const PERIOD_LABELS = {
     last_month: 'Last Month',
 };
 
+const parseMetric = (val) => {
+    if (val === null || val === undefined) return null;
+    const num = Number(val);
+    return isNaN(num) ? null : num;
+};
+
 const formatCurrency = (val) => {
-    const num = Number(val || 0);
+    if (val === null || val === undefined || isNaN(Number(val))) return '—';
+    const num = Number(val);
     return '₹' + num.toLocaleString('en-IN', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
 };
 
+const formatCompactCurrency = (val) => {
+    if (val === null || val === undefined || isNaN(Number(val))) return '—';
+    const num = Number(val);
+    if (num === 0) return '₹0';
+    const abs = Math.abs(num);
+    const sign = num < 0 ? '-' : '';
+    if (abs >= 10000000) {
+        const cr = abs / 10000000;
+        return `${sign}₹${cr % 1 === 0 ? cr : cr.toFixed(1)}Cr`;
+    }
+    if (abs >= 100000) {
+        const l = abs / 100000;
+        return `${sign}₹${l % 1 === 0 ? l : l.toFixed(1)}L`;
+    }
+    if (abs >= 1000) {
+        const k = abs / 1000;
+        return `${sign}₹${k % 1 === 0 ? k : k.toFixed(1)}k`;
+    }
+    return `${sign}₹${num}`;
+};
+
 const formatInteger = (val) => {
-    return Number(val || 0).toLocaleString('en-IN');
+    if (val === null || val === undefined || isNaN(Number(val))) return '—';
+    return Number(val).toLocaleString('en-IN');
+};
+
+const formatSyncTime = (date) => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return null;
+    return date.toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+    });
+};
+
+const CALENDAR_MONTHS = [
+    { short: 'Jan', full: 'January', monthNum: 1 },
+    { short: 'Feb', full: 'February', monthNum: 2 },
+    { short: 'Mar', full: 'March', monthNum: 3 },
+    { short: 'Apr', full: 'April', monthNum: 4 },
+    { short: 'May', full: 'May', monthNum: 5 },
+    { short: 'Jun', full: 'June', monthNum: 6 },
+    { short: 'Jul', full: 'July', monthNum: 7 },
+    { short: 'Aug', full: 'August', monthNum: 8 },
+    { short: 'Sep', full: 'September', monthNum: 9 },
+    { short: 'Oct', full: 'October', monthNum: 10 },
+    { short: 'Nov', full: 'November', monthNum: 11 },
+    { short: 'Dec', full: 'December', monthNum: 12 },
+];
+
+const MONTH_NAMES = CALENDAR_MONTHS.map((m) => m.short);
+
+const getCalendarMonthIndex = (val) => {
+    if (val === null || val === undefined) return -1;
+    const str = String(val).trim().toLowerCase();
+    if (!str) return -1;
+
+    // 1. Direct match on short name (e.g. 'oct', 'jan')
+    const shortIdx = CALENDAR_MONTHS.findIndex((m) => m.short.toLowerCase() === str);
+    if (shortIdx !== -1) return shortIdx;
+
+    // 2. Direct match on full name (e.g. 'october', 'january')
+    const fullIdx = CALENDAR_MONTHS.findIndex((m) => m.full.toLowerCase() === str);
+    if (fullIdx !== -1) return fullIdx;
+
+    // 3. Month number (e.g. '10', 10, '01')
+    if (/^(0?[1-9]|1[0-2])$/.test(str)) {
+        return parseInt(str, 10) - 1;
+    }
+
+    // 4. ISO Date format (e.g. '2026-10-01' or '2026-10')
+    if (/^\d{4}-(0?[1-9]|1[0-2])/.test(str)) {
+        const parts = str.split('-');
+        const m = parseInt(parts[1], 10);
+        if (m >= 1 && m <= 12) return m - 1;
+    }
+
+    // 5. Fallback prefix match (e.g. 'sept')
+    const prefixIdx = CALENDAR_MONTHS.findIndex((m) => str.startsWith(m.short.toLowerCase()));
+    if (prefixIdx !== -1) return prefixIdx;
+
+    return -1;
 };
 
 const formatDate = (isoStr) => {
@@ -92,6 +185,9 @@ const Dashboard = () => {
     const [isStoreOpen, setIsStoreOpen] = useState(false);
     const [isPeriodOpen, setIsPeriodOpen] = useState(false);
 
+    // ── Metric Drilldown Modal State ──
+    const [activeMetricModal, setActiveMetricModal] = useState(null); // 'cost' | 'profit' | 'margin' | null
+
     // ── Notification Bell & Dropdown State ──
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const [bellPosition, setBellPosition] = useState(null);
@@ -99,27 +195,20 @@ const Dashboard = () => {
     const bellButtonRef = useRef(null);
 
     // ── API State ──
-    const [summary, setSummary] = useState({
-        today_sales: 0,
-        monthly_sales: 0,
-        total_customers: 0,
-        total_revenue: 0,
-        low_stock_products: 0,
-        mode: 'all_stores',
-        stores_summary: [],
-    });
-
+    const [summary, setSummary] = useState(null);
     const [overviewData, setOverviewData] = useState([]);
-    const [revenueVsCost, setRevenueVsCost] = useState({ revenue: 0, cost: 0 });
+    const [revenueVsCost, setRevenueVsCost] = useState(null);
     const [topProducts, setTopProducts] = useState([]);
     const [transactions, setTransactions] = useState([]);
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [lastSyncTime, setLastSyncTime] = useState(null);
     const [error, setError] = useState(null);
 
-    // Sequence reference to prevent stale responses from race conditions
+    // Sequence reference and in-flight guard to prevent race conditions and duplicate requests
     const reqSeqRef = useRef(0);
+    const isRefreshingRef = useRef(false);
     const storeDropdownRef = useRef(null);
     const periodDropdownRef = useRef(null);
 
@@ -128,15 +217,15 @@ const Dashboard = () => {
         const items = [];
 
         // Low stock products alert from Dashboard summary
-        if (summary.low_stock_products > 0) {
+        if (summary && summary.low_stock_products > 0) {
             items.push({
                 id: 'low-stock-alert',
                 type: 'warning',
                 title: 'Low Stock Alert',
                 message: `${summary.low_stock_products} ${summary.low_stock_products === 1 ? 'product is' : 'products are'} running low on inventory and need attention.`,
                 time: 'Requires Action',
-                link: '/low-stock-alerts',
-                linkText: 'View Low Stock Alerts',
+                link: '/inventory',
+                linkText: 'View Inventory',
             });
         }
 
@@ -153,7 +242,7 @@ const Dashboard = () => {
         }
 
         return items;
-    }, [summary.low_stock_products, error]);
+    }, [summary, error]);
 
     // ── Bind Header Notification Bell Icon Button ──
     useEffect(() => {
@@ -276,6 +365,31 @@ const Dashboard = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Close metric details modal on Escape key
+    useEffect(() => {
+        if (!activeMetricModal) return;
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                setActiveMetricModal(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [activeMetricModal]);
+
+    // Smooth scroll to Revenue vs Cost chart from metric modal
+    const scrollToRevCostChart = useCallback(() => {
+        setActiveMetricModal(null);
+        setTimeout(() => {
+            const chartCard = document.getElementById('revenue-vs-cost-card');
+            if (chartCard) {
+                chartCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                chartCard.classList.add('highlight-pulse');
+                setTimeout(() => chartCard.classList.remove('highlight-pulse'), 2200);
+            }
+        }, 120);
+    }, []);
+
     // ── Load Authorized Stores ──
     useEffect(() => {
         let mounted = true;
@@ -295,6 +409,10 @@ const Dashboard = () => {
 
     // ── Fetch All Dashboard Data ──
     const fetchAllDashboardData = useCallback(async (storeIdVal, mainPeriodVal, ovPeriodVal, rcPeriodVal, isSilent = false) => {
+        // Prevent duplicate requests when fetch is already in-flight
+        if (isRefreshingRef.current) return;
+        isRefreshingRef.current = true;
+
         const currentSeq = ++reqSeqRef.current;
         if (!isSilent) setLoading(true);
         setRefreshing(true);
@@ -309,6 +427,7 @@ const Dashboard = () => {
                 revCostResult,
                 topProductsResult,
                 ordersResult,
+                analyticsProductsResult,
             ] = await Promise.allSettled([
                 getDashboardSummary(storeFilter),
                 getDashboardOverview(ovPeriodVal || mainPeriodVal, storeFilter),
@@ -318,6 +437,9 @@ const Dashboard = () => {
                     store_id: storeFilter || undefined,
                     page: 1,
                     page_size: 5,
+                }),
+                getAnalyticsProducts({
+                    store_id: storeFilter || undefined,
                 }),
             ]);
 
@@ -331,37 +453,62 @@ const Dashboard = () => {
             if (summaryResult.status === 'fulfilled' && summaryResult.value) {
                 const val = summaryResult.value;
                 setSummary({
-                    today_sales: Number(val.today_sales ?? 0),
-                    monthly_sales: Number(val.monthly_sales ?? 0),
-                    total_customers: Number(val.total_customers ?? 0),
-                    total_revenue: Number(val.total_revenue ?? 0),
-                    low_stock_products: Number(val.low_stock_products ?? 0),
+                    today_sales: parseMetric(val.today_sales),
+                    monthly_sales: parseMetric(val.monthly_sales),
+                    total_customers: parseMetric(val.total_customers),
+                    total_revenue: parseMetric(val.total_revenue),
+                    low_stock_products: parseMetric(val.low_stock_products),
                     mode: val.mode || 'all_stores',
                     stores_summary: Array.isArray(val.stores_summary) ? val.stores_summary : [],
                 });
             } else {
                 hadError = true;
                 errorMsg = summaryResult.reason?.message || 'Failed to load dashboard summary';
+                setSummary(null);
             }
 
             // 2. Sales Overview Chart
             if (overviewResult.status === 'fulfilled' && overviewResult.value) {
-                const list = Array.isArray(overviewResult.value.overview) ? overviewResult.value.overview : [];
+                const rawVal = overviewResult.value;
+                const list = Array.isArray(rawVal)
+                    ? rawVal
+                    : Array.isArray(rawVal.overview)
+                    ? rawVal.overview
+                    : Array.isArray(rawVal.data)
+                    ? rawVal.data
+                    : Array.isArray(rawVal.items)
+                    ? rawVal.items
+                    : [];
                 setOverviewData(list);
             } else {
                 hadError = true;
-                setOverviewData([]);
+                if (!errorMsg) errorMsg = overviewResult.reason?.message || 'Failed to load sales overview';
+                setOverviewData(null);
             }
 
             // 3. Revenue vs Cost Chart
             if (revCostResult.status === 'fulfilled' && revCostResult.value) {
+                const val = revCostResult.value;
+                const rev = parseMetric(val.revenue);
+                const cst = parseMetric(val.cost);
+                const gp = val.gross_profit !== undefined && val.gross_profit !== null
+                    ? parseMetric(val.gross_profit)
+                    : (rev !== null && cst !== null ? rev - cst : null);
+                const gm = val.gross_margin_percentage !== undefined && val.gross_margin_percentage !== null
+                    ? parseMetric(val.gross_margin_percentage)
+                    : (rev !== null && rev > 0 && gp !== null ? (gp / rev) * 100 : (rev === 0 ? 0 : null));
+
                 setRevenueVsCost({
-                    revenue: Number(revCostResult.value.revenue ?? 0),
-                    cost: Number(revCostResult.value.cost ?? 0),
+                    revenue: rev,
+                    cost: cst,
+                    gross_profit: gp,
+                    gross_margin_percentage: gm,
+                    monthly: Array.isArray(val.monthly) ? val.monthly : undefined,
                 });
             } else {
                 hadError = true;
-                setRevenueVsCost({ revenue: 0, cost: 0 });
+                if (!errorMsg) errorMsg = revCostResult.reason?.message || 'Failed to load revenue and cost metrics';
+                setRevenueVsCost(null);
             }
 
             // 4. Top Selling Products
@@ -392,6 +539,9 @@ const Dashboard = () => {
 
             if (hadError && errorMsg) {
                 setError(errorMsg);
+            } else {
+                // Record the actual successful synchronization timestamp
+                setLastSyncTime(new Date());
             }
         } catch (err) {
             if (currentSeq === reqSeqRef.current) {
@@ -401,6 +551,7 @@ const Dashboard = () => {
             if (currentSeq === reqSeqRef.current) {
                 setLoading(false);
                 setRefreshing(false);
+                isRefreshingRef.current = false;
             }
         }
     }, []);
@@ -427,31 +578,200 @@ const Dashboard = () => {
 
     // Calculate today's orders count from stores_summary if available
     const todayOrdersCount = useMemo(() => {
-        if (!selectedStore && Array.isArray(summary.stores_summary) && summary.stores_summary.length > 0) {
+        if (!summary || !Array.isArray(summary.stores_summary) || summary.stores_summary.length === 0) {
+            return null;
+        }
+        if (!selectedStore) {
             return summary.stores_summary.reduce((acc, curr) => acc + Number(curr.orders_count || 0), 0);
         }
-        if (selectedStore && Array.isArray(summary.stores_summary)) {
-            const current = summary.stores_summary.find((s) => String(s.store_id) === String(selectedStore));
-            if (current) return Number(current.orders_count || 0);
-        }
-        return 0;
-    }, [selectedStore, summary.stores_summary]);
+        const current = summary.stores_summary.find((s) => String(s.store_id) === String(selectedStore));
+        return current ? Number(current.orders_count || 0) : null;
+    }, [selectedStore, summary]);
 
-    // Prepare Revenue vs Cost Chart Data
-    const revVsCostChartData = useMemo(() => {
+    // ── Financial Performance Metrics ──
+    // Formulas:
+    // 1. Gross Profit = Net Sales Revenue − Cost of Goods Sold
+    // 2. Gross Profit Margin (%) = (Gross Profit ÷ Net Sales Revenue) × 100
+    // 3. Markup (%) = (Gross Profit ÷ Cost of Goods Sold) × 100
+    const financialMetrics = useMemo(() => {
+        let revenue = 0;
+        if (revenueVsCost?.revenue !== null && revenueVsCost?.revenue !== undefined) {
+            revenue = Number(revenueVsCost.revenue);
+        } else if (summary?.total_sales !== null && summary?.total_sales !== undefined) {
+            revenue = Number(summary.total_sales);
+        } else if (summary?.total_revenue !== null && summary?.total_revenue !== undefined) {
+            revenue = Number(summary.total_revenue);
+        }
+
+        let cost = 0;
+        if (revenueVsCost?.cost !== null && revenueVsCost?.cost !== undefined) {
+            cost = Number(revenueVsCost.cost);
+        } else if (summary?.total_cost !== null && summary?.total_cost !== undefined) {
+            cost = Number(summary.total_cost);
+        }
+
+        const grossProfit = revenueVsCost?.gross_profit !== undefined && revenueVsCost?.gross_profit !== null
+            ? Number(revenueVsCost.gross_profit)
+            : (summary?.gross_profit !== undefined && summary?.gross_profit !== null
+                ? Number(summary.gross_profit)
+                : Math.round((revenue - cost) * 100) / 100);
+
+        const grossMargin = revenueVsCost?.gross_margin_percentage !== undefined && revenueVsCost?.gross_margin_percentage !== null
+            ? Number(revenueVsCost.gross_margin_percentage)
+            : (summary?.gross_margin_percentage !== undefined && summary?.gross_margin_percentage !== null
+                ? Number(summary.gross_margin_percentage)
+                : (revenue > 0 ? Math.round(((grossProfit / revenue) * 100) * 100) / 100 : 0));
+
+        const markup = cost > 0 ? Math.round(((grossProfit / cost) * 100) * 100) / 100 : 0;
+
+        return {
+            revenue,
+            cost,
+            grossProfit,
+            grossMargin,
+            markup,
+        };
+    }, [revenueVsCost, summary]);
+
+    // Chronologically sorted overview data (all 12 calendar months for yearly, or days 1 - 31 for daily)
+    const sortedOverviewData = useMemo(() => {
+        // When viewing yearly revenue, always construct and display all 12 calendar months in chronological order
+        if (overviewChartPeriod === 'this_year') {
+            const yearlyData = CALENDAR_MONTHS.map((m) => ({
+                month: m.short,
+                shortMonth: m.short,
+                fullMonth: m.full,
+                monthName: m.full,
+                name: m.short,
+                sales: 0,
+            }));
+
+            if (Array.isArray(overviewData)) {
+                overviewData.forEach((item) => {
+                    if (!item) return;
+                    const rawMonth = item.month ?? item.date ?? item.name;
+                    const idx = getCalendarMonthIndex(rawMonth);
+                    if (idx >= 0 && idx < 12) {
+                        const rawSales = item.sales ?? item.revenue ?? item.total ?? item.amount;
+                        const numSales = Number(rawSales);
+                        if (!isNaN(numSales) && numSales >= 0) {
+                            yearlyData[idx].sales = numSales;
+                        }
+                    }
+                });
+            }
+
+            return yearlyData;
+        }
+
+        // Daily overview (this_month, last_month)
+        if (!Array.isArray(overviewData) || overviewData.length === 0) return [];
+
+        return [...overviewData].sort((a, b) => {
+            const dayA = parseInt(a.month ?? a.day ?? a.date, 10);
+            const dayB = parseInt(b.month ?? b.day ?? b.date, 10);
+            if (!isNaN(dayA) && !isNaN(dayB)) return dayA - dayB;
+            return String(a.month).localeCompare(String(b.month));
+        });
+    }, [overviewChartPeriod, overviewData]);
+
+    // Annual sales total matching sum of monthly sales values
+    const annualSalesTotal = useMemo(() => {
+        return sortedOverviewData.reduce((acc, curr) => acc + (Number(curr.sales) || 0), 0);
+    }, [sortedOverviewData]);
+
+    // ── Current-Year Monthly Revenue vs Cost Chart Data (12 Calendar Months Grouped Bars) ──
+    const monthlyRevVsCostData = useMemo(() => {
+        if (revCostChartPeriod === 'this_year') {
+            const monthlyData = CALENDAR_MONTHS.map((m) => ({
+                month: m.short,
+                shortMonth: m.short,
+                fullMonth: m.full,
+                monthName: m.full,
+                name: m.short,
+                revenue: 0,
+                cost: 0,
+                grossProfit: 0,
+                grossMargin: 0,
+            }));
+
+            // Prioritize backend-provided monthly breakdown if available
+            const rawMonthly = Array.isArray(revenueVsCost?.monthly)
+                ? revenueVsCost.monthly
+                : Array.isArray(revenueVsCost?.data)
+                ? revenueVsCost.data
+                : [];
+
+            if (rawMonthly.length > 0) {
+                rawMonthly.forEach((item) => {
+                    if (!item) return;
+                    const idx = getCalendarMonthIndex(item.month ?? item.date ?? item.name);
+                    if (idx >= 0 && idx < 12) {
+                        const c = Number(item.cost ?? item.cogs ?? 0);
+                        if (!isNaN(c) && c >= 0) {
+                            monthlyData[idx].cost = c;
+                        }
+                        const r = Number(item.revenue ?? item.sales ?? 0);
+                        if (!isNaN(r) && r >= 0) {
+                            monthlyData[idx].revenue = r;
+                        }
+                    }
+                });
+            } else {
+                // Synchronize revenue with monthly sales revenue from overviewData
+                if (Array.isArray(sortedOverviewData) && sortedOverviewData.length === 12) {
+                    sortedOverviewData.forEach((item, idx) => {
+                        if (idx < 12) {
+                            monthlyData[idx].revenue = Number(item.sales || 0);
+                        }
+                    });
+                }
+
+                // If monthly cost breakdown is not available, attribute cost proportionally to actual sales
+                const totalYearRevenue = monthlyData.reduce((sum, d) => sum + d.revenue, 0);
+                const totalYearCost = financialMetrics.cost;
+
+                monthlyData.forEach((d) => {
+                    if (totalYearRevenue > 0 && d.revenue > 0) {
+                        d.cost = Math.round(((d.revenue / totalYearRevenue) * totalYearCost) * 100) / 100;
+                    } else {
+                        d.cost = 0;
+                    }
+                });
+
+                // Guarantee exact total cost reconciliation with zero rounding drift
+                const sumCosts = monthlyData.reduce((sum, d) => sum + d.cost, 0);
+                const drift = Math.round((totalYearCost - sumCosts) * 100) / 100;
+                if (drift !== 0) {
+                    const topRevMonth = monthlyData.reduce((prev, curr) => (curr.revenue > prev.revenue ? curr : prev), monthlyData[0]);
+                    if (topRevMonth && topRevMonth.revenue > 0) {
+                        topRevMonth.cost = Math.round((topRevMonth.cost + drift) * 100) / 100;
+                    }
+                }
+            }
+
+            // Compute monthly gross profit and margin safely
+            monthlyData.forEach((d) => {
+                d.grossProfit = Math.round((d.revenue - d.cost) * 100) / 100;
+                d.grossMargin = d.revenue > 0 ? Math.round(((d.grossProfit / d.revenue) * 100) * 100) / 100 : 0;
+            });
+
+            return monthlyData;
+        }
+
+        // For this_month or last_month daily breakdown / single period
         return [
             {
-                name: 'Revenue',
-                amount: Number(revenueVsCost.revenue || 0),
-                fill: '#2563eb',
-            },
-            {
-                name: 'Cost',
-                amount: Number(revenueVsCost.cost || 0),
-                fill: '#ef4444',
+                month: PERIOD_LABELS[revCostChartPeriod] || 'Period',
+                shortMonth: PERIOD_LABELS[revCostChartPeriod] || 'Period',
+                fullMonth: PERIOD_LABELS[revCostChartPeriod] || 'Period',
+                revenue: financialMetrics.revenue,
+                cost: financialMetrics.cost,
+                grossProfit: financialMetrics.grossProfit,
+                grossMargin: financialMetrics.grossMargin,
             },
         ];
-    }, [revenueVsCost]);
+    }, [revCostChartPeriod, sortedOverviewData, revenueVsCost, financialMetrics]);
 
     return (
         <div className="dashboard-container">
@@ -555,18 +875,33 @@ const Dashboard = () => {
                         )}
                     </div>
 
-                    {/* Live Data Badge with Refresh Trigger */}
-                    <div className="live-data-badge">
-                        <span className="live-dot" />
-                        <span>Live data</span>
-                        <button
-                            type="button"
-                            className={`live-refresh-btn ${refreshing ? 'spinning' : ''}`}
-                            onClick={() => fetchAllDashboardData(selectedStore, period, overviewChartPeriod, revCostChartPeriod, true)}
-                            title="Refresh dashboard metrics"
-                        >
-                            <BsArrowRepeat size={14} />
-                        </button>
+                    {/* Live Data Badge with Refresh Trigger & Real Sync Timestamp */}
+                    <div className="live-data-badge-wrap">
+                        <div className="live-data-badge">
+                            <span className="live-dot" />
+                            <span>Live data</span>
+                            <button
+                                type="button"
+                                className={`live-refresh-btn ${refreshing ? 'spinning' : ''}`}
+                                onClick={() => {
+                                    if (refreshing || loading) return;
+                                    fetchAllDashboardData(selectedStore, period, overviewChartPeriod, revCostChartPeriod, true);
+                                }}
+                                disabled={refreshing || loading}
+                                title={refreshing ? 'Refreshing dashboard metrics...' : 'Refresh dashboard metrics'}
+                                aria-label="Refresh dashboard metrics"
+                            >
+                                <BsArrowRepeat size={14} />
+                            </button>
+                        </div>
+                        {lastSyncTime && (
+                            <span
+                                className="last-sync-timestamp"
+                                title={`Last synchronized: ${formatDate(lastSyncTime.toISOString())}`}
+                            >
+                                Synced at {formatSyncTime(lastSyncTime)}
+                            </span>
+                        )}
                     </div>
                 </div>
             </header>
@@ -588,19 +923,21 @@ const Dashboard = () => {
                 </div>
             )}
 
-            {/* ── 4 KPI Cards Grid ── */}
-            <section className="kpi-grid" aria-label="Key Performance Indicators">
-                {/* 1. Total Revenue */}
+            {/* ── Financial Performance Summary Cards (4 Cards) ── */}
+            <section className="kpi-grid" aria-label="Financial Performance Indicators">
+                {/* 1. Total Sales / Revenue */}
                 <Link to="/reports" className="kpi-card" title="View Sales Reports">
                     <div className="kpi-icon-wrap revenue">
-                        <BsBarChartFill />
+                        <BsCashStack />
                     </div>
                     <div className="kpi-content">
-                        <span className="kpi-label">Total Revenue</span>
+                        <span className="kpi-label">Total Sales / Revenue</span>
                         {loading ? (
                             <div className="skeleton-box" style={{ width: 110, height: 26, margin: '4px 0' }} />
                         ) : (
-                            <h2 className="kpi-value">{formatCurrency(summary.total_revenue)}</h2>
+                            <h2 className="kpi-value">
+                                {formatCurrency(financialMetrics.revenue)}
+                            </h2>
                         )}
                         <span className="kpi-subtitle trend-up">
                             <BsArrowUp style={{ display: 'inline', marginRight: 3 }} />
@@ -609,53 +946,114 @@ const Dashboard = () => {
                     </div>
                 </Link>
 
-                {/* 2. Today's Sales */}
-                <Link to="/invoices" className="kpi-card" title="View Invoices & Orders">
-                    <div className="kpi-icon-wrap sales">
-                        <BsCart3 />
+                {/* 2. Total Cost (COGS) */}
+                <button
+                    type="button"
+                    className="kpi-card"
+                    title="Click to view Cost of Goods Sold (COGS) breakdown and accounting formula"
+                    onClick={() => setActiveMetricModal('cost')}
+                    aria-haspopup="dialog"
+                    aria-label={`Total Cost (COGS): ${formatCurrency(financialMetrics.cost)}. Click to view calculation and breakdown.`}
+                >
+                    <div className="kpi-icon-wrap cost">
+                        <BsTagFill />
                     </div>
                     <div className="kpi-content">
-                        <span className="kpi-label">Today's Sales</span>
+                        <span className="kpi-label">Total Cost (COGS)</span>
                         {loading ? (
                             <div className="skeleton-box" style={{ width: 90, height: 26, margin: '4px 0' }} />
                         ) : (
-                            <h2 className="kpi-value">{formatCurrency(summary.today_sales)}</h2>
+                            <h2 className="kpi-value">
+                                {formatCurrency(financialMetrics.cost)}
+                            </h2>
                         )}
                         <span className="kpi-subtitle">
-                            {todayOrdersCount} orders today
+                            Cost of Goods Sold &bull; Click for details
                         </span>
                     </div>
-                </Link>
+                </button>
 
-                {/* 3. Total Customers */}
-                <Link to="/customers" className="kpi-card" title="View Customers">
-                    <div className="kpi-icon-wrap customers">
-                        <BsPeopleFill />
+                {/* 3. Gross Profit */}
+                <button
+                    type="button"
+                    className="kpi-card"
+                    title="Click to view Gross Profit breakdown and accounting formula"
+                    onClick={() => setActiveMetricModal('profit')}
+                    aria-haspopup="dialog"
+                    aria-label={`Gross Profit: ${formatCurrency(financialMetrics.grossProfit)}. Click to view formula and breakdown.`}
+                >
+                    <div className="kpi-icon-wrap profit">
+                        <BsGraphUpArrow />
                     </div>
                     <div className="kpi-content">
-                        <span className="kpi-label">Total Customers</span>
+                        <span className="kpi-label">Gross Profit</span>
                         {loading ? (
-                            <div className="skeleton-box" style={{ width: 60, height: 26, margin: '4px 0' }} />
+                            <div className="skeleton-box" style={{ width: 90, height: 26, margin: '4px 0' }} />
                         ) : (
-                            <h2 className="kpi-value">{formatInteger(summary.total_customers)}</h2>
+                            <h2 className={`kpi-value ${financialMetrics.grossProfit >= 0 ? 'profit-positive' : 'profit-negative'}`}>
+                                {formatCurrency(financialMetrics.grossProfit)}
+                            </h2>
                         )}
-                        <span className="kpi-subtitle">Registered customers</span>
+                        <span className="kpi-subtitle">
+                            Net Sales &minus; COGS &bull; Click for details
+                        </span>
+                    </div>
+                </button>
+
+                {/* 4. Gross Profit Margin (%) */}
+                <button
+                    type="button"
+                    className="kpi-card"
+                    title="Click to view Gross Profit Margin and Markup breakdown"
+                    onClick={() => setActiveMetricModal('margin')}
+                    aria-haspopup="dialog"
+                    aria-label={`Gross Profit Margin: ${financialMetrics.grossMargin.toFixed(2)}%. Click to view formula and breakdown.`}
+                >
+                    <div className="kpi-icon-wrap margin">
+                        <BsPercent />
+                    </div>
+                    <div className="kpi-content">
+                        <span className="kpi-label">Gross Profit Margin</span>
+                        {loading ? (
+                            <div className="skeleton-box" style={{ width: 80, height: 26, margin: '4px 0' }} />
+                        ) : (
+                            <h2 className="kpi-value">
+                                {`${financialMetrics.grossMargin.toFixed(2)}%`}
+                            </h2>
+                        )}
+                        <span className="kpi-subtitle">
+                            Markup: {`${financialMetrics.markup.toFixed(2)}%`} &bull; Click for details
+                        </span>
+                    </div>
+                </button>
+            </section>
+
+            {/* ── Operational Quick Metrics Strip ── */}
+            <section className="operational-strip" aria-label="Operational Metrics">
+                <Link to="/invoices" className="op-card" title="View Invoices & Orders">
+                    <div className="op-icon sales"><BsCart3 /></div>
+                    <div className="op-info">
+                        <span className="op-label">Today's Sales</span>
+                        <span className="op-val">{formatCurrency(summary?.today_sales ?? 0)}</span>
+                        <span className="op-sub">{todayOrdersCount !== null ? `${todayOrdersCount} orders today` : 'Today'}</span>
                     </div>
                 </Link>
 
-                {/* 4. Low Stock Products */}
-                <Link to="/low-stock-alerts" className="kpi-card" title="View Low Stock Alerts">
-                    <div className="kpi-icon-wrap lowstock">
-                        <BsBoxSeam />
+                <Link to="/customers" className="op-card" title="View Customers">
+                    <div className="op-icon customers"><BsPeopleFill /></div>
+                    <div className="op-info">
+                        <span className="op-label">Total Customers</span>
+                        <span className="op-val">{formatInteger(summary?.total_customers ?? 0)}</span>
+                        <span className="op-sub">Registered customers</span>
                     </div>
-                    <div className="kpi-content">
-                        <span className="kpi-label">Low Stock Products</span>
-                        {loading ? (
-                            <div className="skeleton-box" style={{ width: 60, height: 26, margin: '4px 0' }} />
-                        ) : (
-                            <h2 className="kpi-value">{formatInteger(summary.low_stock_products)}</h2>
-                        )}
-                        <span className="kpi-subtitle">Products need attention</span>
+                </Link>
+
+                <Link to="/inventory" className="op-card" title="View Inventory">
+                    <div className="op-icon lowstock"><BsBoxSeam /></div>
+                    <div className="op-info">
+                        <span className="op-label">Low Stock Products</span>
+                        <span className="op-val">{formatInteger(summary?.low_stock_products ?? 0)}</span>
+                        <span className="op-sub">Manage inventory &rarr;</span>
                     </div>
                 </Link>
             </section>
@@ -673,7 +1071,7 @@ const Dashboard = () => {
                                 <h3 className="card-title">Monthly Sales</h3>
                                 <p className="card-subtitle">
                                     {overviewChartPeriod === 'this_year'
-                                        ? 'Sales revenue for this year (Jan - Dec)'
+                                        ? `Sales revenue for this year (January – December) • Total: ${formatCurrency(annualSalesTotal)}`
                                         : `Sales revenue for ${PERIOD_LABELS[overviewChartPeriod].toLowerCase()}`}
                                 </p>
                             </div>
@@ -694,7 +1092,7 @@ const Dashboard = () => {
                     <div className="chart-content-wrap">
                         {loading ? (
                             <div className="skeleton-box" style={{ width: '100%', height: '100%' }} />
-                        ) : overviewData.length === 0 ? (
+                        ) : sortedOverviewData.length === 0 ? (
                             <div className="empty-state-card">
                                 <BsBarChartFill className="empty-state-icon" />
                                 <p className="empty-state-title">No Sales Data</p>
@@ -703,8 +1101,8 @@ const Dashboard = () => {
                         ) : (
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart
-                                    data={overviewData}
-                                    margin={{ top: 22, right: 10, left: 10, bottom: 4 }}
+                                    data={sortedOverviewData}
+                                    margin={{ top: 36, right: 16, left: 24, bottom: 8 }}
                                 >
                                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                                     <XAxis
@@ -712,15 +1110,19 @@ const Dashboard = () => {
                                         axisLine={false}
                                         tickLine={false}
                                         tick={{ fill: '#64748b', fontSize: 11 }}
+                                        interval={0}
                                     />
                                     <YAxis
                                         axisLine={false}
                                         tickLine={false}
+                                        width={68}
                                         tick={{ fill: '#64748b', fontSize: 11 }}
-                                        tickFormatter={(v) => '₹' + Number(v).toLocaleString('en-IN')}
-                                        domain={[0, 'auto']}
+                                        tickFormatter={formatCompactCurrency}
+                                        domain={[0, (dataMax) => (dataMax > 0 ? Math.ceil(dataMax * 1.35) : 100)]}
                                     />
                                     <Tooltip
+                                        cursor={{ fill: 'rgba(37, 99, 235, 0.05)' }}
+                                        labelFormatter={(label, payload) => payload?.[0]?.payload?.fullMonth || payload?.[0]?.payload?.monthName || label}
                                         formatter={(val) => [formatCurrency(val), 'Sales Revenue']}
                                         contentStyle={{
                                             borderRadius: 8,
@@ -731,23 +1133,57 @@ const Dashboard = () => {
                                     />
                                     <Bar
                                         dataKey="sales"
-                                        fill="#2563eb"
                                         radius={[4, 4, 0, 0]}
                                         maxBarSize={32}
+                                        minPointSize={4}
                                     >
+                                        {sortedOverviewData.map((entry, index) => (
+                                            <Cell
+                                                key={`month-cell-${index}`}
+                                                fill={entry.sales > 0 ? '#2563eb' : '#e2e8f0'}
+                                                stroke={entry.sales > 0 ? '#1d4ed8' : '#cbd5e1'}
+                                                strokeWidth={1}
+                                            />
+                                        ))}
                                         <LabelList
                                             dataKey="sales"
                                             position="top"
-                                            formatter={(val) => formatCurrency(val)}
+                                            formatter={(val) => {
+                                                const num = Number(val);
+                                                return num > 0 ? formatCompactCurrency(num) : '';
+                                            }}
                                             style={{
                                                 fontSize: 10,
-                                                fill: '#0f172a',
+                                                fill: '#1e40af',
                                                 fontWeight: 700,
                                             }}
                                         />
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
+                        )}
+
+                        {/* Accessible screen-reader data table for all 12 calendar months */}
+                        {overviewChartPeriod === 'this_year' && (
+                            <div className="sr-only" aria-label="12-Month Yearly Sales Data Table">
+                                <table>
+                                    <caption>Yearly sales revenue by calendar month</caption>
+                                    <thead>
+                                        <tr>
+                                            {CALENDAR_MONTHS.map((m) => (
+                                                <th key={m.short} scope="col">{m.full}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            {sortedOverviewData.map((d) => (
+                                                <td key={d.month}>{formatCurrency(d.sales)}</td>
+                                            ))}
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
 
@@ -756,20 +1192,29 @@ const Dashboard = () => {
                             <span className="legend-dot" style={{ backgroundColor: '#2563eb' }} />
                             <span>Sales Revenue</span>
                         </span>
+                        <span className="legend-item">
+                            <span className="legend-dot" style={{ backgroundColor: '#e2e8f0', border: '1px solid #cbd5e1' }} />
+                            <span>Zero Sales (₹0.00)</span>
+                        </span>
+                        <span className="legend-item legend-total">
+                            <span>Annual Total: <strong>{formatCurrency(annualSalesTotal)}</strong></span>
+                        </span>
                     </div>
                 </div>
 
-                {/* 2. Revenue vs Cost Chart */}
-                <div className="dashboard-card">
+                {/* 2. Monthly Revenue vs Cost Grouped Bar Chart */}
+                <div className="dashboard-card" id="revenue-vs-cost-card">
                     <div className="dashboard-card-header">
                         <div className="card-title-group">
                             <div className="card-header-icon blue">
                                 <BsBarChartFill />
                             </div>
                             <div>
-                                <h3 className="card-title">Revenue vs Cost</h3>
+                                <h3 className="card-title">Monthly Revenue vs Cost</h3>
                                 <p className="card-subtitle">
-                                    Total revenue and cost for the selected period
+                                    {revCostChartPeriod === 'this_year'
+                                        ? `Monthly comparison for this calendar year (Jan – Dec) • Revenue: ${formatCurrency(financialMetrics.revenue)} | Cost: ${formatCurrency(financialMetrics.cost)}`
+                                        : `Revenue and cost comparison for ${PERIOD_LABELS[revCostChartPeriod].toLowerCase()}`}
                                 </p>
                             </div>
                         </div>
@@ -789,27 +1234,51 @@ const Dashboard = () => {
                     <div className="chart-content-wrap">
                         {loading ? (
                             <div className="skeleton-box" style={{ width: '100%', height: '100%' }} />
+                        ) : !revenueVsCost && financialMetrics.revenue === 0 && financialMetrics.cost === 0 ? (
+                            <div className="empty-state-card">
+                                <BsBarChartFill className="empty-state-icon" />
+                                <p className="empty-state-title">Revenue &amp; Cost Unavailable</p>
+                                <p className="empty-state-sub">Unable to retrieve financial metrics for the selected period.</p>
+                            </div>
                         ) : (
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart
-                                    data={revVsCostChartData}
-                                    margin={{ top: 22, right: 20, left: 20, bottom: 4 }}
+                                    data={monthlyRevVsCostData}
+                                    margin={{ top: 36, right: 32, left: 20, bottom: 8 }}
                                 >
                                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                                     <XAxis
-                                        dataKey="name"
-                                        axisLine={false}
-                                        tickLine={false}
-                                        tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }}
-                                    />
-                                    <YAxis
+                                        dataKey="month"
                                         axisLine={false}
                                         tickLine={false}
                                         tick={{ fill: '#64748b', fontSize: 11 }}
-                                        tickFormatter={(v) => '₹' + Number(v).toLocaleString('en-IN')}
-                                        domain={[0, 'auto']}
+                                        interval={0}
+                                    />
+                                    {/* Left Y-Axis for Revenue */}
+                                    <YAxis
+                                        yAxisId="revAxis"
+                                        orientation="left"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        width={64}
+                                        tick={{ fill: '#2563eb', fontSize: 11 }}
+                                        tickFormatter={formatCompactCurrency}
+                                        domain={[0, (dataMax) => (dataMax > 0 ? Math.ceil(dataMax * 1.35) : 100)]}
+                                    />
+                                    {/* Right Y-Axis for Cost (COGS) so ₹1,100 is clearly scaled and visible against ₹83,718 */}
+                                    <YAxis
+                                        yAxisId="costAxis"
+                                        orientation="right"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        width={64}
+                                        tick={{ fill: '#ef4444', fontSize: 11 }}
+                                        tickFormatter={formatCompactCurrency}
+                                        domain={[0, (dataMax) => (dataMax > 0 ? Math.ceil(dataMax * 1.35) : 50)]}
                                     />
                                     <Tooltip
+                                        cursor={{ fill: 'rgba(37, 99, 235, 0.05)' }}
+                                        labelFormatter={(label, payload) => payload?.[0]?.payload?.fullMonth || payload?.[0]?.payload?.monthName || label}
                                         formatter={(val, name) => [formatCurrency(val), name]}
                                         contentStyle={{
                                             borderRadius: 8,
@@ -819,38 +1288,133 @@ const Dashboard = () => {
                                         }}
                                     />
                                     <Bar
-                                        dataKey="amount"
-                                        radius={[4, 4, 0, 0]}
-                                        maxBarSize={48}
+                                        yAxisId="revAxis"
+                                        dataKey="revenue"
+                                        name="Revenue"
+                                        fill="#2563eb"
+                                        radius={[3, 3, 0, 0]}
+                                        maxBarSize={18}
+                                        minPointSize={5}
                                     >
                                         <LabelList
-                                            dataKey="amount"
+                                            dataKey="revenue"
                                             position="top"
-                                            formatter={(val) => formatCurrency(val)}
+                                            formatter={(val) => {
+                                                const num = Number(val);
+                                                return num > 0 ? formatCompactCurrency(num) : '';
+                                            }}
                                             style={{
-                                                fontSize: 11,
-                                                fill: '#0f172a',
+                                                fontSize: 9,
+                                                fill: '#1d4ed8',
                                                 fontWeight: 700,
                                             }}
                                         />
-                                        {revVsCostChartData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.fill} />
-                                        ))}
+                                    </Bar>
+                                    <Bar
+                                        yAxisId="costAxis"
+                                        dataKey="cost"
+                                        name="Cost (COGS)"
+                                        fill="#ef4444"
+                                        radius={[3, 3, 0, 0]}
+                                        maxBarSize={18}
+                                        minPointSize={5}
+                                    >
+                                        <LabelList
+                                            dataKey="cost"
+                                            position="top"
+                                            formatter={(val) => {
+                                                const num = Number(val);
+                                                return num > 0 ? formatCompactCurrency(num) : '';
+                                            }}
+                                            style={{
+                                                fontSize: 9,
+                                                fill: '#b91c1c',
+                                                fontWeight: 700,
+                                            }}
+                                        />
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         )}
+
+                        {/* Accessible screen-reader data table for all 12 calendar months */}
+                        {revCostChartPeriod === 'this_year' && (
+                            <div className="sr-only" aria-label="12-Month Revenue vs Cost Data Table">
+                                <table>
+                                    <caption>Monthly Revenue and Cost of Goods Sold</caption>
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Month</th>
+                                            <th scope="col">Revenue</th>
+                                            <th scope="col">Cost (COGS)</th>
+                                            <th scope="col">Gross Profit</th>
+                                            <th scope="col">Margin (%)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {monthlyRevVsCostData.map((d) => (
+                                            <tr key={d.month}>
+                                                <td>{d.fullMonth}</td>
+                                                <td>{formatCurrency(d.revenue)}</td>
+                                                <td>{formatCurrency(d.cost)}</td>
+                                                <td>{formatCurrency(d.grossProfit)}</td>
+                                                <td>{`${d.grossMargin.toFixed(2)}%`}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
                     </div>
 
-                    <div className="chart-legend">
-                        <span className="legend-item">
-                            <span className="legend-dot" style={{ backgroundColor: '#2563eb' }} />
-                            <span>Revenue</span>
-                        </span>
-                        <span className="legend-item">
-                            <span className="legend-dot" style={{ backgroundColor: '#ef4444' }} />
-                            <span>Cost</span>
-                        </span>
+                    <div className="rev-cost-footer">
+                        <div className="chart-legend">
+                            <span className="legend-item">
+                                <span className="legend-dot" style={{ backgroundColor: '#2563eb' }} />
+                                <span>Revenue (Left Axis): {formatCurrency(financialMetrics.revenue)}</span>
+                            </span>
+                            <span className="legend-item">
+                                <span className="legend-dot" style={{ backgroundColor: '#ef4444' }} />
+                                <span>Cost (Right Axis): {formatCurrency(financialMetrics.cost)}</span>
+                            </span>
+                        </div>
+
+                        <div className="rev-cost-metrics-row">
+                            <div className="rev-cost-metric">
+                                <span className="rev-cost-metric-label">Gross Profit:</span>
+                                <span
+                                    className={`rev-cost-metric-value ${
+                                        financialMetrics.grossProfit >= 0 ? 'profit-positive' : 'profit-negative'
+                                    }`}
+                                >
+                                    {formatCurrency(financialMetrics.grossProfit)}
+                                </span>
+                            </div>
+                            <div className="rev-cost-metric">
+                                <span className="rev-cost-metric-label">Gross Margin:</span>
+                                <span
+                                    className={`rev-cost-metric-value ${
+                                        financialMetrics.grossMargin >= 0 ? 'profit-positive' : 'profit-negative'
+                                    }`}
+                                >
+                                    {`${financialMetrics.grossMargin.toFixed(2)}%`}
+                                </span>
+                            </div>
+                            <div className="rev-cost-metric">
+                                <span className="rev-cost-metric-label">Markup:</span>
+                                <span
+                                    className={`rev-cost-metric-value ${
+                                        financialMetrics.markup >= 0 ? 'profit-positive' : 'profit-negative'
+                                    }`}
+                                >
+                                    {`${financialMetrics.markup.toFixed(2)}%`}
+                                </span>
+                            </div>
+                        </div>
+
+                        <p className="cost-transparency-note">
+                            Cost represents Cost of Goods Sold (COGS: quantity sold × unit cost price). Gross Profit = Net Sales Revenue − COGS (₹{financialMetrics.revenue.toFixed(2)} − ₹{financialMetrics.cost.toFixed(2)} = ₹{financialMetrics.grossProfit.toFixed(2)}). Gross Margin = (Gross Profit ÷ Net Sales Revenue) × 100 ({financialMetrics.grossMargin.toFixed(2)}%). Markup = (Gross Profit ÷ COGS) × 100 ({financialMetrics.markup.toFixed(2)}%).
+                        </p>
                     </div>
                 </div>
             </section>
@@ -894,7 +1458,7 @@ const Dashboard = () => {
                                         <th>Invoice No.</th>
                                         <th>Date &amp; Time</th>
                                         <th>Customer</th>
-                                        <th>Items</th>
+                                        <th>Items (Qty)</th>
                                         <th>Amount</th>
                                         <th>Status</th>
                                     </tr>
@@ -903,9 +1467,12 @@ const Dashboard = () => {
                                     {transactions.map((ord) => {
                                         const invoiceNo = ord.order_number || ord.invoice_number || `ORD-${ord.id}`;
                                         const customerName = ord.customer_name || ord.customer?.name || 'Walk-in Customer';
-                                        const itemsCount = Array.isArray(ord.items) && ord.items.length > 0
+                                        const distinctCount = Array.isArray(ord.items) && ord.items.length > 0
                                             ? ord.items.length
                                             : 1;
+                                        const totalUnits = Array.isArray(ord.items) && ord.items.length > 0
+                                            ? ord.items.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
+                                            : (ord.quantity || 1);
                                         const statusStr = (ord.status || ord.payment_status || 'completed').toLowerCase();
 
                                         return (
@@ -917,7 +1484,11 @@ const Dashboard = () => {
                                                 </td>
                                                 <td>{formatDate(ord.created_at)}</td>
                                                 <td>{customerName}</td>
-                                                <td>{itemsCount}</td>
+                                                <td>
+                                                    {totalUnits > distinctCount
+                                                        ? `${totalUnits} units (${distinctCount} item${distinctCount > 1 ? 's' : ''})`
+                                                        : `${totalUnits} unit${totalUnits > 1 ? 's' : ''}`}
+                                                </td>
                                                 <td className="table-amount">{formatCurrency(ord.total_amount)}</td>
                                                 <td>
                                                     <span className={`status-pill ${statusStr}`}>
@@ -1093,14 +1664,206 @@ const Dashboard = () => {
                         {notificationItems.length > 0 && (
                             <div className="dashboard-notification-footer">
                                 <Link
-                                    to="/low-stock-alerts"
+                                    to="/inventory"
                                     className="dashboard-notification-footer-link"
                                     onClick={() => setIsNotificationOpen(false)}
                                 >
-                                    View all inventory alerts
+                                    View inventory items &amp; alerts
                                 </Link>
                             </div>
                         )}
+                    </div>,
+                    document.body
+                )}
+
+            {/* ── Financial Metric Details Modal ── */}
+            {activeMetricModal &&
+                typeof document !== 'undefined' &&
+                createPortal(
+                    <div
+                        className="financial-modal-backdrop"
+                        onClick={() => setActiveMetricModal(null)}
+                        role="presentation"
+                    >
+                        <div
+                            className="financial-modal-dialog"
+                            role="dialog"
+                            aria-modal="true"
+                            aria-labelledby="financial-modal-title"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Modal Header */}
+                            <div className="financial-modal-header">
+                                <div className="financial-modal-title-group">
+                                    <div className={`financial-modal-icon-wrap ${activeMetricModal}`}>
+                                        {activeMetricModal === 'cost' && <BsTagFill />}
+                                        {activeMetricModal === 'profit' && <BsGraphUpArrow />}
+                                        {activeMetricModal === 'margin' && <BsPercent />}
+                                    </div>
+                                    <div>
+                                        <h3 id="financial-modal-title" className="financial-modal-title">
+                                            {activeMetricModal === 'cost' && 'Total Cost of Goods Sold (COGS)'}
+                                            {activeMetricModal === 'profit' && 'Gross Profit Performance'}
+                                            {activeMetricModal === 'margin' && 'Gross Profit Margin & Markup'}
+                                        </h3>
+                                        <span className="financial-modal-badge">
+                                            {PERIOD_LABELS[period]} &bull; {selectedStoreLabel}
+                                        </span>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="financial-modal-close-btn"
+                                    onClick={() => setActiveMetricModal(null)}
+                                    aria-label="Close metric details modal"
+                                >
+                                    <BsX size={20} />
+                                </button>
+                            </div>
+
+                            {/* Modal Body */}
+                            <div className="financial-modal-body">
+                                {/* Large Metric Value Box */}
+                                <div className="financial-modal-value-card">
+                                    <span className="financial-modal-value-label">Current Metric Value</span>
+                                    <div className="financial-modal-primary-value">
+                                        {activeMetricModal === 'cost' && formatCurrency(financialMetrics.cost)}
+                                        {activeMetricModal === 'profit' && (
+                                            <span className={financialMetrics.grossProfit >= 0 ? 'profit-positive' : 'profit-negative'}>
+                                                {formatCurrency(financialMetrics.grossProfit)}
+                                            </span>
+                                        )}
+                                        {activeMetricModal === 'margin' && (
+                                            <div className="financial-modal-dual-rates">
+                                                <div>
+                                                    <span className="rate-num">{financialMetrics.grossMargin.toFixed(2)}%</span>
+                                                    <span className="rate-sub">Margin on Sales</span>
+                                                </div>
+                                                <div className="rate-divider" />
+                                                <div>
+                                                    <span className="rate-num">{financialMetrics.markup.toFixed(2)}%</span>
+                                                    <span className="rate-sub">Markup on Cost</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Accounting Formula & Calculation Box */}
+                                <div className="financial-modal-formula-box">
+                                    <h4 className="financial-modal-section-title">Accounting Formula &amp; Rules</h4>
+                                    {activeMetricModal === 'cost' && (
+                                        <>
+                                            <div className="financial-modal-formula-tag">
+                                                <code>COGS = &Sigma; (Sold Quantity &times; Unit Cost Price)</code>
+                                            </div>
+                                            <p className="financial-modal-desc">
+                                                COGS represents the direct procurement and manufacturing cost of inventory sold in completed customer orders. Calculated by querying order line items with variant-specific cost prices (falling back to product cost price).
+                                            </p>
+                                            <div className="financial-modal-calc-row">
+                                                <span>Total Net Sales Revenue:</span>
+                                                <strong>{formatCurrency(financialMetrics.revenue)}</strong>
+                                            </div>
+                                            <div className="financial-modal-calc-row">
+                                                <span>Total Cost of Goods Sold (COGS):</span>
+                                                <strong style={{ color: '#dc2626' }}>{formatCurrency(financialMetrics.cost)}</strong>
+                                            </div>
+                                            <div className="financial-modal-calc-row">
+                                                <span>Cost Ratio (% of Sales):</span>
+                                                <strong>
+                                                    {financialMetrics.revenue > 0
+                                                        ? `${((financialMetrics.cost / financialMetrics.revenue) * 100).toFixed(2)}%`
+                                                        : '0.00%'}
+                                                </strong>
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {activeMetricModal === 'profit' && (
+                                        <>
+                                            <div className="financial-modal-formula-tag">
+                                                <code>Gross Profit = Net Sales Revenue &minus; Cost of Goods Sold</code>
+                                            </div>
+                                            <p className="financial-modal-desc">
+                                                Gross profit reflects revenue retained after paying the direct costs of goods sold, before operating expenses (OPEX), rent, utilities, employee payroll, and tax deductions.
+                                            </p>
+                                            <div className="financial-modal-calc-row">
+                                                <span>Net Sales Revenue:</span>
+                                                <strong>{formatCurrency(financialMetrics.revenue)}</strong>
+                                            </div>
+                                            <div className="financial-modal-calc-row">
+                                                <span>&minus; Cost of Goods Sold (COGS):</span>
+                                                <strong style={{ color: '#dc2626' }}>&minus; {formatCurrency(financialMetrics.cost)}</strong>
+                                            </div>
+                                            <div className="financial-modal-calc-row total-highlight">
+                                                <span>= Calculated Gross Profit:</span>
+                                                <strong className={financialMetrics.grossProfit >= 0 ? 'profit-positive' : 'profit-negative'}>
+                                                    {formatCurrency(financialMetrics.grossProfit)}
+                                                </strong>
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {activeMetricModal === 'margin' && (
+                                        <>
+                                            <div className="financial-modal-formula-tag">
+                                                <code>Gross Margin (%) = (Gross Profit &divide; Net Sales Revenue) &times; 100</code>
+                                            </div>
+                                            <p className="financial-modal-desc">
+                                                Gross Margin indicates the share of sales rupees kept as profit. Markup indicates the percentage added above the cost price to achieve the selling price.
+                                            </p>
+                                            <div className="financial-modal-calc-row">
+                                                <span>Gross Profit Denominator (Revenue):</span>
+                                                <strong>{formatCurrency(financialMetrics.revenue)}</strong>
+                                            </div>
+                                            <div className="financial-modal-calc-row">
+                                                <span>Gross Profit Numerator:</span>
+                                                <strong>{formatCurrency(financialMetrics.grossProfit)}</strong>
+                                            </div>
+                                            <div className="financial-modal-calc-row total-highlight">
+                                                <span>Gross Profit Margin:</span>
+                                                <strong className="profit-positive">{financialMetrics.grossMargin.toFixed(2)}%</strong>
+                                            </div>
+                                            <div className="financial-modal-calc-row">
+                                                <span>Markup Ratio ((Profit &divide; Cost) &times; 100):</span>
+                                                <strong>{financialMetrics.markup.toFixed(2)}%</strong>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Modal Actions */}
+                            <div className="financial-modal-footer">
+                                <button
+                                    type="button"
+                                    className="financial-modal-btn secondary"
+                                    onClick={scrollToRevCostChart}
+                                >
+                                    <BsBarChartFill style={{ marginRight: 6 }} />
+                                    <span>View in Revenue vs Cost Chart</span>
+                                </button>
+                                {activeMetricModal === 'cost' ? (
+                                    <Link
+                                        to="/purchases"
+                                        className="financial-modal-btn primary"
+                                        onClick={() => setActiveMetricModal(null)}
+                                    >
+                                        <span>View Purchase Orders</span>
+                                        <BsArrowRight style={{ marginLeft: 6 }} />
+                                    </Link>
+                                ) : (
+                                    <Link
+                                        to="/reports"
+                                        className="financial-modal-btn primary"
+                                        onClick={() => setActiveMetricModal(null)}
+                                    >
+                                        <span>View Financial Reports</span>
+                                        <BsArrowRight style={{ marginLeft: 6 }} />
+                                    </Link>
+                                )}
+                            </div>
+                        </div>
                     </div>,
                     document.body
                 )}
