@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { getWarehouses, getWarehouseDashboard, getWarehouseById } from '../../api/warehouseApi';
 import {
     BsSearch, BsPlus, BsDownload, BsFilter, BsCheckCircleFill, BsClockHistory,
     BsXCircleFill, BsPrinter, BsUpcScan, BsBuildings, BsTruck, BsArrowRepeat,
@@ -374,53 +375,817 @@ export const BarcodePage = () => {
 /* ─────────────────────────────────────────────────────────────
    5. INVENTORY: Warehouses
 ───────────────────────────────────────────────────────────── */
+const extractWarehouses = (data) => {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.data)) return data.data;
+    if (Array.isArray(data?.items)) return data.items;
+    if (Array.isArray(data?.warehouses)) return data.warehouses;
+    if (Array.isArray(data?.data?.items)) return data.data.items;
+    if (Array.isArray(data?.data?.warehouses)) return data.data.warehouses;
+    if (Array.isArray(data?.results)) return data.results;
+    return [];
+};
+
+const formatWarehouseCount = (val) => {
+    if (val === null || val === undefined || val === "" || isNaN(Number(val))) return 0;
+    return Number(val);
+};
+
+const formatWarehouseStockUnits = (val) => {
+    if (val === null || val === undefined || val === "" || isNaN(Number(val))) return "0";
+    return Number(val).toLocaleString("en-IN");
+};
+
+const formatWarehouseStockValue = (val) => {
+    if (val === null || val === undefined || val === "" || isNaN(Number(val))) return "₹0.00";
+    return `₹${Number(val).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 export const WarehousesPage = () => {
+    const [warehouses, setWarehouses] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const [dashboard, setDashboard] = useState(null);
+    const [dashboardLoading, setDashboardLoading] = useState(true);
+    const [dashboardError, setDashboardError] = useState(null);
+
+    const [selectedWarehouseId, setSelectedWarehouseId] = useState(null);
+    const [selectedWarehouse, setSelectedWarehouse] = useState(null);
+    const [selectedWarehouseLoading, setSelectedWarehouseLoading] = useState(false);
+    const [selectedWarehouseError, setSelectedWarehouseError] = useState(null);
+
+    const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [storeFilter, setStoreFilter] = useState("all");
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(50);
+
+    const hasFetchedRef = useRef(false);
+
+    const fetchWarehouses = async (overrideParams = {}) => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const activeSearch = overrideParams.search !== undefined ? overrideParams.search : search;
+            const activeStatus = overrideParams.statusFilter !== undefined ? overrideParams.statusFilter : statusFilter;
+            const activeStore = overrideParams.storeFilter !== undefined ? overrideParams.storeFilter : storeFilter;
+            const activePage = overrideParams.page !== undefined ? overrideParams.page : page;
+            const activePageSize = overrideParams.pageSize !== undefined ? overrideParams.pageSize : pageSize;
+
+            const params = {};
+
+            if (activeSearch && String(activeSearch).trim() !== "") {
+                params.search = String(activeSearch).trim();
+            }
+
+            if (activeStatus === "active") {
+                params.is_active = true;
+            } else if (activeStatus === "inactive") {
+                params.is_active = false;
+            }
+
+            if (activeStore && activeStore !== "all") {
+                params.store_id = Number(activeStore);
+            }
+
+            if (overrideParams.page !== undefined || activeSearch || activeStatus !== "all" || activeStore !== "all") {
+                params.page = activePage;
+                params.page_size = activePageSize;
+            }
+
+            const data = await getWarehouses(params);
+            const list = extractWarehouses(data);
+            setWarehouses(list);
+        } catch (err) {
+            console.error("Failed to fetch warehouses:", err);
+            const errorDetail =
+                err?.response?.data?.detail?.message ||
+                (typeof err?.response?.data?.detail === "string" ? err.response.data.detail : null) ||
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to load warehouses";
+            setError(errorDetail);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSearchSubmit = (e) => {
+        if (e) e.preventDefault();
+        fetchWarehouses({ page: 1 });
+    };
+
+    const handleResetFilters = () => {
+        setSearch("");
+        setStatusFilter("all");
+        setStoreFilter("all");
+        setPage(1);
+        fetchWarehouses({ search: "", statusFilter: "all", storeFilter: "all", page: 1 });
+    };
+
+    const fetchDashboard = async () => {
+        try {
+            setDashboardLoading(true);
+            setDashboardError(null);
+            const data = await getWarehouseDashboard();
+            setDashboard(data);
+        } catch (err) {
+            console.error("Failed to fetch warehouse dashboard:", err);
+            const errorDetail =
+                err?.response?.data?.detail?.message ||
+                (typeof err?.response?.data?.detail === "string" ? err.response.data.detail : null) ||
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to load dashboard counts";
+            setDashboardError(errorDetail);
+        } finally {
+            setDashboardLoading(false);
+        }
+    };
+
+    const handleViewWarehouse = async (id) => {
+        if (!id) return;
+        setSelectedWarehouseId(id);
+        setSelectedWarehouseLoading(true);
+        setSelectedWarehouseError(null);
+        setSelectedWarehouse(null);
+        try {
+            const data = await getWarehouseById(id);
+            setSelectedWarehouse(data?.data || data);
+        } catch (err) {
+            console.error(`Failed to fetch warehouse #${id}:`, err);
+            const errorDetail =
+                err?.response?.data?.detail?.message ||
+                (typeof err?.response?.data?.detail === "string" ? err.response.data.detail : null) ||
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to load warehouse details";
+            setSelectedWarehouseError(errorDetail);
+        } finally {
+            setSelectedWarehouseLoading(false);
+        }
+    };
+
+    const handleCloseModal = () => {
+        setSelectedWarehouseId(null);
+        setSelectedWarehouse(null);
+        setSelectedWarehouseError(null);
+    };
+
+    const handleRefresh = () => {
+        fetchWarehouses();
+        fetchDashboard();
+    };
+
+    useEffect(() => {
+        if (hasFetchedRef.current) return;
+        hasFetchedRef.current = true;
+        fetchWarehouses();
+        fetchDashboard();
+    }, []);
+
+    const dashboardData = dashboard?.data ?? dashboard;
+
+    const totalWarehouses = dashboardLoading
+        ? "..."
+        : (dashboardData?.total_warehouses !== undefined && dashboardData?.total_warehouses !== null)
+            ? formatWarehouseCount(dashboardData.total_warehouses)
+            : 0;
+
+    const activeWarehouses = dashboardLoading
+        ? "..."
+        : (dashboardData?.active_warehouses !== undefined && dashboardData?.active_warehouses !== null)
+            ? formatWarehouseCount(dashboardData.active_warehouses)
+            : 0;
+
+    const inactiveWarehouses = dashboardLoading
+        ? "..."
+        : (dashboardData?.inactive_warehouses !== undefined && dashboardData?.inactive_warehouses !== null)
+            ? formatWarehouseCount(dashboardData.inactive_warehouses)
+            : 0;
+
+    const totalStockUnits = dashboardLoading
+        ? "..."
+        : (dashboardData?.total_stock_units !== undefined && dashboardData?.total_stock_units !== null)
+            ? formatWarehouseStockUnits(dashboardData.total_stock_units)
+            : "0";
+
+    const totalStockValue = dashboardLoading
+        ? "..."
+        : (dashboardData?.total_stock_value !== undefined && dashboardData?.total_stock_value !== null)
+            ? formatWarehouseStockValue(dashboardData.total_stock_value)
+            : "₹0.00";
+
     return (
         <ModuleContainer
             title="Warehouses & Stock Locations"
             subtitle="Central depots, store stockrooms, transit hubs and multi-location inventory levels"
             icon={<BsBuildings />}
             actionBtn={
-                <button style={{
-                    background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                    borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                }}>
-                    <BsPlus size={18} /> Add Warehouse
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button
+                        onClick={handleRefresh}
+                        disabled={loading || dashboardLoading}
+                        title="Refresh Warehouses"
+                        style={{
+                            background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', padding: '10px 14px',
+                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: (loading || dashboardLoading) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                        }}
+                    >
+                        <BsArrowRepeat size={16} /> Refresh
+                    </button>
+                    <button style={{
+                        background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
+                        borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                    }}>
+                        <BsPlus size={18} /> Add Warehouse
+                    </button>
+                </div>
             }
         >
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-                {[
-                    { name: 'Central Depot - North Zone', code: 'WH-CENTRAL-01', location: 'Industrial Area Phase 2, Delhi', items: '14,850 SKUs', value: '₹42,80,000', manager: 'Rajesh Nair', status: 'Operational' },
-                    { name: 'Main Retail Outlet Stockroom', code: 'WH-STORE-MAIN', location: 'Mall Road, Connaught Place', items: '3,420 SKUs', value: '₹14,50,000', manager: 'Sanjay Rawat', status: 'Operational' },
-                    { name: 'West Zone Hub & Fulfillment', code: 'WH-WEST-02', location: 'Bhiwandi Logistic Park, Mumbai', items: '9,200 SKUs', value: '₹28,10,000', manager: 'Anil Desai', status: 'Operational' },
-                ].map((wh, i) => (
-                    <div key={i} style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 22, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                            <div>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', background: '#eef2ff', padding: '2px 8px', borderRadius: 4 }}>{wh.code}</span>
-                                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '6px 0 2px 0' }}>{wh.name}</h3>
-                                <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>{wh.location}</p>
+            {/* Dashboard Stat Cards */}
+            <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
+                <StatCard
+                    label="Total Warehouses"
+                    value={totalWarehouses}
+                    sub="Registered stock locations"
+                    color="#6366f1"
+                />
+                <StatCard
+                    label="Active Warehouses"
+                    value={activeWarehouses}
+                    sub="Operational & ready"
+                    color="#10b981"
+                />
+                <StatCard
+                    label="Inactive Warehouses"
+                    value={inactiveWarehouses}
+                    sub={Number(inactiveWarehouses) > 0 ? "Requires attention" : "All operational"}
+                    color={Number(inactiveWarehouses) > 0 ? "#ef4444" : "#6b7280"}
+                />
+                <StatCard
+                    label="Total Stock Units"
+                    value={totalStockUnits}
+                    sub="Units in warehouses"
+                    color="#0ea5e9"
+                />
+                <StatCard
+                    label="Total Stock Value"
+                    value={totalStockValue}
+                    sub="Inventory valuation"
+                    color="#8b5cf6"
+                />
+            </div>
+
+            {dashboardError && (
+                <div style={{
+                    fontSize: 12.5,
+                    color: '#b91c1c',
+                    background: '#fef2f2',
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    border: '1px solid #fee2e2',
+                    marginBottom: 20
+                }}>
+                    Note: Could not refresh dashboard counts ({dashboardError}).
+                </div>
+            )}
+
+            {/* Warehouse Search and Filter Controls */}
+            <form
+                onSubmit={handleSearchSubmit}
+                style={{
+                    background: '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 12,
+                    padding: '14px 18px',
+                    marginBottom: 20,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                }}
+            >
+                <div style={{ position: 'relative', flex: '1 1 240px' }}>
+                    <BsSearch style={{ position: 'absolute', left: 12, top: 11, color: '#9ca3af' }} />
+                    <input
+                        type="text"
+                        placeholder="Search by name, code, ID..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        style={{
+                            width: '100%',
+                            padding: '8px 12px 8px 36px',
+                            border: '1px solid #d1d5db',
+                            borderRadius: 8,
+                            fontSize: 13.5,
+                            outline: 'none',
+                            color: '#111827',
+                            boxSizing: 'border-box'
+                        }}
+                    />
+                </div>
+
+                <div style={{ flex: '0 0 auto', minWidth: 140 }}>
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setStatusFilter(val);
+                            fetchWarehouses({ statusFilter: val, page: 1 });
+                        }}
+                        style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            border: '1px solid #d1d5db',
+                            borderRadius: 8,
+                            fontSize: 13,
+                            color: '#374151',
+                            background: '#fff',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        <option value="all">All Status</option>
+                        <option value="active">Active Only</option>
+                        <option value="inactive">Inactive Only</option>
+                    </select>
+                </div>
+
+                <div style={{ flex: '0 0 auto', minWidth: 140 }}>
+                    <input
+                        type="number"
+                        placeholder="Store ID (e.g. 2)"
+                        value={storeFilter === 'all' ? '' : storeFilter}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setStoreFilter(val === '' ? 'all' : val);
+                        }}
+                        style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            border: '1px solid #d1d5db',
+                            borderRadius: 8,
+                            fontSize: 13,
+                            color: '#374151',
+                            boxSizing: 'border-box'
+                        }}
+                    />
+                </div>
+
+                <button
+                    type="submit"
+                    disabled={loading}
+                    style={{
+                        background: '#6366f1',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '8px 16px',
+                        borderRadius: 8,
+                        fontWeight: 600,
+                        fontSize: 13,
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                    }}
+                >
+                    <BsSearch size={13} /> Filter
+                </button>
+
+                {(search.trim() || statusFilter !== 'all' || storeFilter !== 'all') && (
+                    <button
+                        type="button"
+                        onClick={handleResetFilters}
+                        style={{
+                            background: '#f3f4f6',
+                            color: '#4b5563',
+                            border: '1px solid #d1d5db',
+                            padding: '8px 14px',
+                            borderRadius: 8,
+                            fontWeight: 600,
+                            fontSize: 13,
+                            cursor: 'pointer',
+                        }}
+                    >
+                        Clear
+                    </button>
+                )}
+            </form>
+
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280' }}>
+                    <div style={{
+                        display: 'inline-block',
+                        width: 32,
+                        height: 32,
+                        border: '3px solid #e5e7eb',
+                        borderTopColor: '#6366f1',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                        marginBottom: 12
+                    }} />
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>Loading warehouses...</p>
+                </div>
+            ) : error ? (
+                <div style={{
+                    background: '#fef2f2',
+                    border: '1px solid #fee2e2',
+                    borderRadius: 12,
+                    padding: '20px 24px',
+                    color: '#dc2626',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 14
+                }}>
+                    <BsExclamationTriangle size={22} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                        <strong style={{ display: 'block', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
+                            Unable to load warehouses
+                        </strong>
+                        <p style={{ fontSize: 13, color: '#b91c1c', margin: '0 0 12px 0' }}>{error}</p>
+                        <button
+                            onClick={() => fetchWarehouses()}
+                            style={{
+                                background: '#dc2626',
+                                color: '#ffffff',
+                                border: 'none',
+                                padding: '6px 14px',
+                                borderRadius: 6,
+                                fontSize: 12.5,
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Try Again
+                        </button>
+                    </div>
+                </div>
+            ) : warehouses.length === 0 ? (
+                <div style={{
+                    textAlign: 'center',
+                    padding: '48px 20px',
+                    background: '#fff',
+                    borderRadius: 12,
+                    border: '1px solid #e5e7eb',
+                    color: '#6b7280'
+                }}>
+                    {search.trim() || statusFilter !== 'all' || storeFilter !== 'all' ? (
+                        <>
+                            <BsSearch size={34} style={{ color: '#9ca3af', marginBottom: 12 }} />
+                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '0 0 6px 0' }}>
+                                No Matching Warehouses Found
+                            </h3>
+                            <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#6b7280' }}>
+                                No active or registered warehouses matched your search criteria {storeFilter !== 'all' ? `for Store #${storeFilter}` : ''} (HTTP 200 OK with 0 records).
+                            </p>
+                            <button
+                                type="button"
+                                onClick={handleResetFilters}
+                                style={{
+                                    background: '#f3f4f6',
+                                    color: '#374151',
+                                    border: '1px solid #d1d5db',
+                                    padding: '7px 16px',
+                                    borderRadius: 8,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Clear Search & Filters
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <BsBuildings size={36} style={{ color: '#9ca3af', marginBottom: 12 }} />
+                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '0 0 6px 0' }}>
+                                No Warehouses Found
+                            </h3>
+                            <p style={{ margin: 0, fontSize: 13 }}>There are currently no warehouses registered in this tenant.</p>
+                        </>
+                    )}
+                </div>
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+                    {warehouses.map((wh, i) => {
+                        const isActive = wh.is_active !== false;
+                        const code = wh.code || `WH-${wh.id || (i + 1)}`;
+                        const name = wh.name || `Warehouse #${wh.id}`;
+                        const address = wh.address || wh.location || "Address not provided";
+                        const storeId = wh.store_id ?? wh.storeId;
+                        const storeName = wh.store_name || wh.storeName;
+                        const tenantId = wh.tenant_id ?? wh.tenantId;
+
+                        return (
+                            <div
+                                key={wh.id || i}
+                                style={{
+                                    background: '#fff',
+                                    borderRadius: 12,
+                                    border: '1px solid #e5e7eb',
+                                    padding: 22,
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                                    <div>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', background: '#eef2ff', padding: '2px 8px', borderRadius: 4 }}>
+                                            {code}
+                                        </span>
+                                        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '6px 0 2px 0' }}>
+                                            {name}
+                                        </h3>
+                                        <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+                                            {address}
+                                        </p>
+                                    </div>
+                                    <span style={{
+                                        background: isActive ? '#ecfdf5' : '#fef2f2',
+                                        color: isActive ? '#059669' : '#dc2626',
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        padding: '3px 8px',
+                                        borderRadius: 10
+                                    }}>
+                                        {isActive ? (wh.status || 'Active') : 'Inactive'}
+                                    </span>
+                                </div>
+                                <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                    <div>
+                                        <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Store</span>
+                                        <strong style={{ fontSize: 13, color: '#111827', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={storeName || (storeId != null ? `Store #${storeId}` : '-')}>
+                                            {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : (wh.items || '-'))}
+                                        </strong>
+                                    </div>
+                                    <div>
+                                        <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Tenant ID</span>
+                                        <strong style={{ fontSize: 14, color: '#10b981' }}>
+                                            {tenantId !== undefined && tenantId !== null ? `#${tenantId}` : (wh.value || '-')}
+                                        </strong>
+                                    </div>
+                                    <div>
+                                        <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Created At</span>
+                                        <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>
+                                            {wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '-'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Updated At</span>
+                                        <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>
+                                            {wh.updated_at ? new Date(wh.updated_at).toLocaleDateString() : (wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '-')}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f3f4f6' }}>
+                                    <button
+                                        onClick={() => handleViewWarehouse(wh.id)}
+                                        style={{
+                                            width: '100%',
+                                            background: '#f8fafc',
+                                            color: '#4f46e5',
+                                            border: '1px solid #e0e7ff',
+                                            padding: '7px 12px',
+                                            borderRadius: 8,
+                                            fontSize: 12.5,
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: 6
+                                        }}
+                                    >
+                                        View Details
+                                    </button>
+                                </div>
                             </div>
-                            <span style={{ background: '#ecfdf5', color: '#059669', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 10 }}>{wh.status}</span>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Warehouse Details Modal (GET /api/v1/warehouses/{id}) */}
+            {selectedWarehouseId && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    padding: 20,
+                    backdropFilter: 'blur(3px)'
+                }}>
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: 14,
+                        width: '100%',
+                        maxWidth: 520,
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        border: '1px solid #e5e7eb',
+                        overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            padding: '18px 24px',
+                            borderBottom: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: '#fafafa'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 8,
+                                    background: '#eef2ff',
+                                    color: '#6366f1',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BsBuildings size={18} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                        Warehouse Details #{selectedWarehouseId}
+                                    </h3>
+                                    <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                        GET /api/v1/warehouses/{selectedWarehouseId}
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleCloseModal}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    fontSize: 20,
+                                    lineHeight: 1,
+                                    cursor: 'pointer',
+                                    color: '#9ca3af',
+                                    padding: '4px 8px'
+                                }}
+                            >
+                                ✕
+                            </button>
                         </div>
-                        <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                            <div>
-                                <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Stored SKUs</span>
-                                <strong style={{ fontSize: 14, color: '#111827' }}>{wh.items}</strong>
-                            </div>
-                            <div>
-                                <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Inventory Value</span>
-                                <strong style={{ fontSize: 14, color: '#10b981' }}>{wh.value}</strong>
-                            </div>
-                            <div style={{ gridColumn: 'span 2', marginTop: 4 }}>
-                                <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Warehouse Manager</span>
-                                <span style={{ fontSize: 12.5, color: '#374151', fontWeight: 600 }}>{wh.manager}</span>
-                            </div>
+
+                        <div style={{ padding: '24px' }}>
+                            {selectedWarehouseLoading ? (
+                                <div style={{ textAlign: 'center', padding: '36px 0', color: '#6b7280' }}>
+                                    <div style={{
+                                        display: 'inline-block',
+                                        width: 32,
+                                        height: 32,
+                                        border: '3px solid #e5e7eb',
+                                        borderTopColor: '#6366f1',
+                                        borderRadius: '50%',
+                                        animation: 'spin 1s linear infinite',
+                                        marginBottom: 12
+                                    }} />
+                                    <p style={{ margin: 0, fontSize: 13.5, fontWeight: 500 }}>Fetching warehouse details...</p>
+                                </div>
+                            ) : selectedWarehouseError ? (
+                                <div style={{
+                                    background: '#fef2f2',
+                                    border: '1px solid #fee2e2',
+                                    borderRadius: 10,
+                                    padding: 16,
+                                    color: '#dc2626'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                        <BsExclamationTriangle size={20} style={{ marginTop: 2, flexShrink: 0 }} />
+                                        <div>
+                                            <strong style={{ display: 'block', fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                                                Error Fetching Warehouse Details
+                                            </strong>
+                                            <p style={{ fontSize: 12.5, margin: '0 0 12px 0', color: '#b91c1c' }}>
+                                                {selectedWarehouseError}
+                                            </p>
+                                            <button
+                                                onClick={() => handleViewWarehouse(selectedWarehouseId)}
+                                                style={{
+                                                    background: '#dc2626',
+                                                    color: '#ffffff',
+                                                    border: 'none',
+                                                    padding: '6px 12px',
+                                                    borderRadius: 6,
+                                                    fontSize: 12,
+                                                    fontWeight: 600,
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Try Again
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : selectedWarehouse ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            color: '#6366f1',
+                                            background: '#eef2ff',
+                                            padding: '3px 10px',
+                                            borderRadius: 6
+                                        }}>
+                                            {selectedWarehouse.code || `WH-${selectedWarehouse.id}`}
+                                        </span>
+                                        <span style={{
+                                            fontSize: 11.5,
+                                            fontWeight: 700,
+                                            padding: '3px 10px',
+                                            borderRadius: 10,
+                                            background: selectedWarehouse.is_active ? '#ecfdf5' : '#fef2f2',
+                                            color: selectedWarehouse.is_active ? '#059669' : '#dc2626'
+                                        }}>
+                                            {selectedWarehouse.is_active ? 'Active' : 'Inactive'}
+                                        </span>
+                                    </div>
+
+                                    <div style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: 10, border: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                                            {selectedWarehouse.name}
+                                        </h4>
+                                        <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
+                                            {selectedWarehouse.address || 'Address not specified'}
+                                        </p>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Warehouse ID</span>
+                                            <strong style={{ fontSize: 14, color: '#0f172a' }}>#{selectedWarehouse.id}</strong>
+                                        </div>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Tenant ID</span>
+                                            <strong style={{ fontSize: 14, color: '#10b981' }}>#{selectedWarehouse.tenant_id}</strong>
+                                        </div>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Store Name</span>
+                                            <strong style={{ fontSize: 13.5, color: '#0f172a' }}>
+                                                {selectedWarehouse.store_name || '-'}
+                                            </strong>
+                                        </div>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Store ID</span>
+                                            <strong style={{ fontSize: 14, color: '#0f172a' }}>
+                                                {selectedWarehouse.store_id != null ? `#${selectedWarehouse.store_id}` : 'None (Unassigned)'}
+                                            </strong>
+                                        </div>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Created At</span>
+                                            <span style={{ fontSize: 12, color: '#334155', fontWeight: 600 }}>
+                                                {selectedWarehouse.created_at ? new Date(selectedWarehouse.created_at).toLocaleString() : '-'}
+                                            </span>
+                                        </div>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Updated At</span>
+                                            <span style={{ fontSize: 12, color: '#334155', fontWeight: 600 }}>
+                                                {selectedWarehouse.updated_at ? new Date(selectedWarehouse.updated_at).toLocaleString() : (selectedWarehouse.created_at ? new Date(selectedWarehouse.created_at).toLocaleString() : '-')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+
+                        <div style={{
+                            padding: '14px 24px',
+                            borderTop: '1px solid #e5e7eb',
+                            background: '#fafafa',
+                            display: 'flex',
+                            justifyContent: 'flex-end'
+                        }}>
+                            <button
+                                onClick={handleCloseModal}
+                                style={{
+                                    background: '#f3f4f6',
+                                    color: '#374151',
+                                    border: '1px solid #d1d5db',
+                                    padding: '8px 18px',
+                                    borderRadius: 8,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Close
+                            </button>
                         </div>
                     </div>
-                ))}
-            </div>
+                </div>
+            )}
         </ModuleContainer>
     );
 };

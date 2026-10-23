@@ -1,8 +1,13 @@
 import axios from "axios";
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "../utils/tokenStorage";
 
+const rawBaseURL = import.meta.env.VITE_API_URL || "https://api-testing.myretailos.com/api/v1";
+const normalizedBaseURL = rawBaseURL.endsWith("/api/v1")
+  ? rawBaseURL
+  : `${rawBaseURL.replace(/\/+$/, "")}/api/v1`;
+
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "https://api-testing.myretailos.com/api/v1",
+  baseURL: normalizedBaseURL,
 });
 
 let isRefreshing = false;
@@ -25,6 +30,14 @@ const processQueue = (error, token = null) => {
 axiosInstance.interceptors.request.use(
   (config) => {
     const token = getAccessToken();
+
+    // Deduplicate /api/v1 prefix if baseURL already contains /api/v1
+    if (config.baseURL && config.url) {
+      const normalizedBase = config.baseURL.replace(/\/+$/, "");
+      if (normalizedBase.endsWith("/api/v1") && config.url.startsWith("/api/v1")) {
+        config.url = config.url.replace(/^\/api\/v1/, "") || "/";
+      }
+    }
 
     console.log("API Request:", {
       method: config.method?.toUpperCase(),

@@ -27,6 +27,14 @@ apiClient.interceptors.request.use(
     async (config) => {
         const token = getAccessToken();
 
+        // Deduplicate /api/v1 prefix if baseURL already contains /api/v1
+        if (config.baseURL && config.url) {
+            const normalizedBase = config.baseURL.replace(/\/+$/, "");
+            if (normalizedBase.endsWith("/api/v1") && config.url.startsWith("/api/v1")) {
+                config.url = config.url.replace(/^\/api\/v1/, "") || "/";
+            }
+        }
+
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }

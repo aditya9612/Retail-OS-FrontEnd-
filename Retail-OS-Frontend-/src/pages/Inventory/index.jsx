@@ -8,6 +8,9 @@ import "./Inventory.css";
 
 import category from "../../services/categoryService";
 import { getPurchaseOrders } from "../../api/purchaseOrdersApi";
+import { getWarehouses } from "../../api/warehouseApi";
+import { getSuppliers } from "../../api/supplierApi";
+import { supplier as supplierService } from "../../services/supplier";
 
 import {
     BsChevronLeft,
@@ -58,12 +61,18 @@ const getArrayFromResponse = (response) => {
     const candidates = [
         response?.data?.data,
         response?.data?.items,
+        response?.data?.categories,
+        response?.data?.warehouses,
+        response?.data?.suppliers,
         response?.data?.products,
         response?.data?.results,
         response?.data?.content,
         response?.data?.low_stock_items,
         response?.data?.low_stock,
         response?.data?.alerts,
+        response?.categories,
+        response?.warehouses,
+        response?.suppliers,
         response?.items,
         response?.products,
         response?.results,
@@ -76,6 +85,43 @@ const getArrayFromResponse = (response) => {
     ];
 
     return candidates.find(Array.isArray) || [];
+};
+
+/* =========================================================
+   VARIANTS & MRP HELPERS
+========================================================= */
+
+const parseVariants = (v) => {
+    if (!v) return null;
+    if (typeof v === "object") return v;
+    if (typeof v === "string") {
+        try {
+            const parsed = JSON.parse(v);
+            return typeof parsed === "object" ? parsed : null;
+        } catch {
+            return null;
+        }
+    }
+    return null;
+};
+
+const getVariantsMrp = (v) => {
+    const parsed = parseVariants(v);
+    if (!parsed) return 0;
+    if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+            const val = item?.mrp ?? item?.mrp_price ?? item?.mrpPrice ?? item?.MRP;
+            if (val !== undefined && val !== null && !isNaN(Number(val)) && Number(val) > 0) {
+                return Number(val);
+            }
+        }
+        return 0;
+    }
+    const val = parsed?.mrp ?? parsed?.mrp_price ?? parsed?.mrpPrice ?? parsed?.MRP;
+    if (val !== undefined && val !== null && !isNaN(Number(val)) && Number(val) > 0) {
+        return Number(val);
+    }
+    return 0;
 };
 
 /* =========================================================
@@ -201,6 +247,49 @@ expiry_date:
             nestedProduct?.purchasePrice ??
             0,
 
+        variants: parseVariants(product?.variants ?? nestedProduct?.variants),
+
+        mrp: (() => {
+            const pMrp =
+                product?.mrp ??
+                product?.mrp_price ??
+                product?.mrpPrice ??
+                product?.MRP ??
+                getVariantsMrp(product?.variants);
+
+            const nMrp =
+                nestedProduct?.mrp ??
+                nestedProduct?.mrp_price ??
+                nestedProduct?.mrpPrice ??
+                nestedProduct?.MRP ??
+                getVariantsMrp(nestedProduct?.variants);
+
+            const rawMrp = Number(pMrp) > 0 ? Number(pMrp) : nMrp;
+
+            if (rawMrp !== undefined && rawMrp !== null && Number(rawMrp) > 0) {
+                return Number(rawMrp);
+            }
+
+            try {
+                const rawMeta = localStorage.getItem("retail_os_products_meta");
+                if (rawMeta) {
+                    const meta = JSON.parse(rawMeta);
+                    const prodId = product?.id ?? nestedProduct?.id;
+                    const prodSku = product?.sku ?? nestedProduct?.sku;
+                    const idKey = prodId ? `id_${prodId}` : null;
+                    const skuKey = prodSku ? `sku_${String(prodSku).trim().toUpperCase()}` : null;
+                    const found = (skuKey && meta[skuKey]) || (idKey && meta[idKey]);
+                    if (found?.mrp !== undefined && found?.mrp !== null && Number(found.mrp) > 0) {
+                        return Number(found.mrp);
+                    }
+                }
+            } catch {
+                // ignore
+            }
+
+            return 0;
+        })(),
+
         brand:
             product?.brand ??
             nestedProduct?.brand ??
@@ -215,13 +304,27 @@ expiry_date:
             nestedProduct?.image ??
             "",
 
+        supplier_id:
+            (product?.supplier_id && Number(product.supplier_id) > 0 ? Number(product.supplier_id) : null) ??
+            (product?.supplierId && Number(product.supplierId) > 0 ? Number(product.supplierId) : null) ??
+            (product?.vendor_id && Number(product.vendor_id) > 0 ? Number(product.vendor_id) : null) ??
+            (nestedProduct?.supplier_id && Number(nestedProduct.supplier_id) > 0 ? Number(nestedProduct.supplier_id) : null) ??
+            (nestedProduct?.supplierId && Number(nestedProduct.supplierId) > 0 ? Number(nestedProduct.supplierId) : null) ??
+            (typeof product?.supplier === "number" && product.supplier > 0 ? product.supplier : null) ??
+            (typeof product?.supplier === "object" && Number(product.supplier?.id) > 0 ? Number(product.supplier.id) : null) ??
+            (typeof nestedProduct?.supplier === "number" && nestedProduct.supplier > 0 ? nestedProduct.supplier : null) ??
+            (typeof nestedProduct?.supplier === "object" && Number(nestedProduct.supplier?.id) > 0 ? Number(nestedProduct.supplier.id) : null) ??
+            null,
+
         supplier_name:
-            product?.supplier_name ??
-            product?.supplierName ??
-            product?.supplier ??
-            nestedProduct?.supplier_name ??
-            nestedProduct?.supplierName ??
-            nestedProduct?.supplier ??
+            (typeof product?.supplier === "string" && product.supplier.trim() ? product.supplier.trim() : null) ??
+            (typeof nestedProduct?.supplier === "string" && nestedProduct.supplier.trim() ? nestedProduct.supplier.trim() : null) ??
+            (typeof product?.supplier_name === "string" && product.supplier_name.trim() ? product.supplier_name.trim() : null) ??
+            (typeof product?.supplierName === "string" && product.supplierName.trim() ? product.supplierName.trim() : null) ??
+            (typeof product?.supplier?.name === "string" && product.supplier.name.trim() ? product.supplier.name.trim() : null) ??
+            (typeof nestedProduct?.supplier_name === "string" && nestedProduct.supplier_name.trim() ? nestedProduct.supplier_name.trim() : null) ??
+            (typeof nestedProduct?.supplierName === "string" && nestedProduct.supplierName.trim() ? nestedProduct.supplierName.trim() : null) ??
+            (typeof nestedProduct?.supplier?.name === "string" && nestedProduct.supplier.name.trim() ? nestedProduct.supplier.name.trim() : null) ??
             "",
     };
 };
@@ -1151,6 +1254,18 @@ const Inventory = () => {
     const [categories, setCategories] =
         useState([]);
 
+    const [warehouses, setWarehouses] =
+        useState([]);
+
+    const [suppliers, setSuppliers] =
+        useState([]);
+
+    const [poSupplierMap, setPoSupplierMap] =
+        useState(new Map());
+
+    const [poSupplierNameMap, setPoSupplierNameMap] =
+        useState(new Map());
+
     const [loading, setLoading] =
         useState(false);
 
@@ -1271,7 +1386,7 @@ const Inventory = () => {
     const fetchProducts = async () => {
         try {
             const response =
-                await listProducts();
+                await listProducts({ page: 1, page_size: 100, include_inactive: true });
 
             console.log(
                 "FULL PRODUCTS RESPONSE =>",
@@ -1351,38 +1466,112 @@ const Inventory = () => {
             setLoading(true);
             setError("");
 
-            const selectedStore =
-                filterWarehouse && filterWarehouse !== "All Warehouses"
-                    ? stores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse))
-                    : (stores.find((s) => s?.is_active !== false) || stores?.[0]);
+            const allStoreWarehouseIds = Array.from(
+                new Set([
+                    ...(stores || []).map((s) => Number(s?.id ?? s?.store_id)),
+                    ...(warehouses || []).map((w) => Number(w?.store_id ?? w?.id)),
+                ])
+            ).filter((id) => Number.isFinite(id) && id > 0);
 
-            const validStoreId = Number(selectedStore?.id ?? selectedStore?.store_id);
+            const isAllWarehouses = !filterWarehouse || filterWarehouse === "All Warehouses";
 
-            const [invResponse, lowStockResponse] =
-                await Promise.allSettled([
+            let rawData = [];
+            let rawLowStockData = [];
+
+            if (isAllWarehouses) {
+                // Fetch unscoped inventory AND inventory for all stores/warehouses
+                const storeRequests = allStoreWarehouseIds.map((sid) =>
+                    listInventory(sid).then((res) => ({ sid, res })).catch(() => null)
+                );
+                const [globalInvSettled, ...storeSettled] = await Promise.allSettled([
+                    listInventory().catch(() => null),
+                    ...storeRequests,
+                ]);
+
+                const seenInvKeys = new Set();
+                const pushItem = (item, fallbackStoreId) => {
+                    if (!item || typeof item !== "object") return;
+                    const invId = item?.id ?? item?.inventory_id ?? item?.inventoryId;
+                    const prodId = item?.product_id ?? item?.productId ?? item?.product?.id;
+                    const sid = item?.store_id ?? item?.storeId ?? item?.warehouse_id ?? item?.warehouseId ?? fallbackStoreId;
+                    const key = invId != null ? `id:${invId}` : `prod:${prodId}-store:${sid}`;
+                    if (!seenInvKeys.has(key)) {
+                        seenInvKeys.add(key);
+                        rawData.push({
+                            ...item,
+                            store_id: item?.store_id ?? item?.storeId ?? sid,
+                        });
+                    }
+                };
+
+                if (globalInvSettled.status === "fulfilled" && globalInvSettled.value) {
+                    const globalItems = getArrayFromResponse(globalInvSettled.value);
+                    if (Array.isArray(globalItems)) {
+                        globalItems.forEach((item) => pushItem(item, null));
+                    }
+                }
+
+                storeSettled.forEach((result) => {
+                    if (result.status === "fulfilled" && result.value) {
+                        const { sid, res } = result.value;
+                        const items = getArrayFromResponse(res);
+                        if (Array.isArray(items)) {
+                            items.forEach((item) => pushItem(item, sid));
+                        }
+                    }
+                });
+
+                // Also fetch low stock alerts across all stores
+                const lowStockSettled = await Promise.allSettled(
+                    allStoreWarehouseIds.map((sid) => lowStock(sid))
+                );
+                const seenLsKeys = new Set();
+                lowStockSettled.forEach((res, idx) => {
+                    if (res.status === "fulfilled") {
+                        const lsItems = getArrayFromResponse(res.value);
+                        if (Array.isArray(lsItems)) {
+                            lsItems.forEach((ls) => {
+                                const lsId = ls?.id ?? `${ls?.product_id}-${ls?.store_id ?? allStoreWarehouseIds[idx]}`;
+                                if (!seenLsKeys.has(lsId)) {
+                                    seenLsKeys.add(lsId);
+                                    rawLowStockData.push({
+                                        ...ls,
+                                        store_id: ls?.store_id ?? allStoreWarehouseIds[idx],
+                                    });
+                                }
+                            });
+                        }
+                    }
+                });
+            } else {
+                const selectedWarehouseObj = warehouses.find(
+                    (w) => String(w?.id) === String(filterWarehouse)
+                );
+                const selectedStore =
+                    stores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
+                    (selectedWarehouseObj?.store_id != null
+                        ? stores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
+                        : null) ||
+                    selectedWarehouseObj ||
+                    stores?.[0];
+
+                const validStoreId = Number(selectedStore?.id ?? selectedStore?.store_id ?? filterWarehouse);
+
+                const [invResponse, lowStockResponse] = await Promise.allSettled([
                     listInventory(validStoreId > 0 ? validStoreId : undefined),
                     validStoreId > 0 ? lowStock(validStoreId) : Promise.resolve({ data: [] }),
                 ]);
 
-            const response =
-                invResponse.status === "fulfilled"
-                    ? invResponse.value
-                    : null;
+                if (invResponse.status === "fulfilled") {
+                    rawData = getArrayFromResponse(invResponse.value) || [];
+                }
+                if (lowStockResponse.status === "fulfilled") {
+                    rawLowStockData = getArrayFromResponse(lowStockResponse.value) || [];
+                }
+            }
 
-            const lowStockRaw =
-                lowStockResponse.status === "fulfilled"
-                    ? lowStockResponse.value
-                    : null;
-
-            const data =
-                getArrayFromResponse(
-                    response
-                );
-
-            const lowStockData =
-                getArrayFromResponse(
-                    lowStockRaw
-                );
+            const data = rawData;
+            const lowStockData = rawLowStockData;
 
             if (!Array.isArray(data)) {
                 setInventory([]);
@@ -1486,7 +1675,10 @@ const Inventory = () => {
                                 item?.store_id ??
                                 item?.storeId ??
                                 item?.store?.id ??
-                                (validStoreId > 0 ? validStoreId : 0)
+                                item?.warehouse_id ??
+                                item?.warehouseId ??
+                                item?.warehouse?.id ??
+                                0
                             );
 
                         const itemInvId =
@@ -1510,6 +1702,7 @@ const Inventory = () => {
                             (itemSku
                                 ? productMap.get(`sku:${itemSku.toLowerCase()}`)
                                 : null) ||
+                            (item?.product && typeof item.product === "object" ? normalizeProduct(item.product) : null) ||
                             null;
 
                         const store =
@@ -1517,6 +1710,15 @@ const Inventory = () => {
                                 (s) =>
                                     Number(s?.id) ===
                                     storeId
+                            ) ||
+                            warehouses.find(
+                                (w) =>
+                                    Number(w?.id) === storeId ||
+                                    Number(w?.store_id) === storeId
+                            ) ||
+                            warehouses.find(
+                                (w) =>
+                                    Number(w?.id) === Number(item?.warehouse_id ?? item?.warehouseId)
                             );
 
                         const lowStockMatch =
@@ -1596,6 +1798,82 @@ const Inventory = () => {
                                     0
                             );
 
+                        const mrp = Number(
+                            (Number(product?.mrp) > 0 ? Number(product.mrp) : 0) ||
+                            product?.mrp_price ||
+                            product?.mrpPrice ||
+                            product?.MRP ||
+                            getVariantsMrp(product?.variants) ||
+                            item?.mrp ||
+                            item?.mrp_price ||
+                            item?.mrpPrice ||
+                            item?.MRP ||
+                            getVariantsMrp(item?.variants) ||
+                            0
+                        );
+
+                        const categoryId =
+                            product?.category_id ??
+                            product?.categoryId ??
+                            item?.category_id ??
+                            item?.categoryId ??
+                            (typeof product?.category === "number" ? product.category : null) ??
+                            (typeof item?.category === "number" ? item.category : null) ??
+                            null;
+
+                        const categoryObj = categories.find(
+                            (c) =>
+                                (categoryId !== null && Number(c?.id) === Number(categoryId)) ||
+                                (product?.category && String(c?.name).trim().toLowerCase() === String(product.category).trim().toLowerCase()) ||
+                                (item?.category && String(c?.name).trim().toLowerCase() === String(item.category).trim().toLowerCase())
+                        );
+
+                        const resolvedCategory =
+                            categoryObj?.name ||
+                            categoryObj?.category_name ||
+                            (typeof product?.category === "string" ? product.category : null) ||
+                            product?.category?.name ||
+                            product?.category_name ||
+                            (typeof item?.category === "string" ? item.category : null) ||
+                            item?.category?.name ||
+                            item?.category_name ||
+                            (categoryId ? `Category #${categoryId}` : "");
+
+                        const supplierId =
+                            (item?.supplier_id && Number(item.supplier_id) > 0 ? Number(item.supplier_id) : null) ??
+                            (item?.supplierId && Number(item.supplierId) > 0 ? Number(item.supplierId) : null) ??
+                            (product?.supplier_id && Number(product.supplier_id) > 0 ? Number(product.supplier_id) : null) ??
+                            (product?.supplierId && Number(product.supplierId) > 0 ? Number(product.supplierId) : null) ??
+                            (Number.isFinite(productId) && poSupplierMap.get(productId) ? Number(poSupplierMap.get(productId)) : null) ??
+                            (typeof item?.supplier === "number" && item.supplier > 0 ? item.supplier : null) ??
+                            (typeof product?.supplier === "number" && product.supplier > 0 ? product.supplier : null) ??
+                            (typeof item?.supplier === "object" && Number(item?.supplier?.id) > 0 ? Number(item.supplier.id) : null) ??
+                            (typeof product?.supplier === "object" && Number(product?.supplier?.id) > 0 ? Number(product.supplier.id) : null) ??
+                            null;
+
+                        const supplierObj = suppliers.find(
+                            (s) =>
+                                (supplierId !== null && Number(s?.id) === Number(supplierId)) ||
+                                (item?.supplier_name && String(s?.name).trim().toLowerCase() === String(item.supplier_name).trim().toLowerCase()) ||
+                                (product?.supplier_name && String(s?.name).trim().toLowerCase() === String(product.supplier_name).trim().toLowerCase())
+                        );
+
+                        const resolvedSupplier =
+                            supplierObj?.name ||
+                            supplierObj?.supplier_name ||
+                            (Number.isFinite(productId) && poSupplierNameMap ? poSupplierNameMap.get(productId) : null) ||
+                            (typeof product?.supplier === "string" && product.supplier.trim() ? product.supplier.trim() : null) ||
+                            product?.supplier?.name ||
+                            product?.supplier?.supplier_name ||
+                            (typeof product?.supplier_name === "string" && product.supplier_name.trim() ? product.supplier_name.trim() : null) ||
+                            (typeof product?.supplierName === "string" && product.supplierName.trim() ? product.supplierName.trim() : null) ||
+                            (typeof item?.supplier === "string" && item.supplier.trim() ? item.supplier.trim() : null) ||
+                            item?.supplier?.name ||
+                            item?.supplier?.supplier_name ||
+                            (typeof item?.supplier_name === "string" && item.supplier_name.trim() ? item.supplier_name.trim() : null) ||
+                            (typeof item?.supplierName === "string" && item.supplierName.trim() ? item.supplierName.trim() : null) ||
+                            "";
+
                         return {
                             ...item,
 
@@ -1634,6 +1912,11 @@ const Inventory = () => {
                                     ? costPrice
                                     : 0,
 
+                            mrp:
+                                Number.isFinite(mrp) && mrp > 0
+                                    ? mrp
+                                    : 0,
+
                             barcode:
                                 product?.barcode ||
                                 item?.barcode ||
@@ -1641,19 +1924,11 @@ const Inventory = () => {
                                 item?.barCode ||
                                 "",
 
-                            category:
-                                product?.category ||
-                                product?.category_name ||
-                                item?.category ||
-                                item?.category_name ||
-                                "",
+                            category: resolvedCategory,
 
                             category_id:
-                                product?.category_id ??
-                                product?.categoryId ??
-                                item?.category_id ??
-                                item?.categoryId ??
-                                null,
+                                categoryObj?.id ??
+                                categoryId,
 
                             brand:
                                 product?.brand ||
@@ -1666,13 +1941,11 @@ const Inventory = () => {
                                 item?.image_url ||
                                 "",
 
-                            supplier_name:
-                                product?.supplier_name ||
-                                product?.supplierName ||
-                                product?.supplier ||
-                                item?.supplier_name ||
-                                item?.supplierName ||
-                                "",
+                            supplier_name: resolvedSupplier,
+
+                            supplier_id:
+                                supplierObj?.id ??
+                                supplierId,
 
                             store_id:
                                 storeId,
@@ -1694,7 +1967,75 @@ const Inventory = () => {
                     (pid !== null ? productMap.get(pid) : null) ||
                     (sku ? productMap.get(`sku:${sku.toLowerCase()}`) : null) ||
                     null;
-                const store = stores.find((s) => Number(s?.id) === sid);
+                const store =
+                    stores.find((s) => Number(s?.id) === sid) ||
+                    warehouses.find(
+                        (w) =>
+                            Number(w?.id) === sid ||
+                            Number(w?.store_id) === sid
+                    );
+
+                const categoryId =
+                    product?.category_id ??
+                    product?.categoryId ??
+                    ls?.category_id ??
+                    ls?.categoryId ??
+                    (typeof product?.category === "number" ? product.category : null) ??
+                    (typeof ls?.category === "number" ? ls.category : null) ??
+                    null;
+
+                const categoryObj = categories.find(
+                    (c) =>
+                        (categoryId !== null && Number(c?.id) === Number(categoryId)) ||
+                        (product?.category && String(c?.name).trim().toLowerCase() === String(product.category).trim().toLowerCase()) ||
+                        (ls?.category && String(c?.name).trim().toLowerCase() === String(ls.category).trim().toLowerCase())
+                );
+
+                const resolvedCategory =
+                    categoryObj?.name ||
+                    categoryObj?.category_name ||
+                    (typeof product?.category === "string" ? product.category : null) ||
+                    product?.category?.name ||
+                    product?.category_name ||
+                    (typeof ls?.category === "string" ? ls.category : null) ||
+                    ls?.category?.name ||
+                    ls?.category_name ||
+                    (categoryId ? `Category #${categoryId}` : "");
+
+                const supplierId =
+                    (ls?.supplier_id && Number(ls.supplier_id) > 0 ? Number(ls.supplier_id) : null) ??
+                    (ls?.supplierId && Number(ls.supplierId) > 0 ? Number(ls.supplierId) : null) ??
+                    (product?.supplier_id && Number(product.supplier_id) > 0 ? Number(product.supplier_id) : null) ??
+                    (product?.supplierId && Number(product.supplierId) > 0 ? Number(product.supplierId) : null) ??
+                    (Number.isFinite(pid) && poSupplierMap.get(pid) ? Number(poSupplierMap.get(pid)) : null) ??
+                    (typeof ls?.supplier === "number" && ls.supplier > 0 ? ls.supplier : null) ??
+                    (typeof product?.supplier === "number" && product.supplier > 0 ? product.supplier : null) ??
+                    (typeof ls?.supplier === "object" && Number(ls?.supplier?.id) > 0 ? Number(ls.supplier.id) : null) ??
+                    (typeof product?.supplier === "object" && Number(product?.supplier?.id) > 0 ? Number(product.supplier.id) : null) ??
+                    null;
+
+                const supplierObj = suppliers.find(
+                    (s) =>
+                        (supplierId !== null && Number(s?.id) === Number(supplierId)) ||
+                        (ls?.supplier_name && String(s?.name).trim().toLowerCase() === String(ls.supplier_name).trim().toLowerCase()) ||
+                        (product?.supplier_name && String(s?.name).trim().toLowerCase() === String(product.supplier_name).trim().toLowerCase())
+                );
+
+                const resolvedSupplier =
+                    supplierObj?.name ||
+                    supplierObj?.supplier_name ||
+                    (Number.isFinite(pid) && poSupplierNameMap ? poSupplierNameMap.get(pid) : null) ||
+                    (typeof product?.supplier === "string" && product.supplier.trim() ? product.supplier.trim() : null) ||
+                    product?.supplier?.name ||
+                    product?.supplier?.supplier_name ||
+                    (typeof product?.supplier_name === "string" && product.supplier_name.trim() ? product.supplier_name.trim() : null) ||
+                    (typeof product?.supplierName === "string" && product.supplierName.trim() ? product.supplierName.trim() : null) ||
+                    (typeof ls?.supplier === "string" && ls.supplier.trim() ? ls.supplier.trim() : null) ||
+                    ls?.supplier?.name ||
+                    ls?.supplier?.supplier_name ||
+                    (typeof ls?.supplier_name === "string" && ls.supplier_name.trim() ? ls.supplier_name.trim() : null) ||
+                    (typeof ls?.supplierName === "string" && ls.supplierName.trim() ? ls.supplierName.trim() : null) ||
+                    "";
 
                 const prodName =
                     String(
@@ -1749,11 +2090,25 @@ const Inventory = () => {
                     stock_status: "Low Stock",
                     price: Number(product?.price ?? product?.selling_price ?? ls?.price ?? ls?.selling_price ?? 0),
                     costPrice: Number(product?.cost_price ?? product?.purchase_price ?? ls?.cost_price ?? ls?.unit_cost ?? 0),
+                    mrp: Number(
+                        (Number(product?.mrp) > 0 ? Number(product.mrp) : 0) ||
+                        product?.mrp_price ||
+                        product?.mrpPrice ||
+                        product?.MRP ||
+                        getVariantsMrp(product?.variants) ||
+                        ls?.mrp ||
+                        ls?.mrp_price ||
+                        ls?.mrpPrice ||
+                        ls?.MRP ||
+                        getVariantsMrp(ls?.variants) ||
+                        0
+                    ),
                     barcode: product?.barcode || ls?.barcode || "",
-                    category: product?.category || product?.category_name || ls?.category || ls?.category_name || "",
-                    category_id: product?.category_id ?? ls?.category_id ?? null,
+                    category: resolvedCategory,
+                    category_id: categoryObj?.id ?? categoryId,
                     brand: product?.brand || ls?.brand || "",
-                    supplier_name: product?.supplier_name || ls?.supplier_name || ls?.supplierName || "",
+                    supplier_name: resolvedSupplier,
+                    supplier_id: supplierObj?.id ?? supplierId,
                     store_name: store?.name || store?.store_name || ls?.store_name || (sid ? `Store #${sid}` : "-"),
                 });
             });
@@ -1826,11 +2181,7 @@ const Inventory = () => {
                 await category.getAll();
 
             const data =
-                response?.data?.data ??
-                response?.data ??
-                response?.items ??
-                response?.content ??
-                response;
+                getArrayFromResponse(response);
 
             if (Array.isArray(data)) {
                 setCategories(data);
@@ -1844,6 +2195,100 @@ const Inventory = () => {
             );
 
             setCategories([]);
+        }
+    };
+
+    /* =====================================================
+       FETCH WAREHOUSES
+    ===================================================== */
+
+    const fetchWarehouses = async () => {
+        try {
+            const response = await getWarehouses();
+            const data = getArrayFromResponse(response);
+
+            if (Array.isArray(data)) {
+                setWarehouses(data);
+            } else {
+                setWarehouses([]);
+            }
+        } catch (err) {
+            console.error(
+                "Warehouses API Error:",
+                err
+            );
+
+            setWarehouses([]);
+        }
+    };
+
+    /* =====================================================
+       FETCH SUPPLIERS
+    ===================================================== */
+
+    const fetchSuppliers = async () => {
+        try {
+            let response = await getSuppliers().catch(() => null);
+            let data = getArrayFromResponse(response);
+
+            if (!Array.isArray(data) || data.length === 0) {
+                const altResponse = await supplierService.getAll().catch(() => null);
+                const altData = getArrayFromResponse(altResponse);
+                if (Array.isArray(altData) && altData.length > 0) {
+                    data = altData;
+                }
+            }
+
+            if (Array.isArray(data)) {
+                setSuppliers(data);
+            } else {
+                setSuppliers([]);
+            }
+        } catch (err) {
+            console.error(
+                "Suppliers API Error:",
+                err
+            );
+
+            setSuppliers([]);
+        }
+    };
+
+    /* =====================================================
+       FETCH PURCHASE ORDERS (FOR PRODUCT -> SUPPLIER MAPPING)
+    ===================================================== */
+
+    const fetchPurchaseOrders = async () => {
+        try {
+            const response = await getPurchaseOrders(1, 100);
+            const data = getArrayFromResponse(response);
+
+            if (Array.isArray(data)) {
+                const idMap = new Map();
+                const nameMap = new Map();
+                data.forEach((po) => {
+                    const sid = Number(po?.supplier_id ?? po?.supplierId ?? po?.supplier?.id ?? po?.supplier);
+                    const sName = String(po?.supplier_name || po?.supplierName || po?.supplier?.name || "").trim();
+                    const items = po?.items || po?.order_items || po?.purchase_order_items || po?.details || [];
+                    if (Array.isArray(items)) {
+                        items.forEach((it) => {
+                            const pid = Number(it?.product_id ?? it?.productId);
+                            if (pid) {
+                                if (sid && !idMap.has(pid)) {
+                                    idMap.set(pid, sid);
+                                }
+                                if (sName && !nameMap.has(pid)) {
+                                    nameMap.set(pid, sName);
+                                }
+                            }
+                        });
+                    }
+                });
+                setPoSupplierMap(idMap);
+                setPoSupplierNameMap(nameMap);
+            }
+        } catch (err) {
+            console.error("Purchase Orders API Error:", err);
         }
     };
 
@@ -1961,25 +2406,61 @@ const fetchValuation = async () => {
             setLowStockLoading(true);
             setLowStockError("");
 
-            const selectedStore =
-                filterWarehouse && filterWarehouse !== "All Warehouses"
-                    ? stores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse))
-                    : (stores.find((s) => s?.is_active !== false) || stores?.[0]);
+            const allStoreWarehouseIds = Array.from(
+                new Set([
+                    ...(stores || []).map((s) => Number(s?.id ?? s?.store_id)),
+                    ...(warehouses || []).map((w) => Number(w?.store_id ?? w?.id)),
+                ])
+            ).filter((id) => Number.isFinite(id) && id > 0);
 
-            const validStoreId = Number(selectedStore?.id ?? selectedStore?.store_id);
+            const isAllWarehouses = !filterWarehouse || filterWarehouse === "All Warehouses";
 
-            if (!validStoreId || Number.isNaN(validStoreId) || validStoreId <= 0) {
-                setLowStockItems([]);
-                return;
-            }
+            let data = [];
 
-            const response =
-                await lowStock(validStoreId);
-
-            const data =
-                getArrayFromResponse(
-                    response
+            if (isAllWarehouses) {
+                const results = await Promise.allSettled(
+                    allStoreWarehouseIds.map((sid) => lowStock(sid))
                 );
+                const seen = new Set();
+                results.forEach((res, idx) => {
+                    if (res.status === "fulfilled") {
+                        const items = getArrayFromResponse(res.value);
+                        if (Array.isArray(items)) {
+                            items.forEach((it) => {
+                                const key = it?.id ?? `${it?.product_id}-${it?.store_id ?? allStoreWarehouseIds[idx]}`;
+                                if (!seen.has(key)) {
+                                    seen.add(key);
+                                    data.push({
+                                        ...it,
+                                        store_id: it?.store_id ?? allStoreWarehouseIds[idx],
+                                    });
+                                }
+                            });
+                        }
+                    }
+                });
+            } else {
+                const selectedWarehouseObj = warehouses.find(
+                    (w) => String(w?.id) === String(filterWarehouse)
+                );
+                const selectedStore =
+                    stores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
+                    (selectedWarehouseObj?.store_id != null
+                        ? stores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
+                        : null) ||
+                    selectedWarehouseObj ||
+                    stores?.[0];
+
+                const validStoreId = Number(selectedStore?.id ?? selectedStore?.store_id ?? filterWarehouse);
+
+                if (!validStoreId || Number.isNaN(validStoreId) || validStoreId <= 0) {
+                    setLowStockItems([]);
+                    return;
+                }
+
+                const response = await lowStock(validStoreId);
+                data = getArrayFromResponse(response) || [];
+            }
 
             const mergedLowStock =
                 data
@@ -2006,7 +2487,74 @@ const fetchValuation = async () => {
                                         s?.id
                                     ) ===
                                     storeId
+                            ) ||
+                            warehouses.find(
+                                (w) =>
+                                    Number(w?.id) === storeId ||
+                                    Number(w?.store_id) === storeId
                             );
+
+                        const categoryId =
+                            product?.category_id ??
+                            product?.categoryId ??
+                            item?.category_id ??
+                            item?.categoryId ??
+                            (typeof product?.category === "number" ? product.category : null) ??
+                            (typeof item?.category === "number" ? item.category : null) ??
+                            null;
+
+                        const categoryObj = categories.find(
+                            (c) =>
+                                (categoryId !== null && Number(c?.id) === Number(categoryId)) ||
+                                (product?.category && String(c?.name).trim().toLowerCase() === String(product.category).trim().toLowerCase()) ||
+                                (item?.category && String(c?.name).trim().toLowerCase() === String(item.category).trim().toLowerCase())
+                        );
+
+                        const resolvedCategory =
+                            categoryObj?.name ||
+                            categoryObj?.category_name ||
+                            (typeof product?.category === "string" ? product.category : null) ||
+                            product?.category?.name ||
+                            product?.category_name ||
+                            (typeof item?.category === "string" ? item.category : null) ||
+                            item?.category?.name ||
+                            item?.category_name ||
+                            (categoryId ? `Category #${categoryId}` : "");
+
+                        const supplierId =
+                            (item?.supplier_id && Number(item.supplier_id) > 0 ? Number(item.supplier_id) : null) ??
+                            (item?.supplierId && Number(item.supplierId) > 0 ? Number(item.supplierId) : null) ??
+                            (product?.supplier_id && Number(product.supplier_id) > 0 ? Number(product.supplier_id) : null) ??
+                            (product?.supplierId && Number(product.supplierId) > 0 ? Number(product.supplierId) : null) ??
+                            (Number.isFinite(productId) && poSupplierMap.get(productId) ? Number(poSupplierMap.get(productId)) : null) ??
+                            (typeof item?.supplier === "number" && item.supplier > 0 ? item.supplier : null) ??
+                            (typeof product?.supplier === "number" && product.supplier > 0 ? product.supplier : null) ??
+                            (typeof item?.supplier === "object" && Number(item?.supplier?.id) > 0 ? Number(item.supplier.id) : null) ??
+                            (typeof product?.supplier === "object" && Number(product?.supplier?.id) > 0 ? Number(product.supplier.id) : null) ??
+                            null;
+
+                        const supplierObj = suppliers.find(
+                            (s) =>
+                                (supplierId !== null && Number(s?.id) === Number(supplierId)) ||
+                                (item?.supplier_name && String(s?.name).trim().toLowerCase() === String(item.supplier_name).trim().toLowerCase()) ||
+                                (product?.supplier_name && String(s?.name).trim().toLowerCase() === String(product.supplier_name).trim().toLowerCase())
+                        );
+
+                        const resolvedSupplier =
+                            supplierObj?.name ||
+                            supplierObj?.supplier_name ||
+                            (Number.isFinite(productId) && poSupplierNameMap ? poSupplierNameMap.get(productId) : null) ||
+                            (typeof product?.supplier === "string" && product.supplier.trim() ? product.supplier.trim() : null) ||
+                            product?.supplier?.name ||
+                            product?.supplier?.supplier_name ||
+                            (typeof product?.supplier_name === "string" && product.supplier_name.trim() ? product.supplier_name.trim() : null) ||
+                            (typeof product?.supplierName === "string" && product.supplierName.trim() ? product.supplierName.trim() : null) ||
+                            (typeof item?.supplier === "string" && item.supplier.trim() ? item.supplier.trim() : null) ||
+                            item?.supplier?.name ||
+                            item?.supplier?.supplier_name ||
+                            (typeof item?.supplier_name === "string" && item.supplier_name.trim() ? item.supplier_name.trim() : null) ||
+                            (typeof item?.supplierName === "string" && item.supplierName.trim() ? item.supplierName.trim() : null) ||
+                            "";
 
                         if (!product) {
                             return {
@@ -2038,15 +2586,8 @@ const fetchValuation = async () => {
                                     item?.barCode ||
                                     "",
 
-                                category:
-                                    item?.category ||
-                                    item?.category_name ||
-                                    "",
-
-                                category_id:
-                                    item?.category_id ??
-                                    item?.categoryId ??
-                                    null,
+                                category: resolvedCategory,
+                                category_id: categoryObj?.id ?? categoryId,
 
                                 brand:
                                     item?.brand || "",
@@ -2054,10 +2595,8 @@ const fetchValuation = async () => {
                                 image_url:
                                     item?.image_url || "",
 
-                                supplier_name:
-                                    item?.supplier_name ||
-                                    item?.supplierName ||
-                                    "",
+                                supplier_name: resolvedSupplier,
+                                supplier_id: supplierObj?.id ?? supplierId,
 
                                 store_id: storeId,
 
@@ -2065,7 +2604,7 @@ const fetchValuation = async () => {
                                     store?.name ||
                                     store?.store_name ||
                                     store?.storeName ||
-                                    `Store #${storeId}`,
+                                    (storeId ? `Store #${storeId}` : "-"),
                             };
                         }
 
@@ -2099,20 +2638,11 @@ const fetchValuation = async () => {
                             product_id:
                                 productId,
 
-                            category:
-                                product?.category ||
-                                product?.category_name ||
-                                item?.category ||
-                                item?.category_name ||
-                                "",
+                            category: resolvedCategory,
+                            category_id: categoryObj?.id ?? categoryId,
 
-                            supplier_name:
-                                product?.supplier_name ||
-                                product?.supplierName ||
-                                product?.supplier ||
-                                item?.supplier_name ||
-                                item?.supplierName ||
-                                "",
+                            supplier_name: resolvedSupplier,
+                            supplier_id: supplierObj?.id ?? supplierId,
 
                             store_id:
                                 storeId,
@@ -2121,7 +2651,7 @@ const fetchValuation = async () => {
                                 store?.name ||
                                 store?.store_name ||
                                 store?.storeName ||
-                                `Store #${storeId}`,
+                                (storeId ? `Store #${storeId}` : "-"),
                         };
                     })
                     .filter(Boolean);
@@ -2151,9 +2681,17 @@ const fetchValuation = async () => {
             setMovementsLoading(true);
             setMovementsError("");
 
+            const selectedWarehouseObj = warehouses.find(
+                (w) => String(w?.id) === String(filterWarehouse)
+            );
+
             const selectedStore =
                 filterWarehouse && filterWarehouse !== "All Warehouses"
-                    ? stores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse))
+                    ? (stores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
+                       (selectedWarehouseObj?.store_id != null
+                           ? stores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
+                           : null) ||
+                       stores.find((s) => s?.is_active !== false) || stores?.[0])
                     : (stores.find((s) => s?.is_active !== false) || stores?.[0]);
 
             const validStoreId = Number(selectedStore?.id ?? selectedStore?.store_id);
@@ -2228,31 +2766,24 @@ const fetchValuation = async () => {
     ===================================================== */
 
     useEffect(() => {
+        fetchInventory();
         fetchProducts();
         fetchStores();
         fetchCategories();
+        fetchWarehouses();
+        fetchSuppliers();
+        fetchPurchaseOrders();
         fetchDashboard();
         fetchValuation();
         getInventoryExpiry();
-
-
     }, []);
 
     /* =====================================================
        FETCH INVENTORY AFTER PRODUCTS + STORES
     ===================================================== */
     useEffect(() => {
-    if (
-        products.length > 0 &&
-        stores.length > 0
-    ) {
         fetchInventory();
-    } else {
-        setInventory([]);
-    }
-}, [products, stores]);
- 
-
+    }, [products, stores, warehouses, categories, suppliers, poSupplierMap, poSupplierNameMap, filterWarehouse]);
 
     /* =====================================================
        LOW STOCK AFTER PRODUCTS + STORES
@@ -2261,25 +2792,28 @@ const fetchValuation = async () => {
     useEffect(() => {
         if (
             products.length > 0 &&
-            stores.length > 0
+            (stores.length > 0 || warehouses.length > 0)
         ) {
             fetchLowStock();
         } else {
             setLowStockItems([]);
         }
-    }, [products, stores, filterWarehouse]);
+    }, [products, stores, warehouses, categories, suppliers, filterWarehouse]);
 
     /* =====================================================
        MOVEMENTS AFTER PRODUCTS + STORES
     ===================================================== */
 
     useEffect(() => {
-        if (products.length > 0 && stores.length > 0) {
+        if (
+            products.length > 0 &&
+            (stores.length > 0 || warehouses.length > 0)
+        ) {
             fetchMovements();
         } else {
             setMovements([]);
         }
-    }, [products, stores, filterWarehouse]);
+    }, [products, stores, warehouses, filterWarehouse]);
 
     /* =====================================================
        SEARCH
@@ -2319,30 +2853,79 @@ const fetchValuation = async () => {
                         searchValue
                     );
 
+           const selectedWarehouseObj = warehouses.find(
+               (w) =>
+                   String(w?.id) === String(filterWarehouse) ||
+                   String(w?.store_id) === String(filterWarehouse) ||
+                   String(w?.name).trim().toLowerCase() === String(filterWarehouse).trim().toLowerCase()
+           ) || stores.find(
+               (s) =>
+                   String(s?.id ?? s?.store_id) === String(filterWarehouse) ||
+                   String(s?.name).trim().toLowerCase() === String(filterWarehouse).trim().toLowerCase()
+           );
+
            const matchWarehouse =
-    filterWarehouse === "All Warehouses" ||
-    String(item?.store_id ?? "") ===
-        String(filterWarehouse);
+               filterWarehouse === "All Warehouses" ||
+               String(item?.warehouse_id ?? "") === String(filterWarehouse) ||
+               String(item?.store_id ?? "") === String(filterWarehouse) ||
+               (selectedWarehouseObj?.id != null && (
+                   String(item?.warehouse_id ?? "") === String(selectedWarehouseObj.id) ||
+                   String(item?.store_id ?? "") === String(selectedWarehouseObj.id)
+               )) ||
+               (selectedWarehouseObj?.store_id != null && (
+                   String(item?.store_id ?? "") === String(selectedWarehouseObj.store_id) ||
+                   String(item?.warehouse_id ?? "") === String(selectedWarehouseObj.store_id)
+               )) ||
+               (selectedWarehouseObj?.name && (
+                   String(item?.store_name ?? "").trim().toLowerCase() === String(selectedWarehouseObj.name).trim().toLowerCase() ||
+                   String(item?.warehouse_name ?? "").trim().toLowerCase() === String(selectedWarehouseObj.name).trim().toLowerCase()
+               ));
+
+            const selectedCatObj = categories.find(
+                (c) =>
+                    String(c?.id) === String(filterCat) ||
+                    String(c?.name).trim().toLowerCase() === String(filterCat).trim().toLowerCase()
+            );
+
+            const itemCatId = item?.category_id != null ? String(item.category_id) : "";
+            const itemCategoryStr = String(item?.category || item?.category_name || "").trim().toLowerCase();
 
             const matchCat =
-                filterCat ===
-                    "All Categories" ||
-                String(
-                    item?.category_id
-                ) ===
-                    String(
-                        filterCat
-                    );
+                filterCat === "All Categories" ||
+                (itemCatId && itemCatId === String(filterCat)) ||
+                (selectedCatObj && itemCatId && itemCatId === String(selectedCatObj.id)) ||
+                (selectedCatObj && itemCategoryStr && itemCategoryStr === String(selectedCatObj.name).trim().toLowerCase()) ||
+                (itemCategoryStr && itemCategoryStr === String(filterCat).trim().toLowerCase());
 
-            const supplier =
+            const selectedSupplierObj = suppliers.find(
+                (s) =>
+                    String(s?.id) === String(filterSupplier) ||
+                    String(s?.name).trim().toLowerCase() === String(filterSupplier).trim().toLowerCase()
+            );
+
+            const itemSupplierName = String(
                 item?.supplier_name ||
-                "";
+                item?.supplierName ||
+                (typeof item?.supplier === "string" ? item.supplier : "") ||
+                (typeof item?.supplier === "object" ? (item?.supplier?.name || item?.supplier?.supplier_name) : "") ||
+                ""
+            ).trim().toLowerCase();
+
+            const itemSupplierId =
+                item?.supplier_id != null
+                    ? String(item.supplier_id)
+                    : typeof item?.supplier === "number"
+                    ? String(item.supplier)
+                    : typeof item?.supplier === "object" && item?.supplier?.id != null
+                    ? String(item.supplier.id)
+                    : "";
 
             const matchSupplier =
-                filterSupplier ===
-                    "All Suppliers" ||
-                supplier ===
-                    filterSupplier;
+                filterSupplier === "All Suppliers" ||
+                (itemSupplierId && itemSupplierId === String(filterSupplier)) ||
+                (selectedSupplierObj && itemSupplierId && itemSupplierId === String(selectedSupplierObj.id)) ||
+                (selectedSupplierObj && itemSupplierName && itemSupplierName === String(selectedSupplierObj.name).trim().toLowerCase()) ||
+                (itemSupplierName && itemSupplierName === String(filterSupplier).trim().toLowerCase());
 
             const createdDate =
                 item?.created_at
@@ -2871,17 +3454,19 @@ if (action === "transfer") {
                 {/* TOP BAR */}
 
                 <div className="inv-topbar">
-                    <div>
+                    <div className="inv-topbar-info">
                         <div className="inv-eyebrow">
                             <span className="inv-eyebrow-dot" />
-                            Inventory Management
+                            Stock & Inventory Directory
                         </div>
 
                         <h1 className="inv-title">
-                            Inventory Dashboard
+                            📦 Stock Management
                         </h1>
+                        <p className="inv-subtitle">
+                            Monitor real-time warehouse inventory, track low stock alerts, and oversee stock movements
+                        </p>
                     </div>
-
                 </div>
 
                 {/* LOADING */}
@@ -2903,145 +3488,31 @@ if (action === "transfer") {
 
                 {/* KPI */}
 
-                <div
-                    className="inv-kpi-grid"
-                    style={{
-                        width: "100%",
-                        display: "grid",
-                        gridTemplateColumns:
-                            "repeat(5, minmax(0, 1fr))",
-                        gap: "16px",
-                        margin:
-                            "16px 0 20px",
-                        boxSizing:
-                            "border-box",
-                    }}
-                >
-                    {kpis.map(
-                        (item) => (
-                            <div
-                                key={
-                                    item.label
-                                }
-                                className="inv-kpi-card"
-                                style={{
-                                    width: "100%",
-                                    minWidth: 0,
-                                    height: "110px",
-                                    background:
-                                        "#ffffff",
-                                    border:
-                                        "1px solid #e5e7eb",
-                                    borderRadius:
-                                        "10px",
-                                    padding:
-                                        "16px 18px",
-                                    boxSizing:
-                                        "border-box",
-                                    boxShadow:
-                                        "0 2px 8px rgba(0,0,0,0.04)",
-                                    display:
-                                        "flex",
-                                    flexDirection:
-                                        "column",
-                                    justifyContent:
-                                        "space-between",
-                                    overflow:
-                                        "hidden",
-                                }}
-                            >
+                <div className="inv-kpi-grid">
+                    {kpis.map((item) => (
+                        <div key={item.label} className="inv-kpi-card">
+                            <div className="inv-kpi-top">
+                                <span className="inv-kpi-label">{item.label}</span>
                                 <div
-                                    style={{
-                                        display:
-                                            "flex",
-                                        alignItems:
-                                            "center",
-                                        justifyContent:
-                                            "space-between",
-                                        width: "100%",
-                                    }}
+                                    className="inv-kpi-icon-wrap"
+                                    style={{ color: item.color, background: item.bg }}
                                 >
-                                    <span
-                                        style={{
-                                            fontSize:
-                                                "12px",
-                                            lineHeight:
-                                                "18px",
-                                            fontWeight: 600,
-                                            color:
-                                                "#6b7280",
-                                        }}
-                                    >
-                                        {
-                                            item.label
-                                        }
-                                    </span>
-
-                                    <span
-                                        style={{
-                                            width: "30px",
-                                            height: "30px",
-                                            display:
-                                                "flex",
-                                            alignItems:
-                                                "center",
-                                            justifyContent:
-                                                "center",
-                                            borderRadius:
-                                                "8px",
-                                            color:
-                                                item.color,
-                                            background:
-                                                item.bg,
-                                            fontSize:
-                                                "15px",
-                                        }}
-                                    >
-                                        {
-                                            item.icon
-                                        }
-                                    </span>
-                                </div>
-
-                                <div
-                                    title={
-                                        typeof item.value === "string" || typeof item.value === "number"
-                                            ? String(item.value)
-                                            : undefined
-                                    }
-                                    style={{
-                                        fontSize:
-                                            item.label === "Inventory Value"
-                                                ? String(item.value || "").length > 11
-                                                    ? "19px"
-                                                    : String(item.value || "").length > 8
-                                                    ? "21px"
-                                                    : "24px"
-                                                : "28px",
-                                        lineHeight:
-                                            item.label === "Inventory Value"
-                                                ? "28px"
-                                                : "34px",
-                                        fontWeight: 700,
-                                        color:
-                                            "#111827",
-                                        whiteSpace:
-                                            "nowrap",
-                                        overflow:
-                                            "hidden",
-                                        textOverflow:
-                                            "ellipsis",
-                                        maxWidth:
-                                            "100%",
-                                    }}
-                                >
-                                    {
-                                        item.value
-                                    }
+                                    {item.icon}
                                 </div>
                             </div>
-                        )
-                    )}
+
+                            <div
+                                className="inv-kpi-value"
+                                title={
+                                    typeof item.value === "string" || typeof item.value === "number"
+                                        ? String(item.value)
+                                        : undefined
+                                }
+                            >
+                                {item.value}
+                            </div>
+                        </div>
+                    ))}
                 </div>
 
                 {/* FILTERS */}
@@ -3084,6 +3555,12 @@ if (action === "transfer") {
                             }
                             categories={
                                 categories
+                            }
+                            warehouses={
+                                warehouses
+                            }
+                            suppliers={
+                                suppliers
                             }
                             filterWarehouse={
                                 filterWarehouse

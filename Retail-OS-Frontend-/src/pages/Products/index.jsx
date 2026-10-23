@@ -657,7 +657,7 @@ if (skuError) {
         const sellingPrice = Number(form.sellingPrice);
 
         if (form.mrp === '' || mrp <= 0) {
-            newErrors.mrp = 'MRP must be greater than 0';
+            newErrors.mrp = 'MRP Price must be greater than 0';
         }
 
         if (form.sellingPrice === '' || sellingPrice <= 0) {
@@ -669,7 +669,7 @@ if (skuError) {
             form.sellingPrice !== '' &&
             mrp <= sellingPrice
         ) {
-            newErrors.mrp = 'MRP must be greater than selling price';
+            newErrors.mrp = 'MRP Price must be greater than selling price';
         }
 
         if (!form.gst) {
@@ -984,7 +984,7 @@ if (skuError) {
                         </div>
                     </div>
 
-                    {/* HSN + MRP */}
+                    {/* HSN + MRP Price */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
@@ -1015,13 +1015,14 @@ if (skuError) {
 
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                MRP (₹)
+                                MRP Price (₹)
                             </label>
                             <input
                                 type="number"
                                 min="0"
                                 value={form.mrp}
                                 onChange={e => set('mrp', e.target.value)}
+                                placeholder="0.00"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
@@ -1798,6 +1799,7 @@ const Products = () => {
             saveLocalProductMeta(targetId, targetSku, {
                 featured: Boolean(originalForm.featured),
                 brand: originalForm.brand?.trim() || null,
+                mrp: Number(originalForm.mrp) || 0,
                 manufacturingDate: originalForm.manufacturingDate || null,
                 expiryDate: originalForm.expiryDate || null,
                 imageUrl: originalForm.imagePreview || originalForm.imageUrl || null,

@@ -126,12 +126,13 @@ const InventoryTable = ({
             <th>Product</th>
             <th>SKU</th>
             <th>Category</th>
+            <th>Supplier</th>
             <th>Store Name</th>
             <th>Store ID</th>
             <th>Available Qty</th>
             <th>Reorder Level</th>
             <th>Expiry Date</th>
-            <th>Cost Price</th>
+            <th>MRP PRICE</th>
             <th>Selling Price</th>
             <th>Margin</th>
             <th>Status</th>
@@ -175,10 +176,23 @@ const InventoryTable = ({
             ===================================================== */
 
             const category =
-              item.category ||
+              (typeof item.category === "string" && item.category.trim() ? item.category : null) ||
+              item.category?.name ||
               item.category_name ||
               item.categoryName ||
-              "General";
+              (item.category_id ? `Category #${item.category_id}` : "—");
+
+            /* =====================================================
+               SUPPLIER
+            ===================================================== */
+
+            const supplier =
+              (typeof item.supplier_name === "string" && item.supplier_name.trim() ? item.supplier_name : null) ||
+              (typeof item.supplierName === "string" && item.supplierName.trim() ? item.supplierName : null) ||
+              (typeof item.supplier === "string" && item.supplier.trim() ? item.supplier : null) ||
+              item.supplier?.name ||
+              item.supplier?.supplier_name ||
+              "—";
 
             /* =====================================================
                LOCATION / WAREHOUSE
@@ -230,7 +244,7 @@ const InventoryTable = ({
                 : 0;
 
             /* =====================================================
-               COST PRICE
+               COST PRICE (Preserved for Margin Calculation)
             ===================================================== */
 
             const costPrice =
@@ -246,6 +260,50 @@ const InventoryTable = ({
                   item.unit_cost !== null
                 ? Number(item.unit_cost)
                 : 0;
+
+            /* =====================================================
+               MRP PRICE
+            ===================================================== */
+
+            const itemVariants = (() => {
+              const v = item?.variants;
+              if (!v) return null;
+              if (typeof v === "object") return v;
+              if (typeof v === "string") {
+                try {
+                  const parsed = JSON.parse(v);
+                  return typeof parsed === "object" ? parsed : null;
+                } catch {
+                  return null;
+                }
+              }
+              return null;
+            })();
+
+            const getVariantsMrp = (v) => {
+              if (!v) return 0;
+              if (Array.isArray(v)) {
+                for (const elem of v) {
+                  const val = elem?.mrp ?? elem?.mrp_price ?? elem?.mrpPrice ?? elem?.MRP;
+                  if (val !== undefined && val !== null && !isNaN(Number(val)) && Number(val) > 0) return Number(val);
+                }
+                return 0;
+              }
+              const val = v?.mrp ?? v?.mrp_price ?? v?.mrpPrice ?? v?.MRP;
+              if (val !== undefined && val !== null && !isNaN(Number(val)) && Number(val) > 0) return Number(val);
+              return 0;
+            };
+
+            const mrpPrice =
+              item.mrp !== undefined && item.mrp !== null && Number(item.mrp) > 0
+                ? Number(item.mrp)
+                : item.mrp_price !== undefined && item.mrp_price !== null && Number(item.mrp_price) > 0
+                ? Number(item.mrp_price)
+                : item.mrpPrice !== undefined && item.mrpPrice !== null && Number(item.mrpPrice) > 0
+                ? Number(item.mrpPrice)
+                : item.MRP !== undefined && item.MRP !== null && Number(item.MRP) > 0
+                ? Number(item.MRP)
+                : getVariantsMrp(itemVariants);
 
             /* =====================================================
                SELLING PRICE
@@ -501,6 +559,25 @@ const isMissingRequiredExpiry =
                 </td>
 
                 {/* =================================================
+                   SUPPLIER
+                ================================================= */}
+
+                <td>
+                  <span
+                    style={{
+                      background: "#f0fdf4",
+                      color: "#16a34a",
+                      padding: "4px 8px",
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {supplier}
+                  </span>
+                </td>
+
+                {/* =================================================
                    STORE NAME / STORE ID
                 ================================================= */}
 
@@ -593,11 +670,11 @@ const isMissingRequiredExpiry =
              
 
                 {/* =================================================
-                   COST PRICE
+                   MRP PRICE
                 ================================================= */}
 
                 <td>
-                  {fmt(costPrice)}
+                  {fmt(mrpPrice)}
                 </td>
 
                 {/* =================================================
@@ -663,19 +740,57 @@ const isMissingRequiredExpiry =
                 {/* =================================================
                    ACTION
                 ================================================= */}
-<td>
-  <span
-    style={{
-      color:
-        margin >= 20
-          ? "#10b981"
-          : "#ef4444",
-      fontWeight: 700,
-    }}
-  >
-    {formattedMargin}%
-  </span>
-</td>
+                <td className="inventory-actions-cell">
+                  <div className="inventory-action-buttons">
+                    <button
+                      type="button"
+                      className="inventory-action-btn inventory-action-update"
+                      title="Update Stock"
+                      aria-label="Update Stock"
+                      onClick={() => {
+                        if (typeof setStockModal === "function") {
+                          setStockModal(item);
+                        }
+                      }}
+                    >
+                      <BsPencil size={12} />
+                      <span>Update</span>
+                    </button>
+                    {onView && (
+                      <button
+                        type="button"
+                        className="inventory-action-btn inventory-action-view"
+                        title="View Details"
+                        aria-label="View Details"
+                        onClick={() => onView(item)}
+                      >
+                        <BsEye size={12} />
+                      </button>
+                    )}
+                    {onHistory && (
+                      <button
+                        type="button"
+                        className="inventory-action-btn inventory-action-history"
+                        title="Movement History"
+                        aria-label="Movement History"
+                        onClick={() => onHistory(item)}
+                      >
+                        <BsClockHistory size={12} />
+                      </button>
+                    )}
+                    {onAdjust && (
+                      <button
+                        type="button"
+                        className="inventory-action-btn inventory-action-adjust"
+                        title="Adjust Inventory"
+                        aria-label="Adjust Inventory"
+                        onClick={() => onAdjust(item)}
+                      >
+                        <BsSliders size={12} />
+                      </button>
+                    )}
+                  </div>
+                </td>
                
 
               </tr>

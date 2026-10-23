@@ -1,4 +1,4 @@
-﻿import axiosInstance from "./axios";
+import axiosInstance from "./axios";
 
 // =====================================================
 // GET - List Purchase Orders
@@ -9,7 +9,7 @@ export const getPurchaseOrders = async (
   pageSize = 20
 ) => {
   const response = await axiosInstance.get(
-    "/api/v1/purchase-orders",
+    "/purchase-orders",
     {
       params: {
         page,
@@ -35,7 +35,7 @@ export const getPurchaseOrder = async (
   }
 
   const response = await axiosInstance.get(
-    `/api/v1/purchase-orders/${purchaseOrderId}`
+    `/purchase-orders/${purchaseOrderId}`
   );
 
   return response.data;
@@ -49,7 +49,7 @@ export const createPurchaseOrder = async (
   payload
 ) => {
   const response = await axiosInstance.post(
-    "/api/v1/purchase-orders",
+    "/purchase-orders",
     payload
   );
 
@@ -77,7 +77,7 @@ export const updatePurchaseOrder = async (
   );
 
   const response = await axiosInstance.patch(
-    `/api/v1/purchase-orders/${purchaseOrderId}`,
+    `/purchase-orders/${purchaseOrderId}`,
     payload
   );
 
@@ -99,7 +99,7 @@ export const receivePurchaseOrder = async (
   }
 
   const response = await axiosInstance.post(
-    `/api/v1/purchase-orders/${purchaseOrderId}/receive`,
+    `/purchase-orders/${purchaseOrderId}/receive`,
     payload
   );
 
@@ -121,7 +121,7 @@ export const updatePurchaseOrderStatus = async (
   }
 
   const response = await axiosInstance.patch(
-    `/api/v1/purchase-orders/${purchaseOrderId}/status`,
+    `/purchase-orders/${purchaseOrderId}/status`,
     payload
   );
 

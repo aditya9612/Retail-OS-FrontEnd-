@@ -14,6 +14,8 @@ const InventoryFilters = ({
   products,
   stores,
   categories,
+  warehouses,
+  suppliers,
 
   filterWarehouse,
   setFilterWarehouse,
@@ -40,29 +42,35 @@ const InventoryFilters = ({
      - Warehouse ID is used internally for filtering.
   ===================================================== */
 
-  const warehouseOptions = (stores || []).filter(
-    (store) =>
-      store?.is_active !== false &&
-      store?.is_warehouse === true
-  );
+  const warehouseOptions =
+    Array.isArray(warehouses)
+      ? warehouses.filter((wh) => wh?.is_active !== false)
+      : (stores || []).filter(
+          (store) =>
+            store?.is_active !== false &&
+            store?.is_warehouse === true
+        );
 
   /* =====================================================
      SUPPLIER OPTIONS
   ===================================================== */
 
-  const supplierOptions = [
-    ...new Set(
-      (inventory || [])
-        .map((item) =>
-          String(
-            item?.supplier_name ||
-              item?.supplierName ||
-              ""
-          ).trim()
-        )
-        .filter(Boolean)
-    ),
-  ];
+  const supplierOptions =
+    Array.isArray(suppliers) && suppliers.length > 0
+      ? suppliers.filter((supplier) => supplier?.is_active !== false)
+      : [
+          ...new Set(
+            (inventory || [])
+              .map((item) =>
+                String(
+                  item?.supplier_name ||
+                    item?.supplierName ||
+                    ""
+                ).trim()
+              )
+              .filter(Boolean)
+          ),
+        ];
 
   /* =====================================================
      RESET FILTERS
@@ -161,14 +169,25 @@ const InventoryFilters = ({
               All Warehouses
             </option>
 
-            {warehouseOptions.map((store) => (
-              <option
-                key={store.id}
-                value={String(store.id)}
-              >
-                {store.name}
+            {warehouseOptions.length === 0 ? (
+              <option value="" disabled>
+                No warehouses found
               </option>
-            ))}
+            ) : (
+              warehouseOptions.map((wh) => {
+                const label = wh.store_name
+                  ? `${wh.name || wh.code || `Warehouse #${wh.id}`} (${wh.store_name})`
+                  : (wh.name || wh.code || `Warehouse #${wh.id}`);
+                return (
+                  <option
+                    key={wh.id}
+                    value={String(wh.id)}
+                  >
+                    {label}
+                  </option>
+                );
+              })
+            )}
           </select>
         </div>
 
@@ -225,14 +244,26 @@ const InventoryFilters = ({
               All Suppliers
             </option>
 
-            {supplierOptions.map((supplier) => (
-              <option
-                key={supplier}
-                value={supplier}
-              >
-                {supplier}
-              </option>
-            ))}
+            {supplierOptions.map((supplier) => {
+              const id = typeof supplier === "object" ? supplier.id : supplier;
+              const name =
+                typeof supplier === "object"
+                  ? supplier.name || `Supplier #${supplier.id}`
+                  : supplier;
+              const value =
+                typeof supplier === "object"
+                  ? supplier.name || String(supplier.id)
+                  : supplier;
+
+              return (
+                <option
+                  key={id}
+                  value={value}
+                >
+                  {name}
+                </option>
+              );
+            })}
           </select>
         </div>
 
