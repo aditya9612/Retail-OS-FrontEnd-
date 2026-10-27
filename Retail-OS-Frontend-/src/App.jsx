@@ -61,11 +61,13 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ProtectedRoute from './components/ProtectedRoute';
 import GuestRoute from './components/GuestRoute';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
     return (
-        <Router>
-            <Routes>
+        <ErrorBoundary>
+            <Router>
+                <Routes>
 
                 {/* Login page */}
                 <Route
@@ -194,6 +196,7 @@ function App() {
 
             </Routes>
         </Router>
+        </ErrorBoundary>
     );
 }
 
