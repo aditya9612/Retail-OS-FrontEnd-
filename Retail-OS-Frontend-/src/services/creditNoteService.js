@@ -199,15 +199,111 @@ export const downloadCreditNotePdf = async (creditNoteId) => {
 /**
  * Convenient alias for previewing Credit Note PDF
  */
+/**
+ * Convenient alias for previewing Credit Note PDF
+ */
 export const previewCreditNotePdf = async (creditNoteId) => {
     return getCreditNotePdf(creditNoteId, { mode: 'preview' });
+};
+
+/**
+ * 5. POST /api/v1/credit-notes/validate - Validate Credit Note at POS Checkout
+ * @param {string} creditNoteNo - e.g. 'CN-2026-000001'
+ * @param {number|string} billAmount - positive total bill amount
+ */
+export const validateCreditNote = async (creditNoteNo, billAmount) => {
+    try {
+        if (!creditNoteNo) throw new Error('Credit Note number is required.');
+        const response = await apiClient.post('/credit-notes/validate', {
+            credit_note_no: String(creditNoteNo).trim(),
+            bill_amount: Number(billAmount) || 0,
+        });
+        return response.data;
+    } catch (e) {
+        return await handleApiError(e);
+    }
+};
+
+/**
+ * 6. POST /api/v1/credit-notes/redeem - Redeem Credit Note towards Bill
+ * @param {Object} payload
+ * @param {string} payload.credit_note_no
+ * @param {number} payload.amount_to_redeem
+ * @param {number} [payload.invoice_id]
+ * @param {number} [payload.order_id]
+ * @param {string} [payload.notes]
+ */
+export const redeemCreditNote = async (payload) => {
+    try {
+        if (!payload.credit_note_no) throw new Error('Credit Note number is required.');
+        if (!payload.amount_to_redeem || Number(payload.amount_to_redeem) <= 0) {
+            throw new Error('A positive redemption amount is required.');
+        }
+
+        const body = {
+            credit_note_no: String(payload.credit_note_no).trim(),
+            amount_to_redeem: Number(payload.amount_to_redeem),
+        };
+        if (payload.invoice_id) body.invoice_id = Number(payload.invoice_id);
+        if (payload.order_id) body.order_id = Number(payload.order_id);
+        if (payload.notes) body.notes = String(payload.notes).trim();
+
+        const response = await apiClient.post('/credit-notes/redeem', body);
+        return response.data;
+    } catch (e) {
+        return await handleApiError(e);
+    }
+};
+
+/**
+ * 7. GET /api/v1/credit-notes/by-number/{credit_note_no} - Lookup Credit Note by Number
+ * @param {string} creditNoteNo
+ */
+export const getCreditNoteByNumber = async (creditNoteNo) => {
+    try {
+        if (!creditNoteNo) throw new Error('Credit Note number is required.');
+        const response = await apiClient.get(`/credit-notes/by-number/${encodeURIComponent(String(creditNoteNo).trim())}`);
+        return response.data;
+    } catch (e) {
+        return await handleApiError(e);
+    }
+};
+
+/**
+ * 8. GET /api/v1/credit-notes/{credit_note_id}/thermal - Export Credit Note Thermal Slip (80mm ESC/POS)
+ * @param {number|string} creditNoteId
+ * @param {Object} [options]
+ * @param {'preview'|'download'|'raw'} [options.mode='preview']
+ */
+export const getCreditNoteThermal = async (creditNoteId, { mode = 'preview' } = {}) => {
+    try {
+        if (!creditNoteId) throw new Error('Credit Note ID is required.');
+        const response = await apiClient.get(`/credit-notes/${encodeURIComponent(creditNoteId)}/thermal`, {
+            params: { mode },
+            responseType: mode === 'preview' ? 'blob' : 'json',
+        });
+
+        if (mode === 'preview') {
+            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'image/png' });
+            const url = window.URL.createObjectURL(blob);
+            return { success: true, url, blob };
+        }
+
+        return response.data;
+    } catch (e) {
+        return await handleApiError(e);
+    }
 };
 
 export default {
     getCreditNotes,
     createCreditNote,
     getCreditNoteById,
+    getCreditNoteByNumber,
     getCreditNotePdf,
     downloadCreditNotePdf,
     previewCreditNotePdf,
+    validateCreditNote,
+    redeemCreditNote,
+    getCreditNoteThermal,
 };

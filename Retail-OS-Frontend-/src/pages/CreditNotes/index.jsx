@@ -19,6 +19,7 @@ import {
     BsBoxArrowUpRight,
     BsShieldCheck,
     BsPercent,
+    BsPrinter,
 } from 'react-icons/bs';
 import {
     getCreditNotes,
@@ -27,6 +28,7 @@ import {
     getCreditNotePdf,
     downloadCreditNotePdf,
     previewCreditNotePdf,
+    getCreditNoteThermal,
 } from '../../services/creditNoteService.js';
 import { searchInvoices, getStores } from '../../services/invoiceService.js';
 
@@ -280,6 +282,20 @@ export const CreditNotesPage = () => {
             showAlert('Credit Note PDF downloaded successfully!', 'success');
         } catch (err) {
             showAlert(`Download failed: ${err.message}`, 'error');
+        }
+    };
+
+    // ── Thermal Slip Action ──────────────────────────────────────────────────
+    const handleThermalSlip = async (creditNoteId) => {
+        try {
+            showAlert('Generating 80mm ESC/POS thermal receipt slip...', 'info');
+            const res = await getCreditNoteThermal(creditNoteId, { mode: 'preview' });
+            if (res?.url) {
+                window.open(res.url, '_blank');
+                showAlert('Thermal receipt slip preview opened.', 'success');
+            }
+        } catch (err) {
+            showAlert(`Thermal slip generation failed: ${err.message}`, 'error');
         }
     };
 
@@ -1047,6 +1063,25 @@ export const CreditNotesPage = () => {
                                                         }}
                                                     >
                                                         <BsDownload size={13} />
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => handleThermalSlip(cn.id)}
+                                                        title="Preview 80mm ESC/POS Thermal Slip"
+                                                        style={{
+                                                            background: '#f3f4f6',
+                                                            border: '1px solid #d1d5db',
+                                                            borderRadius: 6,
+                                                            padding: '5px 8px',
+                                                            fontSize: 12,
+                                                            fontWeight: 600,
+                                                            color: '#4b5563',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                        }}
+                                                    >
+                                                        <BsPrinter size={13} />
                                                     </button>
                                                 </div>
                                             </td>
