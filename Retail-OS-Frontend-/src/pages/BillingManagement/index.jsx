@@ -23,6 +23,8 @@ import {
     previewInvoicePdf,
     reprintInvoice,
     generateInvoiceAsync,
+    voidInvoice,
+    getInvoiceByNumber,
     getStores,
     getCustomers,
     getProducts,
@@ -340,6 +342,11 @@ const BillingManagement = () => {
                 } catch (_) {}
             }
             if (!found) {
+                try {
+                    found = await getInvoiceByNumber(query);
+                } catch (_) {}
+            }
+            if (!found) {
                 found = invoices.find(
                     (inv) => String(inv.id) === query ||
                              String(inv.order_id) === query ||
@@ -459,6 +466,33 @@ const BillingManagement = () => {
             showAlert(err.message || 'Error triggering async generation.', 'error');
         } finally {
             setAsyncLoadingId(null);
+        }
+    };
+
+    // ── Void / Cancel Invoice (POST /api/v1/invoices/{id}/void) ───────────────
+    const [showVoidModal, setShowVoidModal] = useState(false);
+    const [voidTargetInvoice, setVoidTargetInvoice] = useState(null);
+    const [voidReason, setVoidReason] = useState('Customer cancelled / Billing error');
+    const [voidLoading, setVoidLoading] = useState(false);
+
+    const openVoidModal = (inv) => {
+        setVoidTargetInvoice(inv);
+        setVoidReason('Customer cancelled / Billing error');
+        setShowVoidModal(true);
+    };
+
+    const handleVoidSubmit = async () => {
+        if (!voidTargetInvoice?.id || voidLoading) return;
+        setVoidLoading(true);
+        try {
+            await voidInvoice(voidTargetInvoice.id, voidReason);
+            showAlert(`Invoice #${voidTargetInvoice.invoice_number || voidTargetInvoice.id} successfully cancelled and voided!`, 'success');
+            setShowVoidModal(false);
+            loadInvoices();
+        } catch (err) {
+            showAlert(err.message || 'Failed to void invoice.', 'error');
+        } finally {
+            setVoidLoading(false);
         }
     };
 
@@ -1487,6 +1521,19 @@ const BillingManagement = () => {
                                                     >
                                                         {asyncLoadingId === invId ? <span style={{ fontSize: 10 }}>⏳</span> : <BsLightningChargeFill size={12} />}
                                                     </button>
+
+                                                    {/* 6. Void / Cancel Invoice */}
+                                                    {inv.status !== 'cancelled' && inv.status !== 'void' && (
+                                                        <button
+                                                            id={`btn-void-${invId}`}
+                                                            onClick={() => openVoidModal(inv)}
+                                                            className="adm-action-btn"
+                                                            title="Void / Cancel Tax Invoice (POST /api/v1/invoices/{invoice_id}/void)"
+                                                            style={{ background: '#fef2f2', color: '#dc2626' }}
+                                                        >
+                                                            <BsTrash size={13} />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -2494,6 +2541,111 @@ const BillingManagement = () => {
                                 style={{ background: '#d97706' }}
                             >
                                 {reprintLoading ? 'Dispatching…' : 'Send Print Job'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* =================================================================
+               MODAL: VOID / CANCEL INVOICE (POST /api/v1/invoices/{id}/void)
+               ================================================================= */}
+            {showVoidModal && voidTargetInvoice && (
+                <div
+                    className="modal-backdrop"
+                    onClick={() => setShowVoidModal(false)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(15, 23, 42, 0.65)',
+                        zIndex: 2200,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 16,
+                        backdropFilter: 'blur(3px)',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: '#fff',
+                            borderRadius: 14,
+                            width: '100%',
+                            maxWidth: 460,
+                            padding: 24,
+                            boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                            <div style={{ background: '#fee2e2', color: '#dc2626', padding: 10, borderRadius: 10 }}>
+                                <BsExclamationTriangleFill size={22} />
+                            </div>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+                                    Void / Cancel Tax Invoice
+                                </h3>
+                                <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
+                                    Invoice #{voidTargetInvoice.invoice_number || voidTargetInvoice.id}
+                                </p>
+                            </div>
+                        </div>
+
+                        <p style={{ fontSize: 13, color: '#475569', marginBottom: 14, lineHeight: 1.5 }}>
+                            Voiding this invoice will cancel active payments, restore inventory items to stock, and record an audit cancellation in compliance with GST guidelines.
+                        </p>
+
+                        <div style={{ marginBottom: 20 }}>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                                Cancellation Reason <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <textarea
+                                rows={3}
+                                required
+                                value={voidReason}
+                                onChange={(e) => setVoidReason(e.target.value)}
+                                placeholder="Enter reason for voiding this invoice..."
+                                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13, resize: 'vertical' }}
+                            />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowVoidModal(false)}
+                                style={{
+                                    padding: '9px 18px',
+                                    borderRadius: 8,
+                                    border: '1px solid #cbd5e1',
+                                    background: '#f8fafc',
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    color: '#475569',
+                                }}
+                            >
+                                Dismiss
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleVoidSubmit}
+                                disabled={voidLoading || !voidReason.trim()}
+                                style={{
+                                    padding: '9px 20px',
+                                    borderRadius: 8,
+                                    border: 'none',
+                                    background: '#dc2626',
+                                    color: '#fff',
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                }}
+                            >
+                                {voidLoading && <BsArrowRepeat size={13} className="spin" />}
+                                Confirm Void & Cancel
                             </button>
                         </div>
                     </div>

@@ -247,12 +247,86 @@ export const reprintInvoice = async (invoiceId, payload = { printer_type: 'gener
 };
 
 /**
+/**
  * 6. POST /api/v1/invoices/{invoice_id}/generate-async - Generate Invoice Async
  * @param {number|string} invoiceId
  */
 export const generateInvoiceAsync = async (invoiceId) => {
     try {
         const response = await apiClient.post(`/invoices/${encodeURIComponent(invoiceId)}/generate-async`);
+        return response.data;
+    } catch (e) {
+        handleApiError(e);
+    }
+};
+
+/**
+ * 7. POST /api/v1/invoices/{invoice_id}/void - Void or Cancel an Issued Tax Invoice
+ * @param {number|string} invoiceId
+ * @param {string} reason
+ */
+export const voidInvoice = async (invoiceId, reason = 'Cancelled by cashier / customer request') => {
+    try {
+        if (!invoiceId) throw new Error('Invoice ID is required to void.');
+        const response = await apiClient.post(`/invoices/${encodeURIComponent(invoiceId)}/void`, {
+            reason: String(reason).trim() || 'Invoice voided',
+        });
+        return response.data;
+    } catch (e) {
+        handleApiError(e);
+    }
+};
+
+/**
+ * 8. GET /api/v1/invoices/by-number/{invoice_number} - Lookup Invoice by Invoice Number
+ * @param {string} invoiceNumber (e.g. 'INV-2026-000001')
+ */
+export const getInvoiceByNumber = async (invoiceNumber) => {
+    try {
+        if (!invoiceNumber) throw new Error('Invoice number is required.');
+        const response = await apiClient.get(`/invoices/by-number/${encodeURIComponent(String(invoiceNumber).trim())}`);
+        return response.data;
+    } catch (e) {
+        handleApiError(e);
+    }
+};
+
+/**
+ * 9. GET /api/v1/invoices/{invoice_id}/pdf-status - Check Invoice PDF Readiness Status
+ * @param {number|string} invoiceId
+ */
+export const getInvoicePdfStatus = async (invoiceId) => {
+    try {
+        if (!invoiceId) throw new Error('Invoice ID is required.');
+        const response = await apiClient.get(`/invoices/${encodeURIComponent(invoiceId)}/pdf-status`);
+        return response.data;
+    } catch (e) {
+        handleApiError(e);
+    }
+};
+
+/**
+ * 10. GET /api/v1/invoices/{invoice_id}/thermal - Export Invoice / POS Thermal Receipt Slip (80mm ESC/POS)
+ * @param {number|string} invoiceId
+ * @param {Object} [options]
+ * @param {'preview'|'download'|'raw'} [options.mode='preview']
+ * @param {string} [options.printer_type='generic']
+ * @param {boolean} [options.is_reprint=false]
+ */
+export const getInvoiceThermalReceipt = async (invoiceId, { mode = 'preview', printer_type = 'generic', is_reprint = false } = {}) => {
+    try {
+        if (!invoiceId) throw new Error('Invoice ID is required.');
+        const response = await apiClient.get(`/invoices/${encodeURIComponent(invoiceId)}/thermal`, {
+            params: { mode, printer_type, is_reprint },
+            responseType: mode === 'preview' ? 'blob' : 'json',
+        });
+
+        if (mode === 'preview') {
+            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'image/png' });
+            const url = window.URL.createObjectURL(blob);
+            return { success: true, url, blob };
+        }
+
         return response.data;
     } catch (e) {
         handleApiError(e);
@@ -296,9 +370,13 @@ export default {
     getInvoiceById,
     getInvoice,
     getInvoiceByOrderId,
+    getInvoiceByNumber,
     getInvoicePdf,
     downloadInvoicePdf,
     previewInvoicePdf,
+    getInvoicePdfStatus,
+    getInvoiceThermalReceipt,
+    voidInvoice,
     reprintInvoice,
     generateInvoiceAsync,
     getStores,
