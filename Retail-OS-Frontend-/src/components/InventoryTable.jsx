@@ -9,6 +9,90 @@ import {
   BsPencil,
 } from "react-icons/bs";
 
+const MRP_FIELD_NAMES = [
+  "mrp",
+  "mrp_price",
+  "mrpPrice",
+  "MRP",
+  "max_retail_price",
+  "maxRetailPrice",
+  "maximum_retail_price",
+  "retail_price",
+  "retailPrice",
+  "product_mrp",
+  "productMrp",
+];
+
+const isValidNumericMrp = (val) => {
+  if (val === undefined || val === null || val === "" || typeof val === "boolean") {
+    return false;
+  }
+  const num = Number(val);
+  return Number.isFinite(num) && num > 0;
+};
+
+const extractMrpFromObject = (obj, depth = 0) => {
+  if (!obj || depth > 4) return null;
+
+  if (typeof obj === "string") {
+    try {
+      const parsed = JSON.parse(obj);
+      if (parsed && typeof parsed === "object") {
+        return extractMrpFromObject(parsed, depth + 1);
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  if (typeof obj !== "object") return null;
+
+  for (const field of MRP_FIELD_NAMES) {
+    if (isValidNumericMrp(obj[field])) {
+      return Number(obj[field]);
+    }
+  }
+
+  if (Array.isArray(obj)) {
+    for (const elem of obj) {
+      const val = extractMrpFromObject(elem, depth + 1);
+      if (val !== null) return val;
+    }
+    return null;
+  }
+
+  const nestedContainers = [
+    obj.variants,
+    obj.variant,
+    obj.items,
+    obj.options,
+    obj.details,
+    obj.product_details,
+    obj.productDetail,
+    obj.metadata,
+    obj.meta,
+    obj.custom_fields,
+  ];
+
+  for (const container of nestedContainers) {
+    if (container) {
+      const val = extractMrpFromObject(container, depth + 1);
+      if (val !== null) return val;
+    }
+  }
+
+  const values = Object.values(obj);
+  for (const val of values) {
+    if (val && typeof val === "object") {
+      const result = extractMrpFromObject(val, depth + 1);
+      if (result !== null) return result;
+    }
+  }
+
+  return null;
+};
+
 const InventoryTable = ({
   paginated = [],
   stockStatus,
@@ -126,12 +210,13 @@ const InventoryTable = ({
             <th>Product</th>
             <th>SKU</th>
             <th>Category</th>
+            <th>Supplier</th>
             <th>Store Name</th>
             <th>Store ID</th>
             <th>Available Qty</th>
             <th>Reorder Level</th>
             <th>Expiry Date</th>
-            <th>Cost Price</th>
+            <th>MRP PRICE</th>
             <th>Selling Price</th>
             <th>Margin</th>
             <th>Status</th>
@@ -175,10 +260,23 @@ const InventoryTable = ({
             ===================================================== */
 
             const category =
-              item.category ||
+              (typeof item.category === "string" && item.category.trim() ? item.category : null) ||
+              item.category?.name ||
               item.category_name ||
               item.categoryName ||
-              "General";
+              (item.category_id ? `Category #${item.category_id}` : "—");
+
+            /* =====================================================
+               SUPPLIER
+            ===================================================== */
+
+            const supplier =
+              (typeof item.supplier_name === "string" && item.supplier_name.trim() ? item.supplier_name : null) ||
+              (typeof item.supplierName === "string" && item.supplierName.trim() ? item.supplierName : null) ||
+              (typeof item.supplier === "string" && item.supplier.trim() ? item.supplier : null) ||
+              item.supplier?.name ||
+              item.supplier?.supplier_name ||
+              "—";
 
             /* =====================================================
                LOCATION / WAREHOUSE
@@ -215,24 +313,22 @@ const InventoryTable = ({
             ===================================================== */
 
             const minStock =
-              item.low_stock_threshold !==
-                undefined &&
-              item.low_stock_threshold !== null
-                ? Number(
-                    item.low_stock_threshold
-                  )
-                : item.minStock !==
-                      undefined &&
-                    item.minStock !== null
+              Number(item.low_stock_threshold) > 0
+                ? Number(item.low_stock_threshold)
+                : Number(item.minStock) > 0
                 ? Number(item.minStock)
-                : item.minimum_stock !==
-                      undefined &&
-                    item.minimum_stock !== null
+                : Number(item.minimum_stock) > 0
                 ? Number(item.minimum_stock)
+                : Number(item.min_stock) > 0
+                ? Number(item.min_stock)
+                : Number(item.reorder_level) > 0
+                ? Number(item.reorder_level)
+                : Number(item.reorderLevel) > 0
+                ? Number(item.reorderLevel)
                 : 0;
 
             /* =====================================================
-               COST PRICE
+               COST PRICE (Preserved for Margin Calculation)
             ===================================================== */
 
             const costPrice =
@@ -250,17 +346,29 @@ const InventoryTable = ({
                 : 0;
 
             /* =====================================================
+               MRP PRICE
+            ===================================================== */
+
+            const mrpPrice =
+              (isValidNumericMrp(item?.mrp) ? Number(item.mrp) : null) ??
+              (isValidNumericMrp(item?.mrp_price) ? Number(item.mrp_price) : null) ??
+              (isValidNumericMrp(item?.mrpPrice) ? Number(item.mrpPrice) : null) ??
+              (isValidNumericMrp(item?.MRP) ? Number(item.MRP) : null) ??
+              extractMrpFromObject(item?.product) ??
+              extractMrpFromObject(item?.variants) ??
+              extractMrpFromObject(item);
+
+            /* =====================================================
                SELLING PRICE
             ===================================================== */
 
             const sellingPrice =
-              item.sellingPrice !== undefined &&
-              item.sellingPrice !== null
-                ? Number(item.sellingPrice)
-                : item.selling_price !==
-                      undefined &&
-                  item.selling_price !== null
+              item.selling_price !== undefined &&
+              item.selling_price !== null
                 ? Number(item.selling_price)
+                : item.sellingPrice !== undefined &&
+                  item.sellingPrice !== null
+                ? Number(item.sellingPrice)
                 : item.price !== undefined &&
                   item.price !== null
                 ? Number(item.price)
@@ -374,24 +482,19 @@ const isMissingRequiredExpiry =
             ===================================================== */
 
             let st;
-
-            if (isZeroPrice) {
-              st = {
-                label: "Out of Stock",
-                color: "#dc2626",
-                bg: "#fef2f2",
-              };
-            } else if (qty <= 0) {
-              st = {
-                label: "Out of Stock",
-                color: "#dc2626",
-                bg: "#fef2f2",
-              };
-     } else if (minStock > 0 && qty <= minStock) {
+            if (typeof stockStatus === "function") {
+              st = stockStatus(item);
+            } else if (item?.is_low_stock || (minStock > 0 && qty <= minStock)) {
               st = {
                 label: "Low Stock",
                 color: "#d97706",
                 bg: "#fffbeb",
+              };
+            } else if (isZeroPrice || qty <= 0) {
+              st = {
+                label: "Out of Stock",
+                color: "#dc2626",
+                bg: "#fef2f2",
               };
             } else {
               st = {
@@ -508,6 +611,25 @@ const isMissingRequiredExpiry =
                 </td>
 
                 {/* =================================================
+                   SUPPLIER
+                ================================================= */}
+
+                <td>
+                  <span
+                    style={{
+                      background: "#f0fdf4",
+                      color: "#16a34a",
+                      padding: "4px 8px",
+                      borderRadius: 20,
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {supplier}
+                  </span>
+                </td>
+
+                {/* =================================================
                    STORE NAME / STORE ID
                 ================================================= */}
 
@@ -600,11 +722,13 @@ const isMissingRequiredExpiry =
              
 
                 {/* =================================================
-                   COST PRICE
+                   MRP PRICE
                 ================================================= */}
 
                 <td>
-                  {fmt(costPrice)}
+                  {mrpPrice !== null && mrpPrice !== undefined
+                    ? (typeof fmt === "function" ? fmt(mrpPrice) : `₹${Number(mrpPrice).toLocaleString("en-IN")}`)
+                    : "—"}
                 </td>
 
                 {/* =================================================
@@ -670,19 +794,57 @@ const isMissingRequiredExpiry =
                 {/* =================================================
                    ACTION
                 ================================================= */}
-<td>
-  <span
-    style={{
-      color:
-        margin >= 20
-          ? "#10b981"
-          : "#ef4444",
-      fontWeight: 700,
-    }}
-  >
-    {formattedMargin}%
-  </span>
-</td>
+                <td className="inventory-actions-cell">
+                  <div className="inventory-action-buttons">
+                    <button
+                      type="button"
+                      className="inventory-action-btn inventory-action-update"
+                      title="Update Stock"
+                      aria-label="Update Stock"
+                      onClick={() => {
+                        if (typeof setStockModal === "function") {
+                          setStockModal(item);
+                        }
+                      }}
+                    >
+                      <BsPencil size={12} />
+                      <span>Update</span>
+                    </button>
+                    {onView && (
+                      <button
+                        type="button"
+                        className="inventory-action-btn inventory-action-view"
+                        title="View Details"
+                        aria-label="View Details"
+                        onClick={() => onView(item)}
+                      >
+                        <BsEye size={12} />
+                      </button>
+                    )}
+                    {onHistory && (
+                      <button
+                        type="button"
+                        className="inventory-action-btn inventory-action-history"
+                        title="Movement History"
+                        aria-label="Movement History"
+                        onClick={() => onHistory(item)}
+                      >
+                        <BsClockHistory size={12} />
+                      </button>
+                    )}
+                    {onAdjust && (
+                      <button
+                        type="button"
+                        className="inventory-action-btn inventory-action-adjust"
+                        title="Adjust Inventory"
+                        aria-label="Adjust Inventory"
+                        onClick={() => onAdjust(item)}
+                      >
+                        <BsSliders size={12} />
+                      </button>
+                    )}
+                  </div>
+                </td>
                
 
               </tr>

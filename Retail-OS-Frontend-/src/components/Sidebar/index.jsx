@@ -83,7 +83,7 @@ export const menuGroups = [
             { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases' },
             { name: 'Suppliers', icon: <BsTruck />, path: '/suppliers' },
             { name: 'GRN', icon: <BsClipboardCheck />, path: '/inventory/grn' },
-            { name: 'Purchase Returns', icon: <BsArrowCounterclockwise />, path: '/inventory/purchase-returns' },
+            { name: 'Purchase Returns', icon: <BsArrowCounterclockwise />, path: '/inventory/purchase-returns', aliasPaths: ['/returns', '/purchase-order-returns'] },
             { name: 'Store Transfers', icon: <BsArrowLeftRight />, path: '/inventory/store-transfers' },
         ],
     },

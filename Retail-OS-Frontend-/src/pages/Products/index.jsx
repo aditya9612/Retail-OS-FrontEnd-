@@ -536,10 +536,21 @@ export const toPayload = (form, categories = [], existingProduct = null) => {
 
 export const mapProductRecord = (p, activeCatMap = {}, inventoryExpiryMap = {}) => {
     if (!p) return null;
-    const mrpVal = p.mrp ?? p.cost_price ?? p.mrp_price ?? null;
-    const priceVal = p.selling_price ?? p.price ?? p.sellingPrice ?? null;
     const variants = (typeof p.variants === 'object' && p.variants !== null) ? p.variants : {};
     const localMeta = getLocalProductMeta(p.id, p.sku);
+
+    const mrpCandidate = (
+        (Number(p.mrp) > 0 ? Number(p.mrp) : null) ??
+        (Number(variants.mrp) > 0 ? Number(variants.mrp) : null) ??
+        (Number(variants.mrp_price) > 0 ? Number(variants.mrp_price) : null) ??
+        (Number(p.mrp_price) > 0 ? Number(p.mrp_price) : null) ??
+        (Number(localMeta.mrp) > 0 ? Number(localMeta.mrp) : null) ??
+        (p.cost_price != null ? Number(p.cost_price) : null) ??
+        null
+    );
+    const mrpVal = mrpCandidate;
+    const priceVal = p.selling_price ?? p.price ?? p.sellingPrice ?? null;
+    const costVal = p.cost_price ?? null;
 
     const isFeatured = Boolean(
         p.featured === true ||
@@ -661,9 +672,10 @@ export const mapProductRecord = (p, activeCatMap = {}, inventoryExpiryMap = {}) 
         is_expired: isExpired,
         status_label: statusLabel,
         sellingPrice: priceVal,
+        selling_price: priceVal,
         price: priceVal,
         mrp: mrpVal,
-        cost_price: mrpVal,
+        cost_price: costVal ?? mrpVal,
         brand: brandVal,
         featured: isFeatured,
         expiry_date: expiryDate,
@@ -2329,6 +2341,7 @@ const Products = () => {
             saveLocalProductMeta(targetId, targetSku, {
                 featured: Boolean(originalForm.featured),
                 brand: originalForm.brand?.trim() || null,
+                mrp: Number(originalForm.mrp) || 0,
                 manufacturingDate: originalForm.manufacturingDate || null,
                 expiryDate: originalForm.expiryDate || null,
                 imageUrl: originalForm.imagePreview || originalForm.imageUrl || null,
@@ -3267,7 +3280,7 @@ const Products = () => {
                                         fontWeight: 600,
                                         whiteSpace: 'nowrap'
                                     }}>
-                                        {fmt(p.mrp ?? p.cost_price)}
+                                        {(p.mrp && Number(p.mrp) > 0) ? fmt(p.mrp) : (p.cost_price && Number(p.cost_price) > 0 ? fmt(p.cost_price) : '—')}
                                     </td>
 
                                     <td style={{

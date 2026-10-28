@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import "./purchase.css";
 
 import {
@@ -1998,20 +1998,26 @@ const Purchases = () => {
         const totalAmount =
           Number(form.total) || 0;
 
-        const payload = {
-          supplier_id:
-            Number(form.supplier),
-
-          store_id:
-            Number(form.storeId),
-
-          invoice_number:
-            form.invoiceNumber,
-
-          remarks:
-            form.remarks ||
-            "Updated purchase order",
-        };
+        const payload = {};
+        const supId = Number(form.supplier);
+        if (supId > 0) {
+          payload.supplier_id = supId;
+        }
+        const stId = Number(form.storeId);
+        if (stId > 0) {
+          payload.store_id = stId;
+        }
+        if (form.invoiceNumber !== undefined) {
+          payload.invoice_number =
+            form.invoiceNumber && form.invoiceNumber !== "-"
+              ? form.invoiceNumber.trim()
+              : null;
+        }
+        if (form.remarks !== undefined || form.notes !== undefined) {
+          const notesVal = form.remarks || form.notes || "Updated purchase order";
+          payload.remarks = notesVal;
+          payload.notes = notesVal;
+        }
 
         console.log("========== UPDATE PURCHASE ==========");
         console.log("Purchase Order ID:", purchaseOrderId);
@@ -2048,23 +2054,32 @@ const Purchases = () => {
               ? "cancelled"
               : form.status;
 
-          const updatedStatusResponse =
-            await updatePurchaseOrderStatus(
-              purchaseOrderId,
-              {
-                status:
-                  backendStatus,
-              }
+          const currentStatusLower = String(
+            currentPurchase.backendStatus ||
+              currentPurchase.rawData?.status ||
+              ""
+          ).toLowerCase();
+
+          // Only invoke status transition API if status actually changed
+          if (backendStatus && backendStatus !== currentStatusLower) {
+            const updatedStatusResponse =
+              await updatePurchaseOrderStatus(
+                purchaseOrderId,
+                {
+                  status:
+                    backendStatus,
+                }
+              );
+
+            updatedStatus =
+              updatedStatusResponse?.data ??
+              updatedStatusResponse;
+
+            console.log(
+              "UPDATE PURCHASE STATUS RESPONSE:",
+              updatedStatusResponse
             );
-
-          updatedStatus =
-            updatedStatusResponse?.data ??
-            updatedStatusResponse;
-
-          console.log(
-            "UPDATE PURCHASE STATUS RESPONSE:",
-            updatedStatusResponse
-          );
+          }
         }
 
         const finalBackendStatus =
@@ -2244,9 +2259,13 @@ const Purchases = () => {
         apiError?.detail;
 
       const message =
-        detail?.message ||
-        detail ||
         apiError?.message ||
+        detail?.message ||
+        (typeof detail === "string" ? detail : null) ||
+        (Array.isArray(detail)
+          ? detail.map((d) => d.msg || d.message).join(", ")
+          : null) ||
+        err?.message ||
         "Failed to save purchase";
 
       alert(
@@ -2991,10 +3010,19 @@ const Purchases = () => {
                               display: "inline-flex",
                               alignItems: "center",
                               gap: 5,
-                              cursor:
-                                "pointer",
+                              cursor: isDraftPurchase(purchase)
+                                ? "pointer"
+                                : "not-allowed",
+                              opacity: isDraftPurchase(purchase)
+                                ? 1
+                                : 0.45,
                             }}
-                            title="Edit"
+                            disabled={!isDraftPurchase(purchase)}
+                            title={
+                              isDraftPurchase(purchase)
+                                ? "Edit"
+                                : "Only draft orders can be edited"
+                            }
                             aria-label="Edit purchase order"
                             onClick={() =>
                               handleEditPurchase(
