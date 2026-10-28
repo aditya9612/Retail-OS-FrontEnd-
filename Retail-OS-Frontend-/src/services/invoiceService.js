@@ -6,11 +6,20 @@ import { getCart, returnOrder, returnInvoiceItem } from './billingService';
 export { getCart, returnOrder, returnInvoiceItem };
 
 /**
- * Handle API error and extract meaningful message
+ * Handle API error and extract meaningful message, handling JSON and Blob response errors
  */
-export const handleApiError = (error) => {
+export const handleApiError = async (error) => {
     let message = null;
-    const data = error?.response?.data;
+    let data = error?.response?.data;
+
+    // If response was a Blob (e.g., from PDF/Thermal endpoints), parse JSON inside blob
+    if (data instanceof Blob) {
+        try {
+            const text = await data.text();
+            data = JSON.parse(text);
+        } catch (_) {}
+    }
+
     if (data) {
         if (typeof data.message === 'string' && data.message) {
             message = data.message;
@@ -32,19 +41,21 @@ export const handleApiError = (error) => {
 
 /* ==========================================================================
    INVOICES MODULE APIS (/api/v1/invoices)
-   Strictly aligned with OpenAPI specifications
+   Strictly aligned with OpenAPI specifications (All 10 Endpoints)
    ========================================================================== */
 
 const ALLOWED_PAYMENT_MODES = ['cash', 'upi', 'card', 'credit_card', 'debit_card', 'wallet', 'qr'];
 
 /**
- * 1. POST /api/v1/invoices - Create Invoice
+ * 1. POST /api/v1/invoices — Create Invoice
  * @param {Object} payload
  * @param {number} payload.store_id
  * @param {number|null} [payload.customer_id]
  * @param {boolean} [payload.same_state=true]
  * @param {Array} [payload.items] [{ product_id, quantity, unit_price, discount }]
  * @param {Array} [payload.payments] [{ payment_mode, amount, transaction_reference, amount_tendered, change_due }]
+ * @param {number|null} [payload.shift_id]
+ * @param {string|null} [payload.idempotency_key]
  */
 export const createInvoice = async (payload) => {
     try {
@@ -76,25 +87,27 @@ export const createInvoice = async (payload) => {
             same_state: payload.same_state !== undefined ? Boolean(payload.same_state) : true,
             ...(sanitizedItems && sanitizedItems.length > 0 ? { items: sanitizedItems } : {}),
             ...(sanitizedPayments && sanitizedPayments.length > 0 ? { payments: sanitizedPayments } : {}),
+            ...(payload.shift_id ? { shift_id: Number(payload.shift_id) } : {}),
+            ...(payload.idempotency_key ? { idempotency_key: String(payload.idempotency_key) } : {}),
         };
 
         const response = await apiClient.post('/invoices', sanitizedPayload);
         return response.data;
     } catch (e) {
-        handleApiError(e);
+        await handleApiError(e);
     }
 };
 
 /**
- * 2. GET /api/v1/invoices - Search Invoices
+ * 2. GET /api/v1/invoices — Search Invoices
  * @param {Object} params
- * @param {string} [params.invoice_number]
- * @param {string} [params.customer_name]
- * @param {string} [params.mobile]
- * @param {string} [params.gstin]
+ * @param {string} [params.invoice_number] min 1, max 50
+ * @param {string} [params.customer_name] min 2, max 100
+ * @param {string} [params.mobile] exactly 10 digits
+ * @param {string} [params.gstin] 15 chars GSTIN
  * @param {string} [params.payment_status] paid, unpaid, partial, cancelled, completed, pending, failed
- * @param {string} [params.date_from]
- * @param {string} [params.date_to]
+ * @param {string} [params.date_from] ISO datetime
+ * @param {string} [params.date_to] ISO datetime
  * @param {number} [params.store_id]
  */
 export const searchInvoices = async (params = {}) => {
@@ -132,7 +145,7 @@ export const searchInvoices = async (params = {}) => {
             cleanParams.date_to = String(params.date_to).trim();
         }
 
-        // Backend strictly requires at least one search parameter to prevent unbounded queries
+        // Backend requires at least one parameter to prevent unbounded queries
         if (Object.keys(cleanParams).length === 0) {
             cleanParams.store_id = 1;
         }
@@ -140,22 +153,23 @@ export const searchInvoices = async (params = {}) => {
         const response = await apiClient.get('/invoices', { params: cleanParams });
         return response.data;
     } catch (e) {
-        handleApiError(e);
+        await handleApiError(e);
     }
 };
 
 export const getInvoices = searchInvoices;
 
 /**
- * 3. GET /api/v1/invoices/{invoice_id} - Get Invoice Details
+ * 3. GET /api/v1/invoices/{invoice_id} — Get Invoice Details
  * @param {number|string} invoiceId
  */
 export const getInvoiceById = async (invoiceId) => {
     try {
+        if (!invoiceId) throw new Error('Invoice ID is required.');
         const response = await apiClient.get(`/invoices/${encodeURIComponent(invoiceId)}`);
         return response.data;
     } catch (e) {
-        handleApiError(e);
+        await handleApiError(e);
     }
 };
 
@@ -166,170 +180,198 @@ export const getInvoice = getInvoiceById;
  */
 export const getInvoiceByOrderId = async (orderId) => {
     try {
+        if (!orderId) throw new Error('Order ID is required.');
         const response = await apiClient.post(`/billing/invoices/${encodeURIComponent(orderId)}`);
         return response.data;
     } catch (e) {
-        handleApiError(e);
+        await handleApiError(e);
     }
 };
 
 /**
- * 4. GET /api/v1/invoices/{invoice_id}/pdf - Download or Preview Tax Invoice / Bill PDF
+ * 4. GET /api/v1/invoices/{invoice_id}/pdf — Download or Preview Tax Invoice / Bill PDF
  * @param {number|string} invoiceId
  * @param {Object} options
- * @param {'download'|'preview'} [options.mode='download']
+ * @param {'download'|'preview'} [options.mode='preview']
  * @param {'invoice'|'bill'} [options.document_type='invoice']
+ * @param {string} [options.invoiceNumber]
  */
-export const getInvoicePdf = async (invoiceId, { mode = 'download', document_type = 'invoice' } = {}) => {
+export const getInvoicePdf = async (invoiceId, { mode = 'preview', document_type = 'invoice', invoiceNumber = null } = {}) => {
     try {
-        const token = getAccessToken();
-        const headers = { Accept: 'application/pdf, application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (!invoiceId) throw new Error('Invoice ID is required for PDF retrieval.');
 
-        const baseURL = apiClient.defaults.baseURL || 'https://api-testing.myretailos.com/api/v1';
-        const url = `${baseURL}/invoices/${encodeURIComponent(invoiceId)}/pdf?mode=${encodeURIComponent(mode)}&document_type=${encodeURIComponent(document_type)}`;
+        const response = await apiClient.get(`/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+            params: { mode, document_type },
+            responseType: 'blob',
+            headers: { Accept: 'application/pdf, application/json' },
+        });
 
-        const response = await fetch(url, { method: 'GET', headers });
-        if (!response.ok) {
-            let msg = `PDF export failed with HTTP ${response.status}`;
-            try {
-                const errData = await response.json();
-                msg = errData?.detail?.message || errData?.detail || errData?.message || msg;
-            } catch (_) {}
-            throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
-        }
+        const blob = response.data instanceof Blob 
+            ? response.data 
+            : new Blob([response.data], { type: 'application/pdf' });
 
-        const blob = await response.blob();
         const blobUrl = window.URL.createObjectURL(blob);
+        const filename = `${document_type === 'bill' ? 'POS_Bill' : 'Tax_Invoice'}_${invoiceNumber || invoiceId}.pdf`;
 
         if (mode === 'download') {
             const link = document.createElement('a');
             link.href = blobUrl;
-            link.download = `${document_type === 'bill' ? 'POS_Bill' : 'Tax_Invoice'}_${invoiceId}.pdf`;
+            link.download = filename;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
-            return { success: true, url: blobUrl };
+            setTimeout(() => window.URL.revokeObjectURL(blobUrl), 2000);
+            return { success: true, url: blobUrl, blob, filename };
         }
 
-        return { success: true, url: blobUrl, blob };
+        return { success: true, url: blobUrl, blob, filename };
     } catch (e) {
-        handleApiError(e);
+        await handleApiError(e);
     }
 };
 
 export const downloadInvoicePdf = async (invoiceId, options = {}) => {
-    return getInvoicePdf(invoiceId, { mode: 'download', document_type: options.document_type || 'invoice', ...options });
+    return getInvoicePdf(invoiceId, { ...options, mode: 'download' });
 };
 
 export const previewInvoicePdf = async (invoiceId, options = {}) => {
-    return getInvoicePdf(invoiceId, { mode: 'preview', document_type: options.document_type || 'invoice', ...options });
+    return getInvoicePdf(invoiceId, { ...options, mode: 'preview' });
 };
 
 /**
- * 5. POST /api/v1/invoices/{invoice_id}/reprint - Reprint Invoice
- * @param {number|string} invoiceId
- * @param {string|Object} [payload] - printer_type string or object { printer_type }
- */
-export const reprintInvoice = async (invoiceId, payload = { printer_type: 'generic' }) => {
-    try {
-        const printer = (typeof payload === 'string' ? payload : payload?.printer_type) || 'generic';
-        const response = await apiClient.post(
-            `/invoices/${encodeURIComponent(invoiceId)}/reprint`,
-            { printer_type: printer },
-            { params: { printer_type: printer } }
-        );
-        return response.data;
-    } catch (e) {
-        handleApiError(e);
-    }
-};
-
-/**
-/**
- * 6. POST /api/v1/invoices/{invoice_id}/generate-async - Generate Invoice Async
- * @param {number|string} invoiceId
- */
-export const generateInvoiceAsync = async (invoiceId) => {
-    try {
-        const response = await apiClient.post(`/invoices/${encodeURIComponent(invoiceId)}/generate-async`);
-        return response.data;
-    } catch (e) {
-        handleApiError(e);
-    }
-};
-
-/**
- * 7. POST /api/v1/invoices/{invoice_id}/void - Void or Cancel an Issued Tax Invoice
- * @param {number|string} invoiceId
- * @param {string} reason
- */
-export const voidInvoice = async (invoiceId, reason = 'Cancelled by cashier / customer request') => {
-    try {
-        if (!invoiceId) throw new Error('Invoice ID is required to void.');
-        const response = await apiClient.post(`/invoices/${encodeURIComponent(invoiceId)}/void`, {
-            reason: String(reason).trim() || 'Invoice voided',
-        });
-        return response.data;
-    } catch (e) {
-        handleApiError(e);
-    }
-};
-
-/**
- * 8. GET /api/v1/invoices/by-number/{invoice_number} - Lookup Invoice by Invoice Number
- * @param {string} invoiceNumber (e.g. 'INV-2026-000001')
- */
-export const getInvoiceByNumber = async (invoiceNumber) => {
-    try {
-        if (!invoiceNumber) throw new Error('Invoice number is required.');
-        const response = await apiClient.get(`/invoices/by-number/${encodeURIComponent(String(invoiceNumber).trim())}`);
-        return response.data;
-    } catch (e) {
-        handleApiError(e);
-    }
-};
-
-/**
- * 9. GET /api/v1/invoices/{invoice_id}/pdf-status - Check Invoice PDF Readiness Status
- * @param {number|string} invoiceId
- */
-export const getInvoicePdfStatus = async (invoiceId) => {
-    try {
-        if (!invoiceId) throw new Error('Invoice ID is required.');
-        const response = await apiClient.get(`/invoices/${encodeURIComponent(invoiceId)}/pdf-status`);
-        return response.data;
-    } catch (e) {
-        handleApiError(e);
-    }
-};
-
-/**
- * 10. GET /api/v1/invoices/{invoice_id}/thermal - Export Invoice / POS Thermal Receipt Slip (80mm ESC/POS)
+ * 5. GET /api/v1/invoices/{invoice_id}/thermal — Export Invoice / POS Thermal Receipt Slip (80mm ESC/POS)
  * @param {number|string} invoiceId
  * @param {Object} [options]
- * @param {'preview'|'download'|'raw'} [options.mode='preview']
- * @param {string} [options.printer_type='generic']
+ * @param {'preview'|'view'|'download'|'pdf'|'html'|'json'|'text'} [options.mode='preview']
+ * @param {'generic'|'epson'|'tvs'} [options.printer_type='generic']
  * @param {boolean} [options.is_reprint=false]
  */
-export const getInvoiceThermalReceipt = async (invoiceId, { mode = 'preview', printer_type = 'generic', is_reprint = false } = {}) => {
+export const getInvoiceThermal = async (invoiceId, { mode = 'preview', printer_type = 'generic', is_reprint = false } = {}) => {
     try {
-        if (!invoiceId) throw new Error('Invoice ID is required.');
+        if (!invoiceId) throw new Error('Invoice ID is required for thermal receipt export.');
+        
+        const isBinaryMode = mode === 'preview' || mode === 'pdf';
         const response = await apiClient.get(`/invoices/${encodeURIComponent(invoiceId)}/thermal`, {
             params: { mode, printer_type, is_reprint },
-            responseType: mode === 'preview' ? 'blob' : 'json',
+            responseType: isBinaryMode ? 'blob' : 'json',
         });
 
         if (mode === 'preview') {
             const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'image/png' });
             const url = window.URL.createObjectURL(blob);
-            return { success: true, url, blob };
+            return { success: true, url, blob, mode };
+        }
+
+        if (mode === 'pdf') {
+            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            return { success: true, url, blob, mode };
         }
 
         return response.data;
     } catch (e) {
-        handleApiError(e);
+        await handleApiError(e);
+    }
+};
+
+export const getInvoiceThermalReceipt = getInvoiceThermal;
+
+/**
+ * 6. POST /api/v1/invoices/{invoice_id}/reprint — Reprint Invoice Thermal Receipt
+ * @param {number|string} invoiceId
+ * @param {Object|string} [payload] - printer_type or { printer_type, mode }
+ * @param {Object} [options]
+ */
+export const reprintInvoice = async (invoiceId, payload = { printer_type: 'generic' }, options = {}) => {
+    try {
+        if (!invoiceId) throw new Error('Invoice ID is required to reprint.');
+        const printer = (typeof payload === 'string' ? payload : payload?.printer_type) || 'generic';
+        const mode = (typeof payload === 'object' && payload?.mode) || options.mode || null;
+
+        const queryParams = {};
+        if (mode) queryParams.mode = mode;
+
+        const isBinary = mode === 'preview' || mode === 'pdf';
+        const response = await apiClient.post(
+            `/invoices/${encodeURIComponent(invoiceId)}/reprint`,
+            { printer_type: printer, ...(mode ? { mode } : {}) },
+            { 
+                params: queryParams,
+                responseType: isBinary ? 'blob' : 'json'
+            }
+        );
+
+        if (mode === 'preview') {
+            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'image/png' });
+            const url = window.URL.createObjectURL(blob);
+            return { success: true, url, blob, mode: 'preview' };
+        }
+
+        return response.data;
+    } catch (e) {
+        await handleApiError(e);
+    }
+};
+
+/**
+ * 7. POST /api/v1/invoices/{invoice_id}/generate-async — Generate Invoice Asynchronously
+ * @param {number|string} invoiceId
+ */
+export const generateInvoiceAsync = async (invoiceId) => {
+    try {
+        if (!invoiceId) throw new Error('Invoice ID is required for async generation.');
+        const response = await apiClient.post(`/invoices/${encodeURIComponent(invoiceId)}/generate-async`);
+        return response.data;
+    } catch (e) {
+        await handleApiError(e);
+    }
+};
+
+/**
+ * 8. GET /api/v1/invoices/by-number/{invoice_number} — Lookup Invoice by Invoice Number
+ * @param {string} invoiceNumber (e.g. 'INV-2026-000001')
+ */
+export const getInvoiceByNumber = async (invoiceNumber) => {
+    try {
+        if (!invoiceNumber || !String(invoiceNumber).trim()) {
+            throw new Error('Valid invoice number is required.');
+        }
+        const response = await apiClient.get(`/invoices/by-number/${encodeURIComponent(String(invoiceNumber).trim())}`);
+        return response.data;
+    } catch (e) {
+        await handleApiError(e);
+    }
+};
+
+/**
+ * 9. GET /api/v1/invoices/{invoice_id}/pdf-status — Check Invoice PDF Readiness Status
+ * @param {number|string} invoiceId
+ */
+export const getInvoicePdfStatus = async (invoiceId) => {
+    try {
+        if (!invoiceId) throw new Error('Invoice ID is required to check PDF readiness status.');
+        const response = await apiClient.get(`/invoices/${encodeURIComponent(invoiceId)}/pdf-status`);
+        return response.data;
+    } catch (e) {
+        await handleApiError(e);
+    }
+};
+
+/**
+ * 10. POST /api/v1/invoices/{invoice_id}/void — Void or Cancel an Issued Tax Invoice
+ * @param {number|string} invoiceId
+ * @param {string} [reason]
+ */
+export const voidInvoice = async (invoiceId, reason = 'Customer cancelled at counter') => {
+    try {
+        if (!invoiceId) throw new Error('Invoice ID is required to void.');
+        const trimmedReason = String(reason || '').trim();
+        const response = await apiClient.post(`/invoices/${encodeURIComponent(invoiceId)}/void`, {
+            reason: trimmedReason.length >= 3 ? trimmedReason : 'Customer cancelled at counter',
+        });
+        return response.data;
+    } catch (e) {
+        await handleApiError(e);
     }
 };
 
@@ -370,15 +412,16 @@ export default {
     getInvoiceById,
     getInvoice,
     getInvoiceByOrderId,
-    getInvoiceByNumber,
     getInvoicePdf,
     downloadInvoicePdf,
     previewInvoicePdf,
-    getInvoicePdfStatus,
+    getInvoiceThermal,
     getInvoiceThermalReceipt,
-    voidInvoice,
     reprintInvoice,
     generateInvoiceAsync,
+    getInvoiceByNumber,
+    getInvoicePdfStatus,
+    voidInvoice,
     getStores,
     getCustomers,
     getProducts,

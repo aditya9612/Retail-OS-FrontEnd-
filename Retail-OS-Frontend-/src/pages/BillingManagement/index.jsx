@@ -19,12 +19,16 @@ import {
     searchInvoices,
     getInvoiceById,
     getInvoiceByOrderId,
+    getInvoicePdf,
     downloadInvoicePdf,
     previewInvoicePdf,
+    getInvoiceThermal,
+    getInvoiceThermalReceipt,
     reprintInvoice,
     generateInvoiceAsync,
     voidInvoice,
     getInvoiceByNumber,
+    getInvoicePdfStatus,
     getStores,
     getCustomers,
     getProducts,
@@ -72,12 +76,18 @@ const getStatusBadge = (st) => {
     );
 };
 
-const fmt = (n) =>
-    '₹' +
-    Number(n || 0).toLocaleString('en-IN', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    });
+const fmt = (n) => {
+    try {
+        const val = Number(n);
+        const safe = isNaN(val) ? 0 : val;
+        return '₹' + safe.toLocaleString('en-IN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
+    } catch (_) {
+        return '₹0.00';
+    }
+};
 
 const formatDate = (dateStr) => {
     if (!dateStr) return '—';
@@ -166,6 +176,22 @@ const BillingManagement = () => {
     const [availableStores, setAvailableStores] = useState([]);
     const [availableCustomers, setAvailableCustomers] = useState([]);
     const [availableProducts, setAvailableProducts] = useState([]);
+
+    // ── Create Invoice Modal State (Strictly matching POST /api/v1/invoices) ──
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [createLoading, setCreateLoading] = useState(false);
+    const [createError, setCreateError] = useState('');
+    const [newInvoiceData, setNewInvoiceData] = useState({
+        store_id: 1,
+        customer_id: null,
+        same_state: true,
+        items: [
+            { product_id: 1, quantity: 1, unit_price: 500, discount: 0 },
+        ],
+        payments: [
+            { payment_mode: 'cash', amount: 590, transaction_reference: '', amount_tendered: 600, change_due: 10 },
+        ],
+    });
 
     useEffect(() => {
         let isMounted = true;
@@ -373,13 +399,44 @@ const BillingManagement = () => {
         }
     };
 
-    // ── Invoice Details & Live PDF Preview Modal ───────────────────────────
+    // ── Table Invoice Selection State (for Top Download Invoice action) ───
+    const [selectedTableInvoiceId, setSelectedTableInvoiceId] = useState(null);
+    const selectedTableInvoice = useMemo(() => {
+        if (!selectedTableInvoiceId) return null;
+        return invoices.find((inv) => String(inv.id) === String(selectedTableInvoiceId));
+    }, [invoices, selectedTableInvoiceId]);
+
+    // ── Dedicated PDF Preview & Print Modal State (Requirement 2) ───────────
+    const [showPdfPreviewModal, setShowPdfPreviewModal] = useState(false);
+    const [pdfPreviewInvoice, setPdfPreviewInvoice] = useState(null);
+    const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
+    const [pdfPreviewLoading, setPdfPreviewLoading] = useState(false);
+    const [pdfDocType, setPdfDocType] = useState('invoice'); // 'invoice' | 'bill'
+    const [pdfStatusPolling, setPdfStatusPolling] = useState(false);
+    const [pdfStatusMessage, setPdfStatusMessage] = useState('');
+    const previewIframeRef = useRef(null);
+
+    // ── Download Invoice Modal State (Requirement 3) ────────────────────────
+    const [showDownloadModal, setShowDownloadModal] = useState(false);
+    const [downloadSearchNumber, setDownloadSearchNumber] = useState('');
+    const [downloadLookupLoading, setDownloadLookupLoading] = useState(false);
+    const [downloadLookupResult, setDownloadLookupResult] = useState(null);
+    const [downloadLookupError, setDownloadLookupError] = useState('');
+    const [downloadDocType, setDownloadDocType] = useState('invoice'); // 'invoice' | 'bill'
+
+    // ── Thermal Receipt Slip & Reprint State (Requirement 7) ────────────────
+    const [showThermalModal, setShowThermalModal] = useState(false);
+    const [thermalInvoice, setThermalInvoice] = useState(null);
+    const [thermalPrinterType, setThermalPrinterType] = useState('generic'); // 'generic' | 'epson' | 'tvs'
+    const [thermalLoading, setThermalLoading] = useState(false);
+    const [thermalPreviewUrl, setThermalPreviewUrl] = useState(null);
+    const [isReprintMode, setIsReprintMode] = useState(false);
+    const [reprintSubmitting, setReprintSubmitting] = useState(false);
+
+    // ── Invoice Details Modal State ─────────────────────────────────────────
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [showDetailModal, setShowDetailModal] = useState(false);
     const [activeDetailTab, setActiveDetailTab] = useState('details'); // 'details' | 'pdf'
-    const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null);
-    const [pdfLoading, setPdfLoading] = useState(false);
-    const [pdfDocType, setPdfDocType] = useState('invoice'); // 'invoice' | 'bill'
 
     const handleOpenDetail = async (inv) => {
         setSelectedInvoice(inv);
@@ -395,36 +452,109 @@ const BillingManagement = () => {
         }
     };
 
-    const loadPdfPreview = useCallback(async (invId, docType = 'invoice') => {
+    // ── Load PDF with optional async readiness polling (Requirement 2) ──────
+    const loadPdfWithStatusCheck = useCallback(async (invId, docType = 'invoice', invNum = null) => {
         if (!invId) return;
-        setPdfLoading(true);
+        setPdfPreviewLoading(true);
+        setPdfStatusMessage('');
         try {
-            const res = await previewInvoicePdf(invId, { document_type: docType });
+            // First check PDF readiness if backend indicates async generation
+            try {
+                const statusRes = await getInvoicePdfStatus(invId);
+                if (statusRes && (statusRes.status === 'pending' || statusRes.status === 'generating' || statusRes.status === 'queued')) {
+                    setPdfStatusPolling(true);
+                    setPdfStatusMessage(`PDF generation in progress (${statusRes.status}). Checking status…`);
+                    
+                    // Poll pdf-status endpoint up to 8 times every 2 seconds
+                    let pollCount = 0;
+                    let isReady = false;
+                    while (pollCount < 8 && !isReady) {
+                        await new Promise((resolve) => setTimeout(resolve, 2000));
+                        pollCount++;
+                        try {
+                            const check = await getInvoicePdfStatus(invId);
+                            if (check && (check.status === 'ready' || check.pdf_url)) {
+                                isReady = true;
+                                break;
+                            }
+                        } catch (_) {}
+                    }
+                    setPdfStatusPolling(false);
+                }
+            } catch (_) {
+                // PDF status endpoint is optional or already ready
+            }
+
+            const res = await previewInvoicePdf(invId, { document_type: docType, invoiceNumber: invNum });
             if (res?.url) {
                 setPdfPreviewUrl(res.url);
+            } else {
+                throw new Error('PDF stream could not be loaded.');
             }
         } catch (err) {
-            showAlert(`Could not generate preview: ${err.message}`, 'error');
+            showAlert(`Could not load PDF document: ${err.message}`, 'error');
         } finally {
-            setPdfLoading(false);
+            setPdfPreviewLoading(false);
+            setPdfStatusPolling(false);
         }
     }, []);
 
-    useEffect(() => {
-        if (showDetailModal && activeDetailTab === 'pdf' && selectedInvoice?.id) {
-            loadPdfPreview(selectedInvoice.id, pdfDocType);
-        }
-    }, [showDetailModal, activeDetailTab, selectedInvoice?.id, pdfDocType, loadPdfPreview]);
+    // ── Open Dedicated PDF Preview & Print Modal (Requirement 2) ───────────
+    const openPdfPreviewModal = async (inv, docType = 'invoice') => {
+        if (!inv) return;
+        setPdfPreviewInvoice(inv);
+        setPdfDocType(docType);
+        setPdfPreviewUrl(null);
+        setShowPdfPreviewModal(true);
 
-    // ── PDF Download Handler ───────────────────────────────────────────────
+        let latestInv = inv;
+        if (inv.id) {
+            try {
+                const fresh = await getInvoiceById(inv.id);
+                if (fresh) {
+                    latestInv = fresh;
+                    setPdfPreviewInvoice(fresh);
+                }
+            } catch (_) {}
+        }
+
+        await loadPdfWithStatusCheck(latestInv.id, docType, latestInv.invoice_number);
+    };
+
+    // ── Reliable Browser PDF Print Workflow (Requirement 2) ─────────────────
+    const handlePrintPdf = () => {
+        if (previewIframeRef.current && previewIframeRef.current.contentWindow) {
+            try {
+                previewIframeRef.current.contentWindow.focus();
+                previewIframeRef.current.contentWindow.print();
+                return;
+            } catch (_) {}
+        }
+        
+        // Fallback: open clean printable blob window
+        if (pdfPreviewUrl) {
+            const printWin = window.open(pdfPreviewUrl, '_blank');
+            if (printWin) {
+                printWin.onload = () => {
+                    try { printWin.print(); } catch (_) {}
+                };
+            } else {
+                showAlert('Pop-up window blocked. Please allow pop-ups to print this invoice.', 'error');
+            }
+        } else {
+            showAlert('PDF preview is still loading. Please wait…', 'info');
+        }
+    };
+
+    // ── PDF Download Handler (Blob & Auth Handling) ─────────────────────────
     const [downloadingId, setDownloadingId] = useState(null);
 
-    const handleDownload = async (invId, docType = 'invoice') => {
+    const handleDownload = async (invId, docType = 'invoice', invNumber = null) => {
         if (!invId || downloadingId) return;
         setDownloadingId(invId);
         try {
-            await downloadInvoicePdf(invId, { document_type: docType });
-            showAlert(`Downloaded ${docType === 'bill' ? 'POS Bill' : 'Tax Invoice'} PDF for #${invId}!`, 'success');
+            await downloadInvoicePdf(invId, { document_type: docType, invoiceNumber: invNumber });
+            showAlert(`Downloaded ${docType === 'bill' ? 'POS Bill' : 'Tax Invoice'} PDF for #${invNumber || invId}!`, 'success');
         } catch (err) {
             showAlert(err.message || 'Error downloading PDF.', 'error');
         } finally {
@@ -432,28 +562,169 @@ const BillingManagement = () => {
         }
     };
 
-    // ── Reprint Modal & Handler (POST /api/v1/invoices/{id}/reprint) ────────
-    const [showReprintModal, setShowReprintModal] = useState(false);
-    const [reprintTargetInvoice, setReprintTargetInvoice] = useState(null);
-    const [printerType, setPrinterType] = useState('thermal_80mm');
-    const [reprintLoading, setReprintLoading] = useState(false);
-
-    const openReprintModal = (inv) => {
-        setReprintTargetInvoice(inv);
-        setShowReprintModal(true);
+    // ── Top Action: Download Invoice Button (Requirement 3) ─────────────────
+    const handleTopDownloadClick = () => {
+        if (selectedTableInvoiceId) {
+            const target = selectedTableInvoice || { id: selectedTableInvoiceId };
+            handleDownload(target.id, 'invoice', target.invoice_number);
+        } else {
+            setShowDownloadModal(true);
+            setDownloadLookupResult(null);
+            setDownloadLookupError('');
+        }
     };
 
-    const handleReprintSubmit = async () => {
-        if (!reprintTargetInvoice?.id) return;
-        setReprintLoading(true);
+    // ── Download Modal Lookup by Invoice Number (GET /invoices/by-number/{num}) ─
+    const handleDownloadModalLookup = async () => {
+        const query = downloadSearchNumber.trim();
+        if (!query) {
+            setDownloadLookupError('Please enter an invoice number to lookup.');
+            return;
+        }
+        setDownloadLookupLoading(true);
+        setDownloadLookupError('');
+        setDownloadLookupResult(null);
+
         try {
-            const res = await reprintInvoice(reprintTargetInvoice.id, { printer_type: printerType });
-            showAlert(res?.message || `Invoice #${reprintTargetInvoice.invoice_number || reprintTargetInvoice.id} sent to ${printerType} printer!`, 'success');
-            setShowReprintModal(false);
+            const found = await getInvoiceByNumber(query);
+            if (found) {
+                setDownloadLookupResult(found);
+            } else {
+                setDownloadLookupError(`No tax invoice found with number "${query}".`);
+            }
+        } catch (err) {
+            // If direct by-number lookup fails, fallback to searchInvoices
+            try {
+                const searchRes = await searchInvoices({ invoice_number: query });
+                const list = Array.isArray(searchRes) ? searchRes : (searchRes?.data || []);
+                const match = list.find(it => String(it.invoice_number).toLowerCase() === query.toLowerCase());
+                if (match) {
+                    setDownloadLookupResult(match);
+                } else {
+                    setDownloadLookupError(err.message || `No invoice found for "${query}".`);
+                }
+            } catch (_) {
+                setDownloadLookupError(err.message || `No invoice found for "${query}".`);
+            }
+        } finally {
+            setDownloadLookupLoading(false);
+        }
+    };
+
+    // ── Open Thermal Receipt Modal (GET /invoices/{id}/thermal) ─────────────
+    const openThermalModal = async (inv) => {
+        if (!inv?.id) return;
+        setThermalInvoice(inv);
+        setShowThermalModal(true);
+        setThermalLoading(true);
+        setIsReprintMode(false);
+        setThermalPreviewUrl(null);
+
+        try {
+            const res = await getInvoiceThermal(inv.id, {
+                mode: 'preview',
+                printer_type: thermalPrinterType,
+                is_reprint: false,
+            });
+            if (res?.url) {
+                setThermalPreviewUrl(res.url);
+            }
+        } catch (err) {
+            showAlert(err.message || 'Error loading thermal preview.', 'error');
+        } finally {
+            setThermalLoading(false);
+        }
+    };
+
+    // ── Thermal Receipt: Switch Printer Type & Reload ───────────────────────
+    const handleThermalPrinterChange = async (newType) => {
+        setThermalPrinterType(newType);
+        if (!thermalInvoice?.id) return;
+        setThermalLoading(true);
+        try {
+            const res = await getInvoiceThermal(thermalInvoice.id, {
+                mode: 'preview',
+                printer_type: newType,
+                is_reprint: isReprintMode,
+            });
+            if (res?.url) {
+                setThermalPreviewUrl(res.url);
+            }
+        } catch (err) {
+            showAlert(err.message || 'Error updating thermal preview.', 'error');
+        } finally {
+            setThermalLoading(false);
+        }
+    };
+
+    // ── Reprint Thermal Slip with DUPLICATE header (POST /invoices/{id}/reprint) ─
+    const handleReprintReceipt = async () => {
+        if (!thermalInvoice?.id || reprintSubmitting) return;
+        setReprintSubmitting(true);
+        try {
+            const res = await reprintInvoice(
+                thermalInvoice.id,
+                { printer_type: thermalPrinterType, mode: 'preview' },
+                { mode: 'preview' }
+            );
+
+            if (res?.url) {
+                setThermalPreviewUrl(res.url);
+                setIsReprintMode(true);
+                showAlert(`Reprint slip generated with *** DUPLICATE / REPRINT *** header!`, 'success');
+            } else {
+                showAlert(res?.message || `Reprint dispatched to ${thermalPrinterType} printer!`, 'success');
+            }
         } catch (err) {
             showAlert(err.message || 'Failed to dispatch reprint.', 'error');
         } finally {
-            setReprintLoading(false);
+            setReprintSubmitting(false);
+        }
+    };
+
+    // ── Download Raw 80mm ESC/POS Text Stream ──────────────────────────────
+    const handleDownloadThermalEscPos = async () => {
+        if (!thermalInvoice?.id) return;
+        try {
+            const res = await getInvoiceThermal(thermalInvoice.id, {
+                mode: 'download',
+                printer_type: thermalPrinterType,
+                is_reprint: isReprintMode,
+            });
+            if (typeof res === 'string') {
+                const blob = new Blob([res], { type: 'text/plain' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Thermal_Receipt_${thermalInvoice.invoice_number || thermalInvoice.id}.txt`;
+                a.click();
+                setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+            }
+            showAlert('Thermal ESC/POS receipt stream downloaded!', 'success');
+        } catch (err) {
+            showAlert(err.message || 'Failed to download ESC/POS text stream.', 'error');
+        }
+    };
+
+    // ── Download 80mm Thermal Receipt PDF ──────────────────────────────────
+    const handleDownloadThermalPdf = async () => {
+        if (!thermalInvoice?.id) return;
+        try {
+            const res = await getInvoiceThermal(thermalInvoice.id, {
+                mode: 'pdf',
+                printer_type: thermalPrinterType,
+                is_reprint: isReprintMode,
+            });
+            if (res?.url) {
+                const a = document.createElement('a');
+                a.href = res.url;
+                a.download = `Thermal_Slip_${thermalInvoice.invoice_number || thermalInvoice.id}.pdf`;
+                a.click();
+                setTimeout(() => window.URL.revokeObjectURL(res.url), 1000);
+            }
+            showAlert('Thermal 80mm PDF receipt downloaded!', 'success');
+        } catch (err) {
+            showAlert(err.message || 'Failed to download thermal PDF.', 'error');
         }
     };
 
@@ -475,15 +746,15 @@ const BillingManagement = () => {
         }
     };
 
-    // ── Void / Cancel Invoice (POST /api/v1/invoices/{id}/void) ───────────────
+    // ── Void / Cancel Invoice (POST /api/v1/invoices/{id}/void) (Requirement 8) ─
     const [showVoidModal, setShowVoidModal] = useState(false);
     const [voidTargetInvoice, setVoidTargetInvoice] = useState(null);
-    const [voidReason, setVoidReason] = useState('Customer cancelled / Billing error');
+    const [voidReason, setVoidReason] = useState('Customer cancelled at counter');
     const [voidLoading, setVoidLoading] = useState(false);
 
     const openVoidModal = (inv) => {
         setVoidTargetInvoice(inv);
-        setVoidReason('Customer cancelled / Billing error');
+        setVoidReason('Customer cancelled at counter');
         setShowVoidModal(true);
     };
 
@@ -491,10 +762,19 @@ const BillingManagement = () => {
         if (!voidTargetInvoice?.id || voidLoading) return;
         setVoidLoading(true);
         try {
-            await voidInvoice(voidTargetInvoice.id, voidReason);
+            const updated = await voidInvoice(voidTargetInvoice.id, voidReason);
             showAlert(`Invoice #${voidTargetInvoice.invoice_number || voidTargetInvoice.id} successfully cancelled and voided!`, 'success');
             setShowVoidModal(false);
-            loadInvoices();
+            
+            // Refresh list from server and update local state
+            await fetchInvoicesList();
+
+            if (selectedInvoice && String(selectedInvoice.id) === String(voidTargetInvoice.id)) {
+                setSelectedInvoice((prev) => ({
+                    ...prev,
+                    status: updated?.status || 'cancelled',
+                }));
+            }
         } catch (err) {
             showAlert(err.message || 'Failed to void invoice.', 'error');
         } finally {
@@ -502,22 +782,7 @@ const BillingManagement = () => {
         }
     };
 
-    // ── Create Invoice Modal State (Strictly matching POST /api/v1/invoices) ──
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [createLoading, setCreateLoading] = useState(false);
-    const [createError, setCreateError] = useState('');
-
-    const [newInvoiceData, setNewInvoiceData] = useState({
-        store_id: 1,
-        customer_id: null,
-        same_state: true,
-        items: [
-            { product_id: 1, quantity: 1, unit_price: 500, discount: 0 },
-        ],
-        payments: [
-            { payment_mode: 'cash', amount: 590, transaction_reference: '', amount_tendered: 600, change_due: 10 },
-        ],
-    });
+    // ── Create Invoice Modal State (Form helpers & submission) ──
 
     // Helper to calculate estimated total from line items and tax
     const calculateEstimatedGrandTotal = (items, sameState = true) => {
@@ -896,6 +1161,40 @@ const BillingManagement = () => {
                         title="Export current invoice records to CSV"
                     >
                         <BsDownload size={14} /> Export CSV
+                    </button>
+                    <button
+                        id="download-invoice-btn"
+                        onClick={handleTopDownloadClick}
+                        className="adm-btn-secondary"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 7,
+                            fontWeight: 600,
+                            background: selectedTableInvoiceId ? '#ecfdf5' : '#f8fafc',
+                            color: selectedTableInvoiceId ? '#059669' : '#0f172a',
+                            border: selectedTableInvoiceId ? '1px solid #10b981' : '1px solid #cbd5e1',
+                            boxShadow: selectedTableInvoiceId ? '0 2px 8px rgba(16, 185, 129, 0.2)' : 'none',
+                            cursor: 'pointer',
+                        }}
+                        title={selectedTableInvoiceId 
+                            ? `Download Tax Invoice PDF for Selected #${selectedTableInvoice?.invoice_number || selectedTableInvoiceId}`
+                            : "Download Invoice PDF or Lookup by Number (GET /invoices/by-number)"}
+                    >
+                        <BsDownload size={14} color={selectedTableInvoiceId ? '#059669' : '#4f46e5'} />
+                        Download Invoice
+                        {selectedTableInvoiceId && (
+                            <span style={{ 
+                                background: '#10b981', 
+                                color: '#fff', 
+                                fontSize: 10, 
+                                padding: '2px 7px', 
+                                borderRadius: 999, 
+                                fontWeight: 700 
+                            }}>
+                                Selected #{selectedTableInvoice?.invoice_number ? selectedTableInvoice.invoice_number.slice(-6) : selectedTableInvoiceId}
+                            </span>
+                        )}
                     </button>
                     <button
                         id="create-invoice-btn"
@@ -1334,6 +1633,9 @@ const BillingManagement = () => {
                     <table className="dash-table" style={{ marginTop: 0, width: '100%' }}>
                         <thead>
                             <tr>
+                                <th style={{ width: 44, textAlign: 'center' }}>
+                                    <span style={{ fontSize: 11, color: '#64748b' }}>Select</span>
+                                </th>
                                 <th>Invoice Number</th>
                                 <th>Customer Name</th>
                                 <th>Invoice Date</th>
@@ -1344,13 +1646,13 @@ const BillingManagement = () => {
                                 <th>IGST</th>
                                 <th>Grand Total</th>
                                 <th>Payment Status</th>
-                                <th style={{ textAlign: 'center', minWidth: 200 }}>Available Actions</th>
+                                <th style={{ textAlign: 'center', minWidth: 230 }}>Available Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {loadingInvoices ? (
                                 <tr>
-                                    <td colSpan={11} style={{ textAlign: 'center', padding: '48px 0', color: '#64748b' }}>
+                                    <td colSpan={12} style={{ textAlign: 'center', padding: '48px 0', color: '#64748b' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                                             <BsArrowRepeat size={24} className="spin" color="#4f46e5" />
                                             <span style={{ fontSize: 14, fontWeight: 600 }}>Fetching invoice records from server…</span>
@@ -1359,7 +1661,7 @@ const BillingManagement = () => {
                                 </tr>
                             ) : paginatedInvoices.length === 0 ? (
                                 <tr>
-                                    <td colSpan={11} style={{ textAlign: 'center', padding: '48px 0', color: '#94a3b8' }}>
+                                    <td colSpan={12} style={{ textAlign: 'center', padding: '48px 0', color: '#94a3b8' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
                                             <BsFileEarmarkText size={32} color="#cbd5e1" />
                                             <div>
@@ -1388,9 +1690,29 @@ const BillingManagement = () => {
                                     const cgst = Number(inv.cgst_amount || 0);
                                     const sgst = Number(inv.sgst_amount || 0);
                                     const igst = Number(inv.igst_amount || 0);
+                                    const isSelected = String(selectedTableInvoiceId) === String(invId);
 
                                     return (
-                                        <tr key={inv.id || idx}>
+                                        <tr 
+                                            key={inv.id || idx}
+                                            style={{
+                                                background: isSelected ? '#f5f3ff' : undefined,
+                                                transition: 'background-color 0.15s ease',
+                                            }}
+                                        >
+                                            {/* Row Radio Selection */}
+                                            <td style={{ textAlign: 'center' }}>
+                                                <input
+                                                    type="radio"
+                                                    name="selected_invoice_row"
+                                                    checked={isSelected}
+                                                    onChange={() => setSelectedTableInvoiceId(prev => String(prev) === String(invId) ? null : invId)}
+                                                    onClick={() => setSelectedTableInvoiceId(prev => String(prev) === String(invId) ? null : invId)}
+                                                    style={{ cursor: 'pointer', accentColor: '#4f46e5', width: 16, height: 16 }}
+                                                    title="Select this invoice to download or preview"
+                                                />
+                                            </td>
+
                                             {/* Invoice Number */}
                                             <td>
                                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1481,10 +1803,21 @@ const BillingManagement = () => {
                                                         <BsEyeFill size={13} />
                                                     </button>
 
-                                                    {/* 2. Download Tax Invoice PDF */}
+                                                    {/* 2. Preview & Print Invoice (Requirement 2) */}
+                                                    <button
+                                                        id={`btn-preview-print-${invId}`}
+                                                        onClick={() => openPdfPreviewModal(inv, 'invoice')}
+                                                        className="adm-action-btn"
+                                                        title="Preview & Print Invoice (GET /api/v1/invoices/{invoice_id}/pdf)"
+                                                        style={{ background: '#eff6ff', color: '#2563eb' }}
+                                                    >
+                                                        <BsPrinter size={13} />
+                                                    </button>
+
+                                                    {/* 3. Download Tax Invoice PDF */}
                                                     <button
                                                         id={`btn-download-pdf-${invId}`}
-                                                        onClick={() => handleDownload(invId, 'invoice')}
+                                                        onClick={() => handleDownload(invId, 'invoice', invNumber)}
                                                         disabled={downloadingId === invId}
                                                         className="adm-action-btn"
                                                         title="Download Tax Invoice PDF (GET /api/v1/invoices/{invoice_id}/pdf?document_type=invoice)"
@@ -1493,10 +1826,10 @@ const BillingManagement = () => {
                                                         {downloadingId === invId ? <span style={{ fontSize: 10 }}>⏳</span> : <BsFileEarmarkPdf size={13} />}
                                                     </button>
 
-                                                    {/* 3. Download POS Bill */}
+                                                    {/* 4. Download POS Bill */}
                                                     <button
                                                         id={`btn-download-bill-${invId}`}
-                                                        onClick={() => handleDownload(invId, 'bill')}
+                                                        onClick={() => handleDownload(invId, 'bill', invNumber)}
                                                         disabled={downloadingId === invId}
                                                         className="adm-action-btn"
                                                         title="Download Compact POS Bill (GET /api/v1/invoices/{invoice_id}/pdf?document_type=bill)"
@@ -1505,30 +1838,30 @@ const BillingManagement = () => {
                                                         <BsReceiptCutoff size={13} />
                                                     </button>
 
-                                                    {/* 4. Reprint Invoice */}
+                                                    {/* 5. Thermal Receipt Slip (80mm ESC/POS) & Reprint (Requirement 7) */}
                                                     <button
-                                                        id={`btn-reprint-${invId}`}
-                                                        onClick={() => openReprintModal(inv)}
+                                                        id={`btn-thermal-${invId}`}
+                                                        onClick={() => openThermalModal(inv)}
                                                         className="adm-action-btn"
-                                                        title="Submit Reprint Request (POST /api/v1/invoices/{invoice_id}/reprint)"
+                                                        title="Export 80mm ESC/POS Thermal Receipt & Reprint"
                                                         style={{ background: '#fffbeb', color: '#d97706' }}
                                                     >
-                                                        <BsPrinter size={13} />
+                                                        <BsSliders size={13} />
                                                     </button>
 
-                                                    {/* 5. Generate Async */}
+                                                    {/* 6. Generate Async (Requirement 7 & 2) */}
                                                     <button
                                                         id={`btn-async-${invId}`}
                                                         onClick={() => handleGenerateAsync(invId)}
                                                         disabled={asyncLoadingId === invId}
                                                         className="adm-action-btn"
                                                         title="Submit Async Generation (POST /api/v1/invoices/{invoice_id}/generate-async)"
-                                                        style={{ background: '#eff6ff', color: '#2563eb' }}
+                                                        style={{ background: '#f1f5f9', color: '#475569' }}
                                                     >
                                                         {asyncLoadingId === invId ? <span style={{ fontSize: 10 }}>⏳</span> : <BsLightningChargeFill size={12} />}
                                                     </button>
 
-                                                    {/* 6. Void / Cancel Invoice */}
+                                                    {/* 7. Void / Cancel Invoice (Requirement 8) */}
                                                     {inv.status !== 'cancelled' && inv.status !== 'void' && (
                                                         <button
                                                             id={`btn-void-${invId}`}
@@ -2388,27 +2721,34 @@ const BillingManagement = () => {
                                     </div>
 
                                     {/* Action Buttons inside Details */}
-                                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', paddingTop: 10, borderTop: '1px solid #e2e8f0' }}>
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', paddingTop: 12, borderTop: '1px solid #e2e8f0' }}>
                                         <button
-                                            onClick={() => handleDownload(selectedInvoice.id, 'invoice')}
+                                            onClick={() => openPdfPreviewModal(selectedInvoice, 'invoice')}
                                             className="adm-btn-primary"
-                                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#2563eb' }}
+                                        >
+                                            <BsPrinter size={13} /> Preview &amp; Print
+                                        </button>
+                                        <button
+                                            onClick={() => handleDownload(selectedInvoice.id, 'invoice', selectedInvoice.invoice_number)}
+                                            className="adm-btn-secondary"
+                                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#ecfdf5', color: '#059669', borderColor: '#10b981' }}
                                         >
                                             <BsDownload size={13} /> Download Tax Invoice (PDF)
                                         </button>
                                         <button
-                                            onClick={() => handleDownload(selectedInvoice.id, 'bill')}
+                                            onClick={() => handleDownload(selectedInvoice.id, 'bill', selectedInvoice.invoice_number)}
                                             className="adm-btn-secondary"
                                             style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
                                         >
                                             <BsReceiptCutoff size={13} /> Download POS Bill
                                         </button>
                                         <button
-                                            onClick={() => openReprintModal(selectedInvoice)}
+                                            onClick={() => openThermalModal(selectedInvoice)}
                                             className="adm-btn-secondary"
-                                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#d97706', borderColor: '#fcd34d' }}
                                         >
-                                            <BsPrinter size={13} /> Reprint
+                                            <BsSliders size={13} /> Thermal Receipt (80mm)
                                         </button>
                                         <button
                                             onClick={() => handleGenerateAsync(selectedInvoice.id)}
@@ -2417,6 +2757,15 @@ const BillingManagement = () => {
                                         >
                                             <BsLightningChargeFill size={12} /> Generate Async
                                         </button>
+                                        {selectedInvoice.status !== 'cancelled' && selectedInvoice.status !== 'void' && (
+                                            <button
+                                                onClick={() => openVoidModal(selectedInvoice)}
+                                                className="adm-btn-secondary"
+                                                style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#dc2626', borderColor: '#fca5a5' }}
+                                            >
+                                                <BsTrash size={12} /> Void Invoice
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                             ) : (
@@ -2471,87 +2820,7 @@ const BillingManagement = () => {
                 </div>
             )}
 
-            {/* =================================================================
-               MODAL 3: REPRINT MODAL (POST /api/v1/invoices/{id}/reprint)
-               ================================================================= */}
-            {showReprintModal && reprintTargetInvoice && (
-                <div
-                    className="modal-backdrop"
-                    onClick={() => setShowReprintModal(false)}
-                    style={{
-                        position: 'fixed',
-                        inset: 0,
-                        background: 'rgba(15, 23, 42, 0.65)',
-                        zIndex: 2100,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: 16,
-                        backdropFilter: 'blur(3px)',
-                    }}
-                >
-                    <div
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                            background: '#fff',
-                            borderRadius: 14,
-                            width: '100%',
-                            maxWidth: 450,
-                            padding: 22,
-                            boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-                        }}
-                    >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                            <div style={{ background: '#fffbeb', color: '#d97706', padding: 8, borderRadius: 8 }}>
-                                <BsPrinter size={20} />
-                            </div>
-                            <div>
-                                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
-                                    Reprint Invoice
-                                </h3>
-                                <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
-                                    POST /api/v1/invoices/{reprintTargetInvoice.id}/reprint
-                                </p>
-                            </div>
-                        </div>
 
-                        <div style={{ marginBottom: 18 }}>
-                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                                Select Target Printer Profile
-                            </label>
-                            <select
-                                id="reprint-printer-type-select"
-                                value={printerType}
-                                onChange={(e) => setPrinterType(e.target.value)}
-                                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
-                            >
-                                <option value="thermal_80mm">Thermal 80mm POS Printer (Standard Receipt)</option>
-                                <option value="thermal_58mm">Thermal 58mm POS Printer (Compact Receipt)</option>
-                                <option value="laser_a4">Laser / Inkjet A4 Full Page Printer</option>
-                                <option value="generic">Generic Network Printer (Raw ESC/POS)</option>
-                            </select>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                            <button
-                                onClick={() => setShowReprintModal(false)}
-                                className="adm-btn-secondary"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                id="confirm-reprint-btn"
-                                onClick={handleReprintSubmit}
-                                disabled={reprintLoading}
-                                className="adm-btn-primary"
-                                style={{ background: '#d97706' }}
-                            >
-                                {reprintLoading ? 'Dispatching…' : 'Send Print Job'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* =================================================================
                MODAL: VOID / CANCEL INVOICE (POST /api/v1/invoices/{id}/void)
@@ -2728,6 +2997,727 @@ const BillingManagement = () => {
                                 style={{ background: '#2563eb' }}
                             >
                                 Dismiss
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* =================================================================
+               MODAL 5: DEDICATED INVOICE PREVIEW & PRINT MODAL (Requirement 2)
+               ================================================================= */}
+            {showPdfPreviewModal && pdfPreviewInvoice && (
+                <div
+                    className="modal-backdrop"
+                    onClick={() => setShowPdfPreviewModal(false)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(15, 23, 42, 0.75)',
+                        zIndex: 2300,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 16,
+                        backdropFilter: 'blur(4px)',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: '#fff',
+                            borderRadius: 16,
+                            width: '100%',
+                            maxWidth: 920,
+                            height: '92vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 25px 60px -15px rgba(0,0,0,0.3)',
+                            overflow: 'hidden',
+                        }}
+                    >
+                        {/* Modal Header */}
+                        <div
+                            style={{
+                                padding: '14px 22px',
+                                borderBottom: '1px solid #e2e8f0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: '#f8fafc',
+                                flexWrap: 'wrap',
+                                gap: 10,
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{ background: '#eff6ff', color: '#2563eb', padding: 9, borderRadius: 10 }}>
+                                    <BsFileEarmarkPdf size={22} />
+                                </div>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                                            Invoice #{pdfPreviewInvoice.invoice_number || pdfPreviewInvoice.id}
+                                        </h2>
+                                        {getStatusBadge(pdfPreviewInvoice.status)}
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>
+                                        Order #{pdfPreviewInvoice.order_id || pdfPreviewInvoice.id} &nbsp;·&nbsp; Total: {fmt(pdfPreviewInvoice.total_amount)}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Top Action Controls */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                {/* Document Type Toggle (Invoice vs Bill) */}
+                                <div style={{ display: 'flex', background: '#e2e8f0', padding: 3, borderRadius: 8 }}>
+                                    <button
+                                        id="preview-tab-tax-invoice-btn"
+                                        onClick={() => {
+                                            setPdfDocType('invoice');
+                                            loadPdfWithStatusCheck(pdfPreviewInvoice.id, 'invoice', pdfPreviewInvoice.invoice_number);
+                                        }}
+                                        style={{
+                                            padding: '4px 10px',
+                                            border: 'none',
+                                            borderRadius: 6,
+                                            background: pdfDocType === 'invoice' ? '#fff' : 'transparent',
+                                            color: pdfDocType === 'invoice' ? '#0f172a' : '#64748b',
+                                            fontWeight: pdfDocType === 'invoice' ? 700 : 500,
+                                            fontSize: 11,
+                                            cursor: 'pointer',
+                                            boxShadow: pdfDocType === 'invoice' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        }}
+                                    >
+                                        Tax Invoice
+                                    </button>
+                                    <button
+                                        id="preview-tab-pos-bill-btn"
+                                        onClick={() => {
+                                            setPdfDocType('bill');
+                                            loadPdfWithStatusCheck(pdfPreviewInvoice.id, 'bill', pdfPreviewInvoice.invoice_number);
+                                        }}
+                                        style={{
+                                            padding: '4px 10px',
+                                            border: 'none',
+                                            borderRadius: 6,
+                                            background: pdfDocType === 'bill' ? '#fff' : 'transparent',
+                                            color: pdfDocType === 'bill' ? '#0f172a' : '#64748b',
+                                            fontWeight: pdfDocType === 'bill' ? 700 : 500,
+                                            fontSize: 11,
+                                            cursor: 'pointer',
+                                            boxShadow: pdfDocType === 'bill' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        }}
+                                    >
+                                        POS Bill
+                                    </button>
+                                </div>
+
+                                {/* Print Invoice Button (Reliable Print Workflow) */}
+                                <button
+                                    id="preview-modal-print-btn"
+                                    onClick={handlePrintPdf}
+                                    disabled={pdfPreviewLoading || !pdfPreviewUrl}
+                                    className="adm-btn-primary"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        fontSize: 12,
+                                        padding: '6px 14px',
+                                        background: '#2563eb',
+                                    }}
+                                    title="Open Print Dialog"
+                                >
+                                    <BsPrinter size={13} /> Print Invoice
+                                </button>
+
+                                {/* Download PDF Button */}
+                                <button
+                                    id="preview-modal-download-btn"
+                                    onClick={() => handleDownload(pdfPreviewInvoice.id, pdfDocType, pdfPreviewInvoice.invoice_number)}
+                                    disabled={pdfPreviewLoading || !pdfPreviewUrl}
+                                    className="adm-btn-secondary"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        fontSize: 12,
+                                        padding: '6px 14px',
+                                        background: '#ecfdf5',
+                                        color: '#059669',
+                                        borderColor: '#10b981',
+                                    }}
+                                >
+                                    <BsDownload size={13} /> Download PDF
+                                </button>
+
+                                {/* Close Button */}
+                                <button
+                                    onClick={() => setShowPdfPreviewModal(false)}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        color: '#94a3b8',
+                                        padding: 4,
+                                        marginLeft: 4,
+                                    }}
+                                    title="Close Preview"
+                                >
+                                    <BsX size={26} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Modal Body: Actual PDF Rendering */}
+                        <div style={{ flex: 1, position: 'relative', background: '#525659', display: 'flex', flexDirection: 'column' }}>
+                            {pdfPreviewLoading ? (
+                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', gap: 12, padding: 32 }}>
+                                    <BsArrowRepeat size={36} className="spin" color="#38bdf8" />
+                                    <div style={{ fontSize: 16, fontWeight: 600 }}>Loading Invoice PDF…</div>
+                                    {pdfStatusPolling && (
+                                        <div style={{ fontSize: 13, color: '#bae6fd', maxWidth: 400, textAlign: 'center' }}>
+                                            {pdfStatusMessage || 'Checking PDF status (GET /invoices/{id}/pdf-status)…'}
+                                        </div>
+                                    )}
+                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>
+                                        GET /api/v1/invoices/{pdfPreviewInvoice.id}/pdf?document_type={pdfDocType}
+                                    </div>
+                                </div>
+                            ) : pdfPreviewUrl ? (
+                                <iframe
+                                    ref={previewIframeRef}
+                                    src={pdfPreviewUrl}
+                                    title={`Invoice-${pdfPreviewInvoice.invoice_number || pdfPreviewInvoice.id}-PDF`}
+                                    style={{ width: '100%', height: '100%', border: 'none' }}
+                                />
+                            ) : (
+                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', gap: 12, padding: 32 }}>
+                                    <BsExclamationTriangleFill size={36} color="#f59e0b" />
+                                    <div style={{ fontSize: 15, fontWeight: 600 }}>PDF Document Preview Not Available</div>
+                                    <p style={{ margin: 0, fontSize: 12, color: '#cbd5e1' }}>
+                                        The document may still be compiling in background.
+                                    </p>
+                                    <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                                        <button
+                                            onClick={() => loadPdfWithStatusCheck(pdfPreviewInvoice.id, pdfDocType, pdfPreviewInvoice.invoice_number)}
+                                            className="adm-btn-primary"
+                                            style={{ fontSize: 12 }}
+                                        >
+                                            <BsArrowRepeat size={13} /> Retry PDF Load
+                                        </button>
+                                        <button
+                                            onClick={() => handleGenerateAsync(pdfPreviewInvoice.id)}
+                                            className="adm-btn-secondary"
+                                            style={{ fontSize: 12, background: '#fff' }}
+                                        >
+                                            <BsLightningChargeFill size={12} /> Trigger Async Generation
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div
+                            style={{
+                                padding: '10px 22px',
+                                borderTop: '1px solid #e2e8f0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: '#f8fafc',
+                                fontSize: 12,
+                                color: '#64748b',
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <span>Official GST Compliant Invoice PDF</span>
+                                <span>·</span>
+                                <button
+                                    onClick={() => {
+                                        setShowPdfPreviewModal(false);
+                                        openThermalModal(pdfPreviewInvoice);
+                                    }}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#d97706',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        padding: 0,
+                                        fontSize: 12,
+                                    }}
+                                >
+                                    <BsReceiptCutoff size={12} /> Switch to 80mm Thermal Receipt
+                                </button>
+                            </div>
+                            <button
+                                onClick={() => setShowPdfPreviewModal(false)}
+                                className="adm-btn-secondary"
+                                style={{ fontSize: 12, padding: '5px 14px' }}
+                            >
+                                Close Preview
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* =================================================================
+               MODAL 6: DOWNLOAD INVOICE MODAL (Requirement 3)
+               ================================================================= */}
+            {showDownloadModal && (
+                <div
+                    className="modal-backdrop"
+                    onClick={() => setShowDownloadModal(false)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(15, 23, 42, 0.65)',
+                        zIndex: 2250,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 16,
+                        backdropFilter: 'blur(3px)',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: '#fff',
+                            borderRadius: 16,
+                            width: '100%',
+                            maxWidth: 560,
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            overflow: 'hidden',
+                        }}
+                    >
+                        {/* Header */}
+                        <div
+                            style={{
+                                padding: '16px 22px',
+                                borderBottom: '1px solid #e2e8f0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: '#f8fafc',
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ background: '#ecfdf5', color: '#059669', padding: 9, borderRadius: 10 }}>
+                                    <BsDownload size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                                        Download Tax Invoice
+                                    </h3>
+                                    <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
+                                        Lookup invoice by number or select from recent records
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowDownloadModal(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                            >
+                                <BsX size={24} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div style={{ padding: '20px 22px' }}>
+                            {/* Search by Number (GET /invoices/by-number/{invoice_number}) */}
+                            <div style={{ marginBottom: 18 }}>
+                                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                                    Lookup Invoice by Number (GET /invoices/by-number)
+                                </label>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <input
+                                        type="text"
+                                        value={downloadSearchNumber}
+                                        onChange={(e) => setDownloadSearchNumber(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleDownloadModalLookup(); }}
+                                        placeholder="e.g. INV-2026-000001 or scan barcode"
+                                        style={{
+                                            flex: 1,
+                                            padding: '9px 12px',
+                                            borderRadius: 8,
+                                            border: '1px solid #cbd5e1',
+                                            fontSize: 13,
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleDownloadModalLookup}
+                                        disabled={downloadLookupLoading || !downloadSearchNumber.trim()}
+                                        className="adm-btn-primary"
+                                        style={{ fontSize: 13, padding: '9px 16px', display: 'flex', alignItems: 'center', gap: 6 }}
+                                    >
+                                        {downloadLookupLoading ? <BsArrowRepeat size={14} className="spin" /> : <BsSearch size={13} />}
+                                        Lookup
+                                    </button>
+                                </div>
+                                {downloadLookupError && (
+                                    <p style={{ margin: '6px 0 0', fontSize: 12, color: '#ef4444' }}>
+                                        {downloadLookupError}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Found Invoice Card */}
+                            {downloadLookupResult ? (
+                                <div
+                                    style={{
+                                        background: '#f8fafc',
+                                        border: '1px solid #cbd5e1',
+                                        borderRadius: 12,
+                                        padding: 16,
+                                        marginBottom: 16,
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                                        <span style={{ fontWeight: 700, color: '#4f46e5', fontSize: 15 }}>
+                                            #{downloadLookupResult.invoice_number}
+                                        </span>
+                                        {getStatusBadge(downloadLookupResult.status)}
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12, color: '#475569', marginBottom: 14 }}>
+                                        <div>Date: <b>{formatDate(downloadLookupResult.created_at)}</b></div>
+                                        <div>Total: <b style={{ color: '#0f172a' }}>{fmt(downloadLookupResult.total_amount)}</b></div>
+                                        <div>Order ID: #{downloadLookupResult.order_id || '—'}</div>
+                                        <div>Store ID: #{downloadLookupResult.store_id || 1}</div>
+                                    </div>
+
+                                    {/* Format Selection */}
+                                    <div style={{ marginBottom: 12 }}>
+                                        <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>
+                                            Choose Document Format:
+                                        </label>
+                                        <div style={{ display: 'flex', gap: 10 }}>
+                                            <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                                                <input
+                                                    type="radio"
+                                                    name="modal_doc_type"
+                                                    checked={downloadDocType === 'invoice'}
+                                                    onChange={() => setDownloadDocType('invoice')}
+                                                />
+                                                Tax Invoice (A4 Standard)
+                                            </label>
+                                            <label style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                                                <input
+                                                    type="radio"
+                                                    name="modal_doc_type"
+                                                    checked={downloadDocType === 'bill'}
+                                                    onChange={() => setDownloadDocType('bill')}
+                                                />
+                                                POS Bill (Compact Receipt)
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Buttons for Lookup Result */}
+                                    <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                handleDownload(downloadLookupResult.id, downloadDocType, downloadLookupResult.invoice_number);
+                                                setShowDownloadModal(false);
+                                            }}
+                                            className="adm-btn-primary"
+                                            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, padding: '9px 14px' }}
+                                        >
+                                            <BsDownload size={14} /> Download {downloadDocType === 'bill' ? 'Bill' : 'Invoice'} PDF
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowDownloadModal(false);
+                                                openPdfPreviewModal(downloadLookupResult, downloadDocType);
+                                            }}
+                                            className="adm-btn-secondary"
+                                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '9px 14px' }}
+                                        >
+                                            <BsPrinter size={14} /> Preview &amp; Print
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* Or Select from Loaded Invoices */
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0 10px' }}>
+                                        <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+                                        <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>OR CHOOSE FROM LOADED LIST</span>
+                                        <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+                                    </div>
+
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                                        Select from loaded invoices
+                                    </label>
+                                    <select
+                                        value={selectedTableInvoiceId || ''}
+                                        onChange={(e) => setSelectedTableInvoiceId(e.target.value ? Number(e.target.value) : null)}
+                                        style={{
+                                            width: '100%',
+                                            padding: '9px 12px',
+                                            borderRadius: 8,
+                                            border: '1px solid #cbd5e1',
+                                            fontSize: 13,
+                                            marginBottom: 16,
+                                        }}
+                                    >
+                                        <option value="">-- Choose an invoice ({invoices.length} loaded) --</option>
+                                        {invoices.map((inv) => (
+                                            <option key={inv.id} value={inv.id}>
+                                                #{inv.invoice_number || inv.id} — {fmt(inv.total_amount)} ({inv.customer_name || 'Walk-in'})
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    {selectedTableInvoice && (
+                                        <div style={{ display: 'flex', gap: 10 }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    handleDownload(selectedTableInvoice.id, 'invoice', selectedTableInvoice.invoice_number);
+                                                    setShowDownloadModal(false);
+                                                }}
+                                                className="adm-btn-primary"
+                                                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 13, padding: '9px 14px' }}
+                                            >
+                                                <BsDownload size={14} /> Download Selected PDF
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowDownloadModal(false);
+                                                    openPdfPreviewModal(selectedTableInvoice, 'invoice');
+                                                }}
+                                                className="adm-btn-secondary"
+                                                style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, padding: '9px 14px' }}
+                                            >
+                                                <BsPrinter size={14} /> Preview &amp; Print
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer */}
+                        <div
+                            style={{
+                                padding: '12px 22px',
+                                borderTop: '1px solid #e2e8f0',
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                                background: '#f8fafc',
+                            }}
+                        >
+                            <button
+                                onClick={() => setShowDownloadModal(false)}
+                                className="adm-btn-secondary"
+                                style={{ fontSize: 13, padding: '6px 16px' }}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* =================================================================
+               MODAL 7: THERMAL RECEIPT SLIP & REPRINT MODAL (Requirement 7)
+               ================================================================= */}
+            {showThermalModal && thermalInvoice && (
+                <div
+                    className="modal-backdrop"
+                    onClick={() => setShowThermalModal(false)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(15, 23, 42, 0.7)',
+                        zIndex: 2350,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 16,
+                        backdropFilter: 'blur(3px)',
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: '#fff',
+                            borderRadius: 16,
+                            width: '100%',
+                            maxWidth: 520,
+                            maxHeight: '94vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            overflow: 'hidden',
+                        }}
+                    >
+                        {/* Header */}
+                        <div
+                            style={{
+                                padding: '16px 20px',
+                                borderBottom: '1px solid #e2e8f0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: '#f8fafc',
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ background: '#fffbeb', color: '#d97706', padding: 9, borderRadius: 10 }}>
+                                    <BsReceiptCutoff size={20} />
+                                </div>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                                            Thermal Receipt (80mm ESC/POS)
+                                        </h3>
+                                        {isReprintMode && (
+                                            <span style={{ background: '#fef2f2', color: '#dc2626', fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4 }}>
+                                                DUPLICATE / REPRINT
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
+                                        Invoice #{thermalInvoice.invoice_number || thermalInvoice.id} · GET /invoices/{thermalInvoice.id}/thermal
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowThermalModal(false)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                            >
+                                <BsX size={24} />
+                            </button>
+                        </div>
+
+                        {/* Controls Bar */}
+                        <div
+                            style={{
+                                padding: '10px 20px',
+                                background: '#f1f5f9',
+                                borderBottom: '1px solid #e2e8f0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                                flexWrap: 'wrap',
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                                <span style={{ fontWeight: 600, color: '#475569' }}>Printer:</span>
+                                <select
+                                    value={thermalPrinterType}
+                                    onChange={(e) => handleThermalPrinterChange(e.target.value)}
+                                    style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #cbd5e1', fontSize: 12 }}
+                                >
+                                    <option value="generic">Generic (Standard 80mm)</option>
+                                    <option value="epson">Epson TM-T88 (ESC/POS)</option>
+                                    <option value="tvs">TVS RP Series</option>
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    onClick={handleReprintReceipt}
+                                    disabled={reprintSubmitting}
+                                    className="adm-btn-primary"
+                                    style={{
+                                        fontSize: 12,
+                                        padding: '5px 12px',
+                                        background: '#d97706',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5,
+                                    }}
+                                    title="Reprint with *** DUPLICATE / REPRINT *** header"
+                                >
+                                    {reprintSubmitting ? <BsArrowRepeat size={12} className="spin" /> : <BsPrinter size={12} />}
+                                    Reprint Thermal Slip
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Receipt Preview Canvas */}
+                        <div
+                            style={{
+                                flex: 1,
+                                overflowY: 'auto',
+                                padding: 20,
+                                background: '#e2e8f0',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'flex-start',
+                            }}
+                        >
+                            {thermalLoading ? (
+                                <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
+                                    <BsArrowRepeat size={28} className="spin" color="#d97706" style={{ marginBottom: 8 }} />
+                                    <div style={{ fontSize: 13, fontWeight: 600 }}>Rendering 80mm thermal receipt preview…</div>
+                                </div>
+                            ) : thermalPreviewUrl ? (
+                                <div style={{ background: '#fff', padding: 12, borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', maxWidth: 380 }}>
+                                    <img
+                                        src={thermalPreviewUrl}
+                                        alt="Thermal Receipt Preview (80mm)"
+                                        style={{ width: '100%', display: 'block', borderRadius: 4 }}
+                                    />
+                                </div>
+                            ) : (
+                                <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>
+                                    Thermal receipt preview could not be generated.
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Export Actions Footer */}
+                        <div
+                            style={{
+                                padding: '12px 20px',
+                                borderTop: '1px solid #e2e8f0',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                background: '#f8fafc',
+                                flexWrap: 'wrap',
+                                gap: 8,
+                            }}
+                        >
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    onClick={handleDownloadThermalEscPos}
+                                    className="adm-btn-secondary"
+                                    style={{ fontSize: 12, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5 }}
+                                    title="Download raw ESC/POS text stream"
+                                >
+                                    <BsDownload size={12} /> Download ESC/POS (.txt)
+                                </button>
+                                <button
+                                    onClick={handleDownloadThermalPdf}
+                                    className="adm-btn-secondary"
+                                    style={{ fontSize: 12, padding: '5px 10px', display: 'flex', alignItems: 'center', gap: 5 }}
+                                    title="Download 80mm receipt PDF"
+                                >
+                                    <BsFileEarmarkPdf size={12} /> Download Thermal PDF
+                                </button>
+                            </div>
+                            <button
+                                onClick={() => setShowThermalModal(false)}
+                                className="adm-btn-secondary"
+                                style={{ fontSize: 12, padding: '5px 12px' }}
+                            >
+                                Close
                             </button>
                         </div>
                     </div>
