@@ -2,8 +2,13 @@ import axios from "axios";
 import { getAccessToken, getRefreshToken, setTokens, clearTokens } from "../utils/tokenStorage.js";
 import { validateOrderCoupon } from "./couponService.js";
 
+const rawBaseURL = import.meta.env.VITE_API_URL || "https://api-testing.myretailos.com/api/v1";
+const normalizedBaseURL = rawBaseURL.endsWith("/api/v1")
+    ? rawBaseURL
+    : `${rawBaseURL.replace(/\/+$/, "")}/api/v1`;
+
 const apiClient = axios.create({
-    baseURL: "https://api-testing.myretailos.com/api/v1",
+    baseURL: normalizedBaseURL,
     headers: {
         "Content-Type": "application/json",
     },
@@ -116,7 +121,7 @@ apiClient.interceptors.response.use(
 
             try {
                 const response = await axios.post(
-                    "https://api-testing.myretailos.com/api/v1/auth/refresh",
+                    `${normalizedBaseURL}/auth/refresh`,
                     { refresh_token: refreshToken },
                     { headers: { "Content-Type": "application/json" } }
                 );

@@ -196,8 +196,54 @@ const Login = () => {
     // Helper: Extract backend error message cleanly
     const extractErrorMessage = (err, fallback = "An unexpected error occurred.") => {
         if (!err) return fallback;
-        const data = err.response?.data;
-        if (!data) return err.message || fallback;
+
+        // 1. Network or connection failure (no response received from server)
+        if (!err.response) {
+            if (err.code === "ECONNABORTED" || err.message?.toLowerCase().includes("timeout")) {
+                return "Connection timed out. Please check your internet connection.";
+            }
+            if (err.message === "Network Error" || err.code === "ERR_NETWORK") {
+                return "Unable to connect to the authentication server. Please check your internet connection or verify the server is running.";
+            }
+            return err.message || "Network Error: Could not reach the server.";
+        }
+
+        const { status, data } = err.response;
+
+        // 2. HTTP Status-specific handling
+        if (status === 401) {
+            if (data?.message) return data.message;
+            if (typeof data?.detail === "string") return data.detail;
+            return "Invalid email or password.";
+        }
+
+        if (status === 403) {
+            return data?.message || data?.detail || "Access forbidden: you do not have permission.";
+        }
+
+        if (status === 404) {
+            return "Authentication service endpoint was not found.";
+        }
+
+        if (status === 422) {
+            // Validation errors
+            if (Array.isArray(data?.detail) && data.detail.length > 0) {
+                return data.detail.map((d) => d.msg || d.message).join(", ");
+            }
+            if (typeof data?.detail === "string") return data.detail;
+            return "Please check the entered information.";
+        }
+
+        if (status === 429) {
+            return "Too many attempts. Please try again after a few minutes.";
+        }
+
+        if (status >= 500) {
+            return "Authentication server error. Please try again later.";
+        }
+
+        // 3. Fallback backend message extraction
+        if (!data) return fallback;
 
         if (typeof data.message === "string" && data.message.trim()) {
             return data.message;
