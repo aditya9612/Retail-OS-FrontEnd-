@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   BsSearch,
   BsPlus,
@@ -6,6 +6,19 @@ import {
   BsTrashFill,
   BsCheckCircleFill,
   BsClockHistory,
+  BsBuilding,
+  BsCheckCircle,
+  BsXCircle,
+  BsCurrencyRupee,
+  BsHourglassSplit,
+  BsChevronLeft,
+  BsChevronRight,
+  BsArrowCounterclockwise,
+  BsFilter,
+  BsEnvelope,
+  BsTelephone,
+  BsGeoAlt,
+  BsBoxSeam,
 } from "react-icons/bs";
 
 import { supplier as supplierService } from "../../services/supplier";
@@ -103,37 +116,25 @@ const SupplierFormModal = ({ supplier, onClose, onSave }) => {
 
   return (
     <div
-      className="ec-modal-overlay"
+      className="sup-modal-overlay"
       onClick={onClose}
     >
       <div
-        className="ec-modal"
-        style={{ maxWidth: 600 }}
+        className="sup-modal"
+        style={{ maxWidth: 580 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="ec-modal-header">
-          <div>
-            <h3
-              style={{
-                fontWeight: 700,
-                fontSize: 16,
-                color: "#111827",
-              }}
-            >
+        <div className="sup-modal-header">
+          <div className="sup-modal-title-wrap">
+            <h3 className="sup-modal-title">
               {isNew
                 ? "Add New Supplier"
                 : `Edit: ${form.name || supplier.name || "Supplier"}`}
             </h3>
 
-            <p
-              style={{
-                fontSize: 12,
-                color: "#9ca3af",
-                marginTop: 2,
-              }}
-            >
+            <p className="sup-modal-subtitle">
               {isNew
-                ? "Enter supplier details"
+                ? "Enter supplier information to create a new vendor record"
                 : `Supplier ID: #${supplier.id}${
                     supplierDetails?.is_active !== undefined
                       ? supplierDetails.is_active
@@ -145,163 +146,135 @@ const SupplierFormModal = ({ supplier, onClose, onSave }) => {
           </div>
 
           <button
-            className="ec-modal-close"
+            type="button"
+            className="sup-modal-close"
             onClick={onClose}
+            aria-label="Close modal"
           >
             ✕
           </button>
         </div>
 
-        {/* Loading details notification */}
-        {loadingDetails && (
-          <div
-            style={{
-              padding: "6px 12px",
-              background: "#eff6ff",
-              color: "#2563eb",
-              borderRadius: 6,
-              fontSize: 12,
-              marginBottom: 12,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-          >
-            <span>⏳</span> Loading latest supplier details from server...
-          </div>
-        )}
+        <div className="sup-modal-body">
+          {/* Loading details notification */}
+          {loadingDetails && (
+            <div className="sup-modal-alert info">
+              <span className="sup-spinner" />
+              <span>Loading latest supplier details from server...</span>
+            </div>
+          )}
 
-        {/* Error notification with Retry */}
-        {detailsError && (
-          <div
-            style={{
-              padding: "8px 12px",
-              background: "#fef2f2",
-              color: "#dc2626",
-              borderRadius: 6,
-              fontSize: 12,
-              marginBottom: 12,
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <span>{detailsError}</span>
-            <button
-              className="adm-btn-secondary"
-              style={{ fontSize: 11, padding: "2px 8px" }}
-              onClick={fetchDetails}
-            >
-              Retry
-            </button>
-          </div>
-        )}
+          {/* Error notification with Retry */}
+          {detailsError && (
+            <div className="sup-modal-alert error">
+              <span>{detailsError}</span>
+              <button
+                type="button"
+                className="sup-btn-retry"
+                onClick={fetchDetails}
+              >
+                Retry
+              </button>
+            </div>
+          )}
 
-        {/* Supplier Name */}
-        <div className="ec-field">
-          <label>Supplier Name *</label>
-
-          <input
-            className="ec-input"
-            value={form.name}
-            onChange={(e) => set("name", e.target.value)}
-            placeholder="Enter supplier name"
-          />
-        </div>
-
-        {/* Contact Person */}
-        <div className="ec-field">
-          <label>Contact Person</label>
-
-          <input
-            className="ec-input"
-            value={form.contact_person}
-            onChange={(e) => set("contact_person", e.target.value)}
-            placeholder="Enter contact person name"
-          />
-        </div>
-
-        {/* Email + Phone */}
-        <div className="ec-form-row">
-          <div className="ec-field">
-            <label>Email</label>
-
+          {/* Supplier Name */}
+          <div className="sup-form-group">
+            <label className="sup-form-label">
+              Supplier Name <span className="sup-req">*</span>
+            </label>
             <input
-              className="ec-input"
-              type="email"
-              value={form.email}
-              onChange={(e) => set("email", e.target.value)}
-              placeholder="supplier@example.com"
+              className="sup-form-input"
+              value={form.name}
+              onChange={(e) => set("name", e.target.value)}
+              placeholder="Enter supplier name"
             />
           </div>
 
-          <div className="ec-field">
-            <label>Phone</label>
-
+          {/* Contact Person */}
+          <div className="sup-form-group">
+            <label className="sup-form-label">Contact Person</label>
             <input
-              className="ec-input"
-              value={form.phone}
-              onChange={(e) => set("phone", e.target.value)}
-              placeholder="Enter phone number"
+              className="sup-form-input"
+              value={form.contact_person}
+              onChange={(e) => set("contact_person", e.target.value)}
+              placeholder="Enter contact person name"
             />
           </div>
-        </div>
 
-        {/* Address */}
-        <div className="ec-field">
-          <label>Address</label>
+          {/* Email + Phone */}
+          <div className="sup-form-row">
+            <div className="sup-form-group">
+              <label className="sup-form-label">Email</label>
+              <input
+                className="sup-form-input"
+                type="email"
+                value={form.email}
+                onChange={(e) => set("email", e.target.value)}
+                placeholder="supplier@example.com"
+              />
+            </div>
 
-          <textarea
-            className="ec-textarea"
-            rows={3}
-            value={form.address}
-            onChange={(e) => set("address", e.target.value)}
-            placeholder="Enter supplier address"
-          />
-        </div>
+            <div className="sup-form-group">
+              <label className="sup-form-label">Phone</label>
+              <input
+                className="sup-form-input"
+                value={form.phone}
+                onChange={(e) => set("phone", e.target.value)}
+                placeholder="Enter phone number"
+              />
+            </div>
+          </div>
 
-        {/* GSTIN */}
-        <div className="ec-field">
-          <label>GSTIN</label>
+          {/* Address */}
+          <div className="sup-form-group">
+            <label className="sup-form-label">Address</label>
+            <textarea
+              className="sup-form-textarea"
+              rows={3}
+              value={form.address}
+              onChange={(e) => set("address", e.target.value)}
+              placeholder="Enter supplier address"
+            />
+          </div>
 
-          <input
-            className="ec-input"
-            maxLength={15}
-            value={form.gstin}
-            onChange={(e) => set("gstin", e.target.value.toUpperCase())}
-            placeholder="e.g. 27AAPFU0939F1ZV (15 characters)"
-          />
+          {/* GSTIN */}
+          <div className="sup-form-group">
+            <label className="sup-form-label">GSTIN</label>
+            <input
+              className="sup-form-input sup-gstin-input"
+              maxLength={15}
+              value={form.gstin}
+              onChange={(e) => set("gstin", e.target.value.toUpperCase())}
+              placeholder="e.g. 27AAPFU0939F1ZV (15 characters)"
+            />
+          </div>
         </div>
 
         {/* Buttons */}
-        <div
-          style={{
-            display: "flex",
-            gap: 10,
-            justifyContent: "flex-end",
-            marginTop: 18,
-          }}
-        >
+        <div className="sup-modal-footer">
           <button
-            className="adm-btn-secondary"
+            type="button"
+            className="sup-btn-cancel"
             onClick={onClose}
           >
             Cancel
           </button>
 
           <button
-            className="adm-btn-primary"
+            type="button"
+            className="sup-btn-submit"
             onClick={() => onSave(form)}
           >
             {isNew ? (
               <>
                 <BsPlus size={16} />
-                Add Supplier
+                <span>Add Supplier</span>
               </>
             ) : (
               <>
                 <BsCheckCircleFill size={13} />
-                Save Changes
+                <span>Save Changes</span>
               </>
             )}
           </button>
@@ -399,245 +372,146 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
     : [];
 
   return (
-    <div className="ec-modal-overlay" onClick={onClose}>
+    <div className="sup-modal-overlay" onClick={onClose}>
       <div
-        className="ec-modal"
-        style={{
-          maxWidth: 960,
-          width: "95%",
-          maxHeight: "90vh",
-          display: "flex",
-          flexDirection: "column",
-          padding: 24,
-        }}
+        className="sup-modal sup-modal-lg"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="ec-modal-header" style={{ marginBottom: 16 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <BsClockHistory size={18} color="#2563eb" />
-              <h3
-                style={{
-                  fontWeight: 700,
-                  fontSize: 17,
-                  color: "#111827",
-                  margin: 0,
-                }}
-              >
+        <div className="sup-modal-header">
+          <div className="sup-modal-title-group">
+            <div className="sup-modal-icon-badge">
+              <BsClockHistory size={18} />
+            </div>
+            <div>
+              <h3 className="sup-modal-title">
                 Purchase History: {supplierName}
               </h3>
+              <p className="sup-modal-subtitle">
+                Supplier ID: #{supplier?.id}{" "}
+                {supplier?.email ? `· ${supplier.email}` : ""}{" "}
+                {supplier?.phone ? `· ${supplier.phone}` : ""}
+              </p>
             </div>
-            <p
-              style={{
-                fontSize: 12,
-                color: "#6b7280",
-                margin: "4px 0 0",
-              }}
-            >
-              Supplier ID: #{supplier?.id}{" "}
-              {supplier?.email ? `· ${supplier.email}` : ""}{" "}
-              {supplier?.phone ? `· ${supplier.phone}` : ""}
-            </p>
           </div>
-          <button className="ec-modal-close" onClick={onClose}>
+          <button className="sup-modal-close" onClick={onClose} aria-label="Close modal">
             ✕
           </button>
         </div>
 
-        {/* Purchase Summary KPI Cards */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 12,
-            marginBottom: 16,
-          }}
-        >
-          {/* Total Purchases */}
-          <div className="adm-kpi-card" style={{ padding: "12px 16px" }}>
-            <span style={{ fontSize: 18 }}>📦</span>
-            <p
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#9ca3af",
-                textTransform: "uppercase",
-                marginTop: 4,
-              }}
-            >
-              Total Purchases
-            </p>
-            <p
-              style={{
-                fontSize: 22,
-                fontWeight: 800,
-                color: "#6366f1",
-                marginTop: 2,
-              }}
-            >
-              {totalPurchases}
-            </p>
-          </div>
-
-          {/* Total Amount Spent */}
-          <div className="adm-kpi-card" style={{ padding: "12px 16px" }}>
-            <span style={{ fontSize: 18 }}>💰</span>
-            <p
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#9ca3af",
-                textTransform: "uppercase",
-                marginTop: 4,
-              }}
-            >
-              Total Amount Spent
-            </p>
-            <p
-              style={{
-                fontSize: 22,
-                fontWeight: 800,
-                color: "#2563eb",
-                marginTop: 2,
-              }}
-            >
-              {formatCurrency(totalAmountSpent)}
-            </p>
-          </div>
-
-          {/* Supplier Status */}
-          <div className="adm-kpi-card" style={{ padding: "12px 16px" }}>
-            <span style={{ fontSize: 18 }}>🚚</span>
-            <p
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#9ca3af",
-                textTransform: "uppercase",
-                marginTop: 4,
-              }}
-            >
-              Status
-            </p>
-            <p
-              style={{
-                fontSize: 16,
-                fontWeight: 700,
-                color: supplier?.is_active !== false ? "#10b981" : "#6b7280",
-                marginTop: 4,
-              }}
-            >
-              {supplier?.is_active !== false ? "Active Supplier" : "Inactive"}
-            </p>
-          </div>
-        </div>
-
-        {/* Filter Controls & Record Counter */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: 12,
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <label
-              style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: "#4b5563",
-              }}
-            >
-              Status Filter:
-            </label>
-            <select
-              className="ec-input"
-              style={{
-                padding: "4px 8px",
-                fontSize: 12,
-                width: 140,
-                height: 32,
-              }}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="all">All Statuses</option>
-              <option value="completed">Completed</option>
-              <option value="received">Received</option>
-              <option value="ordered">Ordered</option>
-              <option value="pending">Pending</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-
-          <span style={{ fontSize: 12, color: "#6b7280" }}>
-            Showing {purchaseOrders.length} purchase record(s)
-          </span>
-        </div>
-
-        {/* Content Section: Table of Purchase Orders */}
-        <div
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            border: "1px solid #e5e7eb",
-            borderRadius: 8,
-          }}
-        >
-          {loading && (
-            <div
-              style={{
-                padding: 40,
-                textAlign: "center",
-                color: "#6b7280",
-                fontSize: 14,
-              }}
-            >
-              Loading purchase history...
+        {/* Modal Body */}
+        <div className="sup-modal-body">
+          {/* Purchase Summary KPI Cards */}
+          <div className="sup-hist-kpi-grid">
+            {/* Total Purchases */}
+            <div className="sup-hist-kpi-card">
+              <div className="sup-hist-kpi-icon sup-hist-kpi-indigo">
+                <BsBoxSeam size={18} />
+              </div>
+              <div className="sup-hist-kpi-info">
+                <span className="sup-hist-kpi-label">Total Purchases</span>
+                <span className="sup-hist-kpi-value sup-text-indigo">
+                  {totalPurchases}
+                </span>
+              </div>
             </div>
-          )}
 
-          {!loading && error && (
-            <div
-              style={{
-                padding: 30,
-                textAlign: "center",
-                color: "#dc2626",
-                background: "#fef2f2",
-              }}
-            >
-              <p style={{ margin: 0, fontWeight: 600 }}>
-                Failed to load purchase history
-              </p>
-              <p style={{ fontSize: 12, margin: "6px 0 12px" }}>
-                {String(error)}
-              </p>
-              <button
-                className="adm-btn-secondary"
-                style={{ fontSize: 12, padding: "4px 12px" }}
-                onClick={() => setRetryCount((c) => c + 1)}
+            {/* Total Amount Spent */}
+            <div className="sup-hist-kpi-card">
+              <div className="sup-hist-kpi-icon sup-hist-kpi-blue">
+                <BsCurrencyRupee size={18} />
+              </div>
+              <div className="sup-hist-kpi-info">
+                <span className="sup-hist-kpi-label">Total Amount Spent</span>
+                <span className="sup-hist-kpi-value sup-text-blue">
+                  {formatCurrency(totalAmountSpent)}
+                </span>
+              </div>
+            </div>
+
+            {/* Supplier Status */}
+            <div className="sup-hist-kpi-card">
+              <div className="sup-hist-kpi-icon sup-hist-kpi-emerald">
+                <BsBuilding size={18} />
+              </div>
+              <div className="sup-hist-kpi-info">
+                <span className="sup-hist-kpi-label">Supplier Status</span>
+                <span
+                  className="sup-hist-kpi-value"
+                  style={{
+                    color: supplier?.is_active !== false ? "#059669" : "#64748b",
+                    fontSize: 14,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <span
+                    className={`sup-status-dot ${
+                      supplier?.is_active !== false ? "sup-dot-active" : "sup-dot-inactive"
+                    }`}
+                  />
+                  {supplier?.is_active !== false ? "Active Supplier" : "Inactive"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filter Controls & Record Counter */}
+          <div className="sup-hist-toolbar">
+            <div className="sup-hist-filter-group">
+              <label className="sup-hist-filter-label">
+                <BsFilter size={14} />
+                <span>Status Filter:</span>
+              </label>
+              <select
+                className="sup-hist-select"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
               >
-                Retry
-              </button>
+                <option value="all">All Statuses</option>
+                <option value="completed">Completed</option>
+                <option value="received">Received</option>
+                <option value="ordered">Ordered</option>
+                <option value="pending">Pending</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
             </div>
-          )}
 
-          {!loading && !error && purchaseOrders.length === 0 && (
-            <div
-              style={{
-                padding: 40,
-                textAlign: "center",
-                color: "#6b7280",
-                fontSize: 14,
-              }}
-            >
-              No purchase history records found for this supplier.
-            </div>
-          )}
+            <span className="sup-hist-record-count">
+              Showing <strong>{purchaseOrders.length}</strong> purchase record(s)
+            </span>
+          </div>
+
+          {/* Content Section: Table of Purchase Orders */}
+          <div className="sup-hist-table-wrap">
+            {loading && (
+              <div className="sup-loading-state" style={{ padding: 48 }}>
+                <div className="sup-spinner" />
+                <span>Loading purchase history...</span>
+              </div>
+            )}
+
+            {!loading && error && (
+              <div className="sup-error-state" style={{ padding: 32, borderRadius: 8 }}>
+                <p className="sup-error-title">Failed to load purchase history</p>
+                <p className="sup-error-desc">{String(error)}</p>
+                <button
+                  className="sup-btn-retry"
+                  onClick={() => setRetryCount((c) => c + 1)}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {!loading && !error && purchaseOrders.length === 0 && (
+              <div className="sup-empty-state" style={{ padding: 48 }}>
+                <div className="sup-empty-icon">📦</div>
+                <p className="sup-empty-title">No purchase history records found</p>
+                <p className="sup-empty-desc">No purchase orders found matching this filter criteria.</p>
+              </div>
+            )}
 
           {!loading && !error && purchaseOrders.length > 0 && (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1017,16 +891,11 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
             </table>
           )}
         </div>
+        </div>
 
         {/* Footer */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            marginTop: 16,
-          }}
-        >
-          <button className="adm-btn-secondary" onClick={onClose}>
+        <div className="sup-modal-footer">
+          <button className="sup-btn-cancel" onClick={onClose}>
             Close
           </button>
         </div>
@@ -1040,6 +909,9 @@ const Supplier = () => {
   const [loading, setLoading] = useState(true);
   const [suppliersError, setSuppliersError] = useState(null);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
   const [modal, setModal] = useState(null);
   const [historySupplier, setHistorySupplier] = useState(null);
   const [stats, setStats] = useState(null);
@@ -1113,15 +985,8 @@ const Supplier = () => {
       console.error("Failed to load suppliers:", error);
 
       if (error.response) {
-        console.log(
-          "Status:",
-          error.response.status
-        );
-
-        console.log(
-          "Data:",
-          error.response.data
-        );
+        console.log("Status:", error.response.status);
+        console.log("Data:", error.response.data);
       }
       setSuppliers([]);
       setSuppliersError(getErrorMessage(error, "Failed to load suppliers"));
@@ -1139,9 +1004,34 @@ const Supplier = () => {
   }, [search]);
 
   // =========================
-  // DISPLAYED SUPPLIERS (FROM API)
+  // FILTERING & PAGINATION
   // =========================
-  const filteredSuppliers = suppliers;
+  const filteredSuppliers = useMemo(() => {
+    let list = Array.isArray(suppliers) ? suppliers : [];
+    if (statusFilter === "active") {
+      list = list.filter((s) => s.is_active !== false);
+    } else if (statusFilter === "inactive") {
+      list = list.filter((s) => s.is_active === false);
+    }
+    return list;
+  }, [suppliers, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSuppliers.length / PAGE_SIZE));
+
+  const paginatedSuppliers = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredSuppliers.slice(start, start + PAGE_SIZE);
+  }, [filteredSuppliers, page, PAGE_SIZE]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
+
+  const handleResetFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setPage(1);
+  };
 
   // =========================
   // ADD / UPDATE
@@ -1192,15 +1082,10 @@ const Supplier = () => {
       console.log("Supplier Payload:", payload);
 
       if (modal?.id) {
-        await supplierService.update(
-          modal.id,
-          payload
-        );
-
+        await supplierService.update(modal.id, payload);
         alert("Supplier updated successfully!");
       } else {
         await supplierService.create(payload);
-
         alert("Supplier created successfully!");
       }
 
@@ -1209,21 +1094,11 @@ const Supplier = () => {
       await loadSuppliers();
       await loadStats();
     } catch (error) {
-      console.error(
-        "Supplier Save Error:",
-        error
-      );
+      console.error("Supplier Save Error:", error);
 
       if (error.response) {
-        console.log(
-          "Status:",
-          error.response.status
-        );
-
-        console.log(
-          "API Error:",
-          error.response.data
-        );
+        console.log("Status:", error.response.status);
+        console.log("API Error:", error.response.data);
       }
 
       const message = getErrorMessage(error, "Supplier operation failed");
@@ -1249,21 +1124,11 @@ const Supplier = () => {
       await loadSuppliers();
       await loadStats();
     } catch (error) {
-      console.error(
-        "Delete Supplier Error:",
-        error
-      );
+      console.error("Delete Supplier Error:", error);
 
       if (error.response) {
-        console.log(
-          "Status:",
-          error.response.status
-        );
-
-        console.log(
-          "API Error:",
-          error.response.data
-        );
+        console.log("Status:", error.response.status);
+        console.log("API Error:", error.response.data);
       }
 
       const message = getErrorMessage(error, "Failed to delete supplier");
@@ -1282,7 +1147,8 @@ const Supplier = () => {
             <span>Vendor Directory</span>
           </div>
           <h1 className="sup-title">
-            🚚 Suppliers
+            <BsBuilding size={24} style={{ color: "#4f46e5" }} />
+            <span>Suppliers</span>
           </h1>
           <p className="sup-subtitle">
             Manage your suppliers, track procurement spend, and monitor vendor purchase orders
@@ -1307,12 +1173,12 @@ const Supplier = () => {
           <div className="sup-kpi-top">
             <span className="sup-kpi-label">Total Suppliers</span>
             <div className="sup-kpi-icon-wrap sup-kpi-icon-indigo">
-              🚚
+              <BsBuilding size={20} />
             </div>
           </div>
           <div className="sup-kpi-value sup-kpi-value-indigo">
             {stats && stats.total_suppliers !== undefined
-              ? stats.total_suppliers
+              ? Number(stats.total_suppliers).toLocaleString("en-IN")
               : statsLoading
               ? "..."
               : "-"}
@@ -1324,12 +1190,12 @@ const Supplier = () => {
           <div className="sup-kpi-top">
             <span className="sup-kpi-label">Active Suppliers</span>
             <div className="sup-kpi-icon-wrap sup-kpi-icon-emerald">
-              ✅
+              <BsCheckCircle size={20} />
             </div>
           </div>
           <div className="sup-kpi-value sup-kpi-value-emerald">
             {stats && stats.active_suppliers !== undefined
-              ? stats.active_suppliers
+              ? Number(stats.active_suppliers).toLocaleString("en-IN")
               : statsLoading
               ? "..."
               : "-"}
@@ -1341,12 +1207,12 @@ const Supplier = () => {
           <div className="sup-kpi-top">
             <span className="sup-kpi-label">Inactive Suppliers</span>
             <div className="sup-kpi-icon-wrap sup-kpi-icon-slate">
-              ⏸️
+              <BsXCircle size={20} />
             </div>
           </div>
           <div className="sup-kpi-value sup-kpi-value-slate">
             {stats && stats.inactive_suppliers !== undefined
-              ? stats.inactive_suppliers
+              ? Number(stats.inactive_suppliers).toLocaleString("en-IN")
               : statsLoading
               ? "..."
               : "-"}
@@ -1358,7 +1224,7 @@ const Supplier = () => {
           <div className="sup-kpi-top">
             <span className="sup-kpi-label">Total Spend</span>
             <div className="sup-kpi-icon-wrap sup-kpi-icon-blue">
-              💰
+              <BsCurrencyRupee size={20} />
             </div>
           </div>
           <div className="sup-kpi-value sup-kpi-value-blue" style={{ fontSize: 22 }}>
@@ -1378,12 +1244,12 @@ const Supplier = () => {
           <div className="sup-kpi-top">
             <span className="sup-kpi-label">Pending Orders</span>
             <div className="sup-kpi-icon-wrap sup-kpi-icon-amber">
-              📦
+              <BsHourglassSplit size={20} />
             </div>
           </div>
           <div className="sup-kpi-value sup-kpi-value-amber">
             {stats && stats.pending_orders_count !== undefined
-              ? stats.pending_orders_count
+              ? Number(stats.pending_orders_count).toLocaleString("en-IN")
               : statsLoading
               ? "..."
               : "-"}
@@ -1432,26 +1298,57 @@ const Supplier = () => {
 
       {/* ================= SEARCH & TOOLBAR ================= */}
       <div className="sup-toolbar">
-        <div className="sup-search-wrapper">
-          <BsSearch className="sup-search-icon" size={14} />
-          <input
-            className="sup-search-input"
-            placeholder="Search suppliers by name, contact, email or phone..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          {search && (
-            <button
-              className="sup-search-clear"
-              onClick={() => setSearch("")}
-              title="Clear search"
-            >
-              ✕
-            </button>
-          )}
+        <div className="sup-toolbar-left">
+          <div className="sup-search-wrapper">
+            <BsSearch className="sup-search-icon" size={14} />
+            <input
+              className="sup-search-input"
+              placeholder="Search suppliers by name, contact, email or phone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                className="sup-search-clear"
+                onClick={() => setSearch("")}
+                title="Clear search"
+                type="button"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          <div className="sup-filter-group">
+            <div className="sup-filter-item">
+              <BsFilter size={14} className="sup-filter-icon" />
+              <select
+                className="sup-filter-select"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="all">All Statuses</option>
+                <option value="active">Active Only</option>
+                <option value="inactive">Inactive Only</option>
+              </select>
+            </div>
+
+            {(search || statusFilter !== "all") && (
+              <button
+                className="sup-btn-reset"
+                onClick={handleResetFilters}
+                title="Reset all search & filters"
+                type="button"
+              >
+                <BsArrowCounterclockwise size={13} />
+                <span>Reset</span>
+              </button>
+            )}
+          </div>
         </div>
+
         <div className="sup-toolbar-meta">
-          <span>Total Suppliers:</span>
+          <span>Suppliers:</span>
           <span className="sup-meta-count">
             {filteredSuppliers ? filteredSuppliers.length : 0}
           </span>
@@ -1464,11 +1361,11 @@ const Supplier = () => {
           <table className="sup-table">
             <thead>
               <tr>
-                <th>Supplier</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Address & GSTIN</th>
-                <th className="text-right">Actions</th>
+                <th style={{ width: "28%" }}>Supplier</th>
+                <th style={{ width: "20%" }}>Email</th>
+                <th style={{ width: "16%" }}>Phone</th>
+                <th style={{ width: "22%" }}>Address & GSTIN</th>
+                <th className="text-right" style={{ width: "14%" }}>Actions</th>
               </tr>
             </thead>
 
@@ -1487,24 +1384,37 @@ const Supplier = () => {
 
               {/* DATA */}
               {!loading &&
-                filteredSuppliers.map((supplier) => (
+                paginatedSuppliers.map((supplier) => (
                   <tr key={supplier.id}>
                     <td>
                       <div className="sup-name-cell">
                         <div className="sup-name-row">
-                          <span className="sup-primary-name">{supplier.name || "-"}</span>
+                          <span
+                            className="sup-primary-name sup-cell-truncate"
+                            title={supplier.name || "-"}
+                          >
+                            {supplier.name || "-"}
+                          </span>
                           {supplier.is_active !== undefined && (
                             <span
                               className={`sup-badge ${
                                 supplier.is_active ? "sup-badge-active" : "sup-badge-inactive"
                               }`}
                             >
+                              <span
+                                className={`sup-status-dot ${
+                                  supplier.is_active ? "sup-dot-active" : "sup-dot-inactive"
+                                }`}
+                              />
                               {supplier.is_active ? "Active" : "Inactive"}
                             </span>
                           )}
                         </div>
                         {supplier.contact_person && (
-                          <div className="sup-contact-sub">
+                          <div
+                            className="sup-contact-sub sup-cell-truncate"
+                            title={`Contact: ${supplier.contact_person}`}
+                          >
                             Contact: {supplier.contact_person}
                           </div>
                         )}
@@ -1512,25 +1422,36 @@ const Supplier = () => {
                     </td>
 
                     <td>
-                      <span className={supplier.email ? "sup-text-secondary" : "sup-text-muted"}>
+                      <span
+                        className={`sup-cell-truncate ${supplier.email ? "sup-text-secondary" : "sup-text-muted"}`}
+                        title={supplier.email || "-"}
+                      >
                         {supplier.email || "-"}
                       </span>
                     </td>
 
                     <td>
-                      <span className={supplier.phone ? "sup-text-secondary" : "sup-text-muted"}>
+                      <span
+                        className={`sup-cell-truncate ${supplier.phone ? "sup-text-secondary" : "sup-text-muted"}`}
+                        title={supplier.phone || "-"}
+                      >
                         {supplier.phone || "-"}
                       </span>
                     </td>
 
                     <td>
                       <div className="sup-name-cell">
-                        <span className={supplier.address ? "sup-text-secondary" : "sup-text-muted"}>
+                        <span
+                          className={`sup-cell-truncate ${supplier.address ? "sup-text-secondary" : "sup-text-muted"}`}
+                          title={supplier.address || "-"}
+                        >
                           {supplier.address || "-"}
                         </span>
                         {supplier.gstin && (
                           <div>
-                            <span className="sup-gstin-pill">GSTIN: {supplier.gstin}</span>
+                            <span className="sup-gstin-pill" title={`GSTIN: ${supplier.gstin}`}>
+                              GSTIN: {supplier.gstin}
+                            </span>
                           </div>
                         )}
                       </div>
@@ -1544,7 +1465,7 @@ const Supplier = () => {
                           title="View Purchase History"
                           onClick={() => setHistorySupplier(supplier)}
                         >
-                          <BsClockHistory size={12} />
+                          <BsClockHistory size={13} />
                           <span>History</span>
                         </button>
 
@@ -1554,7 +1475,7 @@ const Supplier = () => {
                           title="Edit Supplier"
                           onClick={() => setModal(supplier)}
                         >
-                          <BsPencilFill size={12} />
+                          <BsPencilFill size={13} />
                           <span>Edit</span>
                         </button>
 
@@ -1564,7 +1485,7 @@ const Supplier = () => {
                           title="Delete Supplier"
                           onClick={() => deleteSupplier(supplier.id)}
                         >
-                          <BsTrashFill size={12} />
+                          <BsTrashFill size={13} />
                           <span>Delete</span>
                         </button>
                       </div>
@@ -1600,10 +1521,19 @@ const Supplier = () => {
                         <div className="sup-empty-icon">📦</div>
                         <p className="sup-empty-title">No suppliers found</p>
                         <p className="sup-empty-desc">
-                          {search
-                            ? `No suppliers matched your search query "${search}"`
+                          {search || statusFilter !== "all"
+                            ? "No suppliers matched your search query or status filter criteria."
                             : "No suppliers have been added yet."}
                         </p>
+                        {(search || statusFilter !== "all") && (
+                          <button
+                            className="sup-btn-retry"
+                            style={{ marginTop: 12 }}
+                            onClick={handleResetFilters}
+                          >
+                            Clear Filters
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -1611,6 +1541,40 @@ const Supplier = () => {
             </tbody>
           </table>
         </div>
+
+        {/* ================= PAGINATION ================= */}
+        {!loading && filteredSuppliers.length > PAGE_SIZE && (
+          <div className="sup-pagination">
+            <div className="sup-pagination-info">
+              Showing <strong>{(page - 1) * PAGE_SIZE + 1}</strong> to{" "}
+              <strong>{Math.min(page * PAGE_SIZE, filteredSuppliers.length)}</strong> of{" "}
+              <strong>{filteredSuppliers.length}</strong> suppliers
+            </div>
+            <div className="sup-pagination-controls">
+              <button
+                className="sup-page-btn"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                title="Previous page"
+              >
+                <BsChevronLeft size={12} />
+                <span>Previous</span>
+              </button>
+              <span className="sup-page-current">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                className="sup-page-btn"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+                title="Next page"
+              >
+                <span>Next</span>
+                <BsChevronRight size={12} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ================= MODAL ================= */}

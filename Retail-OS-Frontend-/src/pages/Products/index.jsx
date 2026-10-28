@@ -387,7 +387,8 @@ const toCreatePayload = (form, categories = []) => {
         hsn_code: form.hsnCode?.trim() || null,
         gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
         price: String(Number(form.sellingPrice) || 0),
-        cost_price: String(Number(form.mrp) || 0),
+        selling_price: String(Number(form.sellingPrice) || 0),
+        mrp: Number(form.mrp) || 0,
         variants: metaVariants,
         track_batch: false,
         track_expiry: Boolean(form.expiryDate),
@@ -425,6 +426,7 @@ const toUpdatePayload = (form, categories = [], existingProduct = null) => {
     }
 
     const metaVariants = {
+        ...((typeof existingProduct?.variants === 'object' && existingProduct?.variants !== null) ? existingProduct.variants : {}),
         ...((typeof form.variants === 'object' && form.variants !== null) ? form.variants : {}),
         featured: Boolean(form.featured),
         brand: form.brand?.trim() || '',
@@ -435,7 +437,7 @@ const toUpdatePayload = (form, categories = [], existingProduct = null) => {
         expiry_date: form.expiryDate || null,
     };
 
-    return {
+    const payload = {
         name: form.name?.trim() || null,
         barcode: form.barcode?.trim() || null,
         description: form.description?.trim() || null,
@@ -443,13 +445,21 @@ const toUpdatePayload = (form, categories = [], existingProduct = null) => {
         hsn_code: form.hsnCode?.trim() || null,
         gst_rate: String(Number(String(form.gst).replace('%', '')) || 0),
         price: String(Number(form.sellingPrice) || 0),
-        cost_price: String(Number(form.mrp) || 0),
+        selling_price: String(Number(form.sellingPrice) || 0),
+        mrp: Number(form.mrp) || 0,
         variants: metaVariants,
         track_batch: false,
         track_expiry: Boolean(form.expiryDate),
         image_url: finalImageUrl,
         is_active: Boolean(form.status),
     };
+
+    // Preserve existing cost_price; DO NOT overwrite it with MRP
+    if (existingProduct?.cost_price !== undefined && existingProduct?.cost_price !== null) {
+        payload.cost_price = String(existingProduct.cost_price);
+    }
+
+    return payload;
 };
 
 const toPayload = (form, categories = [], existingProduct = null) => {
@@ -485,8 +495,15 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
         name: String(product.name ?? ''),
         sku: String(product.sku ?? ''),
         hsnCode: String(product.hsn_code ?? product.hsnCode ?? ''),
-        sellingPrice: product.sellingPrice ?? product.price ?? product.selling_price ?? '',
-        mrp: product.mrp ?? product.cost_price ?? product.mrp_price ?? '',
+        sellingPrice: product.selling_price ?? product.sellingPrice ?? product.price ?? '',
+        mrp: (
+            (Number(product.mrp) > 0 ? product.mrp : null) ??
+            (Number(variants.mrp) > 0 ? variants.mrp : null) ??
+            (Number(variants.mrp_price) > 0 ? variants.mrp_price : null) ??
+            (Number(product.mrp_price) > 0 ? product.mrp_price : null) ??
+            (Number(localMeta.mrp) > 0 ? localMeta.mrp : null) ??
+            ''
+        ),
         brand: String(product.brand ?? product.brand_name ?? variants.brand ?? localMeta.brand ?? ''),
         barcode: String(product.barcode ?? ''),
         description: String(product.description ?? ''),
@@ -584,23 +601,23 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
     };
     const SKU_REGEX = /^SKU-\d{3,6}$/;
 
-const validateSKUFormat = (sku) => {
-    const value = sku.trim().toUpperCase();
+    const validateSKUFormat = (sku) => {
+        const value = sku.trim().toUpperCase();
 
-    if (!value) {
-        return 'SKU is required';
-    }
+        if (!value) {
+            return 'SKU is required';
+        }
 
-    if (!SKU_REGEX.test(value)) {
-        return 'SKU must be in format SKU-001 with 3 to 6 digits';
-    }
+        if (!SKU_REGEX.test(value)) {
+            return 'SKU must be in format SKU-001 with 3 to 6 digits';
+        }
 
-    if (/^SKU-0+$/.test(value)) {
-        return 'SKU cannot be all zeros';
-    }
+        if (/^SKU-0+$/.test(value)) {
+            return 'SKU cannot be all zeros';
+        }
 
-    return '';
-};
+        return '';
+    };
     const validateForm = () => {
         const newErrors = {};
 
@@ -609,24 +626,24 @@ const validateSKUFormat = (sku) => {
         }
         const normalizedSKU = form.sku.trim().toUpperCase();
 
-const skuError = validateSKUFormat(normalizedSKU);
+        const skuError = validateSKUFormat(normalizedSKU);
 
-if (skuError) {
-    newErrors.sku = skuError;
-} else {
-   const duplicateSKU = existingProducts.some(p => {
-        const existingSKU = (p.sku || '').trim().toUpperCase();
+        if (skuError) {
+            newErrors.sku = skuError;
+        } else {
+            const duplicateSKU = existingProducts.some(p => {
+                const existingSKU = (p.sku || '').trim().toUpperCase();
 
-        return (
-            existingSKU === normalizedSKU &&
-            p.id !== product?.id
-        );
-    });
+                return (
+                    existingSKU === normalizedSKU &&
+                    p.id !== product?.id
+                );
+            });
 
-    if (duplicateSKU) {
-        newErrors.sku = 'SKU already exists. Please use a unique SKU.';
-    }
-}
+            if (duplicateSKU) {
+                newErrors.sku = 'SKU already exists. Please use a unique SKU.';
+            }
+        }
 
         if (!form.category && form.category_id == null && categories.length > 0) {
             newErrors.category = 'Category is required';
@@ -695,7 +712,7 @@ if (skuError) {
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    }; 
+    };
 
     const [featuredConfirm, setFeaturedConfirm] = useState(false);
 
@@ -739,637 +756,637 @@ if (skuError) {
 
     return (
         <>
-        {featuredConfirm && (
-            <div className="ec-modal-overlay" style={{ zIndex: 2000 }}>
-                <div className="ec-modal" style={{ maxWidth: 420, width: '90%', padding: 28 }} onClick={e => e.stopPropagation()}>
-                    <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>⭐</div>
-                    <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827', textAlign: 'center', margin: '0 0 8px' }}>
-                        Mark as Featured Product?
-                    </h3>
-                    <p style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' }}>
-                        Do you want to mark this product as a featured product? It will be displayed in the Featured Products section and included in the Featured Products KPI count.
-                    </p>
-                    <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                        <button
-                            className="adm-btn-secondary"
-                            style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#374151' }}
-                            onClick={() => { set('featured', false); setFeaturedConfirm(false); }}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="adm-btn-primary"
-                            style={{ padding: '9px 20px', borderRadius: 8, background: '#eab308', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}
-                            onClick={() => { setFeaturedConfirm(false); doSave(); }}
-                        >
-                            ⭐ Mark as Featured
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-        <div className="ec-modal-overlay" onClick={onClose}>
-            <div
-                className="ec-modal"
-                style={{ maxWidth: 720, width: '90%' }}
-                onClick={e => e.stopPropagation()}
-            >
-                <div className="ec-modal-header">
-                    <div>
-                        <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>
-                            {isNew ? 'Add New Product' : `Edit: ${product.name}`}
+            {featuredConfirm && (
+                <div className="ec-modal-overlay" style={{ zIndex: 2000 }}>
+                    <div className="ec-modal" style={{ maxWidth: 420, width: '90%', padding: 28 }} onClick={e => e.stopPropagation()}>
+                        <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>⭐</div>
+                        <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827', textAlign: 'center', margin: '0 0 8px' }}>
+                            Mark as Featured Product?
                         </h3>
-                        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-                            Fill in all required product details
+                        <p style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' }}>
+                            Do you want to mark this product as a featured product? It will be displayed in the Featured Products section and included in the Featured Products KPI count.
                         </p>
+                        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                            <button
+                                className="adm-btn-secondary"
+                                style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+                                onClick={() => { set('featured', false); setFeaturedConfirm(false); }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="adm-btn-primary"
+                                style={{ padding: '9px 20px', borderRadius: 8, background: '#eab308', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}
+                                onClick={() => { setFeaturedConfirm(false); doSave(); }}
+                            >
+                                ⭐ Mark as Featured
+                            </button>
+                        </div>
                     </div>
-                    <button className="ec-modal-close" onClick={onClose}>✕</button>
                 </div>
-
-                <form onSubmit={handleSubmit} style={{ padding: 20, display: 'grid', gap: 14 }}>
-                    {/* Product Name + SKU */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            )}
+            <div className="ec-modal-overlay" onClick={onClose}>
+                <div
+                    className="ec-modal"
+                    style={{ maxWidth: 720, width: '90%' }}
+                    onClick={e => e.stopPropagation()}
+                >
+                    <div className="ec-modal-header">
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Product Name <span style={{ color: 'red' }}>*</span>
-                            </label>
-                            <input
-                                className="adm-search"
-                                value={form.name}
-                                onChange={e => set('name', e.target.value)}
-                                placeholder="e.g. Wireless Earbuds Pro"
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.name && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.name}
-                                </div>
-                            )}
+                            <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>
+                                {isNew ? 'Add New Product' : `Edit: ${product.name}`}
+                            </h3>
+                            <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                                Fill in all required product details
+                            </p>
                         </div>
-
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                SKU <span style={{ color: 'red' }}>*</span>
-                            </label>
-                            <input
-                                className="adm-search"
-                                value={form.sku}
-                               onChange={e => {
-    let value = e.target.value.toUpperCase();
-
-    if (!value.startsWith('SKU-')) {
-        value = 'SKU-' + value.replace(/^SKU-?/i, '');
-    }
-
-    const digits = value
-        .slice(4)
-        .replace(/\D/g, '')
-        .slice(0, 6);
-
-    set('sku', 'SKU-' + digits);
-}}
-                                placeholder="e.g. SKU-001"
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.sku && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.sku}
-                                </div>
-                            )}
-                        </div>
+                        <button className="ec-modal-close" onClick={onClose}>✕</button>
                     </div>
 
-                    {/* Category + Brand */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Category <span style={{ color: 'red' }}>*</span>
-                            </label>
-                            <select
-                                value={form.category_id != null ? String(form.category_id) : (categories.find(c => c.name === form.category)?.id != null ? String(categories.find(c => c.name === form.category).id) : '')}
-                                onChange={e => {
-                                    const val = e.target.value;
-                                    const selId = val ? Number(val) : null;
-                                    const selCat = categories.find(c => String(c.id) === String(val));
-                                    const catName = selCat ? selCat.name : val;
-                                    setForm(f => ({ ...f, category: catName, category_id: selId }));
-                                    set('category', catName);
-                                }}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            >
-                                {categories.length === 0 ? (
-                                    <option value="" disabled>No categories available</option>
-                                ) : (
-                                    categories.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))
-                                )}
-                            </select>
-                            {errors.category && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.category}
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label htmlFor="product-brand-input" style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Brand <span style={{ color: 'red' }}>*</span>
-                            </label>
-                            <input
-                                id="product-brand-input"
-                                name="brand"
-                                className="adm-search"
-                                value={form.brand}
-                                onChange={e => set('brand', e.target.value)}
-                                onBlur={() => {
-                                    setErrors(prev => ({
-                                        ...prev,
-                                        brand: validateBrandField(form.brand)
-                                    }));
-                                }}
-                                placeholder="e.g. Nike, Nike123, ABC 123"
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: errors.brand ? '1px solid #dc2626' : '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.brand && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.brand}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Barcode + Unit */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#01050c' }}>
-                                Barcode <span style={{ color: 'red' }}>*</span>
-                            </label>
-                            <input
-                                className="adm-search"
-                                value={form.barcode}
-                                onChange={e => set('barcode', e.target.value)}
-                                placeholder="EAN/UPC Barcode"
-                                inputMode="numeric"
-                                maxLength={13}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.barcode && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.barcode}
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Unit
-                            </label>
-                            <select
-                                value={form.unit}
-                                onChange={e => set('unit', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            >
-                                {UNITS.map(u => (
-                                    <option key={u} value={u}>{u}</option>
-                                ))}
-                            </select>
-                            {errors.unit && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.unit}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* HSN + MRP Price */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                HSN Code
-                            </label>
-                            <input
-                                className="adm-search"
-                                value={form.hsnCode}
-                                onChange={e => set('hsnCode', e.target.value)}
-                                placeholder="HSN/SAC Code"
-                                inputMode="numeric"
-                                maxLength={4}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.hsnCode && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.hsnCode}
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                MRP Price (₹)
-                            </label>
-                            <input
-                                type="number"
-                                min="0"
-                                value={form.mrp}
-                                onChange={e => set('mrp', e.target.value)}
-                                placeholder="0.00"
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.mrp && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.mrp}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Selling Price + GST Rate */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Selling Price (₹)
-                            </label>
-                            <input
-                                className="ec-input"
-                                type="number"
-                                value={form.sellingPrice}
-                                onChange={e => set('sellingPrice', e.target.value)}
-                                placeholder="0"
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.sellingPrice && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.sellingPrice}
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                GST Rate
-                            </label>
-                            <select
-                                value={form.gst}
-                                onChange={e => set('gst', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            >
-                                {GST_RATES.map(g => (
-                                    <option key={g} value={g}>{g}</option>
-                                ))}
-                            </select>
-                            {errors.gst && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.gst}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-
-                    {/* Manufacturing Date + Expiry Date */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Manufacturing Date
-                            </label>
-                            <input
-                                type="date"
-                                value={form.manufacturingDate}
-                                onChange={e => set('manufacturingDate', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: errors.manufacturingDate ? '1px solid #dc2626' : '1px solid #e5e7eb',
-                                    boxSizing: 'border-box',
-                                    fontSize: 13,
-                                    color: '#111827'
-                                }}
-                            />
-                            {errors.manufacturingDate && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.manufacturingDate}
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Expiry Date
-                                {form.category === 'Groceries' && (
-                                    <span style={{ color: 'red' }}> *</span>
-                                )}
-                            </label>
-                            <input
-                                type="date"
-                                value={form.expiryDate}
-                                onChange={e => set('expiryDate', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: errors.expiryDate ? '1px solid #dc2626' : '1px solid #e5e7eb',
-                                    boxSizing: 'border-box',
-                                    fontSize: 13,
-                                    color: '#111827'
-                                }}
-                            />
-                            {form.category === 'Groceries' && (
-                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
-                                    Expiry date is mandatory for food/grocery products.
-                                </div>
-                            )}
-                            {errors.expiryDate && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.expiryDate}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Product Image URL or File Upload (Optional) */}
-                    <div>
-                        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                            Product Image <span style={{ color: '#9ca3af', fontWeight: 400 }}>(URL or choose file)</span>
-                        </label>
-                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                            <input
-                                className="adm-search"
-                                value={form.imageUrl || ''}
-                                onChange={e => {
-                                    const val = e.target.value;
-                                    setForm(f => ({
-                                        ...f,
-                                        imageUrl: val,
-                                        imagePreview: val,
-                                        selectedFile: null,
-                                        hasNewFile: false,
-                                        imageRemoved: false
-                                    }));
-                                }}
-                                placeholder="Paste image URL (https://...)"
-                                style={{
-                                    flex: 1,
-                                    padding: '9px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box',
-                                    fontSize: 13
-                                }}
-                            />
-                            <label
-                                style={{
-                                    padding: '9px 14px',
-                                    background: '#f9fafb',
-                                    border: '1px solid #d1d5db',
-                                    borderRadius: 6,
-                                    cursor: 'pointer',
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    whiteSpace: 'nowrap',
-                                    userSelect: 'none'
-                                }}
-                                title="Upload image from computer"
-                            >
-                                📁 Choose File
+                    <form onSubmit={handleSubmit} style={{ padding: 20, display: 'grid', gap: 14 }}>
+                        {/* Product Name + SKU */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Product Name <span style={{ color: 'red' }}>*</span>
+                                </label>
                                 <input
-                                    type="file"
-                                    accept="image/*"
-                                    style={{ display: 'none' }}
-                                    onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (!file) return;
-                                        if (!file.type.startsWith('image/')) {
-                                            alert('Please select a valid image file (PNG, JPG, WEBP, etc.)');
-                                            return;
-                                        }
-                                        if (file.size > 2 * 1024 * 1024) {
-                                            alert('Image file size should be less than 2MB');
-                                            return;
-                                        }
-                                        const reader = new FileReader();
-                                        reader.onload = (ev) => {
-                                            if (ev.target?.result) {
-                                                setForm(f => ({
-                                                    ...f,
-                                                    imagePreview: ev.target.result,
-                                                    selectedFile: file,
-                                                    hasNewFile: true,
-                                                    imageRemoved: false,
-                                                    imageUrl: ''
-                                                }));
-                                            }
-                                        };
-                                        reader.readAsDataURL(file);
-                                    }}
-                                />
-                            </label>
-                        </div>
-                        {Boolean(form.imagePreview) && (
-                            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <img
-                                    src={normalizeImageUrl(form.imagePreview) || form.imagePreview}
-                                    alt="Selected preview"
-                                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    className="adm-search"
+                                    value={form.name}
+                                    onChange={e => set('name', e.target.value)}
+                                    placeholder="e.g. Wireless Earbuds Pro"
                                     style={{
-                                        width: 44,
-                                        height: 44,
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
                                         borderRadius: 6,
-                                        objectFit: 'cover',
                                         border: '1px solid #e5e7eb',
-                                        display: 'block'
+                                        boxSizing: 'border-box'
                                     }}
                                 />
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setForm(f => ({
-                                            ...f,
-                                            imageUrl: '',
-                                            imagePreview: '',
-                                            selectedFile: null,
-                                            hasNewFile: false,
-                                            imageRemoved: true
-                                        }));
+                                {errors.name && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.name}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    SKU <span style={{ color: 'red' }}>*</span>
+                                </label>
+                                <input
+                                    className="adm-search"
+                                    value={form.sku}
+                                    onChange={e => {
+                                        let value = e.target.value.toUpperCase();
+
+                                        if (!value.startsWith('SKU-')) {
+                                            value = 'SKU-' + value.replace(/^SKU-?/i, '');
+                                        }
+
+                                        const digits = value
+                                            .slice(4)
+                                            .replace(/\D/g, '')
+                                            .slice(0, 6);
+
+                                        set('sku', 'SKU-' + digits);
+                                    }}
+                                    placeholder="e.g. SKU-001"
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                {errors.sku && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.sku}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Category + Brand */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Category <span style={{ color: 'red' }}>*</span>
+                                </label>
+                                <select
+                                    value={form.category_id != null ? String(form.category_id) : (categories.find(c => c.name === form.category)?.id != null ? String(categories.find(c => c.name === form.category).id) : '')}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        const selId = val ? Number(val) : null;
+                                        const selCat = categories.find(c => String(c.id) === String(val));
+                                        const catName = selCat ? selCat.name : val;
+                                        setForm(f => ({ ...f, category: catName, category_id: selId }));
+                                        set('category', catName);
                                     }}
                                     style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: '#ef4444',
-                                        fontSize: 12,
-                                        cursor: 'pointer',
-                                        padding: 0,
-                                        textDecoration: 'underline'
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '8px 10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
                                     }}
                                 >
-                                    Remove image
-                                </button>
+                                    {categories.length === 0 ? (
+                                        <option value="" disabled>No categories available</option>
+                                    ) : (
+                                        categories.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))
+                                    )}
+                                </select>
+                                {errors.category && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.category}
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
 
-                    {/* Description */}
-                    <div>
-                        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                            Description
-                        </label>
-                        <textarea
-                            value={form.description}
-                            onChange={e => set('description', e.target.value)}
-                            rows={3}
-                            style={{
-                                width: '100%',
-                                marginTop: 4,
-                                padding: '8px 10px',
-                                borderRadius: 6,
-                                border: '1px solid #e5e7eb',
-                                boxSizing: 'border-box',
-                                resize: 'vertical'
-                            }}
-                        />
-                    </div>
+                            <div>
+                                <label htmlFor="product-brand-input" style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Brand <span style={{ color: 'red' }}>*</span>
+                                </label>
+                                <input
+                                    id="product-brand-input"
+                                    name="brand"
+                                    className="adm-search"
+                                    value={form.brand}
+                                    onChange={e => set('brand', e.target.value)}
+                                    onBlur={() => {
+                                        setErrors(prev => ({
+                                            ...prev,
+                                            brand: validateBrandField(form.brand)
+                                        }));
+                                    }}
+                                    placeholder="e.g. Nike, Nike123, ABC 123"
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
+                                        borderRadius: 6,
+                                        border: errors.brand ? '1px solid #dc2626' : '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                {errors.brand && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.brand}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
 
-                    {/* Active + Featured */}
-                    <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-                        <label style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            fontSize: 13,
-                            color: '#374151',
-                            cursor: 'pointer'
-                        }}>
-                            <input
-                                type="checkbox"
-                                checked={form.status}
-                                onChange={e => set('status', e.target.checked)}
+                        {/* Barcode + Unit */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#01050c' }}>
+                                    Barcode <span style={{ color: 'red' }}>*</span>
+                                </label>
+                                <input
+                                    className="adm-search"
+                                    value={form.barcode}
+                                    onChange={e => set('barcode', e.target.value)}
+                                    placeholder="EAN/UPC Barcode"
+                                    inputMode="numeric"
+                                    maxLength={13}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                {errors.barcode && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.barcode}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Unit
+                                </label>
+                                <select
+                                    value={form.unit}
+                                    onChange={e => set('unit', e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '8px 10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                >
+                                    {UNITS.map(u => (
+                                        <option key={u} value={u}>{u}</option>
+                                    ))}
+                                </select>
+                                {errors.unit && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.unit}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* HSN + MRP Price */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    HSN Code
+                                </label>
+                                <input
+                                    className="adm-search"
+                                    value={form.hsnCode}
+                                    onChange={e => set('hsnCode', e.target.value)}
+                                    placeholder="HSN/SAC Code"
+                                    inputMode="numeric"
+                                    maxLength={4}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                {errors.hsnCode && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.hsnCode}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    MRP Price (₹)
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={form.mrp}
+                                    onChange={e => set('mrp', e.target.value)}
+                                    placeholder="0.00"
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '8px 10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                {errors.mrp && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.mrp}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Selling Price + GST Rate */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Selling Price (₹)
+                                </label>
+                                <input
+                                    className="ec-input"
+                                    type="number"
+                                    value={form.sellingPrice}
+                                    onChange={e => set('sellingPrice', e.target.value)}
+                                    placeholder="0"
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                {errors.sellingPrice && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.sellingPrice}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    GST Rate
+                                </label>
+                                <select
+                                    value={form.gst}
+                                    onChange={e => set('gst', e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '8px 10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                >
+                                    {GST_RATES.map(g => (
+                                        <option key={g} value={g}>{g}</option>
+                                    ))}
+                                </select>
+                                {errors.gst && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.gst}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+
+                        {/* Manufacturing Date + Expiry Date */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Manufacturing Date
+                                </label>
+                                <input
+                                    type="date"
+                                    value={form.manufacturingDate}
+                                    onChange={e => set('manufacturingDate', e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '8px 10px',
+                                        borderRadius: 6,
+                                        border: errors.manufacturingDate ? '1px solid #dc2626' : '1px solid #e5e7eb',
+                                        boxSizing: 'border-box',
+                                        fontSize: 13,
+                                        color: '#111827'
+                                    }}
+                                />
+                                {errors.manufacturingDate && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.manufacturingDate}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Expiry Date
+                                    {form.category === 'Groceries' && (
+                                        <span style={{ color: 'red' }}> *</span>
+                                    )}
+                                </label>
+                                <input
+                                    type="date"
+                                    value={form.expiryDate}
+                                    onChange={e => set('expiryDate', e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '8px 10px',
+                                        borderRadius: 6,
+                                        border: errors.expiryDate ? '1px solid #dc2626' : '1px solid #e5e7eb',
+                                        boxSizing: 'border-box',
+                                        fontSize: 13,
+                                        color: '#111827'
+                                    }}
+                                />
+                                {form.category === 'Groceries' && (
+                                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
+                                        Expiry date is mandatory for food/grocery products.
+                                    </div>
+                                )}
+                                {errors.expiryDate && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.expiryDate}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Product Image URL or File Upload (Optional) */}
+                        <div>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                Product Image <span style={{ color: '#9ca3af', fontWeight: 400 }}>(URL or choose file)</span>
+                            </label>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                <input
+                                    className="adm-search"
+                                    value={form.imageUrl || ''}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        setForm(f => ({
+                                            ...f,
+                                            imageUrl: val,
+                                            imagePreview: val,
+                                            selectedFile: null,
+                                            hasNewFile: false,
+                                            imageRemoved: false
+                                        }));
+                                    }}
+                                    placeholder="Paste image URL (https://...)"
+                                    style={{
+                                        flex: 1,
+                                        padding: '9px 10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box',
+                                        fontSize: 13
+                                    }}
+                                />
+                                <label
+                                    style={{
+                                        padding: '9px 14px',
+                                        background: '#f9fafb',
+                                        border: '1px solid #d1d5db',
+                                        borderRadius: 6,
+                                        cursor: 'pointer',
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        color: '#374151',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        whiteSpace: 'nowrap',
+                                        userSelect: 'none'
+                                    }}
+                                    title="Upload image from computer"
+                                >
+                                    📁 Choose File
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        style={{ display: 'none' }}
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            if (!file.type.startsWith('image/')) {
+                                                alert('Please select a valid image file (PNG, JPG, WEBP, etc.)');
+                                                return;
+                                            }
+                                            if (file.size > 2 * 1024 * 1024) {
+                                                alert('Image file size should be less than 2MB');
+                                                return;
+                                            }
+                                            const reader = new FileReader();
+                                            reader.onload = (ev) => {
+                                                if (ev.target?.result) {
+                                                    setForm(f => ({
+                                                        ...f,
+                                                        imagePreview: ev.target.result,
+                                                        selectedFile: file,
+                                                        hasNewFile: true,
+                                                        imageRemoved: false,
+                                                        imageUrl: ''
+                                                    }));
+                                                }
+                                            };
+                                            reader.readAsDataURL(file);
+                                        }}
+                                    />
+                                </label>
+                            </div>
+                            {Boolean(form.imagePreview) && (
+                                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <img
+                                        src={normalizeImageUrl(form.imagePreview) || form.imagePreview}
+                                        alt="Selected preview"
+                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                        style={{
+                                            width: 44,
+                                            height: 44,
+                                            borderRadius: 6,
+                                            objectFit: 'cover',
+                                            border: '1px solid #e5e7eb',
+                                            display: 'block'
+                                        }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setForm(f => ({
+                                                ...f,
+                                                imageUrl: '',
+                                                imagePreview: '',
+                                                selectedFile: null,
+                                                hasNewFile: false,
+                                                imageRemoved: true
+                                            }));
+                                        }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#ef4444',
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                            padding: 0,
+                                            textDecoration: 'underline'
+                                        }}
+                                    >
+                                        Remove image
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Description */}
+                        <div>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                Description
+                            </label>
+                            <textarea
+                                value={form.description}
+                                onChange={e => set('description', e.target.value)}
+                                rows={3}
+                                style={{
+                                    width: '100%',
+                                    marginTop: 4,
+                                    padding: '8px 10px',
+                                    borderRadius: 6,
+                                    border: '1px solid #e5e7eb',
+                                    boxSizing: 'border-box',
+                                    resize: 'vertical'
+                                }}
                             />
-                            Active
-                        </label>
+                        </div>
 
-                        <label style={{
+                        {/* Active + Featured */}
+                        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                            <label style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                fontSize: 13,
+                                color: '#374151',
+                                cursor: 'pointer'
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={form.status}
+                                    onChange={e => set('status', e.target.checked)}
+                                />
+                                Active
+                            </label>
+
+                            <label style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                fontSize: 13,
+                                color: '#374151',
+                                cursor: 'pointer'
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={form.featured}
+                                    onChange={e => set('featured', e.target.checked)}
+                                />
+                                Featured
+                            </label>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
                             display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            fontSize: 13,
-                            color: '#374151',
-                            cursor: 'pointer'
+                            justifyContent: 'flex-end',
+                            gap: 10,
+                            marginTop: 10
                         }}>
-                            <input
-                                type="checkbox"
-                                checked={form.featured}
-                                onChange={e => set('featured', e.target.checked)}
-                            />
-                            Featured
-                        </label>
-                    </div>
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                onClick={onClose}
+                                style={{ padding: '8px 16px' }}
+                            >
+                                Cancel
+                            </button>
 
-                    {/* Footer */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        gap: 10,
-                        marginTop: 10
-                    }}>
-                        <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            onClick={onClose}
-                            style={{ padding: '8px 16px' }}
-                        >
-                            Cancel
-                        </button>
-
-                        <button
-                            type="submit"
-                            className="adm-btn-primary"
-                            disabled={saving}
-                            style={{ padding: '8px 16px' }}
-                        >
-                            {saving ? 'Saving…' : (isNew ? 'Create Product' : 'Update Product')}
-                        </button>
-                    </div>
-                </form>
+                            <button
+                                type="submit"
+                                className="adm-btn-primary"
+                                disabled={saving}
+                                style={{ padding: '8px 16px' }}
+                            >
+                                {saving ? 'Saving…' : (isNew ? 'Create Product' : 'Update Product')}
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
-        </div>
-    </>
+        </>
     );
 };
 
@@ -1547,10 +1564,19 @@ const Products = () => {
 
             setProducts(
                 list.map(p => {
-                    const mrpVal = p.mrp ?? p.cost_price ?? p.mrp_price ?? null;
-                    const priceVal = p.selling_price ?? p.price ?? p.sellingPrice ?? null;
                     const variants = (typeof p.variants === 'object' && p.variants !== null) ? p.variants : {};
                     const localMeta = getLocalProductMeta(p.id, p.sku);
+                    const mrpCandidate = (
+                        (Number(p.mrp) > 0 ? Number(p.mrp) : null) ??
+                        (Number(variants.mrp) > 0 ? Number(variants.mrp) : null) ??
+                        (Number(variants.mrp_price) > 0 ? Number(variants.mrp_price) : null) ??
+                        (Number(p.mrp_price) > 0 ? Number(p.mrp_price) : null) ??
+                        (Number(localMeta.mrp) > 0 ? Number(localMeta.mrp) : null) ??
+                        null
+                    );
+                    const mrpVal = mrpCandidate;
+                    const priceVal = p.selling_price ?? p.price ?? p.sellingPrice ?? null;
+                    const costVal = p.cost_price ?? null;
 
                     const isFeatured = Boolean(
                         p.featured === true ||
@@ -1631,9 +1657,10 @@ const Products = () => {
                         category: catName,
                         status: Boolean(p.is_active ?? p.status ?? true),
                         sellingPrice: priceVal,
+                        selling_price: priceVal,
                         price: priceVal,
                         mrp: mrpVal,
-                        cost_price: mrpVal,
+                        cost_price: costVal,
                         brand: brandVal,
                         featured: isFeatured,
                         expiry_date: expiryDate,
@@ -2320,16 +2347,16 @@ const Products = () => {
                             borderRadius: 6,
                             background:
                                 kpiFilter === 'featured' ? '#eef2ff' :
-                                kpiFilter === 'categories' ? '#ecfeff' :
-                                '#fffbeb',
+                                    kpiFilter === 'categories' ? '#ecfeff' :
+                                        '#fffbeb',
                             color:
                                 kpiFilter === 'featured' ? '#4f46e5' :
-                                kpiFilter === 'categories' ? '#0e7490' :
-                                '#b45309',
+                                    kpiFilter === 'categories' ? '#0e7490' :
+                                        '#b45309',
                             border:
                                 kpiFilter === 'featured' ? '1px solid #c7d2fe' :
-                                kpiFilter === 'categories' ? '1px solid #a5f3fc' :
-                                '1px solid #fde68a'
+                                    kpiFilter === 'categories' ? '1px solid #a5f3fc' :
+                                        '1px solid #fde68a'
                         }}>
                             {kpiFilter === 'featured' && `⭐ Featured Products (${filtered.length})`}
                             {kpiFilter === 'categories' && `🏷️ Categorized Products (${filtered.length})`}
@@ -2604,7 +2631,7 @@ const Products = () => {
                                         fontWeight: 600,
                                         whiteSpace: 'nowrap'
                                     }}>
-                                        {fmt(p.mrp ?? p.cost_price)}
+                                        {p.mrp && Number(p.mrp) > 0 ? fmt(p.mrp) : '—'}
                                     </td>
 
                                     <td style={{
@@ -2772,9 +2799,8 @@ const Products = () => {
                                         width: 30,
                                         height: 30,
                                         borderRadius: 6,
-                                        border: `1.5px solid ${
-                                            n === page ? '#6366f1' : '#e5e7eb'
-                                        }`,
+                                        border: `1.5px solid ${n === page ? '#6366f1' : '#e5e7eb'
+                                            }`,
                                         background: n === page
                                             ? '#eef2ff'
                                             : '#fff',
@@ -2802,130 +2828,130 @@ const Products = () => {
                     </div>
                 )}
             </div>
-{modal && (
-    <ProductFormModal
-        product={modal === 'new' ? null : modal}
-        existingProducts={products}
-        categories={categories}
-        onClose={() => setModal(null)}
-        onSave={handleSave}
-    />
-)}
+            {modal && (
+                <ProductFormModal
+                    product={modal === 'new' ? null : modal}
+                    existingProducts={products}
+                    categories={categories}
+                    onClose={() => setModal(null)}
+                    onSave={handleSave}
+                />
+            )}
 
-{previewImage && (
-    <div
-        className="ec-modal-overlay"
-        style={{
-            zIndex: 3000,
-            background: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20
-        }}
-        onClick={closeImagePreview}
-    >
-        <div
-            style={{
-                position: 'relative',
-                maxWidth: '90vw',
-                maxHeight: '90vh',
-                background: '#ffffff',
-                borderRadius: 12,
-                padding: 20,
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 12,
-                minWidth: 320
-            }}
-            onClick={e => e.stopPropagation()}
-        >
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: '1px solid #f3f4f6',
-                paddingBottom: 10
-            }}>
-                <div>
-                    <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
-                        {previewImage.name}
-                    </h4>
-                    {previewImage.sku && (
-                        <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 500 }}>
-                            SKU: {previewImage.sku}
-                        </span>
-                    )}
-                </div>
-                <button
-                    onClick={closeImagePreview}
+            {previewImage && (
+                <div
+                    className="ec-modal-overlay"
                     style={{
-                        background: '#f3f4f6',
-                        border: 'none',
-                        borderRadius: '50%',
-                        width: 32,
-                        height: 32,
-                        display: 'grid',
-                        placeItems: 'center',
-                        cursor: 'pointer',
-                        color: '#6b7280',
-                        fontSize: 14,
-                        fontWeight: 700
+                        zIndex: 3000,
+                        background: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 20
                     }}
-                    title="Close"
+                    onClick={closeImagePreview}
                 >
-                    ✕
-                </button>
-            </div>
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: 200,
-                maxHeight: '75vh',
-                overflow: 'hidden',
-                borderRadius: 8,
-                background: '#f9fafb'
-            }}>
-                {previewError || !previewImage.url ? (
-                    <div style={{ padding: '36px 20px', textAlign: 'center', color: '#6b7280' }}>
-                        <BsImage size={40} color="#9ca3af" style={{ marginBottom: 10 }} />
-                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#374151' }}>
-                            {previewError ? 'Image unavailable' : 'No image uploaded'}
-                        </p>
-                        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9ca3af' }}>
-                            {previewError
-                                ? 'The image could not be loaded or the link is broken.'
-                                : 'No image link or file was provided for this product.'}
-                        </p>
-                    </div>
-                ) : (
-                    <img
-                        src={previewImage.url}
-                        alt={previewImage.name}
-                        onError={() => {
-                            setPreviewError(true);
-                            setBrokenImages(prev => {
-                                const next = new Set(prev);
-                                if (previewImage.url) next.add(previewImage.url);
-                                return next;
-                            });
-                        }}
+                    <div
                         style={{
-                            maxWidth: '100%',
-                            maxHeight: '75vh',
-                            objectFit: 'contain',
-                            borderRadius: 8,
-                            display: 'block'
+                            position: 'relative',
+                            maxWidth: '90vw',
+                            maxHeight: '90vh',
+                            background: '#ffffff',
+                            borderRadius: 12,
+                            padding: 20,
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 12,
+                            minWidth: 320
                         }}
-                    />
-                )}
-            </div>
-        </div>
-    </div>
-)}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            borderBottom: '1px solid #f3f4f6',
+                            paddingBottom: 10
+                        }}>
+                            <div>
+                                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                    {previewImage.name}
+                                </h4>
+                                {previewImage.sku && (
+                                    <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 500 }}>
+                                        SKU: {previewImage.sku}
+                                    </span>
+                                )}
+                            </div>
+                            <button
+                                onClick={closeImagePreview}
+                                style={{
+                                    background: '#f3f4f6',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    width: 32,
+                                    height: 32,
+                                    display: 'grid',
+                                    placeItems: 'center',
+                                    cursor: 'pointer',
+                                    color: '#6b7280',
+                                    fontSize: 14,
+                                    fontWeight: 700
+                                }}
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: 200,
+                            maxHeight: '75vh',
+                            overflow: 'hidden',
+                            borderRadius: 8,
+                            background: '#f9fafb'
+                        }}>
+                            {previewError || !previewImage.url ? (
+                                <div style={{ padding: '36px 20px', textAlign: 'center', color: '#6b7280' }}>
+                                    <BsImage size={40} color="#9ca3af" style={{ marginBottom: 10 }} />
+                                    <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#374151' }}>
+                                        {previewError ? 'Image unavailable' : 'No image uploaded'}
+                                    </p>
+                                    <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9ca3af' }}>
+                                        {previewError
+                                            ? 'The image could not be loaded or the link is broken.'
+                                            : 'No image link or file was provided for this product.'}
+                                    </p>
+                                </div>
+                            ) : (
+                                <img
+                                    src={previewImage.url}
+                                    alt={previewImage.name}
+                                    onError={() => {
+                                        setPreviewError(true);
+                                        setBrokenImages(prev => {
+                                            const next = new Set(prev);
+                                            if (previewImage.url) next.add(previewImage.url);
+                                            return next;
+                                        });
+                                    }}
+                                    style={{
+                                        maxWidth: '100%',
+                                        maxHeight: '75vh',
+                                        objectFit: 'contain',
+                                        borderRadius: 8,
+                                        display: 'block'
+                                    }}
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -3,7 +3,6 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import InventoryHeader from "../../components/InventoryHeader";
 import InventoryFilters from "../../components/InventoryFilters";
 import InventoryTable from "../../components/InventoryTable";
-import LowStockAlert from "../../components/LowStockAlert";
 import "./Inventory.css";
 
 import category from "../../services/categoryService";
@@ -19,32 +18,30 @@ import {
     BsBoxes,
     BsExclamationTriangle,
     BsXCircle,
+    BsCurrencyRupee,
+    BsCalendarX,
 } from "react-icons/bs";
 
 import {
     listInventory,
     listProducts,
+    getProductById,
     listStores,
     stockIn,
     stockOut,
     transferStock,
+    getProductMultiStoreStock,
     lowStock,
     inventoryDashboard,
     adjustInventory,
     getInventoryValuation,
     getInventoryExpiry,
-    listMovements
+    listMovements,
+    isStoreActive,
+    clearInventoryCache,
 } from "../../services/inventoryService";
 
 const PAGE_SIZE = 8;
-
-const movementCellStyle = {
-    padding: "13px 14px",
-    fontSize: "13px",
-    color: "#374151",
-    borderBottom: "1px solid #f1f5f9",
-    verticalAlign: "middle",
-};
 
 /* =========================================================
    FORMAT PRICE
@@ -105,23 +102,136 @@ const parseVariants = (v) => {
     return null;
 };
 
-const getVariantsMrp = (v) => {
-    const parsed = parseVariants(v);
-    if (!parsed) return 0;
-    if (Array.isArray(parsed)) {
-        for (const item of parsed) {
-            const val = item?.mrp ?? item?.mrp_price ?? item?.mrpPrice ?? item?.MRP;
-            if (val !== undefined && val !== null && !isNaN(Number(val)) && Number(val) > 0) {
-                return Number(val);
-            }
+const MRP_FIELD_NAMES = [
+    "mrp",
+    "mrp_price",
+    "mrpPrice",
+    "MRP",
+    "max_retail_price",
+    "maxRetailPrice",
+    "maximum_retail_price",
+    "retail_price",
+    "retailPrice",
+    "product_mrp",
+    "productMrp",
+];
+
+const isValidNumericMrp = (val) => {
+    if (val === undefined || val === null || val === "" || typeof val === "boolean") {
+        return false;
+    }
+    const num = Number(val);
+    return Number.isFinite(num) && num > 0;
+};
+
+const extractMrpFromObject = (obj, depth = 0) => {
+    if (!obj || depth > 4) return null;
+
+    if (typeof obj === "string") {
+        const parsed = parseVariants(obj);
+        if (parsed && typeof parsed === "object") {
+            return extractMrpFromObject(parsed, depth + 1);
         }
-        return 0;
+        return null;
     }
-    const val = parsed?.mrp ?? parsed?.mrp_price ?? parsed?.mrpPrice ?? parsed?.MRP;
-    if (val !== undefined && val !== null && !isNaN(Number(val)) && Number(val) > 0) {
-        return Number(val);
+
+    if (typeof obj !== "object") return null;
+
+    // 1. Direct fields on this object
+    for (const field of MRP_FIELD_NAMES) {
+        if (isValidNumericMrp(obj[field])) {
+            return Number(obj[field]);
+        }
     }
-    return 0;
+
+    // 2. If array, inspect each element
+    if (Array.isArray(obj)) {
+        for (const item of obj) {
+            const val = extractMrpFromObject(item, depth + 1);
+            if (val !== null) return val;
+        }
+        return null;
+    }
+
+    // 3. Inspect common nested containers
+    const nestedContainers = [
+        obj.variants,
+        obj.variant,
+        obj.items,
+        obj.options,
+        obj.details,
+        obj.product_details,
+        obj.productDetail,
+        obj.metadata,
+        obj.meta,
+        obj.custom_fields,
+    ];
+
+    for (const container of nestedContainers) {
+        if (container) {
+            const val = extractMrpFromObject(container, depth + 1);
+            if (val !== null) return val;
+        }
+    }
+
+    // 4. If obj is a dictionary/map of variant objects (e.g. { "default": { mrp: 1500 } })
+    const values = Object.values(obj);
+    for (const val of values) {
+        if (val && typeof val === "object") {
+            const result = extractMrpFromObject(val, depth + 1);
+            if (result !== null) return result;
+        }
+    }
+
+    return null;
+};
+
+const getVariantsMrp = (v) => extractMrpFromObject(v);
+
+const resolveMrpValue = (...candidates) => {
+    for (const val of candidates) {
+        if (isValidNumericMrp(val)) {
+            return Number(val);
+        }
+    }
+    return null;
+};
+
+const extractProductMrp = (prod) => {
+    if (!prod) return null;
+
+    // 1. Direct or variant MRP from the product object
+    const fromObject = extractMrpFromObject(prod);
+    if (fromObject !== null) return fromObject;
+
+    // 2. Check nested containers on product
+    const nested =
+        prod?.product ||
+        prod?.product_details ||
+        prod?.productDetail ||
+        prod?.details ||
+        {};
+    const fromNested = extractMrpFromObject(nested);
+    if (fromNested !== null) return fromNested;
+
+    // 3. Check localStorage retail_os_products_meta
+    try {
+        const rawMeta = localStorage.getItem("retail_os_products_meta");
+        if (rawMeta) {
+            const meta = JSON.parse(rawMeta);
+            const prodId = prod?.id ?? prod?.product_id ?? nested?.id;
+            const prodSku = prod?.sku ?? prod?.product_sku ?? nested?.sku;
+            const idKey = prodId ? `id_${prodId}` : null;
+            const skuKey = prodSku ? `sku_${String(prodSku).trim().toUpperCase()}` : null;
+            const found = (skuKey && meta[skuKey]) || (idKey && meta[idKey]);
+            const fromStorage = extractMrpFromObject(found);
+            if (fromStorage !== null) return fromStorage;
+        }
+    } catch {
+        // ignore
+    }
+
+    return null;
 };
 
 /* =========================================================
@@ -227,13 +337,22 @@ expiry_date:
     nestedProduct?.variants?.expiryDate ??
     null,
 
-        price:
-            product?.price ??
+        selling_price:
             product?.selling_price ??
             product?.sellingPrice ??
-            nestedProduct?.price ??
+            product?.price ??
             nestedProduct?.selling_price ??
             nestedProduct?.sellingPrice ??
+            nestedProduct?.price ??
+            0,
+
+        price:
+            product?.selling_price ??
+            product?.sellingPrice ??
+            product?.price ??
+            nestedProduct?.selling_price ??
+            nestedProduct?.sellingPrice ??
+            nestedProduct?.price ??
             0,
 
         cost_price:
@@ -249,46 +368,7 @@ expiry_date:
 
         variants: parseVariants(product?.variants ?? nestedProduct?.variants),
 
-        mrp: (() => {
-            const pMrp =
-                product?.mrp ??
-                product?.mrp_price ??
-                product?.mrpPrice ??
-                product?.MRP ??
-                getVariantsMrp(product?.variants);
-
-            const nMrp =
-                nestedProduct?.mrp ??
-                nestedProduct?.mrp_price ??
-                nestedProduct?.mrpPrice ??
-                nestedProduct?.MRP ??
-                getVariantsMrp(nestedProduct?.variants);
-
-            const rawMrp = Number(pMrp) > 0 ? Number(pMrp) : nMrp;
-
-            if (rawMrp !== undefined && rawMrp !== null && Number(rawMrp) > 0) {
-                return Number(rawMrp);
-            }
-
-            try {
-                const rawMeta = localStorage.getItem("retail_os_products_meta");
-                if (rawMeta) {
-                    const meta = JSON.parse(rawMeta);
-                    const prodId = product?.id ?? nestedProduct?.id;
-                    const prodSku = product?.sku ?? nestedProduct?.sku;
-                    const idKey = prodId ? `id_${prodId}` : null;
-                    const skuKey = prodSku ? `sku_${String(prodSku).trim().toUpperCase()}` : null;
-                    const found = (skuKey && meta[skuKey]) || (idKey && meta[idKey]);
-                    if (found?.mrp !== undefined && found?.mrp !== null && Number(found.mrp) > 0) {
-                        return Number(found.mrp);
-                    }
-                }
-            } catch {
-                // ignore
-            }
-
-            return 0;
-        })(),
+        mrp: extractProductMrp(product),
 
         brand:
             product?.brand ??
@@ -492,24 +572,101 @@ const StockUpdateModal = ({
     const [toStore, setToStore] =
         useState(0);
 
+    const [productStores, setProductStores] =
+        useState([]);
+
+    const [loadingStoreStock, setLoadingStoreStock] =
+        useState(false);
+
     // Compute inventory items for selected product to map store stock
     const productInventoryRecords = useMemo(() => {
         if (!selectedProduct || !Array.isArray(inventory)) return [];
         return inventory.filter(
             (inv) =>
-                Number(inv?.product_id ?? inv?.productId) === Number(selectedProduct)
+                Number(inv?.product_id ?? inv?.productId ?? inv?.product?.id) === Number(selectedProduct)
         );
     }, [selectedProduct, inventory]);
 
+    // Live multi-store availability when in transfer mode
+    useEffect(() => {
+        let isMounted = true;
+        if (action === "transfer" && selectedProduct > 0) {
+            setLoadingStoreStock(true);
+            getProductMultiStoreStock(selectedProduct)
+                .then((res) => {
+                    if (!isMounted) return;
+                    const items = Array.isArray(res?.data)
+                        ? res.data
+                        : Array.isArray(res)
+                        ? res
+                        : [];
+                    setProductStores(items);
+                })
+                .catch(() => {
+                    if (isMounted) setProductStores([]);
+                })
+                .finally(() => {
+                    if (isMounted) setLoadingStoreStock(false);
+                });
+        } else {
+            setProductStores([]);
+            setLoadingStoreStock(false);
+        }
+        return () => {
+            isMounted = false;
+        };
+    }, [action, selectedProduct]);
+
     const storeStockMap = useMemo(() => {
         const map = new Map();
+        // 1. Populate from local inventory array
         productInventoryRecords.forEach((inv) => {
-            const sid = Number(inv?.store_id ?? inv?.storeId);
-            const stock = Number(inv?.quantity ?? inv?.stock ?? inv?.available_stock ?? 0);
-            map.set(sid, (map.get(sid) || 0) + stock);
+            const sid = Number(
+                inv?.store_id ??
+                inv?.storeId ??
+                inv?.store?.id ??
+                inv?.warehouse_id ??
+                inv?.warehouseId ??
+                inv?.warehouse?.id
+            );
+            const stock = Number(
+                inv?.quantity ??
+                inv?.stock ??
+                inv?.available_stock ??
+                0
+            );
+            if (Number.isFinite(sid) && sid > 0) {
+                map.set(sid, (map.get(sid) || 0) + stock);
+            }
         });
+
+        // 2. Include modal item row if applicable
+        if (item && Number(item?.product_id ?? item?.productId) === Number(selectedProduct)) {
+            const sid = Number(item?.store_id ?? item?.storeId ?? item?.warehouse_id ?? item?.warehouseId);
+            const stock = Number(item?.quantity ?? item?.stock ?? item?.available_stock ?? 0);
+            if (Number.isFinite(sid) && sid > 0 && !map.has(sid)) {
+                map.set(sid, stock);
+            }
+        }
+
+        // 3. Supplement/override with multi-store API data if available
+        if (Array.isArray(productStores) && productStores.length > 0) {
+            productStores.forEach((it) => {
+                const sid = Number(it?.store_id ?? it?.storeId ?? it?.id);
+                const stock = Number(
+                    it?.quantity ??
+                    it?.stock ??
+                    it?.available_stock ??
+                    0
+                );
+                if (Number.isFinite(sid) && sid > 0) {
+                    map.set(sid, stock);
+                }
+            });
+        }
+
         return map;
-    }, [productInventoryRecords]);
+    }, [productInventoryRecords, productStores, item, selectedProduct]);
 
     const selectedSourceStock = storeStockMap.get(Number(fromStore)) || 0;
 
@@ -528,23 +685,11 @@ const StockUpdateModal = ({
 
         if (item?.action) {
             setAction(item.action);
-        }
-    }, [item]);
-
-    // When product changes in transfer mode, suggest a valid store with available inventory
-    useEffect(() => {
-        if (action === "transfer" && selectedProduct > 0 && storeStockMap.size > 0) {
-            const currentStockInFrom = storeStockMap.get(Number(fromStore));
-            if (!fromStore || currentStockInFrom === undefined || currentStockInFrom <= 0) {
-                for (const [storeId, stock] of storeStockMap.entries()) {
-                    if (stock > 0) {
-                        setFromStore(storeId);
-                        break;
-                    }
-                }
+            if (item.action === "transfer") {
+                setReason("Transfer");
             }
         }
-    }, [action, selectedProduct, storeStockMap, fromStore]);
+    }, [item]);
 
     const selectedProductData = products.find(
         (product) =>
@@ -577,6 +722,8 @@ const StockUpdateModal = ({
     );
 
     const handleSave = async () => {
+        if (modalLoading) return;
+
         const delta = parseInt(qty, 10) || 0;
 
         if (delta <= 0) {
@@ -605,25 +752,27 @@ const StockUpdateModal = ({
                 return;
             }
 
-            if (selectedProduct && storeStockMap.size > 0) {
-                if (!storeStockMap.has(Number(fromStore))) {
-                    setModalError(
-                        "Selected source store does not have inventory for this product."
-                    );
-                    return;
-                }
-                if (selectedSourceStock <= 0) {
-                    setModalError(
-                        "Source store has 0 stock available for this product."
-                    );
-                    return;
-                }
-                if (delta > selectedSourceStock) {
-                    setModalError(
-                        `Requested transfer quantity (${delta}) exceeds available stock (${selectedSourceStock}) in source store.`
-                    );
-                    return;
-                }
+            const sourceStock = storeStockMap.get(Number(fromStore));
+
+            if (sourceStock === undefined || !storeStockMap.has(Number(fromStore))) {
+                setModalError(
+                    "Selected product is unavailable in the source warehouse. Please choose a source warehouse with available stock."
+                );
+                return;
+            }
+
+            if (sourceStock <= 0) {
+                setModalError(
+                    "Source warehouse has 0 stock available for this product."
+                );
+                return;
+            }
+
+            if (delta > sourceStock) {
+                setModalError(
+                    `Requested transfer quantity (${delta}) exceeds available stock (${sourceStock}) in source warehouse.`
+                );
+                return;
             }
         } else if (fromStore === 0) {
             setModalError("Please select Store");
@@ -666,13 +815,47 @@ const StockUpdateModal = ({
         } catch (err) {
             console.error("HANDLE SAVE ERROR =>", err);
 
+            const responseDetail =
+                err?.response?.data?.detail ||
+                err?.data?.detail;
+
+            const responseMessage =
+                err?.response?.data?.message ||
+                err?.data?.message;
+
+            let extractedMessage = "";
+
+            if (typeof responseDetail === "string") {
+                extractedMessage = responseDetail;
+            } else if (responseDetail && typeof responseDetail === "object") {
+                if (Array.isArray(responseDetail)) {
+                    extractedMessage = responseDetail
+                        .map((d) => d?.msg || d?.message || JSON.stringify(d))
+                        .join(", ");
+                } else if (responseDetail.message) {
+                    extractedMessage = responseDetail.message;
+                } else if (responseDetail.msg) {
+                    extractedMessage = responseDetail.msg;
+                }
+            }
+
+            if (!extractedMessage && typeof responseMessage === "string") {
+                extractedMessage = responseMessage;
+            }
+
+            // Distinguish 404: route not found vs source inventory / store record not found
+            if (err?.response?.status === 404) {
+                if (
+                    !extractedMessage ||
+                    extractedMessage.toLowerCase() === "not found"
+                ) {
+                    extractedMessage =
+                        "The selected product is unavailable in the source warehouse (source inventory record not found).";
+                }
+            }
+
             setModalError(
-                err?.data?.detail?.[0]?.msg ||
-                    (typeof err?.data?.detail === "string" ? err?.data?.detail : null) ||
-                    err?.data?.message ||
-                    err?.response?.data?.detail?.[0]?.msg ||
-                    (typeof err?.response?.data?.detail === "string" ? err?.response?.data?.detail : null) ||
-                    err?.response?.data?.message ||
+                extractedMessage ||
                     err?.message ||
                     "Failed to update stock"
             );
@@ -775,9 +958,11 @@ const StockUpdateModal = ({
                             className="ec-input"
                             value={action}
                             onChange={(e) => {
-                                setAction(
-                                    e.target.value
-                                );
+                                const val = e.target.value;
+                                setAction(val);
+                                if (val === "transfer" && (reason === "Purchase" || !reason)) {
+                                    setReason("Transfer");
+                                }
                                 setModalError("");
                             }}
                         >
@@ -882,39 +1067,44 @@ const StockUpdateModal = ({
                             {stores.map(
                                 (store) => {
                                     const stock = storeStockMap.get(Number(store.id));
-                                    const hasInventory = stock !== undefined;
                                     return (
                                         <option
                                             key={store.id}
                                             value={store.id}
-                                            disabled={
-                                                action === "transfer" &&
-                                                selectedProduct > 0 &&
-                                                storeStockMap.size > 0 &&
-                                                (!hasInventory || stock <= 0)
-                                            }
                                         >
                                             {store.name} (ID: {store.id})
                                             {action === "transfer" && selectedProduct > 0
-                                                ? hasInventory
+                                                ? stock !== undefined
                                                     ? ` - Stock: ${stock}`
-                                                    : " - No Inventory"
+                                                    : " - Stock: 0"
                                                 : ""}
                                         </option>
                                     );
                                 }
                             )}
                         </select>
-                        {action === "transfer" && fromStore > 0 && selectedProduct > 0 && (
+                        {action === "transfer" && selectedProduct > 0 && (
                             <div
                                 style={{
                                     fontSize: 12,
                                     marginTop: 4,
-                                    color: selectedSourceStock > 0 ? "#059669" : "#dc2626",
+                                    color: fromStore > 0
+                                        ? selectedSourceStock > 0 ? "#059669" : "#dc2626"
+                                        : "#6b7280",
                                     fontWeight: 500,
                                 }}
                             >
-                                Available stock in source store: <strong>{selectedSourceStock}</strong> units
+                                {fromStore > 0 ? (
+                                    selectedSourceStock > 0 ? (
+                                        <>Available stock in source store: <strong>{selectedSourceStock}</strong> units</>
+                                    ) : (
+                                        <>Selected warehouse has 0 stock available for this product</>
+                                    )
+                                ) : (
+                                    loadingStoreStock
+                                        ? <>Checking stock availability across stores...</>
+                                        : <>Please select a source store.</>
+                                )}
                             </div>
                         )}
                     </div>
@@ -1215,6 +1405,7 @@ const Inventory = () => {
     const rawInventoryRef = useRef(null);
     const initialLoadRef = useRef(false);
     const prevWarehouseFilterRef = useRef("All Warehouses");
+    const isInitialMountRef = useRef(true);
 
     const [dashboard, setDashboard] =
         useState(null);
@@ -1298,10 +1489,11 @@ const Inventory = () => {
        PRODUCT MAP
     ===================================================== */
 
-    const productMap = useMemo(() => {
+    const buildProductMap = (productList) => {
         const map = new Map();
+        if (!Array.isArray(productList)) return map;
 
-        products.forEach((product) => {
+        productList.forEach((product) => {
             const productId =
                 product?.id ??
                 product?.product_id ??
@@ -1330,7 +1522,52 @@ const Inventory = () => {
         });
 
         return map;
+    };
+
+    const productMap = useMemo(() => {
+        return buildProductMap(products);
     }, [products]);
+
+    const activeStores = useMemo(() => {
+        return (stores || []).filter(isStoreActive);
+    }, [stores]);
+
+    const getSelectedStoreInfo = (targetFilter = filterWarehouse, storeList = stores, whList = warehouses) => {
+        const currentStores = Array.isArray(storeList) && storeList.length > 0 ? storeList : stores;
+        const currentWhs = Array.isArray(whList) && whList.length > 0 ? whList : warehouses;
+        const isAll = !targetFilter || targetFilter === "All Warehouses";
+
+        if (isAll) {
+            const firstActive = currentStores.find(isStoreActive) || currentStores[0] || null;
+            return {
+                isAll: true,
+                selectedStore: firstActive,
+                validStoreId: firstActive ? Number(firstActive.id ?? firstActive.store_id) : null,
+                isStoreAvailable: true,
+                storeName: "All Warehouses",
+            };
+        }
+
+        const selectedWh = currentWhs.find((w) => String(w?.id) === String(targetFilter));
+        let storeId = null;
+        if (selectedWh) {
+            storeId = selectedWh.store_id != null ? Number(selectedWh.store_id) : Number(selectedWh.id);
+        } else {
+            storeId = Number(targetFilter);
+        }
+
+        const matchedStore = currentStores.find((s) => Number(s?.id ?? s?.store_id) === storeId);
+        const isAvailable = matchedStore ? isStoreActive(matchedStore) : false;
+        const name = matchedStore?.name || matchedStore?.store_name || selectedWh?.name || (storeId ? `Store #${storeId}` : "-");
+
+        return {
+            isAll: false,
+            selectedStore: matchedStore || null,
+            validStoreId: Number.isFinite(storeId) && storeId > 0 ? storeId : null,
+            isStoreAvailable: isAvailable,
+            storeName: name,
+        };
+    };
 
     const getLowStockKeys = (ls) => {
         const nested =
@@ -1389,75 +1626,58 @@ const Inventory = () => {
 
     const fetchProducts = async () => {
         try {
-            const response =
-                await listProducts({ page: 1, page_size: 100, include_inactive: true });
+            let allRawProducts = [];
+            let currentPage = 1;
+            const pageSize = 100;
+            let hasMore = true;
 
-            console.log(
-                "FULL PRODUCTS RESPONSE =>",
-                response
-            );
+            while (hasMore && currentPage <= 20) {
+                const response = await listProducts({
+                    page: currentPage,
+                    page_size: pageSize,
+                    include_inactive: true,
+                });
 
-            const data =
-                getArrayFromResponse(
-                    response
+                const data = getArrayFromResponse(response);
+                if (Array.isArray(data) && data.length > 0) {
+                    allRawProducts.push(...data);
+                    if (data.length < pageSize) {
+                        hasMore = false;
+                    } else {
+                        currentPage++;
+                    }
+                } else {
+                    hasMore = false;
+                }
+            }
+
+            const normalizedProducts = allRawProducts
+                .map(normalizeProduct)
+                .filter(
+                    (product) =>
+                        product.id !== null &&
+                        product.id !== undefined &&
+                        Number.isFinite(Number(product.id))
                 );
 
-            const normalizedProducts =
-                data
-                    .map(normalizeProduct)
-                    .filter(
-                        (product) =>
-                            product.id !==
-                                null &&
-                            product.id !==
-                                undefined &&
-                            Number.isFinite(
-                                Number(
-                                    product.id
-                                )
-                            )
-                    );
-
             const uniqueProducts = [];
-            const seenProductIds =
-                new Set();
+            const seenProductIds = new Set();
 
-            normalizedProducts.forEach(
-                (product) => {
-                    const id =
-                        Number(
-                            product.id
-                        );
-
-                    if (
-                        seenProductIds.has(
-                            id
-                        )
-                    ) {
-                        console.warn(
-                            "Duplicate product skipped:",
-                            id
-                        );
-                        return;
-                    }
-
-                    seenProductIds.add(id);
-                    uniqueProducts.push(
-                        product
-                    );
+            normalizedProducts.forEach((product) => {
+                const id = Number(product.id);
+                if (seenProductIds.has(id)) {
+                    return;
                 }
-            );
+                seenProductIds.add(id);
+                uniqueProducts.push(product);
+            });
 
-            setProducts(
-                uniqueProducts
-            );
+            setProducts(uniqueProducts);
+            return uniqueProducts;
         } catch (err) {
-            console.error(
-                "Products API Error =>",
-                err
-            );
-
+            console.error("Products API Error =>", err);
             setProducts([]);
+            return [];
         }
     };
 
@@ -1465,7 +1685,7 @@ const Inventory = () => {
        FETCH INVENTORY
     ===================================================== */
 
-    const fetchInventory = async (overrideStores = null, overrideWarehouses = null, fromCache = false) => {
+    const fetchInventory = async (overrideStores = null, overrideWarehouses = null, fromCache = false, overrideProducts = null) => {
         try {
             setLoading(true);
             setError("");
@@ -1479,14 +1699,16 @@ const Inventory = () => {
                     ? overrideWarehouses
                     : warehouses;
 
-            const allStoreWarehouseIds = Array.from(
-                new Set([
-                    ...(currentStores || []).map((s) => Number(s?.id ?? s?.store_id)),
-                    ...(currentWarehouses || []).map((w) => Number(w?.store_id ?? w?.id)),
-                ])
-            ).filter((id) => Number.isFinite(id) && id > 0);
+            const storeInfo = getSelectedStoreInfo(filterWarehouse, currentStores, currentWarehouses);
 
-            const isAllWarehouses = !filterWarehouse || filterWarehouse === "All Warehouses";
+            // Handle inactive, deleted, or unavailable store selection
+            if (!storeInfo.isAll && !storeInfo.isStoreAvailable) {
+                setError(`Store "${storeInfo.storeName}" is inactive or unavailable.`);
+                setInventory([]);
+                rawInventoryRef.current = { rawData: [], rawLowStockData: [] };
+                setLoading(false);
+                return;
+            }
 
             let rawData = [];
             let rawLowStockData = [];
@@ -1494,96 +1716,33 @@ const Inventory = () => {
             if (fromCache && rawInventoryRef.current) {
                 rawData = rawInventoryRef.current.rawData || [];
                 rawLowStockData = rawInventoryRef.current.rawLowStockData || [];
-            } else if (isAllWarehouses) {
-                // Fetch unscoped inventory AND inventory for all stores/warehouses
-                const storeRequests = allStoreWarehouseIds.map((sid) =>
-                    listInventory(sid).then((res) => ({ sid, res })).catch(() => null)
-                );
-                const [globalInvSettled, ...storeSettled] = await Promise.allSettled([
-                    listInventory().catch(() => null),
-                    ...storeRequests,
-                ]);
+            } else if (storeInfo.isAll) {
+                // Fetch unscoped global inventory (single request for all stores)
+                const globalInvRes = await listInventory().catch((err) => {
+                    console.error("Global Inventory API Error =>", err);
+                    return null;
+                });
 
-                const seenInvKeys = new Set();
-                const pushItem = (item, fallbackStoreId) => {
-                    if (!item || typeof item !== "object") return;
-                    const invId = item?.id ?? item?.inventory_id ?? item?.inventoryId;
-                    const prodId = item?.product_id ?? item?.productId ?? item?.product?.id;
-                    const sid = item?.store_id ?? item?.storeId ?? item?.warehouse_id ?? item?.warehouseId ?? fallbackStoreId;
-                    const key = invId != null ? `id:${invId}` : `prod:${prodId}-store:${sid}`;
-                    if (!seenInvKeys.has(key)) {
-                        seenInvKeys.add(key);
-                        rawData.push({
-                            ...item,
-                            store_id: item?.store_id ?? item?.storeId ?? sid,
-                        });
-                    }
-                };
-
-                if (globalInvSettled.status === "fulfilled" && globalInvSettled.value) {
-                    const globalItems = getArrayFromResponse(globalInvSettled.value);
-                    if (Array.isArray(globalItems)) {
-                        globalItems.forEach((item) => pushItem(item, null));
-                    }
+                const globalItems = getArrayFromResponse(globalInvRes);
+                if (Array.isArray(globalItems)) {
+                    rawData = globalItems;
                 }
-
-                storeSettled.forEach((result) => {
-                    if (result.status === "fulfilled" && result.value) {
-                        const { sid, res } = result.value;
-                        const items = getArrayFromResponse(res);
-                        if (Array.isArray(items)) {
-                            items.forEach((item) => pushItem(item, sid));
-                        }
-                    }
-                });
-
-                // Also fetch low stock alerts across all stores
-                const lowStockSettled = await Promise.allSettled(
-                    allStoreWarehouseIds.map((sid) => lowStock(sid))
-                );
-                const seenLsKeys = new Set();
-                lowStockSettled.forEach((res, idx) => {
-                    if (res.status === "fulfilled") {
-                        const lsItems = getArrayFromResponse(res.value);
-                        if (Array.isArray(lsItems)) {
-                            lsItems.forEach((ls) => {
-                                const lsId = ls?.id ?? `${ls?.product_id}-${ls?.store_id ?? allStoreWarehouseIds[idx]}`;
-                                if (!seenLsKeys.has(lsId)) {
-                                    seenLsKeys.add(lsId);
-                                    rawLowStockData.push({
-                                        ...ls,
-                                        store_id: ls?.store_id ?? allStoreWarehouseIds[idx],
-                                    });
-                                }
-                            });
-                        }
-                    }
-                });
             } else {
-                const selectedWarehouseObj = currentWarehouses.find(
-                    (w) => String(w?.id) === String(filterWarehouse)
-                );
-                const selectedStore =
-                    currentStores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
-                    (selectedWarehouseObj?.store_id != null
-                        ? currentStores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
-                        : null) ||
-                    selectedWarehouseObj ||
-                    currentStores?.[0];
+                // Fetch scoped inventory for valid active store (single request)
+                const scopedInvRes = await listInventory(storeInfo.validStoreId).catch((err) => {
+                    console.error("Scoped Inventory API Error =>", err);
+                    return null;
+                });
 
-                const validStoreId = Number(selectedStore?.id ?? selectedStore?.store_id ?? filterWarehouse);
-
-                const [invResponse, lowStockResponse] = await Promise.allSettled([
-                    listInventory(validStoreId > 0 ? validStoreId : undefined),
-                    validStoreId > 0 ? lowStock(validStoreId) : Promise.resolve({ data: [] }),
-                ]);
-
-                if (invResponse.status === "fulfilled") {
-                    rawData = getArrayFromResponse(invResponse.value) || [];
+                const items = getArrayFromResponse(scopedInvRes);
+                if (Array.isArray(items)) {
+                    rawData = items;
                 }
-                if (lowStockResponse.status === "fulfilled") {
-                    rawLowStockData = getArrayFromResponse(lowStockResponse.value) || [];
-                }
+            }
+
+            // Sync with existing lowStockItems if available
+            if (Array.isArray(lowStockItems) && lowStockItems.length > 0) {
+                rawLowStockData = lowStockItems;
             }
 
             if (!fromCache) {
@@ -1680,6 +1839,56 @@ const Inventory = () => {
 
             const matchedLowStockAlerts = new Set();
 
+            const activeProductMap =
+                Array.isArray(overrideProducts) && overrideProducts.length > 0
+                    ? buildProductMap(overrideProducts)
+                    : productMap;
+
+            // Fetch any missing individual product records by ID to ensure 100% complete product mapping
+            const missingProductIds = Array.from(
+                new Set(
+                    uniqueInventory
+                        .map((it) =>
+                            Number(
+                                it?.product_id ??
+                                it?.productId ??
+                                it?.product?.id
+                            )
+                        )
+                        .filter(
+                            (pid) =>
+                                Number.isFinite(pid) &&
+                                pid > 0 &&
+                                !activeProductMap.has(pid) &&
+                                !activeProductMap.has(String(pid))
+                        )
+                )
+            );
+
+            if (missingProductIds.length > 0) {
+                const fetchedResults = await Promise.allSettled(
+                    missingProductIds.map((pid) => getProductById(pid))
+                );
+                fetchedResults.forEach((res) => {
+                    if (res.status === "fulfilled" && res.value) {
+                        const rawProd = res.value?.data || res.value;
+                        if (rawProd) {
+                            const normProd = normalizeProduct(rawProd);
+                            if (normProd && normProd.id !== null && normProd.id !== undefined) {
+                                activeProductMap.set(normProd.id, normProd);
+                                activeProductMap.set(String(normProd.id), normProd);
+                                if (normProd.sku) {
+                                    activeProductMap.set(
+                                        `sku:${String(normProd.sku).trim().toLowerCase()}`,
+                                        normProd
+                                    );
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
             const mergedInventory =
                 uniqueInventory
                     .map((item) => {
@@ -1717,10 +1926,10 @@ const Inventory = () => {
 
                         const product =
                             (Number.isFinite(productId)
-                                ? productMap.get(productId)
+                                ? activeProductMap.get(productId) || activeProductMap.get(String(productId))
                                 : null) ||
                             (itemSku
-                                ? productMap.get(`sku:${itemSku.toLowerCase()}`)
+                                ? activeProductMap.get(`sku:${itemSku.toLowerCase()}`)
                                 : null) ||
                             (item?.product && typeof item.product === "object" ? normalizeProduct(item.product) : null) ||
                             null;
@@ -1797,12 +2006,12 @@ const Inventory = () => {
 
                         const price =
                             Number(
-                                product?.price ??
-                                    product?.selling_price ??
+                                product?.selling_price ??
                                     product?.sellingPrice ??
-                                    item?.price ??
+                                    product?.price ??
                                     item?.selling_price ??
                                     item?.sellingPrice ??
+                                    item?.price ??
                                     0
                             );
 
@@ -1818,18 +2027,11 @@ const Inventory = () => {
                                     0
                             );
 
-                        const mrp = Number(
-                            (Number(product?.mrp) > 0 ? Number(product.mrp) : 0) ||
-                            product?.mrp_price ||
-                            product?.mrpPrice ||
-                            product?.MRP ||
-                            getVariantsMrp(product?.variants) ||
-                            item?.mrp ||
-                            item?.mrp_price ||
-                            item?.mrpPrice ||
-                            item?.MRP ||
-                            getVariantsMrp(item?.variants) ||
-                            0
+                        const mrp = resolveMrpValue(
+                            extractProductMrp(product),
+                            extractProductMrp(item?.product),
+                            extractMrpFromObject(item),
+                            extractMrpFromObject(item?.variants)
                         );
 
                         const categoryId =
@@ -1925,6 +2127,13 @@ const Inventory = () => {
                                     ? price
                                     : 0,
 
+                            selling_price:
+                                Number.isFinite(
+                                    price
+                                )
+                                    ? price
+                                    : 0,
+
                             costPrice:
                                 Number.isFinite(
                                     costPrice
@@ -1932,10 +2141,15 @@ const Inventory = () => {
                                     ? costPrice
                                     : 0,
 
-                            mrp:
-                                Number.isFinite(mrp) && mrp > 0
-                                    ? mrp
+                            cost_price:
+                                Number.isFinite(
+                                    costPrice
+                                )
+                                    ? costPrice
                                     : 0,
+
+                            mrp: mrp !== null ? mrp : null,
+                            mrp_price: mrp !== null ? mrp : null,
 
                             barcode:
                                 product?.barcode ||
@@ -1983,9 +2197,14 @@ const Inventory = () => {
             lowStockData.forEach((ls) => {
                 if (matchedLowStockAlerts.has(ls)) return;
                 const { pid, sid, invId, sku, nested } = getLowStockKeys(ls);
+                const activeProductMap =
+                    Array.isArray(overrideProducts) && overrideProducts.length > 0
+                        ? buildProductMap(overrideProducts)
+                        : productMap;
+
                 const product =
-                    (pid !== null ? productMap.get(pid) : null) ||
-                    (sku ? productMap.get(`sku:${sku.toLowerCase()}`) : null) ||
+                    (pid !== null ? activeProductMap.get(pid) : null) ||
+                    (sku ? activeProductMap.get(`sku:${sku.toLowerCase()}`) : null) ||
                     null;
                 const store =
                     currentStores.find((s) => Number(s?.id) === sid) ||
@@ -2108,20 +2327,23 @@ const Inventory = () => {
                     low_stock_threshold: threshold,
                     is_low_stock: true,
                     stock_status: "Low Stock",
-                    price: Number(product?.price ?? product?.selling_price ?? ls?.price ?? ls?.selling_price ?? 0),
+                    price: Number(product?.selling_price ?? product?.sellingPrice ?? product?.price ?? ls?.selling_price ?? ls?.price ?? 0),
+                    selling_price: Number(product?.selling_price ?? product?.sellingPrice ?? product?.price ?? ls?.selling_price ?? ls?.price ?? 0),
                     costPrice: Number(product?.cost_price ?? product?.purchase_price ?? ls?.cost_price ?? ls?.unit_cost ?? 0),
-                    mrp: Number(
-                        (Number(product?.mrp) > 0 ? Number(product.mrp) : 0) ||
-                        product?.mrp_price ||
-                        product?.mrpPrice ||
-                        product?.MRP ||
-                        getVariantsMrp(product?.variants) ||
-                        ls?.mrp ||
-                        ls?.mrp_price ||
-                        ls?.mrpPrice ||
-                        ls?.MRP ||
-                        getVariantsMrp(ls?.variants) ||
-                        0
+                    cost_price: Number(product?.cost_price ?? product?.purchase_price ?? ls?.cost_price ?? ls?.unit_cost ?? 0),
+                    mrp: resolveMrpValue(
+                        extractProductMrp(product),
+                        extractProductMrp(ls?.product),
+                        extractMrpFromObject(ls),
+                        extractMrpFromObject(ls?.variants),
+                        extractProductMrp(nested)
+                    ),
+                    mrp_price: resolveMrpValue(
+                        extractProductMrp(product),
+                        extractProductMrp(ls?.product),
+                        extractMrpFromObject(ls),
+                        extractMrpFromObject(ls?.variants),
+                        extractProductMrp(nested)
                     ),
                     barcode: product?.barcode || ls?.barcode || "",
                     category: resolvedCategory,
@@ -2175,6 +2397,8 @@ const Inventory = () => {
             );
 
             setInventory(finalInventory);
+
+
         } catch (err) {
             console.error(
                 "Inventory API Error:",
@@ -2189,6 +2413,7 @@ const Inventory = () => {
         } finally {
             setLoading(false);
         }
+        return { rawData, rawLowStockData };
     };
 
     /* =====================================================
@@ -2427,74 +2652,72 @@ const fetchValuation = async () => {
        FETCH LOW STOCK
     ===================================================== */
 
-    const fetchLowStock = async (overrideStores = null, overrideWarehouses = null) => {
+    const fetchLowStock = async (overrideStores = null, overrideWarehouses = null, preloadedData = null) => {
         try {
             setLowStockLoading(true);
             setLowStockError("");
 
-            const currentStores =
-                Array.isArray(overrideStores) && overrideStores.length > 0
-                    ? overrideStores
-                    : stores;
-            const currentWarehouses =
-                Array.isArray(overrideWarehouses) && overrideWarehouses.length > 0
-                    ? overrideWarehouses
-                    : warehouses;
-
-            const allStoreWarehouseIds = Array.from(
-                new Set([
-                    ...(currentStores || []).map((s) => Number(s?.id ?? s?.store_id)),
-                    ...(currentWarehouses || []).map((w) => Number(w?.store_id ?? w?.id)),
-                ])
-            ).filter((id) => Number.isFinite(id) && id > 0);
-
-            const isAllWarehouses = !filterWarehouse || filterWarehouse === "All Warehouses";
-
             let data = [];
 
-            if (isAllWarehouses) {
-                const results = await Promise.allSettled(
-                    allStoreWarehouseIds.map((sid) => lowStock(sid))
-                );
-                const seen = new Set();
-                results.forEach((res, idx) => {
-                    if (res.status === "fulfilled") {
-                        const items = getArrayFromResponse(res.value);
-                        if (Array.isArray(items)) {
-                            items.forEach((it) => {
-                                const key = it?.id ?? `${it?.product_id}-${it?.store_id ?? allStoreWarehouseIds[idx]}`;
-                                if (!seen.has(key)) {
-                                    seen.add(key);
-                                    data.push({
-                                        ...it,
-                                        store_id: it?.store_id ?? allStoreWarehouseIds[idx],
-                                    });
-                                }
-                            });
-                        }
-                    }
-                });
+            if (Array.isArray(preloadedData)) {
+                data = preloadedData;
             } else {
-                const selectedWarehouseObj = currentWarehouses.find(
-                    (w) => String(w?.id) === String(filterWarehouse)
-                );
-                const selectedStore =
-                    currentStores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
-                    (selectedWarehouseObj?.store_id != null
-                        ? currentStores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
-                        : null) ||
-                    selectedWarehouseObj ||
-                    currentStores?.[0];
+                const currentStores =
+                    Array.isArray(overrideStores) && overrideStores.length > 0
+                        ? overrideStores
+                        : stores;
+                const currentWarehouses =
+                    Array.isArray(overrideWarehouses) && overrideWarehouses.length > 0
+                        ? overrideWarehouses
+                        : warehouses;
 
-                const validStoreId = Number(selectedStore?.id ?? selectedStore?.store_id ?? filterWarehouse);
+                const storeInfo = getSelectedStoreInfo(filterWarehouse, currentStores, currentWarehouses);
 
-                if (!validStoreId || Number.isNaN(validStoreId) || validStoreId <= 0) {
+                if (!storeInfo.isAll && !storeInfo.isStoreAvailable) {
+                    setLowStockError(`Store "${storeInfo.storeName}" is inactive or unavailable.`);
                     setLowStockItems([]);
+                    setLowStockLoading(false);
                     return;
                 }
 
-                const response = await lowStock(validStoreId);
-                data = getArrayFromResponse(response) || [];
+                if (storeInfo.isAll) {
+                    // Only query low stock for ACTIVE stores
+                    const activeStoreIds = currentStores
+                        .filter(isStoreActive)
+                        .map((s) => Number(s?.id ?? s?.store_id))
+                        .filter((id) => Number.isFinite(id) && id > 0);
+
+                    if (activeStoreIds.length === 0) {
+                        setLowStockItems([]);
+                        setLowStockLoading(false);
+                        return;
+                    }
+
+                    const results = await Promise.allSettled(
+                        activeStoreIds.map((sid) => lowStock(sid))
+                    );
+                    const seen = new Set();
+                    results.forEach((res, idx) => {
+                        if (res.status === "fulfilled") {
+                            const items = getArrayFromResponse(res.value);
+                            if (Array.isArray(items)) {
+                                items.forEach((it) => {
+                                    const key = it?.id ?? `${it?.product_id}-${it?.store_id ?? activeStoreIds[idx]}`;
+                                    if (!seen.has(key)) {
+                                        seen.add(key);
+                                        data.push({
+                                            ...it,
+                                            store_id: it?.store_id ?? activeStoreIds[idx],
+                                        });
+                                    }
+                                });
+                            }
+                        }
+                    });
+                } else {
+                    const response = await lowStock(storeInfo.validStoreId);
+                    data = getArrayFromResponse(response) || [];
+                }
             }
 
             const mergedLowStock =
@@ -2725,23 +2948,20 @@ const fetchValuation = async () => {
                     ? overrideWarehouses
                     : warehouses;
 
-            const selectedWarehouseObj = currentWarehouses.find(
-                (w) => String(w?.id) === String(filterWarehouse)
-            );
+            const storeInfo = getSelectedStoreInfo(filterWarehouse, currentStores, currentWarehouses);
 
-            const selectedStore =
-                filterWarehouse && filterWarehouse !== "All Warehouses"
-                    ? (currentStores.find((s) => String(s?.id ?? s?.store_id) === String(filterWarehouse)) ||
-                       (selectedWarehouseObj?.store_id != null
-                           ? currentStores.find((s) => String(s?.id ?? s?.store_id) === String(selectedWarehouseObj.store_id))
-                           : null) ||
-                       currentStores.find((s) => s?.is_active !== false) || currentStores?.[0])
-                    : (currentStores.find((s) => s?.is_active !== false) || currentStores?.[0]);
+            if (!storeInfo.isAll && !storeInfo.isStoreAvailable) {
+                setMovementsError(`Store "${storeInfo.storeName}" is inactive or unavailable.`);
+                setMovements([]);
+                setMovementsLoading(false);
+                return;
+            }
 
-            const validStoreId = Number(selectedStore?.id ?? selectedStore?.store_id);
+            const validStoreId = storeInfo.validStoreId;
 
             if (!validStoreId || Number.isNaN(validStoreId) || validStoreId <= 0) {
                 setMovements([]);
+                setMovementsLoading(false);
                 return;
             }
 
@@ -2814,7 +3034,11 @@ const fetchValuation = async () => {
         initialLoadRef.current = true;
 
         const loadInitialData = async () => {
-            const [storesRes, warehousesRes] = await Promise.allSettled([
+            const [
+                storesRes,
+                warehousesRes,
+                productsRes,
+            ] = await Promise.allSettled([
                 fetchStores(),
                 fetchWarehouses(),
                 fetchProducts(),
@@ -2828,9 +3052,10 @@ const fetchValuation = async () => {
 
             const storeData = storesRes.status === "fulfilled" && Array.isArray(storesRes.value) ? storesRes.value : [];
             const warehouseData = warehousesRes.status === "fulfilled" && Array.isArray(warehousesRes.value) ? warehousesRes.value : [];
+            const productData = productsRes.status === "fulfilled" && Array.isArray(productsRes.value) ? productsRes.value : [];
 
             await Promise.allSettled([
-                fetchInventory(storeData, warehouseData),
+                fetchInventory(storeData, warehouseData, false, productData),
                 fetchLowStock(storeData, warehouseData),
                 fetchMovements(storeData, warehouseData),
             ]);
@@ -2853,6 +3078,10 @@ const fetchValuation = async () => {
        WAREHOUSE FILTER CHANGE ONLY
     ===================================================== */
     useEffect(() => {
+        if (isInitialMountRef.current) {
+            isInitialMountRef.current = false;
+            return;
+        }
         if (prevWarehouseFilterRef.current !== filterWarehouse) {
             prevWarehouseFilterRef.current = filterWarehouse;
             fetchInventory();
@@ -3102,7 +3331,7 @@ if (action === "transfer") {
         to_store_id: Number(toStore),
         product_id: Number(selectedProduct),
         quantity: Number(delta),
-        notes: notes || reason,
+        notes: (typeof notes === "string" && notes.trim()) ? notes.trim() : (reason && reason !== "Purchase" ? reason : "Stock transfer"),
     };
 }
             
@@ -3265,19 +3494,13 @@ if (action === "transfer") {
                    REFRESH AFTER SUCCESS
                 ================================================= */
 
-                await fetchInventory();
-
+                clearInventoryCache();
+                rawInventoryRef.current = null;
+                await fetchInventory(null, null, false);
                 await fetchDashboard();
+                await fetchValuation();
                 await fetchMovements();
-
-                if (
-                    products.length >
-                        0 &&
-                    stores.length >
-                        0
-                ) {
-                    await fetchLowStock();
-                }
+                await fetchLowStock();
             } catch (err) {
                 console.error(
                     "FULL STOCK UPDATE ERROR =>",
@@ -3411,82 +3634,91 @@ if (action === "transfer") {
             "outOfStockItems"
         );
 
+    const dashboardExpired =
+        getDashboardNumber(
+            "expired",
+            "expired_products",
+            "expiredProducts",
+            "expired_count",
+            "expiredCount",
+            "expired_items",
+            "expiredItems"
+        );
+
+    const calculatedExpiredCount = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return (inventory || []).reduce((acc, item) => {
+            const rawDate =
+                item?.expiry_date ||
+                item?.expiryDate ||
+                item?.expiry ||
+                null;
+            if (!rawDate) return acc;
+            const parts = String(rawDate).split("-");
+            let expiry;
+            if (parts.length === 3 && parts[0].length === 4) {
+                expiry = new Date(
+                    Number(parts[0]),
+                    Number(parts[1]) - 1,
+                    Number(parts[2])
+                );
+            } else {
+                expiry = new Date(rawDate);
+            }
+            if (!Number.isNaN(expiry.getTime())) {
+                expiry.setHours(0, 0, 0, 0);
+                if (expiry < today) return acc + 1;
+            }
+            return acc;
+        }, 0);
+    }, [inventory]);
+
+    const expiredProductsCount = dashboardExpired ?? calculatedExpiredCount;
+
     const kpis = [
         {
-            label: "Total SKUs",
-
-            value:
-                dashboardTotalSkus ??
-                inventory.length,
-
+            label: "Total Products",
+            value: (dashboardTotalSkus ?? inventory.length).toLocaleString("en-IN"),
             icon: <BsBoxSeam />,
-
             color: "#4f46e5",
-
             bg: "#eef2ff",
         },
-
         {
-            label:
-                "Total Stock Units",
-
-            value: (
-                dashboardTotalUnits ??
-                totalItems
-            ).toLocaleString(
-                "en-IN"
-            ),
-
-            icon: <BsBoxes />,
-
+            label: "Inventory Valuation",
+            value: fmt(valuation),
+            icon: <BsCurrencyRupee />,
             color: "#059669",
-
             bg: "#ecfdf5",
         },
-
         {
-            label:
-                "Low Stock Alerts",
-
-            value:
-                dashboardLowStock ??
-                lowStockCount,
-
-            icon: (
-                <BsExclamationTriangle />
-            ),
-
+            label: "Available Stock",
+            value: (dashboardTotalUnits ?? totalItems).toLocaleString("en-IN"),
+            icon: <BsBoxes />,
+            color: "#2563eb",
+            bg: "#eff6ff",
+        },
+        {
+            label: "Low Stock",
+            value: (dashboardLowStock ?? lowStockCount).toLocaleString("en-IN"),
+            icon: <BsExclamationTriangle />,
             color: "#d97706",
-
             bg: "#fffbeb",
         },
-
         {
-            label:
-                "Out of Stock",
-
-            value:
-                dashboardOutOfStock ??
-                outOfStockCount,
-
+            label: "Out of Stock",
+            value: (dashboardOutOfStock ?? outOfStockCount).toLocaleString("en-IN"),
             icon: <BsXCircle />,
-
             color: "#dc2626",
-
             bg: "#fef2f2",
         },
-
         {
-    label: "Inventory Value",
-
-    value: fmt(valuation),
-
-    icon: <BsBoxes />,
-
-    color: "#7c3aed",
-
-    bg: "#f5f3ff",
-},
+            label: "Expired Products",
+            value: expiredProductsCount.toLocaleString("en-IN"),
+            icon: <BsCalendarX />,
+            color: "#e11d48",
+            bg: "#ffe4e6",
+        },
     ];
 
     /* =====================================================
@@ -3510,7 +3742,7 @@ if (action === "transfer") {
                             📦 Stock Management
                         </h1>
                         <p className="inv-subtitle">
-                            Monitor real-time warehouse inventory, track low stock alerts, and oversee stock movements
+                            Monitor real-time warehouse inventory and oversee stock movements
                         </p>
                     </div>
                 </div>
@@ -3799,6 +4031,142 @@ if (action === "transfer") {
                                     <BsChevronRight />
                                 </button>
                             </div>
+                        </div>
+                    )}
+                </section>
+
+                {/* RECENT STOCK MOVEMENTS */}
+                <section className="inv-card inv-movements-section">
+                    <div className="inv-card-heading">
+                        <div>
+                            <h2 className="inv-section-title">
+                                Recent Stock Movements
+                            </h2>
+                            <p className="inv-section-description">
+                                {getSelectedStoreInfo().isAll
+                                    ? "Latest inventory movements across the active store."
+                                    : `Latest inventory movements for ${getSelectedStoreInfo().storeName}.`}
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            className="inv-refresh-btn"
+                            onClick={() => fetchMovements()}
+                            disabled={movementsLoading}
+                            title="Refresh Recent Movements"
+                        >
+                            <span className={`inv-refresh-icon ${movementsLoading ? "spinning" : ""}`}>↻</span>
+                            <span>{movementsLoading ? "Refreshing..." : "Refresh"}</span>
+                        </button>
+                    </div>
+
+                    {movementsError && (
+                        <div className="inv-message error">
+                            {movementsError}
+                        </div>
+                    )}
+
+                    {movementsLoading ? (
+                        <div className="inv-message loading">
+                            <span className="inv-spinner" />
+                            Loading recent stock movements...
+                        </div>
+                    ) : movements.length === 0 ? (
+                        <div className="inv-movements-empty">
+                            <div className="inv-movements-empty-icon">📦</div>
+                            <div className="inv-movements-empty-title">No stock movements found</div>
+                            <div className="inv-movements-empty-sub">
+                                Stock movements will automatically record here when stock is added, transferred, or updated.
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="inv-movements-table-wrapper">
+                            <table className="inv-movements-table">
+                                <thead>
+                                    <tr>
+                                        {[
+                                            "Movement ID",
+                                            "Product",
+                                            "Type",
+                                            "Quantity",
+                                            "Store",
+                                            "Notes",
+                                            "Date & Time",
+                                        ].map((heading) => (
+                                            <th key={heading}>
+                                                {heading}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {movements.map((movement) => {
+                                        const type = String(
+                                            movement?.movement_type || ""
+                                        ).toLowerCase();
+
+                                        const typeLabel = type
+                                            .replace(/_/g, " ")
+                                            .replace(/\b\w/g, (char) =>
+                                                char.toUpperCase()
+                                            );
+
+                                        const typeBadgeClass =
+                                            type === "stock_in"
+                                                ? "badge-in"
+                                                : type === "stock_out"
+                                                ? "badge-out"
+                                                : type === "transfer"
+                                                ? "badge-transfer"
+                                                : "badge-adjustment";
+
+                                        return (
+                                            <tr key={movement?.id}>
+                                                <td className="inv-mov-id">
+                                                    #{movement?.id ?? "-"}
+                                                </td>
+                                                <td>
+                                                    <div className="inv-mov-prod-name">
+                                                        {movement?.product_name || "-"}
+                                                    </div>
+                                                    {movement?.sku && (
+                                                        <div className="inv-mov-sku">
+                                                            SKU: {movement.sku}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td>
+                                                    <span className={`inv-mov-type-badge ${typeBadgeClass}`}>
+                                                        <span className="inv-mov-dot" />
+                                                        {typeLabel || "-"}
+                                                    </span>
+                                                </td>
+                                                <td className="inv-mov-qty">
+                                                    {Number(movement?.quantity ?? 0).toLocaleString("en-IN")}
+                                                </td>
+                                                <td className="inv-mov-store">
+                                                    {movement?.store_name || `Store #${movement?.store_id ?? "-"}`}
+                                                </td>
+                                                <td className="inv-mov-notes" title={movement?.notes || undefined}>
+                                                    {movement?.notes || "—"}
+                                                </td>
+                                                <td className="inv-mov-date">
+                                                    {movement?.created_at
+                                                        ? new Date(movement.created_at).toLocaleString("en-IN", {
+                                                              day: "2-digit",
+                                                              month: "short",
+                                                              year: "numeric",
+                                                              hour: "2-digit",
+                                                              minute: "2-digit",
+                                                          })
+                                                        : "—"}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </section>

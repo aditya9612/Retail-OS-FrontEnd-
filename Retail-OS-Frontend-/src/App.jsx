@@ -115,7 +115,8 @@ function App() {
                         <Route path="/purchases" element={<Purchases />} />
                         <Route path="/suppliers" element={<Supplier />} />
                         <Route path="/inventory/grn" element={<GRNPage />} />
-                        <Route path="/inventory/purchase-returns" element={<PurchaseReturnsPage />} />
+                        <Route path="/inventory/purchase-returns" element={<PurchaseOrderReturns />} />
+                        <Route path="/purchase-order-returns" element={<PurchaseOrderReturns />} />
                         <Route path="/inventory/store-transfers" element={<StoreTransfersPage />} />
                         <Route path="/low-stock-alerts" element={<LowStockAlerts />} />
                         <Route path="/returns" element={<PurchaseOrderReturns />} />

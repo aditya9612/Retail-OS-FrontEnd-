@@ -114,15 +114,18 @@ const InventoryFilters = ({
             Search Product
           </label>
 
-          <input
-            id="inventory-search"
-            type="text"
-            placeholder="Search by Product Name / SKU / Barcode"
-            value={search}
-            onChange={(e) =>
-              setSearch(e.target.value)
-            }
-          />
+          <div className="inventory-search-input-wrap">
+            <FiSearch className="inventory-search-icon" size={15} />
+            <input
+              id="inventory-search"
+              type="text"
+              placeholder="Search by Product Name / SKU / Barcode"
+              value={search}
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
+            />
+          </div>
         </div>
 
         {/* Created Date */}

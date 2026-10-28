@@ -68,16 +68,70 @@ const handleResponse = async (response) => {
 };
 
 /* =========================================================
+   STORE ACTIVE VALIDATOR
+========================================================= */
+
+export const isStoreActive = (store) => {
+    if (!store || typeof store !== "object") return false;
+    if (store.is_active === false) return false;
+    if (typeof store.status === "string" && store.status.trim().toLowerCase() === "inactive") return false;
+    if (store.deleted_at != null || store.is_deleted === true) return false;
+    return true;
+};
+
+/* =========================================================
+   IN-FLIGHT REQUEST DEDUPLICATION & SHORT-TTL CACHING
+========================================================= */
+
+const inFlightRequests = new Map();
+const responseCache = new Map();
+const CACHE_TTL_MS = 3500; // 3.5 seconds TTL to deduplicate back-to-back/re-render calls
+
+export const clearInventoryCache = () => {
+    inFlightRequests.clear();
+    responseCache.clear();
+};
+
+const deduplicateGet = (key, fetcher, bypassCache = false) => {
+    const now = Date.now();
+    if (!bypassCache && responseCache.has(key)) {
+        const cached = responseCache.get(key);
+        if (now - cached.timestamp < CACHE_TTL_MS) {
+            return Promise.resolve(cached.data);
+        }
+        responseCache.delete(key);
+    }
+
+    if (inFlightRequests.has(key)) {
+        return inFlightRequests.get(key);
+    }
+
+    const promise = fetcher()
+        .then((data) => {
+            responseCache.set(key, { data, timestamp: Date.now() });
+            return data;
+        })
+        .finally(() => {
+            inFlightRequests.delete(key);
+        });
+
+    inFlightRequests.set(key, promise);
+    return promise;
+};
+
+/* =========================================================
    EXISTING INVENTORY SERVICE
 ========================================================= */
 
 export const inventoryService = {
     getAll: async () => {
-        const response = await apiClient.get(
-            "/inventory"
-        );
+        return deduplicateGet("/inventory", async () => {
+            const response = await apiClient.get(
+                "/inventory"
+            );
 
-        return response.data;
+            return response.data;
+        });
     },
 
     getLowStock: async (storeId) => {
@@ -91,11 +145,11 @@ export const inventoryService = {
             throw new Error("getLowStock requires a valid positive store_id");
         }
 
-        const response = await apiClient.get(
-            `/inventory/low-stock?store_id=${validId}`
-        );
-
-        return response.data;
+        const url = `/inventory/low-stock?store_id=${validId}`;
+        return deduplicateGet(url, async () => {
+            const response = await apiClient.get(url);
+            return response.data;
+        });
     },
 
     getMovements: async (storeId) => {
@@ -103,9 +157,10 @@ export const inventoryService = {
             ? `/inventory/movements?store_id=${storeId}`
             : "/inventory/movements";
 
-        const response = await apiClient.get(url);
-
-        return response.data;
+        return deduplicateGet(url, async () => {
+            const response = await apiClient.get(url);
+            return response.data;
+        });
     },
 };
 
@@ -314,6 +369,7 @@ export const stockIn = async (body) => {
         console.log("STOCK IN API REQUEST =>", body);
         const response = await apiClient.post("/inventory/stock-in", body);
         console.log("STOCK IN SUCCESS =>", response.data);
+        clearInventoryCache();
         return response.data;
     } catch (error) {
         console.error("Stock In API Error =>", error);
@@ -330,6 +386,7 @@ export const stockOut = async (body) => {
         console.log("STOCK OUT API REQUEST =>", body);
         const response = await apiClient.post("/inventory/stock-out", body);
         console.log("STOCK OUT SUCCESS =>", response.data);
+        clearInventoryCache();
         return response.data;
     } catch (error) {
         console.error("Stock Out API Error =>", error);
@@ -343,14 +400,45 @@ export const stockOut = async (body) => {
 
 export const transferStock = async (body) => {
     try {
-        console.log("TRANSFER STOCK API REQUEST =>", body);
-        const response = await apiClient.post("/inventory/transfer", body);
+        const payload = {
+            from_store_id: Number(body.from_store_id),
+            to_store_id: Number(body.to_store_id),
+            product_id: Number(body.product_id),
+            quantity: Number(body.quantity),
+            notes: (typeof body.notes === "string" && body.notes.trim()) ? body.notes.trim() : "Stock transfer",
+        };
+        console.log("TRANSFER STOCK API REQUEST =>", payload);
+        const response = await apiClient.post("/inventory/transfer", payload);
         console.log("TRANSFER STOCK SUCCESS =>", response.data);
+        clearInventoryCache();
         return response.data;
     } catch (error) {
         console.error("Transfer Stock API Error =>", error);
         throw error;
     }
+};
+
+/* =========================================================
+   8B. GET PRODUCT MULTI-STORE AVAILABILITY
+   GET /api/v1/inventory/product/{product_id}/stores
+========================================================= */
+
+export const getProductMultiStoreStock = async (productId) => {
+    const id = Number(productId);
+    if (!Number.isFinite(id) || id <= 0) {
+        return { data: [] };
+    }
+    const url = `/inventory/product/${id}/stores`;
+    return deduplicateGet(url, async () => {
+        try {
+            console.log("GET PRODUCT MULTI STORE STOCK =>", id);
+            const response = await apiClient.get(url);
+            return response.data;
+        } catch (error) {
+            console.warn("Product Multi Store Stock Error =>", error);
+            return null;
+        }
+    });
 };
 
 /* =========================================================
@@ -362,6 +450,7 @@ export const adjustInventory = async (body) => {
         console.log("INVENTORY ADJUSTMENT API REQUEST =>", body);
         const response = await apiClient.post("/inventory/adjustment", body);
         console.log("INVENTORY ADJUSTMENT SUCCESS =>", response.data);
+        clearInventoryCache();
         return response.data;
     } catch (error) {
         console.error("Inventory Adjustment API Error =>", error);
@@ -374,19 +463,35 @@ export const adjustInventory = async (body) => {
 ========================================================= */
 
 export const listMovements = async (storeId) => {
-    try {
-        const url = storeId
-            ? `/inventory/movements?store_id=${storeId}`
-            : `/inventory/movements`;
+    const rawId =
+        typeof storeId === "object" && storeId !== null
+            ? (storeId.store_id ?? storeId.storeId ?? storeId.id)
+            : storeId;
+    const validId = rawId != null ? Number(rawId) : null;
 
-        console.log("LIST MOVEMENTS API REQUEST =>", url);
-        const response = await apiClient.get(url);
-        console.log("LIST MOVEMENTS API RESPONSE =>", response.data);
-        return response.data;
-    } catch (error) {
-        console.error("List Movements API Error =>", error);
-        throw error;
+    if (validId !== null && (!Number.isFinite(validId) || validId <= 0)) {
+        return { data: [] };
     }
+
+    const url = validId
+        ? `/inventory/movements?store_id=${validId}`
+        : `/inventory/movements`;
+
+    return deduplicateGet(url, async () => {
+        try {
+            console.log("LIST MOVEMENTS API REQUEST =>", url);
+            const response = await apiClient.get(url);
+            console.log("LIST MOVEMENTS API RESPONSE =>", response.data);
+            return response.data;
+        } catch (error) {
+            console.error("List Movements API Error =>", error);
+            if (error?.response?.status === 404 || error?.status === 404) {
+                console.warn(`Movements 404 for store_id=${validId}: Store inactive or not found`);
+                return { data: [] };
+            }
+            throw error;
+        }
+    });
 };
 
 /* =========================================================
@@ -394,26 +499,32 @@ export const listMovements = async (storeId) => {
 ========================================================= */
 
 export const lowStock = async (storeId) => {
-    try {
-        const rawId =
-            typeof storeId === "object" && storeId !== null
-                ? (storeId.store_id ?? storeId.storeId ?? storeId.id)
-                : storeId;
-        const validId = Number(rawId);
+    const rawId =
+        typeof storeId === "object" && storeId !== null
+            ? (storeId.store_id ?? storeId.storeId ?? storeId.id)
+            : storeId;
+    const validId = Number(rawId);
 
-        if (!validId || Number.isNaN(validId) || validId <= 0) {
-            return { data: [] };
-        }
-
-        const url = `/inventory/low-stock?store_id=${validId}`;
-        console.log("LOW STOCK API REQUEST =>", url);
-        const response = await apiClient.get(url);
-        console.log("LOW STOCK API RESPONSE =>", response.data);
-        return response.data;
-    } catch (error) {
-        console.error("Low Stock API Error =>", error);
+    if (!validId || Number.isNaN(validId) || validId <= 0) {
         return { data: [] };
     }
+
+    const url = `/inventory/low-stock?store_id=${validId}`;
+    return deduplicateGet(url, async () => {
+        try {
+            console.log("LOW STOCK API REQUEST =>", url);
+            const response = await apiClient.get(url);
+            console.log("LOW STOCK API RESPONSE =>", response.data);
+            return response.data;
+        } catch (error) {
+            console.error("Low Stock API Error =>", error);
+            if (error?.response?.status === 404 || error?.status === 404) {
+                console.warn(`Low stock 404 for store_id=${validId}: Store inactive or not found`);
+                return { data: [] };
+            }
+            return { data: [] };
+        }
+    });
 };
 
 /* =========================================================
@@ -421,19 +532,21 @@ export const lowStock = async (storeId) => {
 ========================================================= */
 
 export const listInventory = async (storeId) => {
-    try {
-        const url = storeId
-            ? `/inventory?store_id=${storeId}`
-            : `/inventory`;
+    const url = storeId
+        ? `/inventory?store_id=${storeId}`
+        : `/inventory`;
 
-        console.log("LIST INVENTORY API REQUEST =>", url);
-        const response = await apiClient.get(url);
-        console.log("LIST INVENTORY API RESPONSE =>", response.data);
-        return response.data;
-    } catch (error) {
-        console.error("List Inventory API Error =>", error);
-        throw error;
-    }
+    return deduplicateGet(url, async () => {
+        try {
+            console.log("LIST INVENTORY API REQUEST =>", url);
+            const response = await apiClient.get(url);
+            console.log("LIST INVENTORY API RESPONSE =>", response.data);
+            return response.data;
+        } catch (error) {
+            console.error("List Inventory API Error =>", error);
+            throw error;
+        }
+    });
 };
 
 /* =========================================================
@@ -446,22 +559,26 @@ export const listInventory = async (storeId) => {
 ========================================================= */
 
 export const getInventoryByProductId = async (productId) => {
-    try {
-        if (productId === undefined || productId === null || productId === "") {
-            throw new Error("Product ID is required");
-        }
-        const id = Number(productId);
-        if (!Number.isFinite(id) || id <= 0) {
-            throw new Error(`Invalid Product ID: ${productId}`);
-        }
-        console.log("GET INVENTORY BY PRODUCT ID =>", id);
-        const response = await apiClient.get(`/inventory/${id}`);
-        console.log("INVENTORY BY PRODUCT ID RESPONSE =>", response.data);
-        return response.data;
-    } catch (error) {
-        console.error("Inventory By Product ID Error =>", error);
-        throw error;
+    if (productId === undefined || productId === null || productId === "") {
+        throw new Error("Product ID is required");
     }
+    const id = Number(productId);
+    if (!Number.isFinite(id) || id <= 0) {
+        throw new Error(`Invalid Product ID: ${productId}`);
+    }
+    const url = `/inventory/${id}`;
+
+    return deduplicateGet(url, async () => {
+        try {
+            console.log("GET INVENTORY BY PRODUCT ID =>", id);
+            const response = await apiClient.get(url);
+            console.log("INVENTORY BY PRODUCT ID RESPONSE =>", response.data);
+            return response.data;
+        } catch (error) {
+            console.error("Inventory By Product ID Error =>", error);
+            throw error;
+        }
+    });
 };
 
 /* =========================================================
@@ -469,28 +586,31 @@ export const getInventoryByProductId = async (productId) => {
 ========================================================= */
 
 export const listProducts = async (params = {}) => {
-    try {
-        console.log("PRODUCTS API REQUEST", params);
-        let url = `/products`;
-        if (params && typeof params === "object") {
-            const query = new URLSearchParams();
-            if (params.page !== undefined) query.append("page", String(params.page));
-            if (params.page_size !== undefined) query.append("page_size", String(params.page_size));
-            if (params.include_inactive !== undefined) {
-                query.append("include_inactive", String(params.include_inactive));
-            } else {
-                query.append("include_inactive", "true");
-            }
-            const qs = query.toString();
-            if (qs) url += `?${qs}`;
+    let url = `/products`;
+    if (params && typeof params === "object") {
+        const query = new URLSearchParams();
+        if (params.page !== undefined) query.append("page", String(params.page));
+        if (params.page_size !== undefined) query.append("page_size", String(params.page_size));
+        if (params.include_inactive !== undefined) {
+            query.append("include_inactive", String(params.include_inactive));
+        } else {
+            query.append("include_inactive", "true");
         }
-        const response = await apiClient.get(url);
-        console.log("PRODUCTS API RESPONSE =>", response.data);
-        return response.data;
-    } catch (error) {
-        console.error("Products API Error =>", error);
-        throw error;
+        const qs = query.toString();
+        if (qs) url += `?${qs}`;
     }
+
+    return deduplicateGet(url, async () => {
+        try {
+            console.log("PRODUCTS API REQUEST", params);
+            const response = await apiClient.get(url);
+            console.log("PRODUCTS API RESPONSE =>", response.data);
+            return response.data;
+        } catch (error) {
+            console.error("Products API Error =>", error);
+            throw error;
+        }
+    });
 };
 
 /* =========================================================
@@ -498,14 +618,18 @@ export const listProducts = async (params = {}) => {
 ========================================================= */
 
 export const getProductById = async (id) => {
-    try {
-        if (!id) return null;
-        const response = await apiClient.get(`/products/${id}`);
-        return response.data;
-    } catch (error) {
-        console.error("Get Product By ID Error =>", error);
-        return null;
-    }
+    if (!id) return null;
+    const url = `/products/${id}`;
+
+    return deduplicateGet(url, async () => {
+        try {
+            const response = await apiClient.get(url);
+            return response.data;
+        } catch (error) {
+            console.error("Get Product By ID Error =>", error);
+            return null;
+        }
+    });
 };
 
 /* =========================================================
@@ -513,15 +637,17 @@ export const getProductById = async (id) => {
 ========================================================= */
 
 export const listStores = async () => {
-    try {
-        console.log("STORES API REQUEST");
-        const response = await apiClient.get("/stores/");
-        console.log("STORES API RESPONSE =>", response.data);
-        return response.data;
-    } catch (error) {
-        console.error("Stores API Error =>", error);
-        throw error;
-    }
+    return deduplicateGet("/stores/", async () => {
+        try {
+            console.log("STORES API REQUEST");
+            const response = await apiClient.get("/stores/");
+            console.log("STORES API RESPONSE =>", response.data);
+            return response.data;
+        } catch (error) {
+            console.error("Stores API Error =>", error);
+            throw error;
+        }
+    });
 };
 
 /* =========================================================
@@ -529,15 +655,17 @@ export const listStores = async () => {
 ========================================================= */
 
 export const inventoryDashboard = async () => {
-    try {
-        console.log("INVENTORY DASHBOARD API REQUEST");
-        const response = await apiClient.get("/inventory/dashboard");
-        console.log("INVENTORY DASHBOARD API RESPONSE =>", response.data);
-        return response.data;
-    } catch (error) {
-        console.error("Inventory Dashboard API Error =>", error);
-        throw error;
-    }
+    return deduplicateGet("/inventory/dashboard", async () => {
+        try {
+            console.log("INVENTORY DASHBOARD API REQUEST");
+            const response = await apiClient.get("/inventory/dashboard");
+            console.log("INVENTORY DASHBOARD API RESPONSE =>", response.data);
+            return response.data;
+        } catch (error) {
+            console.error("Inventory Dashboard API Error =>", error);
+            throw error;
+        }
+    });
 };
 
 /* =========================================================
@@ -545,15 +673,17 @@ export const inventoryDashboard = async () => {
 ========================================================= */
 
 export const getInventoryValuation = async () => {
-    try {
-        console.log("INVENTORY VALUATION API REQUEST");
-        const response = await apiClient.get("/inventory/valuation");
-        console.log("INVENTORY VALUATION API RESPONSE =>", response.data);
-        return response.data;
-    } catch (error) {
-        console.error("Inventory Valuation API Error =>", error);
-        throw error;
-    }
+    return deduplicateGet("/inventory/valuation", async () => {
+        try {
+            console.log("INVENTORY VALUATION API REQUEST");
+            const response = await apiClient.get("/inventory/valuation");
+            console.log("INVENTORY VALUATION API RESPONSE =>", response.data);
+            return response.data;
+        } catch (error) {
+            console.error("Inventory Valuation API Error =>", error);
+            throw error;
+        }
+    });
 };
 
 /* =========================================================
@@ -561,15 +691,17 @@ export const getInventoryValuation = async () => {
 ========================================================= */
 
 export const getInventoryExpiry = async () => {
-    try {
-        console.log("INVENTORY EXPIRY API REQUEST");
-        const response = await apiClient.get("/inventory/expiry");
-        console.log("INVENTORY EXPIRY API RESPONSE =>", response.data);
-        return response.data;
-    } catch (error) {
-        console.error("Inventory Expiry API Error =>", error);
-        throw error;
-    }
+    return deduplicateGet("/inventory/expiry", async () => {
+        try {
+            console.log("INVENTORY EXPIRY API REQUEST");
+            const response = await apiClient.get("/inventory/expiry");
+            console.log("INVENTORY EXPIRY API RESPONSE =>", response.data);
+            return response.data;
+        } catch (error) {
+            console.error("Inventory Expiry API Error =>", error);
+            throw error;
+        }
+    });
 };
 
 /* =========================================================
@@ -632,25 +764,39 @@ export const getInrToUsdRate =
 ========================================================= */
 
 export const listPurchaseOrders = async (page = 1, pageSize = 20) => {
-    try {
-        const safePage = Number(page);
-        const safePageSize = Number(pageSize);
+    const safePage = Number(page);
+    const safePageSize = Number(pageSize);
 
-        if (!Number.isFinite(safePage) || safePage < 1) {
-            throw new Error(`Invalid page number: ${page}`);
-        }
-
-        if (!Number.isFinite(safePageSize) || safePageSize < 1) {
-            throw new Error(`Invalid page size: ${pageSize}`);
-        }
-
-        const url = `/purchase-orders?page=${safePage}&page_size=${safePageSize}`;
-        console.log("PURCHASE ORDERS API REQUEST =>", url);
-        const response = await apiClient.get(url);
-        console.log("PURCHASE ORDERS API RESPONSE =>", response.data);
-        return response.data;
-    } catch (error) {
-        console.error("Purchase Orders API Error =>", error);
-        throw error;
+    if (!Number.isFinite(safePage) || safePage < 1) {
+        throw new Error(`Invalid page number: ${page}`);
     }
+
+    if (!Number.isFinite(safePageSize) || safePageSize < 1) {
+        throw new Error(`Invalid page size: ${pageSize}`);
+    }
+
+    const url = `/purchase-orders?page=${safePage}&page_size=${safePageSize}`;
+    return deduplicateGet(url, async () => {
+        try {
+            console.log("PURCHASE ORDERS API REQUEST =>", url);
+            const response = await apiClient.get(url);
+            console.log("PURCHASE ORDERS API RESPONSE =>", response.data);
+            return response.data;
+        } catch (error) {
+            console.error("Purchase Orders API Error =>", error);
+            throw error;
+        }
+    });
 };
+
+/* =========================================================
+   18. STORE TRANSFERS (Inter-Store / Multi-Item Transfers)
+   POST /api/v1/store-transfers
+   GET  /api/v1/store-transfers
+========================================================= */
+export {
+    createStoreTransfer,
+    getStoreTransfers,
+    getStoreTransferById,
+    getStoreTransfersSummary,
+} from "./storeTransferService";

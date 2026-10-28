@@ -54,19 +54,16 @@
 
 
 /* =========================================================
-   TABLE WIDTH
+   TABLE WIDTH & STYLING
    Keep every column accessible with horizontal scroll
 ========================================================= */
 
 .inventory-table {
   width: max-content;
-  min-width: 1580px;
-
+  min-width: 1800px;
   margin: 0;
-
   border-collapse: collapse;
   table-layout: auto;
-
   box-sizing: border-box;
 }
 
@@ -80,6 +77,35 @@
   box-sizing: border-box;
   white-space: nowrap;
   vertical-align: middle;
+}
+
+.inventory-table thead th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 2;
+  box-shadow: 0 1px 0 #e2e8f0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 12px 14px;
+}
+
+.inventory-table tbody tr {
+  transition: background-color 0.15s ease;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.inventory-table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.inventory-table td {
+  padding: 12px 14px;
+  color: #334155;
+  font-size: 13px;
 }
 
 
@@ -99,32 +125,23 @@
 
 
 /* =========================================================
-   1. PRODUCT
+   1. PRODUCT (Col 1)
 ========================================================= */
 
 .inventory-table th:nth-child(1),
 .inventory-table td:nth-child(1) {
-  min-width: 230px;
-  width: 230px;
+  min-width: 220px;
+  width: 220px;
 }
-
-
-/* Product content must never move outside left boundary */
 
 .inventory-table td:nth-child(1) {
   overflow: visible;
 }
 
-
-/* Product main wrapper */
-
 .inventory-table td:nth-child(1) > div {
   min-width: 0;
   max-width: 100%;
 }
-
-
-/* Product subtitle / store name */
 
 .inventory-table
   td:nth-child(1)
@@ -132,31 +149,31 @@
   > div:last-child
   > div:last-child {
   max-width: 190px;
-
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
-
   overflow-wrap: anywhere;
   word-break: normal;
-
   line-height: 1.35;
 }
 
 
 /* =========================================================
-   2. SKU
+   2. SKU (Col 2)
 ========================================================= */
 
 .inventory-table th:nth-child(2),
 .inventory-table td:nth-child(2) {
-  min-width: 180px;
-  width: 180px;
+  min-width: 150px;
+  width: 150px;
+  font-family: monospace;
+  font-size: 12.5px;
+  color: #64748b;
 }
 
 
 /* =========================================================
-   3. CATEGORY
+   3. CATEGORY (Col 3)
 ========================================================= */
 
 .inventory-table th:nth-child(3),
@@ -167,59 +184,53 @@
 
 
 /* =========================================================
-   4. STORE NAME
+   4. SUPPLIER (Col 4)
 ========================================================= */
 
 .inventory-table th:nth-child(4),
 .inventory-table td:nth-child(4) {
-  min-width: 220px;
-  width: 220px;
-}
-
-
-/* Long store name must remain readable */
-
-.inventory-table td:nth-child(4) {
-  max-width: 260px;
-
-  white-space: normal;
-
-  overflow: visible;
-  text-overflow: clip;
-
-  overflow-wrap: anywhere;
-  word-break: normal;
-
-  line-height: 1.45;
+  min-width: 140px;
+  width: 140px;
 }
 
 
 /* =========================================================
-   5. STORE ID
+   5. STORE NAME (Col 5)
 ========================================================= */
 
 .inventory-table th:nth-child(5),
 .inventory-table td:nth-child(5) {
-  min-width: 90px;
-  width: 90px;
+  min-width: 190px;
+  width: 190px;
+}
 
-  text-align: center;
+.inventory-table td:nth-child(5) {
+  max-width: 220px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.4;
 }
 
 
 /* =========================================================
-   6. AVAILABLE QTY
+   6. STORE ID (Col 6)
 ========================================================= */
 
 .inventory-table th:nth-child(6),
 .inventory-table td:nth-child(6) {
-  min-width: 130px;
-  width: 130px;
+  min-width: 85px;
+  width: 85px;
+  text-align: center;
+  font-family: monospace;
+  color: #64748b;
 }
 
 
 /* =========================================================
-   7. REORDER LEVEL
+   7. AVAILABLE QTY (Col 7)
 ========================================================= */
 
 .inventory-table th:nth-child(7),
@@ -230,68 +241,79 @@
 
 
 /* =========================================================
-   8. EXPIRY DATE
+   8. REORDER LEVEL (Col 8)
 ========================================================= */
 
 .inventory-table th:nth-child(8),
 .inventory-table td:nth-child(8) {
+  min-width: 125px;
+  width: 125px;
+}
+
+
+/* =========================================================
+   9. EXPIRY DATE (Col 9)
+========================================================= */
+
+.inventory-table th:nth-child(9),
+.inventory-table td:nth-child(9) {
   min-width: 135px;
   width: 135px;
 }
 
 
 /* =========================================================
-   9. MRP PRICE
+   10. MRP PRICE (Col 10)
 ========================================================= */
 
-.inventory-table th:nth-child(9),
-.inventory-table td:nth-child(9) {
+.inventory-table th:nth-child(10),
+.inventory-table td:nth-child(10) {
+  min-width: 115px;
+  width: 115px;
+}
+
+
+/* =========================================================
+   11. SELLING PRICE (Col 11)
+========================================================= */
+
+.inventory-table th:nth-child(11),
+.inventory-table td:nth-child(11) {
   min-width: 120px;
   width: 120px;
 }
 
 
 /* =========================================================
-   10. SELLING PRICE
-========================================================= */
-
-.inventory-table th:nth-child(10),
-.inventory-table td:nth-child(10) {
-  min-width: 130px;
-  width: 130px;
-}
-
-
-/* =========================================================
-   11. MARGIN
-========================================================= */
-
-.inventory-table th:nth-child(11),
-.inventory-table td:nth-child(11) {
-  min-width: 105px;
-  width: 105px;
-}
-
-
-/* =========================================================
-   12. STATUS
+   12. MARGIN (Col 12)
 ========================================================= */
 
 .inventory-table th:nth-child(12),
 .inventory-table td:nth-child(12) {
-  min-width: 130px;
-  width: 130px;
+  min-width: 100px;
+  width: 100px;
 }
 
 
 /* =========================================================
-   13. ACTIONS
+   13. STATUS (Col 13)
 ========================================================= */
 
 .inventory-table th:nth-child(13),
 .inventory-table td:nth-child(13) {
-  min-width: 150px;
-  width: 150px;
+  min-width: 125px;
+  width: 125px;
+}
+
+
+/* =========================================================
+   14. ACTIONS (Col 14)
+========================================================= */
+
+.inventory-table th:nth-child(14),
+.inventory-table td:nth-child(14) {
+  min-width: 160px;
+  width: 160px;
 }
 
 
@@ -304,9 +326,7 @@
   .inventory-table-container {
     width: 100%;
     max-width: 100%;
-
     overflow-x: auto;
-
     padding-left: 10px;
     padding-right: 10px;
     padding-bottom: 8px;
@@ -314,7 +334,7 @@
 
   .inventory-table {
     width: max-content;
-    min-width: 1580px;
+    min-width: 1800px;
   }
 
   .inventory-table th:first-child,
@@ -322,10 +342,10 @@
     padding-left: 14px !important;
   }
 
-  .inventory-table th:nth-child(4),
-  .inventory-table td:nth-child(4) {
-    min-width: 205px;
-    width: 205px;
+  .inventory-table th:nth-child(5),
+  .inventory-table td:nth-child(5) {
+    min-width: 180px;
+    width: 180px;
   }
 
 }
@@ -401,20 +421,17 @@
 
   /* Store name */
 
-  .inventory-table th:nth-child(4),
-  .inventory-table td:nth-child(4) {
-    min-width: 195px;
-    width: 195px;
+  .inventory-table th:nth-child(5),
+  .inventory-table td:nth-child(5) {
+    min-width: 175px;
+    width: 175px;
   }
 
-  .inventory-table td:nth-child(4) {
-    max-width: 220px;
-
+  .inventory-table td:nth-child(5) {
+    max-width: 200px;
     white-space: normal;
-
     overflow: visible;
     text-overflow: clip;
-
     overflow-wrap: anywhere;
   }
 
@@ -434,7 +451,7 @@
 
   .inventory-table {
     width: max-content;
-    min-width: 1480px;
+    min-width: 1700px;
   }
 
 
@@ -454,10 +471,10 @@
 
   /* Store */
 
-  .inventory-table th:nth-child(4),
-  .inventory-table td:nth-child(4) {
-    min-width: 185px;
-    width: 185px;
+  .inventory-table th:nth-child(5),
+  .inventory-table td:nth-child(5) {
+    min-width: 170px;
+    width: 170px;
   }
 
 

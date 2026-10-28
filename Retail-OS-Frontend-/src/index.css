@@ -3295,3 +3295,61 @@ body {
 .table-scroll::-webkit-scrollbar-thumb:hover {
   background: #999;
 }
+
+/* ─────────────────────────────────────────
+   Store Transfers Table & Modal Scrollbars
+───────────────────────────────────────── */
+.store-transfers-table-container {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+  -webkit-overflow-scrolling: touch;
+}
+
+.store-transfers-table-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.store-transfers-table-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 6px;
+}
+
+.store-transfers-table-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+  border: 2px solid #f1f5f9;
+  transition: background 0.2s ease;
+}
+
+.store-transfers-table-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.modal-scrollable-body {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f8fafc;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-scrollable-body::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.modal-scrollable-body::-webkit-scrollbar-track {
+  background: #f8fafc;
+}
+
+.modal-scrollable-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.modal-scrollable-body::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

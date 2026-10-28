@@ -1,4 +1,11 @@
-import { getWarehouses, listWarehouses, getWarehouseDashboard, getWarehouseById } from "../api/warehouseApi";
+import {
+  getWarehouses,
+  listWarehouses,
+  getWarehouseDashboard,
+  getWarehouseById,
+  deleteWarehouse,
+  getWarehouseTransfers,
+} from "../api/warehouseApi";
 
 export const warehouseService = {
   getAll: getWarehouses,
@@ -8,7 +15,19 @@ export const warehouseService = {
   getWarehouseDashboard,
   getById: getWarehouseById,
   getWarehouseById,
+  deleteWarehouse,
+  remove: deleteWarehouse,
+  delete: deleteWarehouse,
+  getTransfers: getWarehouseTransfers,
+  getWarehouseTransfers,
 };
 
-export { getWarehouses, listWarehouses, getWarehouseDashboard, getWarehouseById };
+export {
+  getWarehouses,
+  listWarehouses,
+  getWarehouseDashboard,
+  getWarehouseById,
+  deleteWarehouse,
+  getWarehouseTransfers,
+};
 export default warehouseService;

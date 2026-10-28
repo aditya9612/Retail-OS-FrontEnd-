@@ -9,6 +9,90 @@ import {
   BsPencil,
 } from "react-icons/bs";
 
+const MRP_FIELD_NAMES = [
+  "mrp",
+  "mrp_price",
+  "mrpPrice",
+  "MRP",
+  "max_retail_price",
+  "maxRetailPrice",
+  "maximum_retail_price",
+  "retail_price",
+  "retailPrice",
+  "product_mrp",
+  "productMrp",
+];
+
+const isValidNumericMrp = (val) => {
+  if (val === undefined || val === null || val === "" || typeof val === "boolean") {
+    return false;
+  }
+  const num = Number(val);
+  return Number.isFinite(num) && num > 0;
+};
+
+const extractMrpFromObject = (obj, depth = 0) => {
+  if (!obj || depth > 4) return null;
+
+  if (typeof obj === "string") {
+    try {
+      const parsed = JSON.parse(obj);
+      if (parsed && typeof parsed === "object") {
+        return extractMrpFromObject(parsed, depth + 1);
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  if (typeof obj !== "object") return null;
+
+  for (const field of MRP_FIELD_NAMES) {
+    if (isValidNumericMrp(obj[field])) {
+      return Number(obj[field]);
+    }
+  }
+
+  if (Array.isArray(obj)) {
+    for (const elem of obj) {
+      const val = extractMrpFromObject(elem, depth + 1);
+      if (val !== null) return val;
+    }
+    return null;
+  }
+
+  const nestedContainers = [
+    obj.variants,
+    obj.variant,
+    obj.items,
+    obj.options,
+    obj.details,
+    obj.product_details,
+    obj.productDetail,
+    obj.metadata,
+    obj.meta,
+    obj.custom_fields,
+  ];
+
+  for (const container of nestedContainers) {
+    if (container) {
+      const val = extractMrpFromObject(container, depth + 1);
+      if (val !== null) return val;
+    }
+  }
+
+  const values = Object.values(obj);
+  for (const val of values) {
+    if (val && typeof val === "object") {
+      const result = extractMrpFromObject(val, depth + 1);
+      if (result !== null) return result;
+    }
+  }
+
+  return null;
+};
+
 const InventoryTable = ({
   paginated = [],
   stockStatus,
@@ -265,58 +349,26 @@ const InventoryTable = ({
                MRP PRICE
             ===================================================== */
 
-            const itemVariants = (() => {
-              const v = item?.variants;
-              if (!v) return null;
-              if (typeof v === "object") return v;
-              if (typeof v === "string") {
-                try {
-                  const parsed = JSON.parse(v);
-                  return typeof parsed === "object" ? parsed : null;
-                } catch {
-                  return null;
-                }
-              }
-              return null;
-            })();
-
-            const getVariantsMrp = (v) => {
-              if (!v) return 0;
-              if (Array.isArray(v)) {
-                for (const elem of v) {
-                  const val = elem?.mrp ?? elem?.mrp_price ?? elem?.mrpPrice ?? elem?.MRP;
-                  if (val !== undefined && val !== null && !isNaN(Number(val)) && Number(val) > 0) return Number(val);
-                }
-                return 0;
-              }
-              const val = v?.mrp ?? v?.mrp_price ?? v?.mrpPrice ?? v?.MRP;
-              if (val !== undefined && val !== null && !isNaN(Number(val)) && Number(val) > 0) return Number(val);
-              return 0;
-            };
-
             const mrpPrice =
-              item.mrp !== undefined && item.mrp !== null && Number(item.mrp) > 0
-                ? Number(item.mrp)
-                : item.mrp_price !== undefined && item.mrp_price !== null && Number(item.mrp_price) > 0
-                ? Number(item.mrp_price)
-                : item.mrpPrice !== undefined && item.mrpPrice !== null && Number(item.mrpPrice) > 0
-                ? Number(item.mrpPrice)
-                : item.MRP !== undefined && item.MRP !== null && Number(item.MRP) > 0
-                ? Number(item.MRP)
-                : getVariantsMrp(itemVariants);
+              (isValidNumericMrp(item?.mrp) ? Number(item.mrp) : null) ??
+              (isValidNumericMrp(item?.mrp_price) ? Number(item.mrp_price) : null) ??
+              (isValidNumericMrp(item?.mrpPrice) ? Number(item.mrpPrice) : null) ??
+              (isValidNumericMrp(item?.MRP) ? Number(item.MRP) : null) ??
+              extractMrpFromObject(item?.product) ??
+              extractMrpFromObject(item?.variants) ??
+              extractMrpFromObject(item);
 
             /* =====================================================
                SELLING PRICE
             ===================================================== */
 
             const sellingPrice =
-              item.sellingPrice !== undefined &&
-              item.sellingPrice !== null
-                ? Number(item.sellingPrice)
-                : item.selling_price !==
-                      undefined &&
-                  item.selling_price !== null
+              item.selling_price !== undefined &&
+              item.selling_price !== null
                 ? Number(item.selling_price)
+                : item.sellingPrice !== undefined &&
+                  item.sellingPrice !== null
+                ? Number(item.sellingPrice)
                 : item.price !== undefined &&
                   item.price !== null
                 ? Number(item.price)
@@ -674,7 +726,9 @@ const isMissingRequiredExpiry =
                 ================================================= */}
 
                 <td>
-                  {fmt(mrpPrice)}
+                  {mrpPrice !== null && mrpPrice !== undefined
+                    ? (typeof fmt === "function" ? fmt(mrpPrice) : `₹${Number(mrpPrice).toLocaleString("en-IN")}`)
+                    : "—"}
                 </td>
 
                 {/* =================================================

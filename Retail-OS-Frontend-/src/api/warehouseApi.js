@@ -70,10 +70,41 @@ export const getWarehouseById = async (warehouseId) => {
   return response.data;
 };
 
+/**
+ * Delete Warehouse by ID
+ * DELETE /api/v1/warehouses/{warehouse_id}
+ */
+export const deleteWarehouse = async (warehouseId) => {
+  if (!warehouseId) {
+    throw new Error("warehouseId is required");
+  }
+
+  const response = await axiosInstance.delete(`/warehouses/${warehouseId}`);
+  return response.data;
+};
+
+/**
+ * Fetch Warehouse Transfers
+ * GET /api/v1/warehouses/{warehouse_id}/transfers?limit=50
+ */
+export const getWarehouseTransfers = async (warehouseId, params = {}) => {
+  if (!warehouseId) {
+    throw new Error("warehouseId is required");
+  }
+
+  const queryParams = { limit: 50, ...params };
+  const response = await axiosInstance.get(`/warehouses/${warehouseId}/transfers`, {
+    params: queryParams,
+  });
+  return response.data;
+};
+
 export default {
   getWarehouses,
   listWarehouses,
   getWarehouseDashboard,
   getWarehouseById,
+  deleteWarehouse,
+  getWarehouseTransfers,
 };
 

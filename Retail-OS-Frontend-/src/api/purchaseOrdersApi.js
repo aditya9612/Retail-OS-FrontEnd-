@@ -127,3 +127,5 @@ export const updatePurchaseOrderStatus = async (
 
   return response.data;
 };
+
+export { createGRN } from "./grnApi";

@@ -7,6 +7,7 @@ import {
     listProducts,
     listStores,
     getProductById,
+    isStoreActive,
 } from "../../services/inventoryService";
 
 import "./LowStockAlerts.css";
@@ -533,7 +534,7 @@ const LowStockAlerts = () => {
         try {
             setError("");
 
-            const availableStores = storeList || stores;
+            const availableStores = (storeList || stores).filter(isStoreActive);
             const validStoreIds = Array.from(
                 new Set(
                     (availableStores || [])

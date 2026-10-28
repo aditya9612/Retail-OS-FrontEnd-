@@ -5,6 +5,7 @@ import {
   stockIn as serviceStockIn,
   stockOut as serviceStockOut,
   transferStock as serviceTransferStock,
+  getProductMultiStoreStock as serviceGetProductMultiStoreStock,
 } from "../services/inventoryService";
 
 /**
@@ -60,3 +61,18 @@ export const stockOut = async (data) => {
 export const transferStock = async (data) => {
   return await serviceTransferStock(data);
 };
+
+/**
+ * Get Product Multi Store Availability
+ * GET /inventory/product/{product_id}/stores
+ */
+export const getProductMultiStoreStock = async (productId) => {
+  return await serviceGetProductMultiStoreStock(productId);
+};
+
+export {
+  createStoreTransfer,
+  getStoreTransfers,
+  getStoreTransferById,
+  getStoreTransfersSummary,
+} from "../services/storeTransferService";
