@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, LineChart, Line,
@@ -10,7 +11,8 @@ import {
     BsBoxArrowUpRight, BsX, BsExclamationTriangleFill, BsListUl,
     BsPlusCircle, BsEyeFill, BsLightningChargeFill, BsArrowRepeat,
     BsFileEarmarkPdf, BsCreditCard, BsTrash, BsSliders, BsInfoCircle,
-    BsCalendar3, BsShop, BsPerson, BsCashStack, BsCheck2Circle
+    BsCalendar3, BsShop, BsPerson, BsCashStack, BsCheck2Circle,
+    BsArrowReturnLeft
 } from 'react-icons/bs';
 
 import {
@@ -137,6 +139,7 @@ const loadLocalInvoices = () => {
 };
 
 const BillingManagement = () => {
+    const navigate = useNavigate();
     // ── Search & Filter State ──────────────────────────────────────────────
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -1855,7 +1858,29 @@ const BillingManagement = () => {
                                                         {asyncLoadingId === invId ? <span style={{ fontSize: 10 }}>⏳</span> : <BsLightningChargeFill size={12} />}
                                                     </button>
 
-                                                    {/* 7. Void / Cancel Invoice (Requirement 8) */}
+                                                    {/* 7. Create Return / RMA */}
+                                                    <button
+                                                        id={`btn-return-${invId}`}
+                                                        onClick={() => navigate(`/billing/returns?invoice_id=${inv.id}&invoice_number=${encodeURIComponent(invNumber)}&customer=${encodeURIComponent(inv.customer_name || inv.customer || '')}&amount=${inv.total_amount || 0}&action=return`)}
+                                                        className="adm-action-btn"
+                                                        title="Create Return / Refund Request for this invoice"
+                                                        style={{ background: '#fef3c7', color: '#b45309' }}
+                                                    >
+                                                        <BsArrowReturnLeft size={13} />
+                                                    </button>
+
+                                                    {/* 8. Issue Credit Note */}
+                                                    <button
+                                                        id={`btn-creditnote-${invId}`}
+                                                        onClick={() => navigate(`/billing/credit-notes?invoice_id=${inv.id}&invoice_number=${encodeURIComponent(invNumber)}&customer=${encodeURIComponent(inv.customer_name || inv.customer || '')}&amount=${inv.total_amount || 0}&action=credit_note`)}
+                                                        className="adm-action-btn"
+                                                        title="Issue Credit Note against this invoice"
+                                                        style={{ background: '#f3e8ff', color: '#7e22ce' }}
+                                                    >
+                                                        <BsReceiptCutoff size={13} />
+                                                    </button>
+
+                                                    {/* 9. Void / Cancel Invoice (Requirement 8) */}
                                                     {inv.status !== 'cancelled' && inv.status !== 'void' && (
                                                         <button
                                                             id={`btn-void-${invId}`}
@@ -2639,7 +2664,12 @@ const BillingManagement = () => {
                                 Breakdown &amp; Details
                             </button>
                             <button
-                                onClick={() => setActiveDetailTab('pdf')}
+                                onClick={() => {
+                                    setActiveDetailTab('pdf');
+                                    if (!pdfPreviewUrl && selectedInvoice?.id) {
+                                        loadPdfWithStatusCheck(selectedInvoice.id, pdfDocType, selectedInvoice.invoice_number);
+                                    }
+                                }}
                                 style={{
                                     padding: '10px 16px',
                                     border: 'none',
@@ -2724,6 +2754,22 @@ const BillingManagement = () => {
                                             <BsPrinter size={13} /> Preview &amp; Print
                                         </button>
                                         <button
+                                            onClick={() => navigate(`/billing/returns?invoice_id=${selectedInvoice.id}&invoice_number=${encodeURIComponent(selectedInvoice.invoice_number || selectedInvoice.id)}&customer=${encodeURIComponent(selectedInvoice.customer_name || selectedInvoice.customer || '')}&amount=${selectedInvoice.total_amount || selectedInvoice.total || 0}&action=return`)}
+                                            className="adm-btn-secondary"
+                                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#fffbeb', color: '#b45309', borderColor: '#fcd34d' }}
+                                            title="Initiate Return / RMA for this invoice"
+                                        >
+                                            <BsArrowReturnLeft size={13} /> Create Return / RMA
+                                        </button>
+                                        <button
+                                            onClick={() => navigate(`/billing/credit-notes?invoice_id=${selectedInvoice.id}&invoice_number=${encodeURIComponent(selectedInvoice.invoice_number || selectedInvoice.id)}&customer=${encodeURIComponent(selectedInvoice.customer_name || selectedInvoice.customer || '')}&amount=${selectedInvoice.total_amount || selectedInvoice.total || 0}&action=credit_note`)}
+                                            className="adm-btn-secondary"
+                                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#faf5ff', color: '#7e22ce', borderColor: '#d8b4fe' }}
+                                            title="Issue Statutory Credit Note against this invoice"
+                                        >
+                                            <BsReceiptCutoff size={13} /> Issue Credit Note
+                                        </button>
+                                        <button
                                             onClick={() => handleDownload(selectedInvoice.id, 'invoice', selectedInvoice.invoice_number)}
                                             className="adm-btn-secondary"
                                             style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#ecfdf5', color: '#059669', borderColor: '#10b981' }}
@@ -2768,14 +2814,14 @@ const BillingManagement = () => {
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <div style={{ display: 'flex', gap: 8 }}>
                                             <button
-                                                onClick={() => { setPdfDocType('invoice'); loadPdfPreview(selectedInvoice.id, 'invoice'); }}
+                                                onClick={() => { setPdfDocType('invoice'); loadPdfWithStatusCheck(selectedInvoice.id, 'invoice', selectedInvoice.invoice_number); }}
                                                 className={pdfDocType === 'invoice' ? 'adm-btn-primary' : 'adm-btn-secondary'}
                                                 style={{ fontSize: 12, padding: '4px 10px' }}
                                             >
                                                 Tax Invoice Format
                                             </button>
                                             <button
-                                                onClick={() => { setPdfDocType('bill'); loadPdfPreview(selectedInvoice.id, 'bill'); }}
+                                                onClick={() => { setPdfDocType('bill'); loadPdfWithStatusCheck(selectedInvoice.id, 'bill', selectedInvoice.invoice_number); }}
                                                 className={pdfDocType === 'bill' ? 'adm-btn-primary' : 'adm-btn-secondary'}
                                                 style={{ fontSize: 12, padding: '4px 10px' }}
                                             >
@@ -2783,7 +2829,7 @@ const BillingManagement = () => {
                                             </button>
                                         </div>
                                         <button
-                                            onClick={() => handleDownload(selectedInvoice.id, pdfDocType)}
+                                            onClick={() => handleDownload(selectedInvoice.id, pdfDocType, selectedInvoice.invoice_number)}
                                             className="adm-btn-secondary"
                                             style={{ fontSize: 12, padding: '4px 10px' }}
                                         >
@@ -2791,7 +2837,7 @@ const BillingManagement = () => {
                                         </button>
                                     </div>
 
-                                    {pdfLoading ? (
+                                    {pdfPreviewLoading ? (
                                         <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
                                             <BsArrowRepeat size={20} className="spin" color="#4f46e5" style={{ marginBottom: 8 }} />
                                             <div>Generating PDF document preview…</div>
