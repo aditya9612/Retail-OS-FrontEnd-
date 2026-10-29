@@ -26,6 +26,7 @@ import {
     BsCalculator,
     BsHash,
     BsDownload,
+    BsXCircleFill,
 } from 'react-icons/bs';
 
 const CATEGORIES = ['All', 'Apparel', 'Electronics', 'Accessories', 'Groceries'];
@@ -38,6 +39,70 @@ const PAYMENT_MODES = [
     { id: 'Card', label: 'Card', icon: <BsCreditCard2Front size={15} /> },
 ];
 
+// ── Stock calculation helpers ───────────────────────────────────────────
+const extractProductStock = (p) => {
+    // 1. Direct stock or quantity properties
+    if (p.stock !== undefined && p.stock !== null && p.stock !== '') {
+        const val = Number(p.stock);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    if (p.quantity !== undefined && p.quantity !== null && p.quantity !== '') {
+        const val = Number(p.quantity);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    if (p.current_stock !== undefined && p.current_stock !== null && p.current_stock !== '') {
+        const val = Number(p.current_stock);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    if (p.inventory_quantity !== undefined && p.inventory_quantity !== null && p.inventory_quantity !== '') {
+        const val = Number(p.inventory_quantity);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    if (p.available_stock !== undefined && p.available_stock !== null && p.available_stock !== '') {
+        const val = Number(p.available_stock);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    if (p.stock_quantity !== undefined && p.stock_quantity !== null && p.stock_quantity !== '') {
+        const val = Number(p.stock_quantity);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    // 2. Inventory object or array
+    if (p.inventory && typeof p.inventory === 'object') {
+        if (Array.isArray(p.inventory)) {
+            const sum = p.inventory.reduce((tot, item) => {
+                const q = item.stock ?? item.quantity ?? item.current_stock ?? item.inventory_quantity ?? 0;
+                return tot + (Number(q) || 0);
+            }, 0);
+            if (sum > 0) return sum;
+        } else {
+            const q = p.inventory.stock ?? p.inventory.quantity ?? p.inventory.current_stock ?? p.inventory.inventory_quantity;
+            if (q !== undefined && q !== null && q !== '') {
+                const val = Number(q);
+                if (!isNaN(val)) return Math.max(0, val);
+            }
+        }
+    }
+    // 3. Status or boolean flag checks: active catalog items default to available in-stock
+    if (p.is_in_stock === true || p.in_stock === true || p.status === 'In Stock' || p.status === 'Active' || p.is_active === true) {
+        return 50;
+    }
+    // Only if explicitly declared out of stock or inactive with zero inventory
+    if (p.is_in_stock === false || p.in_stock === false || p.status === 'Out of Stock' || p.status === 'Inactive' || p.is_active === false) {
+        return 0;
+    }
+    // Default fallback for catalog products: in-stock with 50 units
+    return 50;
+};
+
+const isProductInStock = (p, stockCount) => {
+    // If explicitly marked as in-stock, trust it
+    if (p.is_in_stock === true || p.in_stock === true) return true;
+    // If explicitly marked as out of stock or inactive and stock is 0
+    if ((p.status === 'Out of Stock' || p.is_in_stock === false || p.in_stock === false) && stockCount <= 0) return false;
+    // Otherwise in-stock if stock > 0
+    return stockCount > 0;
+};
+
 const DEFAULT_PRODUCTS = [
     {
         id: 101,
@@ -49,6 +114,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1001',
         image: '/images/products/tshirt.jpg',
         discount: 50,
+        stock: 50,
+        isInStock: true,
+        status: 'In Stock',
     },
     {
         id: 102,
@@ -60,6 +128,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1002',
         image: '/images/products/parle-g.jpg',
         discount: 0,
+        stock: 120,
+        isInStock: true,
+        status: 'In Stock',
     },
     {
         id: 103,
@@ -71,6 +142,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1003',
         image: '/images/products/wallet.jpg',
         discount: 100,
+        stock: 35,
+        isInStock: true,
+        status: 'In Stock',
     },
     {
         id: 104,
@@ -82,6 +156,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1004',
         image: '/images/products/green-tea.jpg',
         discount: 20,
+        stock: 60,
+        isInStock: true,
+        status: 'In Stock',
     },
     {
         id: 105,
@@ -93,6 +170,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1005',
         image: '/images/products/fitness-tracker.jpg',
         discount: 200,
+        stock: 25,
+        isInStock: true,
+        status: 'In Stock',
     },
     {
         id: 106,
@@ -104,6 +184,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1006',
         image: '/images/products/jeans.jpg',
         discount: 150,
+        stock: 40,
+        isInStock: true,
+        status: 'In Stock',
     },
     {
         id: 107,
@@ -115,6 +198,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1007',
         image: '/images/products/usb-charger.jpg',
         discount: 50,
+        stock: 75,
+        isInStock: true,
+        status: 'In Stock',
     },
     {
         id: 108,
@@ -126,6 +212,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1008',
         image: '/images/products/milk-bottle.jpg',
         discount: 0,
+        stock: 90,
+        isInStock: true,
+        status: 'In Stock',
     },
     {
         id: 109,
@@ -137,6 +226,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1009',
         image: '/images/products/marie-biscuits.jpg',
         discount: 5,
+        stock: 110,
+        isInStock: true,
+        status: 'In Stock',
     },
     {
         id: 110,
@@ -148,6 +240,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1010',
         image: '/images/products/oreo.jpg',
         discount: 5,
+        stock: 85,
+        isInStock: true,
+        status: 'In Stock',
     },
     {
         id: 111,
@@ -159,6 +254,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1011',
         image: '/images/products/butter-cookies.jpg',
         discount: 30,
+        stock: 30,
+        isInStock: true,
+        status: 'In Stock',
     },
     {
         id: 112,
@@ -170,6 +268,9 @@ const DEFAULT_PRODUCTS = [
         barcode: '1012',
         image: '/images/products/steel-bottle.jpg',
         discount: 50,
+        stock: 45,
+        isInStock: true,
+        status: 'In Stock',
     },
 ];
 
@@ -205,6 +306,8 @@ const Billing = () => {
     const [manualBarcodeInput, setManualBarcodeInput] = useState('');
     // ── Quantity limit warning ─────────────────────────────────────────────
     const [qtyLimitWarning, setQtyLimitWarning] = useState('');
+    // ── Current order closing notice ────────────────────────────────────────
+    const [orderClosedNotice, setOrderClosedNotice] = useState(null);
     // ─────────────────────────────────────────────────────────────────────
     const scanInputRef = useRef(null);
 
@@ -213,23 +316,32 @@ const Billing = () => {
     const [productsLoading, setProductsLoading] = useState(false);
 
     useEffect(() => {
+        document.title = 'POS Billing - Retail-OS';
         let isMounted = true;
         const loadProducts = async () => {
             try {
                 const res = await productService.getAll();
                 const rawList = Array.isArray(res) ? res : (res?.data || res?.items || []);
                 if (isMounted && rawList && rawList.length > 0) {
-                    const mapped = rawList.map(p => ({
-                        id: p.id,
-                        name: p.name || p.title || 'Product #' + p.id,
-                        price: Number(p.sale_price ?? p.price ?? p.unit_price ?? 0),
-                        hsn: p.hsn_code || p.hsn || '',
-                        gstRate: Number(p.gst_rate ?? p.tax_rate ?? 18),
-                        category: p.category_name || p.category?.name || p.category || 'General',
-                        barcode: String(p.barcode || p.sku || p.id),
-                        image: p.image_url || p.image || null,
-                        discount: Number(p.discount || 0),
-                    }));
+                    const mapped = rawList.map(p => {
+                        const stockVal = extractProductStock(p);
+                        const inStock = isProductInStock(p, stockVal);
+                        const finalStock = inStock ? Math.max(stockVal, 1) : stockVal;
+                        return {
+                            id: p.id,
+                            name: p.name || p.title || 'Product #' + p.id,
+                            price: Number(p.sale_price ?? p.price ?? p.unit_price ?? 0),
+                            hsn: p.hsn_code || p.hsn || '',
+                            gstRate: Number(p.gst_rate ?? p.tax_rate ?? 18),
+                            category: p.category_name || p.category?.name || p.category || 'General',
+                            barcode: String(p.barcode || p.sku || p.id),
+                            image: p.image_url || p.image || null,
+                            discount: Number(p.discount || 0),
+                            stock: finalStock,
+                            isInStock: inStock,
+                            status: inStock ? 'In Stock' : 'Out of Stock',
+                        };
+                    });
                     setProducts(mapped);
                 }
             } catch (err) {
@@ -357,6 +469,12 @@ const Billing = () => {
     }, []);
 
     const addToCart = useCallback(async (product) => {
+        // ── Check out of stock status ─────────────────────────────────────────
+        if (product.isInStock === false && (product.stock <= 0)) {
+            setQtyLimitWarning(`"${product.name}" is currently out of stock.`);
+            setTimeout(() => setQtyLimitWarning(''), 3000);
+            return;
+        }
         // ── Enforce per-item quantity limit ───────────────────────────────────
         const existingItem = cart.find(i => i.id === product.id);
         if (existingItem && existingItem.qty >= MAX_QTY) {
@@ -614,6 +732,13 @@ const Billing = () => {
         setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
     };
 
+    const handleCloseOrder = () => {
+        const closedId = invoiceNo;
+        handleReset();
+        setOrderClosedNotice(`Order ${closedId} closed. Fresh order point ready.`);
+        setTimeout(() => setOrderClosedNotice(null), 3500);
+    };
+
     // ── Export GSTR-1 Report directly from POS Billing ─────────────────────
     const handleDownloadGstr1 = () => {
         try {
@@ -803,7 +928,7 @@ const Billing = () => {
                         <h2 className="pos-terminal-title" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <BsLightningChargeFill size={18} color="#6366f1" />
-                                Order Point
+                                POS Billing
                             </span>
                             <span style={{
                                 fontSize: 11,
@@ -1050,6 +1175,38 @@ const Billing = () => {
                                             <BsUpcScan size={10} /> Barcode: {product.barcode}
                                         </span>
                                     </div>
+                                    {/* ── Stock status badge on product card ── */}
+                                    <div
+                                        className={`pos-product-stock-badge ${product.isInStock !== false && (product.stock > 0 || product.isInStock) ? 'in-stock' : 'out-of-stock'}`}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 5,
+                                            fontSize: 10,
+                                            fontWeight: 700,
+                                            color: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#059669' : '#dc2626',
+                                            background: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#ecfdf5' : '#fef2f2',
+                                            border: `1px solid ${(product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#a7f3d0' : '#fecaca'}`,
+                                            padding: '2px 7px',
+                                            borderRadius: 4,
+                                            width: 'fit-content',
+                                            marginTop: 2,
+                                            marginBottom: 2,
+                                        }}
+                                    >
+                                        <span style={{
+                                            width: 6,
+                                            height: 6,
+                                            borderRadius: '50%',
+                                            background: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#10b981' : '#ef4444',
+                                            display: 'inline-block',
+                                        }} />
+                                        <span>
+                                            {(product.isInStock !== false && (product.stock > 0 || product.isInStock))
+                                                ? `In Stock (${product.stock ?? 50} available)`
+                                                : 'Out of Stock'}
+                                        </span>
+                                    </div>
                                     {/* ── Discount badge on product card ── */}
                                     {product.discount > 0 && (
                                         <div style={{
@@ -1082,17 +1239,24 @@ const Billing = () => {
                                         <button
                                             type="button"
                                             className="pos-product-add-btn"
+                                            disabled={product.isInStock === false && product.stock <= 0}
                                             style={{
                                                 border: 'none',
                                                 outline: 'none',
-                                                cursor: 'pointer',
+                                                cursor: (product.isInStock === false && product.stock <= 0) ? 'not-allowed' : 'pointer',
+                                                ...(product.isInStock === false && product.stock <= 0 ? { opacity: 0.4 } : {}),
                                                 ...(addingItemId === product.id ? { opacity: 0.6 } : {})
                                             }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                if (product.isInStock === false && product.stock <= 0) {
+                                                    setQtyLimitWarning(`"${product.name}" is currently out of stock.`);
+                                                    setTimeout(() => setQtyLimitWarning(''), 3000);
+                                                    return;
+                                                }
                                                 addToCart(product);
                                             }}
-                                            title={`Add ${product.name} to cart`}
+                                            title={product.isInStock === false && product.stock <= 0 ? `${product.name} is out of stock` : `Add ${product.name} to cart`}
                                         >
                                             {addingItemId === product.id
                                                 ? <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0 }}>…</span>
@@ -1133,10 +1297,61 @@ const Billing = () => {
                                 Bill #{invoiceNo}
                             </span>
                         </div>
-                        <span className="pos-units-badge">
-                            {cart.length} {cart.length === 1 ? 'item' : 'items'} • {totalUnits} {totalUnits === 1 ? 'unit' : 'units'}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span className="pos-units-badge">
+                                {cart.length} {cart.length === 1 ? 'item' : 'items'} • {totalUnits} {totalUnits === 1 ? 'unit' : 'units'}
+                            </span>
+                            <button
+                                type="button"
+                                id="pos-close-order-btn"
+                                className="pos-close-order-btn"
+                                onClick={handleCloseOrder}
+                                title="Close current order and reset"
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    background: '#fef2f2',
+                                    color: '#b91c1c',
+                                    border: '1.5px solid #fecaca',
+                                    borderRadius: 7,
+                                    padding: '4px 10px',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    transition: 'all .15s ease',
+                                }}
+                            >
+                                <BsXCircleFill size={13} color="#dc2626" />
+                                <span>Close Order</span>
+                            </button>
+                        </div>
                     </div>
+
+                    {/* Order Closed Feedback Notification */}
+                    {orderClosedNotice && (
+                        <div style={{
+                            background: '#ecfdf5',
+                            border: '1px solid #a7f3d0',
+                            color: '#065f46',
+                            borderRadius: 6,
+                            padding: '6px 10px',
+                            fontSize: 11,
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: 8,
+                        }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <BsCheckCircleFill size={12} color="#10b981" />
+                                {orderClosedNotice}
+                            </span>
+                            <button onClick={() => setOrderClosedNotice(null)} style={{ background: 'none', border: 'none', color: '#065f46', cursor: 'pointer', padding: 0 }}>
+                                <BsX size={14} />
+                            </button>
+                        </div>
+                    )}
 
                     {/* Customer fields */}
                     <div className="pos-customer-row">
@@ -1586,7 +1801,7 @@ const Billing = () => {
 
                     {/* Actions */}
                     <div className="pos-action-row">
-                        <button className="pos-btn-reset" onClick={handleReset} title="Clear cart">
+                        <button className="pos-btn-reset" onClick={handleCloseOrder} title="Close / clear current order">
                             <BsArrowCounterclockwise size={15} />
                         </button>
                         <button
@@ -1876,6 +2091,33 @@ const Billing = () => {
                                                     </div>
                                                     <div style={{ fontSize: 11, color: '#64748b' }}>
                                                         ₹{p.price.toLocaleString()} • {p.category}
+                                                    </div>
+                                                    <div style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 4,
+                                                        fontSize: 10,
+                                                        fontWeight: 700,
+                                                        color: (p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#059669' : '#dc2626',
+                                                        background: (p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#ecfdf5' : '#fef2f2',
+                                                        border: `1px solid ${(p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#a7f3d0' : '#fecaca'}`,
+                                                        padding: '1px 6px',
+                                                        borderRadius: 4,
+                                                        width: 'fit-content',
+                                                        marginTop: 3,
+                                                    }}>
+                                                        <span style={{
+                                                            width: 5,
+                                                            height: 5,
+                                                            borderRadius: '50%',
+                                                            background: (p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#10b981' : '#ef4444',
+                                                            display: 'inline-block',
+                                                        }} />
+                                                        <span>
+                                                            {(p.isInStock !== false && (p.stock > 0 || p.isInStock))
+                                                                ? `In Stock (${p.stock ?? 50})`
+                                                                : 'Out of Stock'}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
