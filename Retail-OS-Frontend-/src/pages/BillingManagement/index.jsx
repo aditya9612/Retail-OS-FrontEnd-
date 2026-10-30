@@ -186,7 +186,7 @@ const BillingManagement = () => {
             { product_id: 1, quantity: 1, unit_price: 500, discount: 0 },
         ],
         payments: [
-            { payment_mode: 'cash', amount: 590, transaction_reference: '', amount_tendered: 600, change_due: 10 },
+            { payment_mode: 'cash', amount: 590, transaction_reference: '' },
         ],
     });
 
@@ -949,8 +949,6 @@ const BillingManagement = () => {
                         payment_mode: mode,
                         amount: Number(p.amount) || 0,
                         transaction_reference: p.transaction_reference ? String(p.transaction_reference).trim() : null,
-                        amount_tendered: p.amount_tendered !== null && p.amount_tendered !== '' ? Number(p.amount_tendered) : null,
-                        change_due: p.change_due !== null && p.change_due !== '' ? Number(p.change_due) : null,
                     };
                 }),
             };
@@ -2070,7 +2068,7 @@ const BillingManagement = () => {
                                 {/* Same State Toggle (Intra-state vs Inter-state) */}
                                 <div>
                                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                                        Tax Jurisdiction *
+                                        Tax Jurisdiction
                                     </label>
                                     <select
                                         id="modal-same-state-select"
@@ -2093,7 +2091,7 @@ const BillingManagement = () => {
                                             Invoice Line Items ({newInvoiceData.items.length})
                                         </span>
                                         <span style={{ fontSize: 11, color: '#64748b' }}>
-                                            API fields: product_id, quantity, unit_price, discount
+                                            Select products and adjust quantities
                                         </span>
                                     </div>
                                     <div style={{ display: 'flex', gap: 8 }}>
@@ -2292,7 +2290,7 @@ const BillingManagement = () => {
                                             Payment Splits ({newInvoiceData.payments.length} / max 5)
                                         </span>
                                         <span style={{ fontSize: 11, color: '#64748b' }}>
-                                            Supports multiple modes: cash, upi, card, wallet, qr
+                                            Accept cash, UPI, card, or wallet payments
                                         </span>
                                     </div>
                                     <div style={{ display: 'flex', gap: 8 }}>
@@ -2304,10 +2302,6 @@ const BillingManagement = () => {
                                                 const updated = [...newInvoiceData.payments];
                                                 if (updated.length > 0) {
                                                     updated[0].amount = grandTotal;
-                                                    if (updated[0].payment_mode === 'cash') {
-                                                        updated[0].amount_tendered = Math.ceil(grandTotal);
-                                                        updated[0].change_due = Math.max(0, Math.ceil(grandTotal) - grandTotal);
-                                                    }
                                                 }
                                                 setNewInvoiceData({ ...newInvoiceData, payments: updated });
                                                 showAlert(`Payment amount matched to grand total: ₹${grandTotal.toFixed(2)}`, 'info');
@@ -2334,7 +2328,7 @@ const BillingManagement = () => {
                                                         ...newInvoiceData,
                                                         payments: [
                                                             ...newInvoiceData.payments,
-                                                            { payment_mode: 'upi', amount: 0, transaction_reference: '', amount_tendered: null, change_due: null },
+                                                            { payment_mode: 'upi', amount: 0, transaction_reference: '' },
                                                         ],
                                                     });
                                                 }}
@@ -2355,12 +2349,10 @@ const BillingManagement = () => {
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '120px 100px 1.2fr 90px 90px 32px', gap: 8, padding: '4px 8px', fontSize: 11, fontWeight: 600, color: '#64748b' }}>
-                                    <span>Mode *</span>
+                                <div style={{ display: 'grid', gridTemplateColumns: '140px 140px 1fr 36px', gap: 10, padding: '4px 8px', fontSize: 11, fontWeight: 600, color: '#64748b' }}>
+                                    <span>Payment Mode *</span>
                                     <span>Amount (₹) *</span>
-                                    <span>Transaction Ref</span>
-                                    <span>Tendered (₹)</span>
-                                    <span>Change (₹)</span>
+                                    <span>Transaction Reference (Optional)</span>
                                     <span></span>
                                 </div>
 
@@ -2370,8 +2362,8 @@ const BillingManagement = () => {
                                             key={pIdx}
                                             style={{
                                                 display: 'grid',
-                                                gridTemplateColumns: '120px 100px 1.2fr 90px 90px 32px',
-                                                gap: 8,
+                                                gridTemplateColumns: '140px 140px 1fr 36px',
+                                                gap: 10,
                                                 alignItems: 'center',
                                                 background: '#fff',
                                                 padding: '8px 10px',
@@ -2386,7 +2378,7 @@ const BillingManagement = () => {
                                                     updated[pIdx].payment_mode = e.target.value;
                                                     setNewInvoiceData({ ...newInvoiceData, payments: updated });
                                                 }}
-                                                style={{ fontSize: 12, padding: '6px 8px', borderRadius: 4, border: '1px solid #cbd5e1' }}
+                                                style={{ fontSize: 12, padding: '7px 10px', borderRadius: 6, border: '1px solid #cbd5e1' }}
                                             >
                                                 <option value="cash">Cash</option>
                                                 <option value="upi">UPI</option>
@@ -2409,7 +2401,7 @@ const BillingManagement = () => {
                                                     setNewInvoiceData({ ...newInvoiceData, payments: updated });
                                                 }}
                                                 placeholder="Amount"
-                                                style={{ fontSize: 12, padding: '6px 8px', borderRadius: 4, border: '1px solid #cbd5e1' }}
+                                                style={{ fontSize: 12, padding: '7px 10px', borderRadius: 6, border: '1px solid #cbd5e1' }}
                                             />
 
                                             <input
@@ -2420,44 +2412,11 @@ const BillingManagement = () => {
                                                     updated[pIdx].transaction_reference = e.target.value;
                                                     setNewInvoiceData({ ...newInvoiceData, payments: updated });
                                                 }}
-                                                placeholder="Ref / UPI ID / Card Ref"
-                                                style={{ fontSize: 12, padding: '6px 8px', borderRadius: 4, border: '1px solid #cbd5e1' }}
+                                                placeholder="e.g. UPI Ref / Card Last 4 / Cheque No"
+                                                style={{ fontSize: 12, padding: '7px 10px', borderRadius: 6, border: '1px solid #cbd5e1' }}
                                             />
 
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                value={pay.amount_tendered ?? ''}
-                                                onChange={(e) => {
-                                                    const val = e.target.value === '' ? null : Number(e.target.value);
-                                                    const updated = [...newInvoiceData.payments];
-                                                    updated[pIdx].amount_tendered = val;
-                                                    if (val !== null) {
-                                                        updated[pIdx].change_due = Math.max(0, val - Number(updated[pIdx].amount || 0));
-                                                    }
-                                                    setNewInvoiceData({ ...newInvoiceData, payments: updated });
-                                                }}
-                                                placeholder="Tendered"
-                                                style={{ fontSize: 12, padding: '6px 8px', borderRadius: 4, border: '1px solid #cbd5e1' }}
-                                            />
-
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                value={pay.change_due ?? ''}
-                                                onChange={(e) => {
-                                                    const val = e.target.value === '' ? null : Number(e.target.value);
-                                                    const updated = [...newInvoiceData.payments];
-                                                    updated[pIdx].change_due = val;
-                                                    setNewInvoiceData({ ...newInvoiceData, payments: updated });
-                                                }}
-                                                placeholder="Change"
-                                                style={{ fontSize: 12, padding: '6px 8px', borderRadius: 4, border: '1px solid #cbd5e1' }}
-                                            />
-
-                                            <div>
+                                            <div style={{ display: 'flex', justifyContent: 'center' }}>
                                                 {newInvoiceData.payments.length > 1 && (
                                                     <button
                                                         type="button"
@@ -2465,7 +2424,7 @@ const BillingManagement = () => {
                                                             const updated = newInvoiceData.payments.filter((_, i) => i !== pIdx);
                                                             setNewInvoiceData({ ...newInvoiceData, payments: updated });
                                                         }}
-                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}
+                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 4 }}
                                                     >
                                                         <BsTrash size={14} />
                                                     </button>
