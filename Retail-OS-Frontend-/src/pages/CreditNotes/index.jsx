@@ -1588,7 +1588,7 @@ export const CreditNotesPage = () => {
                             >
                                 <BsShieldCheck size={16} style={{ flexShrink: 0, marginTop: 1 }} />
                                 <span>
-                                    Generating this Credit Note executes <code>POST /api/v1/credit-notes</code>, creating an official GST credit document and auto-generating an authorized refund record in the ledger.
+                                    Generating this Credit Note creates an official GST credit document and auto-generates an authorized refund record in the ledger.
                                 </span>
                             </div>
 
@@ -1684,7 +1684,7 @@ export const CreditNotesPage = () => {
                                     Credit Note Details
                                 </h2>
                                 <span style={{ fontSize: 12, color: '#6b7280' }}>
-                                    Fetched via GET /api/v1/credit-notes/{selectedCreditNote?.id || ''}
+                                    Credit Note #{selectedCreditNote?.credit_note_number || selectedCreditNote?.id || ''}
                                 </span>
                             </div>
                             <button
@@ -2003,7 +2003,7 @@ export const CreditNotesPage = () => {
                                     <BsArrowClockwise size={32} className="spin" style={{ color: '#6366f1', marginBottom: 12 }} />
                                     <p style={{ fontWeight: 600, margin: 0 }}>Rendering Credit Note PDF...</p>
                                     <span style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
-                                        Streaming from GET /api/v1/credit-notes/{pdfPreview.creditNoteId}/pdf?mode=preview
+                                        Loading preview document...
                                     </span>
                                 </div>
                             ) : pdfPreview.error ? (

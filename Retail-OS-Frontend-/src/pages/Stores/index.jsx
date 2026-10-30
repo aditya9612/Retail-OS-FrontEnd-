@@ -216,7 +216,7 @@ const Stores = () => {
                                 Store Targets
                             </h1>
                             <p style={{ fontSize: 13, color: '#64748b', margin: '3px 0 0' }}>
-                                Manage revenue and performance targets for stores (<code>/api/v1/store-targets</code>)
+                                Manage revenue and performance targets for stores
                             </p>
                         </div>
                     </div>
@@ -483,7 +483,7 @@ const Stores = () => {
                                         Create Store Target
                                     </h3>
                                     <span style={{ fontSize: 11, color: '#64748b' }}>
-                                        POST /api/v1/store-targets
+                                        Define new store milestone target
                                     </span>
                                 </div>
                             </div>

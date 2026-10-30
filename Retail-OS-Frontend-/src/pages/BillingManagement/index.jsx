@@ -1316,7 +1316,7 @@ const BillingManagement = () => {
                         <BsBoxArrowUpRight size={15} color="#4f46e5" />
                         <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Direct Invoice or Order ID Lookup</span>
                     </div>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Fetch invoice record directly via GET /api/v1/invoices/{'{id}'}</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Fetch invoice record directly by ID</span>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: 260, display: 'flex', alignItems: 'center', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '0 12px' }}>
@@ -1794,7 +1794,7 @@ const BillingManagement = () => {
                                                         id={`btn-view-${invId}`}
                                                         onClick={() => handleOpenDetail(inv)}
                                                         className="adm-action-btn"
-                                                        title="Retrieve Complete Details (GET /api/v1/invoices/{invoice_id})"
+                                                        title="Retrieve Complete Details"
                                                         style={{ background: '#eef2ff', color: '#4f46e5' }}
                                                     >
                                                         <BsEyeFill size={13} />
@@ -1805,7 +1805,7 @@ const BillingManagement = () => {
                                                         id={`btn-preview-print-${invId}`}
                                                         onClick={() => openPdfPreviewModal(inv, 'invoice')}
                                                         className="adm-action-btn"
-                                                        title="Preview & Print Invoice (GET /api/v1/invoices/{invoice_id}/pdf)"
+                                                        title="Preview & Print Invoice"
                                                         style={{ background: '#eff6ff', color: '#2563eb' }}
                                                     >
                                                         <BsPrinter size={13} />
@@ -1817,7 +1817,7 @@ const BillingManagement = () => {
                                                         onClick={() => handleDownload(invId, 'invoice', invNumber)}
                                                         disabled={downloadingId === invId}
                                                         className="adm-action-btn"
-                                                        title="Download Tax Invoice PDF (GET /api/v1/invoices/{invoice_id}/pdf?document_type=invoice)"
+                                                        title="Download Tax Invoice PDF"
                                                         style={{ background: '#ecfdf5', color: '#059669' }}
                                                     >
                                                         {downloadingId === invId ? <span style={{ fontSize: 10 }}>⏳</span> : <BsFileEarmarkPdf size={13} />}
@@ -1829,7 +1829,7 @@ const BillingManagement = () => {
                                                         onClick={() => handleDownload(invId, 'bill', invNumber)}
                                                         disabled={downloadingId === invId}
                                                         className="adm-action-btn"
-                                                        title="Download Compact POS Bill (GET /api/v1/invoices/{invoice_id}/pdf?document_type=bill)"
+                                                        title="Download Compact POS Bill"
                                                         style={{ background: '#f0fdf4', color: '#16a34a' }}
                                                     >
                                                         <BsReceiptCutoff size={13} />
@@ -1852,7 +1852,7 @@ const BillingManagement = () => {
                                                         onClick={() => handleGenerateAsync(invId)}
                                                         disabled={asyncLoadingId === invId}
                                                         className="adm-action-btn"
-                                                        title="Submit Async Generation (POST /api/v1/invoices/{invoice_id}/generate-async)"
+                                                        title="Submit Async Generation"
                                                         style={{ background: '#f1f5f9', color: '#475569' }}
                                                     >
                                                         {asyncLoadingId === invId ? <span style={{ fontSize: 10 }}>⏳</span> : <BsLightningChargeFill size={12} />}
@@ -1886,7 +1886,7 @@ const BillingManagement = () => {
                                                             id={`btn-void-${invId}`}
                                                             onClick={() => openVoidModal(inv)}
                                                             className="adm-action-btn"
-                                                            title="Void / Cancel Tax Invoice (POST /api/v1/invoices/{invoice_id}/void)"
+                                                            title="Void / Cancel Tax Invoice"
                                                             style={{ background: '#fef2f2', color: '#dc2626' }}
                                                         >
                                                             <BsTrash size={13} />
@@ -1980,7 +1980,7 @@ const BillingManagement = () => {
                                         Create Tax Invoice
                                     </h2>
                                     <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
-                                        POST /api/v1/invoices · Generates compliant GST tax invoice with line items &amp; payments
+                                        Generates compliant GST tax invoice with line items &amp; payments
                                     </p>
                                 </div>
                             </div>
@@ -2518,38 +2518,6 @@ const BillingManagement = () => {
                                 </div>
                             </div>
 
-                            {/* Section 5: Live API Request Payload JSON Preview */}
-                            <div style={{ background: '#0f172a', borderRadius: 10, padding: '12px 16px', color: '#f8fafc' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#38bdf8' }}>
-                                        Live Backend Request Payload (POST /api/v1/invoices)
-                                    </span>
-                                    <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                                        Exact JSON payload transmitted to backend
-                                    </span>
-                                </div>
-                                <pre style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', color: '#93c5fd', maxHeight: 130, overflowY: 'auto', background: '#1e293b', padding: 10, borderRadius: 6 }}>
-                                    {JSON.stringify({
-                                        store_id: Number(newInvoiceData.store_id) || 1,
-                                        customer_id: newInvoiceData.customer_id !== null && newInvoiceData.customer_id !== '' ? Number(newInvoiceData.customer_id) : null,
-                                        same_state: Boolean(newInvoiceData.same_state),
-                                        items: newInvoiceData.items.map(it => ({
-                                            product_id: Number(it.product_id) || 1,
-                                            quantity: Number(it.quantity) || 1,
-                                            unit_price: Number(it.unit_price) || 0,
-                                            discount: Number(it.discount) || 0,
-                                        })),
-                                        payments: newInvoiceData.payments.map(p => ({
-                                            payment_mode: p.payment_mode,
-                                            amount: Number(p.amount) || 0,
-                                            transaction_reference: p.transaction_reference ? String(p.transaction_reference).trim() : null,
-                                            amount_tendered: p.amount_tendered !== null && p.amount_tendered !== '' ? Number(p.amount_tendered) : null,
-                                            change_due: p.change_due !== null && p.change_due !== '' ? Number(p.change_due) : null,
-                                        })),
-                                    }, null, 2)}
-                                </pre>
-                            </div>
-
                             {/* Modal Footer */}
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
                                 <button
@@ -3006,7 +2974,7 @@ const BillingManagement = () => {
                                     Async Generation Queued
                                 </h3>
                                 <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
-                                    POST /api/v1/invoices/{asyncTaskInfo.invoice_id}/generate-async
+                                    Background generation task dispatched
                                 </p>
                             </div>
                         </div>
@@ -3217,12 +3185,9 @@ const BillingManagement = () => {
                                     <div style={{ fontSize: 16, fontWeight: 600 }}>Loading Invoice PDF…</div>
                                     {pdfStatusPolling && (
                                         <div style={{ fontSize: 13, color: '#bae6fd', maxWidth: 400, textAlign: 'center' }}>
-                                            {pdfStatusMessage || 'Checking PDF status (GET /invoices/{id}/pdf-status)…'}
+                                            {pdfStatusMessage || 'Checking PDF readiness status…'}
                                         </div>
                                     )}
-                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                                        GET /api/v1/invoices/{pdfPreviewInvoice.id}/pdf?document_type={pdfDocType}
-                                    </div>
                                 </div>
                             ) : pdfPreviewUrl ? (
                                 <iframe
