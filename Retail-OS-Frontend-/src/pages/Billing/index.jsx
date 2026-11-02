@@ -1221,8 +1221,7 @@ const Billing = () => {
                                         <button
                                             type="button"
                                             className="pos-product-add-btn"
-                                            disabled={product.isInStock === false && product.stock <= 0}
-                                            style={{
+                                                                                        style={{
                                                 border: 'none',
                                                 outline: 'none',
                                                 cursor: isOutOfStock ? 'not-allowed' : 'pointer',
