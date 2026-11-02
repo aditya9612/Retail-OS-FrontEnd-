@@ -26,6 +26,15 @@ axiosInstance.interceptors.request.use(
   (config) => {
     const token = getAccessToken();
 
+    // Normalize baseURL and URL to ensure consistent /api/v1 routing
+    const base = (config.baseURL || "").replace(/\/+$/, "");
+    if (!base.endsWith("/api/v1")) {
+      config.baseURL = `${base}/api/v1`;
+    }
+    if (config.url?.startsWith("/api/v1")) {
+      config.url = config.url.replace(/^\/api\/v1/, "");
+    }
+
     console.log("API Request:", {
       method: config.method?.toUpperCase(),
       url: `${config.baseURL || ""}${config.url || ""}`,

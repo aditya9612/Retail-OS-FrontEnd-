@@ -52,17 +52,11 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
       return;
     }
 
-    if (category && !description.trim()) {
-      setError("Please enter category description");
-      alert("Please enter category description");
-      return;
-    }
-
     setError("");
     const categoryData = {
       name: formattedName,
       status: status,
-      description: description.trim(),
+      description: description ? description.trim() : "",
       parent_id: category?.parent_id ?? null,
     };
 

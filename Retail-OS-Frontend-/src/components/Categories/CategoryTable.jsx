@@ -312,6 +312,34 @@ const CategoryTable = ({
                             ? "status active"
                             : "status inactive"
                         }
+                        style={{ cursor: "pointer" }}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (
+                            typeof onStatusChange ===
+                            "function"
+                          ) {
+                            onStatusChange(
+                              item,
+                              !isActive
+                            );
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            if (typeof onStatusChange === "function") {
+                              onStatusChange(item, !isActive);
+                            }
+                          }
+                        }}
+                        title={
+                          isActive
+                            ? "Active status (click to deactivate)"
+                            : "Inactive status (click to activate)"
+                        }
                       >
                         <span
                           className="status-dot"
@@ -347,7 +375,8 @@ const CategoryTable = ({
                       <button
                         type="button"
                         className="view-btn"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (
                             typeof onView ===
                             "function"
@@ -371,7 +400,8 @@ const CategoryTable = ({
                       <button
                         type="button"
                         className="edit-btn"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (
                             typeof onEdit ===
                             "function"
@@ -401,7 +431,8 @@ const CategoryTable = ({
                               ? "status-toggle-btn deactivate"
                               : "status-toggle-btn activate"
                           }
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             if (
                               typeof onStatusChange ===
                               "function"
@@ -425,8 +456,8 @@ const CategoryTable = ({
                           }
                           title={
                             isActive
-                              ? "Make Inactive"
-                              : "Make Active"
+                              ? "Active (click to deactivate)"
+                              : "Inactive (click to activate)"
                           }
                         >
                           {isActive ? (
@@ -448,7 +479,8 @@ const CategoryTable = ({
                       <button
                         type="button"
                         className="delete-btn"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (
                             typeof onDelete ===
                             "function"

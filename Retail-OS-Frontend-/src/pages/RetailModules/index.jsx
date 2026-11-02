@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import apiClient from '../../services/api';
 import { getInvoices } from '../../services/billingService';
+import productService from '../../services/product';
+import { generateBarcodeDataUrl, generateBarcodeLabelsPDF, downloadBarcodeImage } from './barcodeUtils';
 import {
     BsSearch, BsPlus, BsDownload, BsFilter, BsCheckCircleFill, BsClockHistory,
     BsXCircleFill, BsPrinter, BsUpcScan, BsBuildings, BsTruck, BsArrowRepeat,
     BsArrowLeftRight, BsAwardFill, BsShieldLock, BsMegaphone, BsChatDots,
     BsStars, BsPlug, BsDisplay, BsCashStack, BsArrowReturnLeft, BsReceiptCutoff,
-    BsCreditCard2Front, BsBoxSeam, BsSend, BsGear, BsTag, BsExclamationTriangle
+    BsCreditCard2Front, BsBoxSeam, BsSend, BsGear, BsTag, BsExclamationTriangle,
+    BsImage
 } from 'react-icons/bs';
 
 /* ─────────────────────────────────────────────────────────────
@@ -380,75 +383,704 @@ export const BillingPaymentsPage = () => {
    4. PRODUCTS: Barcode
 ───────────────────────────────────────────────────────────── */
 export const BarcodePage = () => {
+    // Product data & search state
+    const [products, setProducts] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedProduct, setSelectedProduct] = useState(null);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+
+    // Form controls
+    const [barcodeStandard, setBarcodeStandard] = useState('EAN-13 (Standard Retail)');
+    const [labelSize, setLabelSize] = useState('50mm x 25mm (Thermal)');
+    const [copies, setCopies] = useState('20');
+
+    // Generated label data from backend (GET /api/v1/products/{product_id}/barcode-label)
+    const [backendLabel, setBackendLabel] = useState(null);
+
+    // Action & status states
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [isPrinting, setIsPrinting] = useState(false);
+    const [statusMessage, setStatusMessage] = useState(null);
+
+    const searchRef = useRef(null);
+
+    // Close search dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (searchRef.current && !searchRef.current.contains(e.target)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Helper to fetch latest product details and existing label from backend
+    const fetchLatestProductData = async (productId) => {
+        try {
+            // GET /api/v1/products/{product_id}
+            const res = await productService.getById(productId);
+            const freshProd = res?.data?.product || res?.data || null;
+            if (freshProd) {
+                setSelectedProduct(freshProd);
+                // If product already has a barcode, fetch its printable label
+                if (freshProd.barcode) {
+                    try {
+                        const labelRes = await productService.getBarcodeLabel(freshProd.id, 'json');
+                        setBackendLabel(labelRes?.data || labelRes);
+                    } catch {
+                        setBackendLabel(null);
+                    }
+                } else {
+                    setBackendLabel(null);
+                }
+                return freshProd;
+            }
+        } catch (err) {
+            console.error('Failed to fetch latest product details:', err);
+        }
+        return null;
+    };
+
+    // Load initial products from backend
+    useEffect(() => {
+        let mounted = true;
+        const loadInitialProducts = async () => {
+            setIsLoadingProducts(true);
+            try {
+                const res = await productService.getAll(1, 100, true);
+                const list = Array.isArray(res?.data)
+                    ? res.data
+                    : Array.isArray(res?.data?.items)
+                        ? res.data.items
+                        : Array.isArray(res?.items)
+                            ? res.items
+                            : [];
+                if (mounted) {
+                    setProducts(list);
+                    if (list.length > 0) {
+                        setSelectedProduct(list[0]);
+                        setSearchQuery(list[0].name ? `${list[0].name}${list[0].sku ? ` (${list[0].sku})` : ''}` : '');
+                        // Fetch latest product details from backend
+                        fetchLatestProductData(list[0].id);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load products for barcode management:', err);
+            } finally {
+                if (mounted) setIsLoadingProducts(false);
+            }
+        };
+        loadInitialProducts();
+        return () => { mounted = false; };
+    }, []);
+
+    // Filter products based on search input
+    const searchResults = useMemo(() => {
+        const q = (searchQuery || '').trim().toLowerCase();
+        if (!q) return products.slice(0, 8);
+        return products.filter(p =>
+            (p.name || '').toLowerCase().includes(q) ||
+            (p.sku || '').toLowerCase().includes(q) ||
+            (p.barcode || '').toLowerCase().includes(q)
+        ).slice(0, 10);
+    }, [products, searchQuery]);
+
+    // Handle product selection
+    const handleSelectProduct = async (prod) => {
+        setSelectedProduct(prod);
+        setBackendLabel(null);
+        setSearchQuery(prod.name ? `${prod.name}${prod.sku ? ` (${prod.sku})` : ''}` : '');
+        setShowDropdown(false);
+        setStatusMessage(null);
+        // Immediately retrieve latest product details via GET /api/v1/products/{product_id}
+        await fetchLatestProductData(prod.id);
+    };
+
+    // 1. Generate & Preview Labels (POST /products/{id}/generate-barcode + GET /products/{id}/barcode-label)
+    const handleGenerateAndPreview = async () => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product first.' });
+            return;
+        }
+
+        const cleanCopies = parseInt(copies, 10);
+        if (isNaN(cleanCopies) || cleanCopies <= 0) {
+            setStatusMessage({ type: 'error', text: 'Please enter a valid positive number of copies (at least 1).' });
+            return;
+        }
+
+        setIsGenerating(true);
+        setStatusMessage(null);
+
+        try {
+            // Step 1: Retrieve latest product details via GET /api/v1/products/{product_id}
+            let currentProd = selectedProduct;
+            try {
+                const freshRes = await productService.getById(selectedProduct.id);
+                if (freshRes?.data) {
+                    currentProd = freshRes.data?.product || freshRes.data;
+                    setSelectedProduct(currentProd);
+                }
+            } catch (fetchErr) {
+                console.warn('Could not refresh product details before generation:', fetchErr);
+            }
+
+            // Step 2: Call POST /api/v1/products/{product_id}/generate-barcode
+            let generatedBarcode = currentProd.barcode;
+            try {
+                const genRes = await productService.generateBarcode(currentProd.id, true);
+                generatedBarcode = genRes?.data?.barcode || genRes?.barcode || genRes?.data;
+            } catch (genErr) {
+                // If 409 Conflict, barcode already exists; fallback without overwrite
+                if (genErr?.response?.status === 409 && currentProd.barcode) {
+                    generatedBarcode = currentProd.barcode;
+                } else {
+                    throw genErr;
+                }
+            }
+
+            if (generatedBarcode && typeof generatedBarcode === 'string') {
+                currentProd = { ...currentProd, barcode: generatedBarcode };
+                setSelectedProduct(currentProd);
+                setProducts(prev => prev.map(p => p.id === currentProd.id ? { ...p, barcode: generatedBarcode } : p));
+            }
+
+            // Step 3: Retrieve GET /api/v1/products/{product_id}/barcode-label?mode=json
+            const labelRes = await productService.getBarcodeLabel(currentProd.id, 'json');
+            const data = labelRes?.data || labelRes;
+            setBackendLabel(data);
+
+            if (data?.barcode && data.barcode !== currentProd.barcode) {
+                currentProd = { ...currentProd, barcode: data.barcode };
+                setSelectedProduct(currentProd);
+                setProducts(prev => prev.map(p => p.id === currentProd.id ? { ...p, barcode: data.barcode } : p));
+            }
+
+            setStatusMessage({
+                type: 'success',
+                text: `Barcode successfully generated: ${data?.barcode || currentProd.barcode || ''} for ${currentProd.name}!`
+            });
+        } catch (err) {
+            console.error('Failed to generate/retrieve barcode label:', err);
+            const msg = err?.response?.data?.message ||
+                (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
+                'Failed to generate barcode on server. Please try again.';
+            setStatusMessage({ type: 'error', text: msg });
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    // 2. Download Barcode standalone image (PNG)
+    const handleDownloadBarcode = () => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product first.' });
+            return;
+        }
+        if (!previewBarcodeNumber) {
+            setStatusMessage({ type: 'error', text: 'No barcode has been generated for this product yet. Click "Generate & Preview Labels" first.' });
+            return;
+        }
+        if (!previewBarcodeImg) {
+            setStatusMessage({ type: 'error', text: 'No barcode graphic available to download.' });
+            return;
+        }
+        const fileId = selectedProduct.sku ? String(selectedProduct.sku).replace(/[^a-zA-Z0-9_-]/g, '_') : selectedProduct.id;
+        const filename = `barcode-${fileId}-${previewBarcodeNumber}.png`;
+        const success = downloadBarcodeImage(previewBarcodeImg, filename);
+        if (success) {
+            setStatusMessage({
+                type: 'success',
+                text: `Downloaded barcode image: ${filename}`
+            });
+        }
+    };
+
+    // 3. Download Barcode Labels as PDF
+    const handleDownloadLabel = () => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product to download barcode labels.' });
+            return;
+        }
+        if (!previewBarcodeNumber) {
+            setStatusMessage({ type: 'error', text: 'No barcode has been generated for this product yet. Click "Generate & Preview Labels" first.' });
+            return;
+        }
+
+        const cleanCopies = parseInt(copies, 10);
+        if (isNaN(cleanCopies) || cleanCopies <= 0) {
+            setStatusMessage({ type: 'error', text: 'Please enter a valid positive number of copies (at least 1).' });
+            return;
+        }
+
+        setIsDownloading(true);
+        setStatusMessage(null);
+
+        try {
+            const productForPdf = {
+                id: selectedProduct.id,
+                name: backendLabel?.product_name || selectedProduct.name,
+                sku: backendLabel?.sku || selectedProduct.sku,
+                barcode: previewBarcodeNumber,
+                mrp: backendLabel?.mrp ?? selectedProduct.mrp ?? selectedProduct.selling_price ?? selectedProduct.price ?? 0
+            };
+
+            generateBarcodeLabelsPDF({
+                product: productForPdf,
+                barcodeStandard,
+                labelSize,
+                copies: cleanCopies,
+                storeName: backendLabel?.store_name || 'RetailOS Store',
+                customBarcodeImage: (backendLabel?.barcode_image_base64 && !String(barcodeStandard).toLowerCase().includes('128') && !String(barcodeStandard).toLowerCase().includes('qr')) ? backendLabel.barcode_image_base64 : null,
+                action: 'download'
+            });
+
+            setStatusMessage({
+                type: 'success',
+                text: `Successfully downloaded ${cleanCopies} barcode label(s) as PDF.`
+            });
+        } catch (err) {
+            console.error('Download error:', err);
+            setStatusMessage({ type: 'error', text: err.message || 'Failed to generate PDF download.' });
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+    // 4. Print Barcode Labels (Single or Batch)
+    const handlePrintWithCopies = (copiesToPrint = null) => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product to print barcode labels.' });
+            return;
+        }
+        if (!previewBarcodeNumber) {
+            setStatusMessage({ type: 'error', text: 'No barcode has been generated for this product yet. Click "Generate & Preview Labels" first.' });
+            return;
+        }
+
+        const requestedCopies = copiesToPrint !== null ? copiesToPrint : parseInt(copies, 10);
+        if (isNaN(requestedCopies) || requestedCopies <= 0) {
+            setStatusMessage({ type: 'error', text: 'Please enter a valid positive number of copies (at least 1).' });
+            return;
+        }
+
+        setIsPrinting(true);
+        setStatusMessage(null);
+
+        try {
+            const productForPdf = {
+                id: selectedProduct.id,
+                name: backendLabel?.product_name || selectedProduct.name,
+                sku: backendLabel?.sku || selectedProduct.sku,
+                barcode: previewBarcodeNumber,
+                mrp: backendLabel?.mrp ?? selectedProduct.mrp ?? selectedProduct.selling_price ?? selectedProduct.price ?? 0
+            };
+
+            generateBarcodeLabelsPDF({
+                product: productForPdf,
+                barcodeStandard,
+                labelSize,
+                copies: requestedCopies,
+                storeName: backendLabel?.store_name || 'RetailOS Store',
+                customBarcodeImage: (backendLabel?.barcode_image_base64 && !String(barcodeStandard).toLowerCase().includes('128') && !String(barcodeStandard).toLowerCase().includes('qr')) ? backendLabel.barcode_image_base64 : null,
+                action: 'print'
+            });
+
+            setStatusMessage({
+                type: 'success',
+                text: `Sent ${requestedCopies} barcode label(s) to printer.`
+            });
+        } catch (err) {
+            console.error('Print error:', err);
+            setStatusMessage({ type: 'error', text: err.message || 'Failed to initiate printing.' });
+        } finally {
+            setIsPrinting(false);
+        }
+    };
+
+    // Preview fields derived from selected product or backend response
+    const previewStore = backendLabel?.store_name || 'RetailOS Store';
+    const previewProductName = backendLabel?.product_name || selectedProduct?.name || (products.length === 0 ? 'No Products Available' : 'Select a Product');
+    const previewSubtitle = selectedProduct?.sku
+        ? `SKU: ${selectedProduct.sku}`
+        : (selectedProduct?.category?.name || selectedProduct?.category || (selectedProduct ? 'Standard Item' : ''));
+    const previewBarcodeNumber = backendLabel?.barcode || selectedProduct?.barcode || null;
+    const rawPrice = backendLabel?.mrp ?? selectedProduct?.mrp ?? selectedProduct?.selling_price ?? selectedProduct?.price ?? 0;
+    const previewMrp = Number(rawPrice).toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+
+    const isQR = String(barcodeStandard).toLowerCase().includes('qr');
+    const isCode128 = String(barcodeStandard).toLowerCase().includes('128');
+
+    // Barcode image for Live Preview
+    const previewBarcodeImg = useMemo(() => {
+        if (!previewBarcodeNumber) return null;
+        // If standard is EAN-13 and backend returned base64 image, use it directly
+        if (backendLabel?.barcode_image_base64 && !isCode128 && !isQR) {
+            return backendLabel.barcode_image_base64;
+        }
+        try {
+            return generateBarcodeDataUrl(previewBarcodeNumber, barcodeStandard);
+        } catch {
+            return null;
+        }
+    }, [backendLabel, previewBarcodeNumber, barcodeStandard, isCode128, isQR]);
+
     return (
         <ModuleContainer
             title="Barcode Management & Label Printing"
             subtitle="Generate EAN-13 / Code 128 barcodes, customize label sticker layouts, and batch print for products"
             icon={<BsUpcScan />}
             actionBtn={
-                <button style={{
-                    background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                    borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                }}>
-                    <BsPrinter size={18} /> Print Barcode Batch
-                </button>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                        type="button"
+                        onClick={handleDownloadBarcode}
+                        disabled={!previewBarcodeNumber || !selectedProduct}
+                        title="Download barcode graphic as PNG"
+                        style={{
+                            background: '#fff',
+                            color: '#374151',
+                            border: '1px solid #d1d5db',
+                            padding: '10px 14px',
+                            borderRadius: 8,
+                            fontWeight: 600,
+                            fontSize: 13,
+                            cursor: !previewBarcodeNumber || !selectedProduct ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            opacity: !previewBarcodeNumber || !selectedProduct ? 0.6 : 1
+                        }}
+                    >
+                        <BsImage size={15} /> Download Barcode
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleDownloadLabel}
+                        disabled={isDownloading || !previewBarcodeNumber || !selectedProduct}
+                        title="Download printable PDF of labels"
+                        style={{
+                            background: '#fff',
+                            color: '#374151',
+                            border: '1px solid #d1d5db',
+                            padding: '10px 16px',
+                            borderRadius: 8,
+                            fontWeight: 600,
+                            fontSize: 13.5,
+                            cursor: isDownloading || !previewBarcodeNumber || !selectedProduct ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            opacity: isDownloading || !previewBarcodeNumber || !selectedProduct ? 0.6 : 1
+                        }}
+                    >
+                        <BsDownload size={16} /> {isDownloading ? 'Downloading...' : 'Download Label'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handlePrintWithCopies()}
+                        disabled={isPrinting || !previewBarcodeNumber || !selectedProduct}
+                        title="Print configured number of copies"
+                        style={{
+                            background: '#6366f1',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '10px 18px',
+                            borderRadius: 8,
+                            fontWeight: 600,
+                            fontSize: 13.5,
+                            cursor: isPrinting || !previewBarcodeNumber || !selectedProduct ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            opacity: isPrinting || !previewBarcodeNumber || !selectedProduct ? 0.6 : 1
+                        }}
+                    >
+                        <BsPrinter size={18} /> {isPrinting ? 'Printing...' : 'Print Barcode Batch'}
+                    </button>
+                </div>
             }
         >
+            {/* Status message */}
+            {statusMessage && (
+                <div style={{
+                    marginBottom: 16,
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    background: statusMessage.type === 'error' ? '#fef2f2' : '#f0fdf4',
+                    border: `1px solid ${statusMessage.type === 'error' ? '#fca5a5' : '#86efac'}`,
+                    color: statusMessage.type === 'error' ? '#b91c1c' : '#15803d',
+                    fontSize: 13,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}>
+                    <span>{statusMessage.text}</span>
+                    <button
+                        type="button"
+                        onClick={() => setStatusMessage(null)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontWeight: 700 }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
                 <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Generate Single / Batch Barcode</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div>
+                        {/* Select Product */}
+                        <div ref={searchRef} style={{ position: 'relative' }}>
                             <label style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Select Product</label>
-                            <input type="text" placeholder="Search product name or SKU..." style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13 }} />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={e => {
+                                    setSearchQuery(e.target.value);
+                                    setShowDropdown(true);
+                                }}
+                                onFocus={() => setShowDropdown(true)}
+                                placeholder={isLoadingProducts ? "Loading products..." : (products.length === 0 ? "No products found in catalog" : "Search product name or SKU...")}
+                                disabled={isLoadingProducts || products.length === 0}
+                                style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
+                            />
+                            {/* Autocomplete Dropdown */}
+                            {showDropdown && searchResults.length > 0 && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    left: 0,
+                                    right: 0,
+                                    background: '#fff',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: 8,
+                                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                                    maxHeight: 220,
+                                    overflowY: 'auto',
+                                    zIndex: 50,
+                                    marginTop: 4
+                                }}>
+                                    {searchResults.map(p => (
+                                        <div
+                                            key={p.id}
+                                            onClick={() => handleSelectProduct(p)}
+                                            style={{
+                                                padding: '9px 12px',
+                                                cursor: 'pointer',
+                                                borderBottom: '1px solid #f3f4f6',
+                                                fontSize: 12.5,
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                background: selectedProduct?.id === p.id ? '#eef2ff' : '#fff'
+                                            }}
+                                            onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                            onMouseLeave={e => e.currentTarget.style.background = selectedProduct?.id === p.id ? '#eef2ff' : '#fff'}
+                                        >
+                                            <div>
+                                                <div style={{ fontWeight: 600, color: '#111827' }}>{p.name}</div>
+                                                <div style={{ fontSize: 11, color: '#6b7280' }}>
+                                                    SKU: {p.sku || 'N/A'} {p.barcode ? `• Barcode: ${p.barcode}` : '• No barcode'}
+                                                </div>
+                                            </div>
+                                            <div style={{ fontWeight: 700, color: '#4f46e5', fontSize: 12 }}>
+                                                ₹{Number(p.mrp || p.selling_price || p.price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {showDropdown && searchResults.length === 0 && searchQuery.trim() && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    left: 0,
+                                    right: 0,
+                                    background: '#fff',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: 8,
+                                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                                    padding: '12px',
+                                    color: '#6b7280',
+                                    fontSize: 12.5,
+                                    textAlign: 'center',
+                                    zIndex: 50,
+                                    marginTop: 4
+                                }}>
+                                    No products found matching "{searchQuery}"
+                                </div>
+                            )}
                         </div>
+
+                        {/* Barcode Standard & Label Size */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                             <div>
                                 <label style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Barcode Standard</label>
-                                <select style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, background: '#fff' }}>
-                                    <option>EAN-13 (Standard Retail)</option>
-                                    <option>Code 128</option>
-                                    <option>QR Code (GST e-Invoice)</option>
+                                <select
+                                    value={barcodeStandard}
+                                    onChange={e => setBarcodeStandard(e.target.value)}
+                                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, background: '#fff' }}
+                                >
+                                    <option value="EAN-13 (Standard Retail)">EAN-13 (Standard Retail)</option>
+                                    <option value="Code 128">Code 128</option>
+                                    <option value="QR Code (GST e-Invoice)">QR Code (GST e-Invoice)</option>
                                 </select>
                             </div>
                             <div>
                                 <label style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Label Size</label>
-                                <select style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, background: '#fff' }}>
-                                    <option>50mm x 25mm (Thermal)</option>
-                                    <option>38mm x 25mm (Standard)</option>
-                                    <option>A4 Sheet (24 labels/sheet)</option>
+                                <select
+                                    value={labelSize}
+                                    onChange={e => setLabelSize(e.target.value)}
+                                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, background: '#fff' }}
+                                >
+                                    <option value="50mm x 25mm (Thermal)">50mm x 25mm (Thermal)</option>
+                                    <option value="38mm x 25mm (Standard)">38mm x 25mm (Standard)</option>
+                                    <option value="A4 Sheet (24 labels/sheet)">A4 Sheet (24 labels/sheet)</option>
                                 </select>
                             </div>
                         </div>
+
+                        {/* Copies to Print */}
                         <div>
                             <label style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Copies to Print</label>
-                            <input type="number" defaultValue="20" style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13 }} />
+                            <input
+                                type="number"
+                                min="1"
+                                max="1000"
+                                value={copies}
+                                onChange={e => setCopies(e.target.value)}
+                                style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
+                            />
                         </div>
-                        <button style={{
-                            marginTop: 10, background: '#6366f1', color: '#fff', border: 'none', padding: '12px',
-                            borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-                        }}>
-                            <BsUpcScan size={18} /> Generate & Preview Labels
+
+                        {/* Generate & Preview Labels Button */}
+                        <button
+                            type="button"
+                            disabled={isGenerating || !selectedProduct}
+                            onClick={handleGenerateAndPreview}
+                            style={{
+                                marginTop: 10,
+                                background: '#6366f1',
+                                color: '#fff',
+                                border: 'none',
+                                padding: '12px',
+                                borderRadius: 8,
+                                fontWeight: 700,
+                                fontSize: 14,
+                                cursor: isGenerating || !selectedProduct ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: 8,
+                                opacity: isGenerating ? 0.7 : 1
+                            }}
+                        >
+                            <BsUpcScan size={18} /> {isGenerating ? 'Generating...' : 'Generate & Preview Labels'}
                         </button>
                     </div>
                 </div>
 
+                {/* Live Label Preview */}
                 <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Live Label Preview</h3>
                     <div style={{
                         border: '2px dashed #cbd5e1', borderRadius: 10, padding: 20, textAlign: 'center',
                         background: '#f8fafc', minHeight: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
                     }}>
-                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', maxWidth: 280 }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', margin: 0 }}>RetailOS Store</p>
-                            <p style={{ fontSize: 13, fontWeight: 800, color: '#111827', margin: '4px 0' }}>Classic Polo T-Shirt</p>
-                            <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 8px 0' }}>Size: L | Color: Navy Blue</p>
-                            <div style={{ background: '#1e293b', height: 42, width: 200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', letterSpacing: 4, fontFamily: 'monospace', fontSize: 15 }}>
-                                ||||| | |||| |||
+                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', maxWidth: 280, width: '100%', boxSizing: 'border-box' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', margin: 0 }}>
+                                {previewStore}
+                            </p>
+                            <p style={{ fontSize: 13, fontWeight: 800, color: '#111827', margin: '4px 0', wordBreak: 'break-word' }}>
+                                {previewProductName}
+                            </p>
+                            <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 8px 0', wordBreak: 'break-word' }}>
+                                {previewSubtitle}
+                            </p>
+
+                            {/* Barcode Graphic */}
+                            <div style={{ minHeight: 46, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '6px 0' }}>
+                                {previewBarcodeImg ? (
+                                    <img
+                                        src={previewBarcodeImg}
+                                        alt={`Barcode ${previewBarcodeNumber}`}
+                                        style={{ height: isQR ? 64 : 44, width: 'auto', maxWidth: '100%', objectFit: 'contain' }}
+                                    />
+                                ) : (
+                                    <div style={{
+                                        padding: '10px 14px',
+                                        background: '#f1f5f9',
+                                        borderRadius: 6,
+                                        color: '#64748b',
+                                        fontSize: 12,
+                                        fontWeight: 500,
+                                        textAlign: 'center',
+                                        border: '1px dashed #cbd5e1'
+                                    }}>
+                                        {selectedProduct ? 'Barcode not generated yet • Click "Generate & Preview Labels"' : 'Select a product to view barcode'}
+                                    </div>
+                                )}
                             </div>
-                            <p style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color: '#334155', margin: '4px 0 0 0' }}>8901234567890</p>
-                            <p style={{ fontSize: 15, fontWeight: 900, color: '#111827', margin: '6px 0 0 0' }}>MRP: ₹1,299.00 <span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>(Incl. of GST)</span></p>
+
+                            <p style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color: '#334155', margin: '4px 0 0 0' }}>
+                                {previewBarcodeNumber || (selectedProduct ? 'Pending Generation' : '—')}
+                            </p>
+                            <p style={{ fontSize: 15, fontWeight: 900, color: '#111827', margin: '6px 0 0 0' }}>
+                                MRP: ₹{previewMrp} <span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>(Incl. of GST)</span>
+                            </p>
                         </div>
+
+                        {/* Quick actions for Live Label Preview */}
+                        {selectedProduct && previewBarcodeNumber && (
+                            <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => handlePrintWithCopies(1)}
+                                    disabled={isPrinting}
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5
+                                    }}
+                                >
+                                    <BsPrinter size={13} /> Print Single Label
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadBarcode}
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5
+                                    }}
+                                >
+                                    <BsImage size={13} /> Download Barcode (PNG)
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

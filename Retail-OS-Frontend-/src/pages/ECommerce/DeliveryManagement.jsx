@@ -35,6 +35,9 @@ import {
     deleteDeliveryPartner,
     uploadServiceability,
     checkPincodeServiceability,
+    getThermalDeliveryLabel,
+    recordFailedDeliveryAttempt,
+    collectDeliveryCOD,
 } from '../../services/deliveryService';
 
 import { getOrders } from '../../services/orderService';
@@ -491,6 +494,206 @@ const CancelDeliveryModal = ({ delivery, onClose, onSuccess }) => {
 };
 
 // ==========================================
+// MODAL 4B: RECORD FAILED DELIVERY ATTEMPT
+// ==========================================
+const FailedAttemptModal = ({ delivery, onClose, onSuccess }) => {
+    const [reason, setReason] = useState('Customer Not Available');
+    const [customReason, setCustomReason] = useState('');
+    const [remarks, setRemarks] = useState('');
+    const [rescheduleDate, setRescheduleDate] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const failureReasons = [
+        'Customer Not Available',
+        'Customer Refused Delivery',
+        'Premises Closed / Locked',
+        'Incorrect / Incomplete Address',
+        'Customer Requested Reschedule',
+        'Cash / Payment Not Ready (COD)',
+        'Delivery Zone Restricted',
+        'Other Reason',
+    ];
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        const selectedReason = reason === 'Other Reason' ? customReason.trim() : reason;
+        if (!selectedReason || selectedReason.length < 3) {
+            setError('Please provide a valid failure reason (minimum 3 characters).');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+        try {
+            const payload = {
+                reason: selectedReason,
+                remarks: remarks.trim() || undefined,
+                reschedule_date: rescheduleDate ? new Date(rescheduleDate).toISOString() : undefined,
+            };
+            const res = await recordFailedDeliveryAttempt(delivery.id, payload);
+            onSuccess(res?.message || `Failed attempt recorded for shipment #${delivery.id}`);
+            onClose();
+        } catch (err) {
+            setError(err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to record failed attempt.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose} style={{ zIndex: 1200 }}>
+            <div className="ec-modal" style={{ maxWidth: 460 }} onClick={e => e.stopPropagation()}>
+                <div className="ec-modal-header">
+                    <div>
+                        <h2 className="ec-modal-title">Record Failed Attempt</h2>
+                        <p className="ec-modal-sub">Log delivery attempt exception for shipment #{delivery?.id}</p>
+                    </div>
+                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+                </div>
+                {error && <div className="ec-form-error" style={{ margin: '14px 20px 0' }}>{error}</div>}
+                <form onSubmit={handleSubmit} style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div>
+                        <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                            Failure Reason <span style={{ color: '#ef4444' }}>*</span>
+                        </label>
+                        <select
+                            className="ec-input"
+                            value={reason}
+                            onChange={e => setReason(e.target.value)}
+                            required
+                        >
+                            {failureReasons.map(r => (
+                                <option key={r} value={r}>{r}</option>
+                            ))}
+                        </select>
+                    </div>
+                    {reason === 'Other Reason' && (
+                        <div>
+                            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                                Specify Reason <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <input
+                                type="text"
+                                className="ec-input"
+                                placeholder="Describe why delivery could not be completed"
+                                value={customReason}
+                                onChange={e => setCustomReason(e.target.value)}
+                                required
+                            />
+                        </div>
+                    )}
+                    <div>
+                        <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                            Additional Remarks (Optional)
+                        </label>
+                        <textarea
+                            className="ec-input"
+                            rows={3}
+                            placeholder="Add driver notes or customer contact details..."
+                            value={remarks}
+                            onChange={e => setRemarks(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                            Reschedule Date &amp; Time (Optional)
+                        </label>
+                        <input
+                            type="datetime-local"
+                            className="ec-input"
+                            value={rescheduleDate}
+                            onChange={e => setRescheduleDate(e.target.value)}
+                        />
+                    </div>
+                    <div className="ec-modal-footer" style={{ padding: '14px 0 0', margin: 0 }}>
+                        <button type="button" className="adm-btn-secondary" onClick={onClose} disabled={loading}>
+                            Cancel
+                        </button>
+                        <button type="submit" className="adm-btn-primary" style={{ background: '#ea580c', borderColor: '#ea580c' }} disabled={loading}>
+                            {loading ? 'Recording...' : 'Record Failed Attempt'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+// ==========================================
+// MODAL 4C: COLLECT COD PAYMENT
+// ==========================================
+const CollectCODModal = ({ delivery, onClose, onSuccess }) => {
+    const [amount, setAmount] = useState(delivery?.cod_amount ? String(delivery.cod_amount) : '');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleCollect = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
+        try {
+            const payload = amount !== '' ? { amount: parseFloat(amount) } : {};
+            const res = await collectDeliveryCOD(delivery.id, payload);
+            onSuccess(res?.message || `COD payment collected for shipment #${delivery.id}`);
+            onClose();
+        } catch (err) {
+            setError(err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to collect COD payment.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose} style={{ zIndex: 1200 }}>
+            <div className="ec-modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+                <div className="ec-modal-header">
+                    <div>
+                        <h2 className="ec-modal-title">Collect COD Payment</h2>
+                        <p className="ec-modal-sub">Confirm Cash On Delivery receipt for shipment #{delivery?.id}</p>
+                    </div>
+                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+                </div>
+                {error && <div className="ec-form-error" style={{ margin: '14px 20px 0' }}>{error}</div>}
+                <form onSubmit={handleCollect} style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: 12, color: '#065f46', fontWeight: 600 }}>Total COD Due</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#047857', marginTop: 2 }}>
+                            {fmtCurrency(delivery?.cod_amount || 0)}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>
+                            Order #{delivery?.order_id} • Customer: {delivery?.recipient_name || 'Retail Customer'}
+                        </div>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>
+                            Amount Collected (₹)
+                        </label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="ec-input"
+                            value={amount}
+                            onChange={e => setAmount(e.target.value)}
+                            placeholder={String(delivery?.cod_amount || 0)}
+                        />
+                    </div>
+                    <div className="ec-modal-footer" style={{ padding: '14px 0 0', margin: 0 }}>
+                        <button type="button" className="adm-btn-secondary" onClick={onClose} disabled={loading}>
+                            Cancel
+                        </button>
+                        <button type="submit" className="adm-btn-primary" style={{ background: '#059669', borderColor: '#059669' }} disabled={loading}>
+                            {loading ? 'Collecting...' : 'Confirm COD Received'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+// ==========================================
 // MODAL 5: SHIPPING LABEL (FETCHED FROM BACKEND)
 // ==========================================
 const ShippingLabelModal = ({ deliveryId, onClose }) => {
@@ -624,13 +827,62 @@ const ShippingLabelModal = ({ deliveryId, onClose }) => {
                             </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: 10 }}>
-                            <button type="button" className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>
-                                Close
-                            </button>
-                            <button type="button" className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center', gap: 6 }} onClick={handlePrint}>
-                                <BsPrinter size={14} /> Print Label Now
-                            </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button type="button" className="adm-btn-primary" style={{ flex: 1, justifyContent: 'center', gap: 6 }} onClick={handlePrint}>
+                                    <BsPrinter size={14} /> Print Standard
+                                </button>
+                                <button
+                                    type="button"
+                                    className="adm-btn-primary"
+                                    style={{ flex: 1, justifyContent: 'center', gap: 6, background: '#4f46e5', borderColor: '#4f46e5' }}
+                                    onClick={async () => {
+                                        try {
+                                            const res = await getThermalDeliveryLabel(deliveryId, { mode: 'view' });
+                                            const htmlContent = typeof res === 'string' ? res : (res?.html || '');
+                                            const pw = window.open('', '_blank', 'width=450,height=650');
+                                            if (pw) {
+                                                pw.document.write(htmlContent);
+                                                pw.document.close();
+                                                pw.focus();
+                                            } else {
+                                                window.open(`https://api-testing.myretailos.com/api/v1/delivery/${deliveryId}/label/thermal?mode=view`, '_blank');
+                                            }
+                                        } catch (err) {
+                                            setError(err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to load thermal label.');
+                                        }
+                                    }}
+                                >
+                                    <BsLightningChargeFill size={13} /> Thermal (4x6")
+                                </button>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button
+                                    type="button"
+                                    className="adm-btn-secondary"
+                                    style={{ flex: 1, justifyContent: 'center', gap: 6 }}
+                                    onClick={async () => {
+                                        try {
+                                            const blob = await getThermalDeliveryLabel(deliveryId, { mode: 'pdf' });
+                                            const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+                                            const link = document.createElement('a');
+                                            link.href = url;
+                                            link.setAttribute('download', `shipping_label_${deliveryId}.pdf`);
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            link.remove();
+                                            window.URL.revokeObjectURL(url);
+                                        } catch (err) {
+                                            setError(err.response?.data?.detail || err.response?.data?.message || err.message || 'Failed to download thermal PDF.');
+                                        }
+                                    }}
+                                >
+                                    <BsDownload size={13} /> Download PDF
+                                </button>
+                                <button type="button" className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>
+                                    Close
+                                </button>
+                            </div>
                         </div>
                     </div>
                 ) : null}
@@ -642,7 +894,7 @@ const ShippingLabelModal = ({ deliveryId, onClose }) => {
 // ==========================================
 // MODAL 6: DELIVERY DETAIL, TRACKING & HISTORY DRAWER
 // ==========================================
-const DeliveryDetailDrawer = ({ deliveryId, onClose, onStatusChanged, onOpenAssignPartner, onOpenUpdateAddress, onOpenCancel, onOpenShippingLabel }) => {
+const DeliveryDetailDrawer = ({ deliveryId, onClose, onStatusChanged, onOpenAssignPartner, onOpenUpdateAddress, onOpenCancel, onOpenShippingLabel, onOpenFailedAttempt, onOpenCollectCOD }) => {
     const [delivery, setDelivery] = useState(null);
     const [tracking, setTracking] = useState(null);
     const [history, setHistory] = useState([]);
@@ -834,31 +1086,75 @@ const DeliveryDetailDrawer = ({ deliveryId, onClose, onStatusChanged, onOpenAssi
 
                             {/* Quick Actions Bar */}
                             {!isTerminal && (
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
                                     <button
                                         type="button"
                                         className="adm-btn-secondary"
-                                        style={{ fontSize: 11, padding: '8px 6px', justifyContent: 'center' }}
+                                        style={{ fontSize: 11, padding: '8px 4px', justifyContent: 'center' }}
                                         onClick={() => onOpenAssignPartner(delivery)}
+                                        title="Assign Logistics Partner"
                                     >
-                                        <BsPerson size={12} /> Assign Partner
+                                        <BsPerson size={12} /> Partner
                                     </button>
                                     <button
                                         type="button"
                                         className="adm-btn-secondary"
-                                        style={{ fontSize: 11, padding: '8px 6px', justifyContent: 'center' }}
+                                        style={{ fontSize: 11, padding: '8px 4px', justifyContent: 'center' }}
                                         onClick={() => onOpenUpdateAddress(delivery)}
+                                        title="Update Destination Address"
                                     >
-                                        <BsGeoAlt size={12} /> Update Address
+                                        <BsGeoAlt size={12} /> Address
                                     </button>
                                     <button
                                         type="button"
                                         className="adm-btn-secondary"
-                                        style={{ fontSize: 11, padding: '8px 6px', justifyContent: 'center', color: '#dc2626' }}
+                                        style={{ fontSize: 11, padding: '8px 4px', justifyContent: 'center', color: '#ea580c' }}
+                                        onClick={() => onOpenFailedAttempt(delivery)}
+                                        title="Record Failed Delivery Attempt"
+                                    >
+                                        <BsExclamationTriangle size={12} /> Failed
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary"
+                                        style={{ fontSize: 11, padding: '8px 4px', justifyContent: 'center', color: '#dc2626' }}
                                         onClick={() => onOpenCancel(delivery)}
+                                        title="Cancel Delivery"
                                     >
                                         <BsXCircleFill size={12} /> Cancel
                                     </button>
+                                </div>
+                            )}
+
+                            {/* Cash On Delivery (COD) Card */}
+                            {delivery.is_cod && (
+                                <div style={{ background: delivery.cod_collected ? '#ecfdf5' : '#fffbeb', border: `1px solid ${delivery.cod_collected ? '#a7f3d0' : '#fde68a'}`, borderRadius: 14, padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <div>
+                                        <span style={{ fontSize: 10, fontWeight: 700, color: delivery.cod_collected ? '#065f46' : '#92400e', textTransform: 'uppercase' }}>Cash On Delivery (COD)</span>
+                                        <p style={{ fontSize: 15, fontWeight: 800, color: delivery.cod_collected ? '#047857' : '#b45309', margin: '2px 0 0 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            {fmtCurrency(delivery.cod_amount || 0)}
+                                            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: delivery.cod_collected ? '#d1fae5' : '#fef3c7', color: delivery.cod_collected ? '#065f46' : '#b45309' }}>
+                                                {delivery.cod_collected ? 'Collected' : 'Pending'}
+                                            </span>
+                                        </p>
+                                    </div>
+                                    {!delivery.cod_collected && delivery.status !== 'cancelled' && (
+                                        <button
+                                            type="button"
+                                            className="adm-btn-primary"
+                                            style={{ fontSize: 11, padding: '6px 12px', background: '#059669', borderColor: '#059669' }}
+                                            onClick={() => onOpenCollectCOD(delivery)}
+                                        >
+                                            <BsCheckCircleFill size={12} /> Collect COD
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Attempt Exception Notice */}
+                            {delivery.attempt_count > 0 && (
+                                <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#9a3412' }}>
+                                    <strong>Delivery Attempt #{delivery.attempt_count}:</strong> {delivery.failure_reason || 'Previous attempt exception logged'}
                                 </div>
                             )}
 
@@ -1438,6 +1734,8 @@ const DeliveryManagement = () => {
     const [assignPartnerTarget, setAssignPartnerTarget] = useState(null);
     const [updateAddressTarget, setUpdateAddressTarget] = useState(null);
     const [cancelDeliveryTarget, setCancelDeliveryTarget] = useState(null);
+    const [failedAttemptTarget, setFailedAttemptTarget] = useState(null);
+    const [collectCodTarget, setCollectCodTarget] = useState(null);
     const [printLabelDeliveryId, setPrintLabelDeliveryId] = useState(null);
     const [drawerDeliveryId, setDrawerDeliveryId] = useState(null);
 
@@ -1981,6 +2279,19 @@ const DeliveryManagement = () => {
                                                 </td>
                                                 <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                                                        {d.is_cod && !d.cod_collected && d.status !== 'cancelled' && (
+                                                            <button
+                                                                type="button"
+                                                                title="Collect COD Payment"
+                                                                onClick={() => setCollectCodTarget(d)}
+                                                                style={{
+                                                                    padding: '4px 8px', borderRadius: 6, border: '1px solid #10b981', background: '#ecfdf5', color: '#047857',
+                                                                    fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4
+                                                                }}
+                                                            >
+                                                                <BsCheckCircleFill size={11} /> COD
+                                                            </button>
+                                                        )}
                                                         <button
                                                             type="button"
                                                             title={d.status === 'cancelled' ? 'Shipping label unavailable for cancelled delivery' : 'Print Shipping Label'}
@@ -2386,6 +2697,32 @@ const DeliveryManagement = () => {
                 />
             )}
 
+            {/* Record Failed Attempt Modal */}
+            {failedAttemptTarget && (
+                <FailedAttemptModal
+                    delivery={failedAttemptTarget}
+                    onClose={() => setFailedAttemptTarget(null)}
+                    onSuccess={(msg) => {
+                        showNotification(msg);
+                        loadDeliveries();
+                        loadStats();
+                    }}
+                />
+            )}
+
+            {/* Collect COD Modal */}
+            {collectCodTarget && (
+                <CollectCODModal
+                    delivery={collectCodTarget}
+                    onClose={() => setCollectCodTarget(null)}
+                    onSuccess={(msg) => {
+                        showNotification(msg);
+                        loadDeliveries();
+                        loadStats();
+                    }}
+                />
+            )}
+
             {/* Printable Shipping Label Modal */}
             {printLabelDeliveryId && (
                 <ShippingLabelModal
@@ -2421,6 +2758,15 @@ const DeliveryManagement = () => {
                     onOpenShippingLabel={(id) => {
                         setDrawerDeliveryId(null);
                         setPrintLabelDeliveryId(id);
+                    }}
+                    onOpenFailedAttempt={(del) => {
+                        if (isTerminalDeliveryStatus(del?.status)) return;
+                        setDrawerDeliveryId(null);
+                        setFailedAttemptTarget(del);
+                    }}
+                    onOpenCollectCOD={(del) => {
+                        setDrawerDeliveryId(null);
+                        setCollectCodTarget(del);
                     }}
                 />
             )}
