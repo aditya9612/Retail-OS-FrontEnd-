@@ -8,6 +8,7 @@ import {
   updatePurchaseOrder,
   updatePurchaseOrderStatus,
   receivePurchaseOrder,
+  deletePurchaseOrder,
 } from "../../api/purchaseOrdersApi";
 
 import { getSuppliers, createSupplier } from "../../api/supplierApi";
@@ -40,6 +41,9 @@ import {
   BsClockHistory,
   BsXCircleFill,
   BsCart3,
+  BsTrash,
+  BsArrowRepeat,
+  BsX,
 } from "react-icons/bs";
 
 /* =====================================================
@@ -81,6 +85,66 @@ const getDisplayStatus = (status) => {
   if (!value) return "Pending";
 
   return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
+/* =====================================================
+   ERROR MESSAGE EXTRACTOR
+===================================================== */
+const extractErrorMessage = (err, fallback = "An error occurred.") => {
+  if (!err) return fallback;
+  const data = err?.response?.data;
+
+  // 1. Direct message (e.g. 409 Conflict: { success: false, message: "..." })
+  if (typeof data?.message === "string" && data.message.trim()) {
+    return data.message.trim();
+  }
+
+  // 2. Detail string or object (FastAPI / standard backend)
+  if (typeof data?.detail === "string" && data.detail.trim()) {
+    return data.detail.trim();
+  }
+  if (data?.detail && typeof data.detail.message === "string") {
+    return data.detail.message.trim();
+  }
+
+  // 3. 422 Validation Error array format (FastAPI: detail = [{ loc, msg, type }])
+  if (Array.isArray(data?.detail)) {
+    const formatted = data.detail
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item?.msg) {
+          const loc = Array.isArray(item.loc)
+            ? item.loc.filter((part) => part !== "body").join(".")
+            : "";
+          return loc ? `${loc}: ${item.msg}` : item.msg;
+        }
+        return JSON.stringify(item);
+      })
+      .filter(Boolean)
+      .join(" | ");
+    if (formatted) return formatted;
+  }
+
+  // 4. Array of errors
+  if (Array.isArray(data?.errors) && data.errors.length > 0) {
+    return data.errors
+      .map((e) =>
+        typeof e === "string" ? e : e?.message || e?.msg || JSON.stringify(e)
+      )
+      .join(" | ");
+  }
+
+  // 5. Generic error key
+  if (typeof data?.error === "string" && data.error.trim()) {
+    return data.error.trim();
+  }
+
+  // 6. Network / Axios error message
+  if (err?.message) {
+    return err.message;
+  }
+
+  return fallback;
 };
 
 /* =====================================================
@@ -1187,10 +1251,16 @@ const Purchases = () => {
   const [error, setError] =
     useState("");
 
+  const [success, setSuccess] =
+    useState("");
+
   const [search, setSearch] =
     useState("");
 
   const [filterStatus, setFilterStatus] =
+    useState("All");
+
+  const [supplierFilter, setSupplierFilter] =
     useState("All");
 
   const [page, setPage] =
@@ -1198,6 +1268,15 @@ const Purchases = () => {
 
   const [modal, setModal] =
     useState(null);
+
+  const [purchaseToDelete, setPurchaseToDelete] =
+    useState(null);
+
+  const [deletingId, setDeletingId] =
+    useState(null);
+
+  const [deleteError, setDeleteError] =
+    useState("");
 
   /* =====================================================
      NORMALIZE SINGLE PURCHASE RESPONSE
@@ -1623,162 +1702,173 @@ const Purchases = () => {
         );
       }
     };
-
   /* =====================================================
      FETCH
   ===================================================== */
 
+  const fetchPurchases = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const suppliersData = await getSuppliers();
+
+      console.log("Suppliers API:", suppliersData);
+
+      const supplierList = Array.isArray(suppliersData)
+        ? suppliersData
+        : suppliersData?.data || [];
+
+      setSuppliers(supplierList);
+
+      const data = await getPurchaseOrders(1, PURCHASE_FETCH_SIZE);
+
+      console.log("Purchase Orders API:", data);
+
+      const purchaseList = Array.isArray(data) ? data : data?.data || [];
+
+      const mappedPurchases = purchaseList.map((po) => ({
+        backendId: po.id,
+
+        id: po.po_number || `PO-${po.id}`,
+
+        supplierId: po.supplier_id,
+
+        supplier:
+          supplierList.find(
+            (supplier) => Number(supplier.id) === Number(po.supplier_id)
+          )?.name || `Supplier #${po.supplier_id}`,
+
+        storeId: po.store_id ?? "",
+
+        // Invoice number must come only from invoice fields.
+        invoiceNumber: po.invoice_number || po.invoice_no || "-",
+
+        purchaseDate: po.created_at || "",
+
+        items:
+          po.items?.reduce(
+            (sum, item) => sum + Number(item.quantity || 0),
+            0
+          ) || 0,
+
+        subtotal: Number(po.total_amount || 0),
+
+        gst: 0,
+        discount: 0,
+
+        total: Number(po.total_amount || 0),
+
+        paymentStatus:
+          po.payment_status ||
+          po.paymentStatus ||
+          (po.status === "received" ? "Paid" : "Pending"),
+
+        status: getDisplayStatus(po.status),
+
+        backendStatus: String(po.status || "").toLowerCase(),
+
+        // Keep the complete line-item objects for View details.
+        itemDetails: getPurchaseItems(po),
+
+        rawData: po,
+
+        remarks: po.remarks || "",
+      }));
+
+      setPurchases(mappedPurchases);
+    } catch (err) {
+      console.error("Purchase Orders API Error:", err);
+
+      console.error("Response:", err?.response?.data);
+
+      setError("Failed to load purchase orders");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchPurchases =
-      async () => {
-        try {
-          setLoading(true);
-          setError("");
-
-          const suppliersData =
-            await getSuppliers();
-
-          console.log(
-            "Suppliers API:",
-            suppliersData
-          );
-
-          const supplierList =
-            Array.isArray(
-              suppliersData
-            )
-              ? suppliersData
-              : suppliersData?.data ||
-                [];
-
-          setSuppliers(
-            supplierList
-          );
-
-          const data =
-            await getPurchaseOrders(
-              1,
-              PURCHASE_FETCH_SIZE
-            );
-
-          console.log(
-            "Purchase Orders API:",
-            data
-          );
-
-          const purchaseList =
-            Array.isArray(data)
-              ? data
-              : data?.data || [];
-
-          const mappedPurchases =
-            purchaseList.map((po) => ({
-              backendId: po.id,
-
-              id:
-                po.po_number ||
-                `PO-${po.id}`,
-
-              supplierId:
-                po.supplier_id,
-
-              supplier:
-                supplierList.find(
-                  (supplier) =>
-                    Number(
-                      supplier.id
-                    ) ===
-                    Number(
-                      po.supplier_id
-                    )
-                )?.name ||
-                `Supplier #${po.supplier_id}`,
-
-              storeId:
-                po.store_id ?? "",
-
-              // Invoice number must come only from invoice fields.
-              // Do not fall back to PO number/ID because that makes
-              // Purchase Order Number and Invoice display the same value.
-              invoiceNumber:
-                po.invoice_number ||
-                po.invoice_no ||
-                "-",
-
-              purchaseDate:
-                po.created_at || "",
-
-              items:
-                po.items?.reduce(
-                  (sum, item) =>
-                    sum +
-                    Number(
-                      item.quantity ||
-                        0
-                    ),
-                  0
-                ) || 0,
-
-              subtotal: Number(
-                po.total_amount || 0
-              ),
-
-              gst: 0,
-              discount: 0,
-
-              total: Number(
-                po.total_amount || 0
-              ),
-
-              paymentStatus:
-                po.payment_status ||
-                po.paymentStatus ||
-                (po.status ===
-                "received"
-                  ? "Paid"
-                  : "Pending"),
-
-              status:
-                getDisplayStatus(po.status),
-
-              backendStatus:
-                String(
-                  po.status || ""
-                ).toLowerCase(),
-
-              // Keep the complete line-item objects for View details.
-              itemDetails: getPurchaseItems(po),
-
-              rawData: po,
-
-              remarks:
-                po.remarks || "",
-            }));
-
-          setPurchases(
-            mappedPurchases
-          );
-        } catch (err) {
-          console.error(
-            "Purchase Orders API Error:",
-            err
-          );
-
-          console.error(
-            "Response:",
-            err?.response?.data
-          );
-
-          setError(
-            "Failed to load purchase orders"
-          );
-        } finally {
-          setLoading(false);
-        }
-      };
-
     fetchPurchases();
   }, []);
+
+  /* =====================================================
+     DELETE PURCHASE ORDER
+  ===================================================== */
+
+  const handleDeleteClick = (purchase) => {
+    setDeleteError("");
+    setPurchaseToDelete(purchase);
+  };
+
+  const handleCancelDelete = () => {
+    if (deletingId !== null) return;
+    setPurchaseToDelete(null);
+    setDeleteError("");
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!purchaseToDelete) return;
+
+    const actualId =
+      purchaseToDelete.backendId ??
+      purchaseToDelete?.rawData?.id ??
+      purchaseToDelete.id;
+
+    if (!actualId) {
+      setDeleteError("Purchase order ID is required for deletion.");
+      return;
+    }
+
+    try {
+      setDeletingId(actualId);
+      setDeleteError("");
+
+      const response = await deletePurchaseOrder(actualId);
+
+      const successMsg =
+        response?.message ||
+        response?.data?.message ||
+        "Purchase order deleted successfully";
+
+      setSuccess(successMsg);
+      setError("");
+
+      // Remove the deleted order from the UI only after successful API confirmation
+      setPurchases((prev) =>
+        prev.filter(
+          (p) =>
+            p.backendId !== purchaseToDelete.backendId &&
+            p.id !== purchaseToDelete.id
+        )
+      );
+
+      // Close the confirmation modal
+      setPurchaseToDelete(null);
+
+      // Refresh purchase orders list and related statistics
+      await fetchPurchases();
+    } catch (err) {
+      console.error("Delete Purchase Order Error:", err);
+
+      const errorMsg = extractErrorMessage(
+        err,
+        "Failed to delete purchase order."
+      );
+
+      // 409 Conflict / 422 / other API errors:
+      // - Display exact backend error message in UI
+      // - Do not remove purchase order from table
+      // - Do not show success notification
+      // - Keep inventory records unchanged
+      // - Prevent repeated requests while deletion is in progress
+      setDeleteError(errorMsg);
+      setError(errorMsg);
+      setSuccess("");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   /* =====================================================
      SAVE
@@ -2293,9 +2383,10 @@ const Purchases = () => {
   const filtered =
     purchases.filter((purchase) => {
       const q =
-        search.toLowerCase();
+        search.toLowerCase().trim();
 
       const matchSearch =
+        !q ||
         purchase.id
           ?.toLowerCase()
           .includes(q) ||
@@ -2311,11 +2402,29 @@ const Purchases = () => {
         purchase.status ===
           filterStatus;
 
+      const matchSupplier =
+        supplierFilter === "All" ||
+        String(purchase.supplierId) === String(supplierFilter) ||
+        purchase.supplier === supplierFilter;
+
       return (
         matchSearch &&
-        matchStatus
+        matchStatus &&
+        matchSupplier
       );
     });
+
+  const isFilterActive =
+    Boolean(search.trim()) ||
+    filterStatus !== "All" ||
+    supplierFilter !== "All";
+
+  const handleResetFilters = () => {
+    setSearch("");
+    setFilterStatus("All");
+    setSupplierFilter("All");
+    setPage(1);
+  };
 
   const totalPages =
     Math.max(
@@ -2370,12 +2479,20 @@ const Purchases = () => {
         p.status === "Cancelled"
     ).length;
 
+  const STATUS_TABS = [
+    { key: "All", label: "All Purchases", count: purchases.length, dotColor: "#6366f1" },
+    { key: "Pending", label: "Pending", count: pendingCount, dotColor: "#f59e0b" },
+    { key: "Received", label: "Received", count: receivedCount, dotColor: "#10b981" },
+    { key: "Cancelled", label: "Cancelled", count: cancelledCount, dotColor: "#ef4444" },
+  ];
+
   const kpis = [
     {
       label: "Total Purchases",
       value: purchases.length,
       color: "#6366f1",
       icon: "🛒",
+      filterStatus: "All",
     },
 
     {
@@ -2383,6 +2500,7 @@ const Purchases = () => {
       value: receivedCount,
       color: "#10b981",
       icon: "✅",
+      filterStatus: "Received",
     },
 
     {
@@ -2390,6 +2508,7 @@ const Purchases = () => {
       value: pendingCount,
       color: "#f59e0b",
       icon: "⏳",
+      filterStatus: "Pending",
     },
 
     {
@@ -2397,6 +2516,7 @@ const Purchases = () => {
       value: cancelledCount,
       color: "#ef4444",
       icon: "❌",
+      filterStatus: "Cancelled",
     },
 
     {
@@ -2406,6 +2526,7 @@ const Purchases = () => {
       ),
       color: "#0ea5e9",
       icon: "💰",
+      filterStatus: null,
     },
   ];
 
@@ -2495,142 +2616,233 @@ const Purchases = () => {
             gap: 14,
           }}
         >
-          {kpis.map((k, i) => (
-            <div
-              key={i}
-              className="adm-kpi-card"
-              style={{
-                padding:
-                  "14px 18px",
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 22,
-                }}
-              >
-                {k.icon}
-              </span>
+          {kpis.map((k, i) => {
+            const isClickable = Boolean(k.filterStatus);
+            const isSelected =
+              k.filterStatus && filterStatus === k.filterStatus;
 
-              <p
+            return (
+              <div
+                key={i}
+                className={`adm-kpi-card ${
+                  isClickable ? "adm-kpi-card--clickable" : ""
+                } ${isSelected ? "adm-kpi-card--selected" : ""}`}
                 style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color:
-                    "#9ca3af",
-                  textTransform:
-                    "uppercase",
-                  letterSpacing:
-                    "0.05em",
-                  marginTop: 8,
+                  padding: "14px 18px",
+                  cursor: isClickable ? "pointer" : "default",
                 }}
+                onClick={() => {
+                  if (k.filterStatus) {
+                    setFilterStatus(k.filterStatus);
+                    setPage(1);
+                  }
+                }}
+                role={isClickable ? "button" : undefined}
+                tabIndex={isClickable ? 0 : undefined}
+                onKeyDown={(e) => {
+                  if (isClickable && (e.key === "Enter" || e.key === " ")) {
+                    e.preventDefault();
+                    setFilterStatus(k.filterStatus);
+                    setPage(1);
+                  }
+                }}
+                title={isClickable ? `Filter by ${k.label}` : undefined}
               >
-                {k.label}
-              </p>
+                <span
+                  style={{
+                    fontSize: 22,
+                  }}
+                >
+                  {k.icon}
+                </span>
 
-              <p
-                style={{
-                  fontSize:
-                    k.label === "Purchase Value"
-                      ? 16
-                      : 26,
-                  fontWeight: 800,
-                  color: k.color,
-                  marginTop: 4,
-                }}
-              >
-                {k.value}
-              </p>
-            </div>
-          ))}
+                <p
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#9ca3af",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.05em",
+                    marginTop: 8,
+                  }}
+                >
+                  {k.label}
+                </p>
+
+                <p
+                  style={{
+                    fontSize:
+                      k.label === "Purchase Value"
+                        ? 16
+                        : 26,
+                    fontWeight: 800,
+                    color: k.color,
+                    marginTop: 4,
+                  }}
+                >
+                  {k.value}
+                </p>
+              </div>
+            );
+          })}
         </div>
 
-        {/* SEARCH + FILTER */}
+        {/* STATUS TABS (COMPACT & RESPONSIVE) */}
 
         <div
-          style={{
-            background: "#fff",
-            border:
-              "1px solid #e8eaf0",
-            borderRadius: 12,
-            padding:
-              "14px 16px",
-            display: "flex",
-            gap: 12,
-            flexWrap:
-              "wrap",
-            alignItems:
-              "center",
-          }}
+          className="purchase-tabs-bar"
+          role="tablist"
+          aria-label="Filter purchases by status"
         >
-          <div
-            style={{
-              position:
-                "relative",
-              flex: 1,
-              minWidth: 220,
-            }}
-          >
-            <BsSearch
-              size={13}
-              style={{
-                position:
-                  "absolute",
-                left: 11,
-                top: "50%",
-                transform:
-                  "translateY(-50%)",
-                color:
-                  "#9ca3af",
-              }}
-            />
+          {STATUS_TABS.map((tab) => {
+            const isActive = filterStatus === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                className={`purchase-tab-btn ${
+                  isActive ? "purchase-tab-btn--active" : ""
+                }`}
+                onClick={() => {
+                  setFilterStatus(tab.key);
+                  setPage(1);
+                }}
+              >
+                <span
+                  className="purchase-tab-dot"
+                  style={{ backgroundColor: tab.dotColor }}
+                  aria-hidden="true"
+                />
+                <span className="purchase-tab-text">{tab.label}</span>
+                <span
+                  className={`purchase-tab-count ${
+                    isActive ? "purchase-tab-count--active" : ""
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-            <input
-              className="ec-input"
-              style={{
-                paddingLeft: 32,
-              }}
-              placeholder="Search purchase order number or supplier..."
-              value={search}
-              onChange={(e) => {
-                setSearch(
-                  e.target.value
-                );
-                setPage(1);
-              }}
-            />
+        {/* REARRANGED FILTER CONTROLS */}
+
+        <div className="purchase-filter-card">
+          {/* SEARCH FIELD */}
+          <div className="purchase-filter-group purchase-filter-search">
+            <label
+              className="purchase-filter-label"
+              htmlFor="purchase-search-input"
+            >
+              Search
+            </label>
+
+            <div className="purchase-search-input-wrap">
+              <BsSearch
+                size={13}
+                className="purchase-search-icon"
+                aria-hidden="true"
+              />
+
+              <input
+                id="purchase-search-input"
+                className="ec-input purchase-search-input"
+                placeholder="Search purchase order number, supplier, or invoice..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+              />
+
+              {search && (
+                <button
+                  type="button"
+                  className="purchase-search-clear-btn"
+                  onClick={() => {
+                    setSearch("");
+                    setPage(1);
+                  }}
+                  title="Clear search"
+                  aria-label="Clear search"
+                >
+                  <BsX size={14} />
+                </button>
+              )}
+            </div>
           </div>
 
-          <select
-            className="ec-input"
-            style={{
-              minWidth: 150,
-            }}
-            value={
-              filterStatus
-            }
-            onChange={(e) => {
-              setFilterStatus(
-                e.target.value
-              );
-              setPage(1);
-            }}
-          >
-            <option value="All">
-              All Status
-            </option>
+          {/* STATUS FILTER */}
+          <div className="purchase-filter-group purchase-filter-status">
+            <label
+              className="purchase-filter-label"
+              htmlFor="purchase-status-select"
+            >
+              Status
+            </label>
 
-            {Object.keys(
-              STATUS_CONFIG
-            ).map((status) => (
-              <option
-                key={status}
-                value={status}
-              >
-                {status}
-              </option>
-            ))}
-          </select>
+            <select
+              id="purchase-status-select"
+              className="ec-input purchase-select"
+              value={filterStatus}
+              onChange={(e) => {
+                setFilterStatus(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="All">All Statuses</option>
+              <option value="Pending">⏳ Pending</option>
+              <option value="Received">✅ Received</option>
+              <option value="Cancelled">❌ Cancelled</option>
+            </select>
+          </div>
+
+          {/* SUPPLIER FILTER */}
+          <div className="purchase-filter-group purchase-filter-supplier">
+            <label
+              className="purchase-filter-label"
+              htmlFor="purchase-supplier-select"
+            >
+              Supplier
+            </label>
+
+            <select
+              id="purchase-supplier-select"
+              className="ec-input purchase-select"
+              value={supplierFilter}
+              onChange={(e) => {
+                setSupplierFilter(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="All">All Suppliers</option>
+              {suppliers?.map((supplier) => (
+                <option
+                  key={supplier.id}
+                  value={String(supplier.id)}
+                >
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* RESET FILTER BUTTON */}
+          <div className="purchase-filter-group purchase-filter-reset">
+            <button
+              type="button"
+              className="purchase-reset-btn"
+              onClick={handleResetFilters}
+              disabled={!isFilterActive}
+              title="Reset all filters"
+            >
+              <BsArrowRepeat size={13} />
+              <span>Reset</span>
+            </button>
+          </div>
         </div>
 
         {/* TABLE */}
@@ -3059,6 +3271,43 @@ const Purchases = () => {
                           >
                             <BsCheckCircleFill size={14} />
                           </button>
+
+                          {/* DELETE */}
+
+                          <button
+                            type="button"
+                            className="adm-btn-secondary adm-btn-delete"
+                            style={{
+                              padding: "5px 9px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: isDraftPurchase(purchase) && deletingId !== (purchase.backendId ?? purchase?.rawData?.id ?? purchase.id)
+                                ? "pointer"
+                                : "not-allowed",
+                              opacity: isDraftPurchase(purchase) && deletingId !== (purchase.backendId ?? purchase?.rawData?.id ?? purchase.id)
+                                ? 1
+                                : 0.45,
+                            }}
+                            disabled={
+                              !isDraftPurchase(purchase) ||
+                              deletingId ===
+                                (purchase.backendId ??
+                                  purchase?.rawData?.id ??
+                                  purchase.id)
+                            }
+                            onClick={() =>
+                              handleDeleteClick(purchase)
+                            }
+                            title={
+                              isDraftPurchase(purchase)
+                                ? "Delete"
+                                : "Only draft orders can be deleted"
+                            }
+                            aria-label="Delete purchase order"
+                          >
+                            <BsTrash size={14} />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -3073,16 +3322,47 @@ const Purchases = () => {
                     <td
                       colSpan={10}
                       style={{
-                        padding: 30,
-                        textAlign:
-                          "center",
-                        color:
-                          "#9ca3af",
+                        padding: "36px 20px",
+                        textAlign: "center",
+                        color: "#6b7280",
                         fontSize: 13,
                       }}
                     >
-                      No purchase orders
-                      found.
+                      <p
+                        style={{
+                          margin: "0 0 6px",
+                          fontWeight: 600,
+                          color: "#374151",
+                          fontSize: 14,
+                        }}
+                      >
+                        No purchase orders found
+                      </p>
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 12,
+                          color: "#9ca3af",
+                        }}
+                      >
+                        {isFilterActive
+                          ? "Try adjusting your search query, status, or supplier filters."
+                          : "No purchases available."}
+                      </p>
+                      {isFilterActive && (
+                        <button
+                          type="button"
+                          className="purchase-reset-btn"
+                          onClick={handleResetFilters}
+                          style={{
+                            margin: "12px auto 0",
+                            display: "inline-flex",
+                          }}
+                        >
+                          <BsArrowRepeat size={13} />
+                          <span>Clear Filters</span>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )}
@@ -3251,6 +3531,121 @@ const Purchases = () => {
               setModal(null)
             }
           />
+        )}
+
+        {/* DELETE CONFIRMATION MODAL */}
+
+        {purchaseToDelete && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(15, 23, 42, 0.55)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: 20,
+              backdropFilter: "blur(3px)",
+            }}
+          >
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: 12,
+                maxWidth: 440,
+                width: "100%",
+                padding: "24px",
+                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 10px 0",
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "#111827",
+                }}
+              >
+                Delete Purchase Order
+              </h3>
+              <p
+                style={{
+                  margin: "0 0 16px 0",
+                  fontSize: 13.5,
+                  color: "#4b5563",
+                  lineHeight: 1.5,
+                }}
+              >
+                Are you sure you want to delete purchase order{" "}
+                <strong>
+                  {purchaseToDelete.poNumber ||
+                    purchaseToDelete.invoiceNumber ||
+                    `#${purchaseToDelete.id}`}
+                </strong>
+                ? This action cannot be undone.
+              </p>
+              {deleteError && (
+                <div
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fee2e2",
+                    color: "#dc2626",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    marginBottom: 16,
+                  }}
+                >
+                  {deleteError}
+                </div>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                }}
+              >
+                <button
+                  type="button"
+                  className="adm-btn-secondary"
+                  disabled={deletingId !== null}
+                  onClick={handleCancelDelete}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    cursor: deletingId !== null ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="adm-btn-delete"
+                  disabled={deletingId !== null}
+                  onClick={handleConfirmDelete}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    cursor: deletingId !== null ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <BsTrash size={14} />
+                  {deletingId !== null ? "Deleting..." : "Confirm Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

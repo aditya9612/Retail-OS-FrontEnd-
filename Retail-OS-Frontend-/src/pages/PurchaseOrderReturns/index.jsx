@@ -1159,7 +1159,22 @@ const PurchaseOrderReturns = () => {
       await fetchReturnsStats();
     } catch (err) {
       console.error("Failed to delete purchase order return:", err);
-      setActionError(extractErrorMessage(err, "Failed to delete purchase order return."));
+      if (err?.response?.status === 405) {
+        setActionError(
+          "Delete operation is not supported by the backend API (HTTP 405 Method Not Allowed). The endpoint DELETE /api/v1/purchase-order-returns/{id} is not implemented on the server."
+        );
+      } else if (err?.response?.status === 404) {
+        setActionError("Purchase order return not found.");
+      } else if (err?.response?.status === 409) {
+        setActionError(
+          extractErrorMessage(
+            err,
+            "Cannot delete purchase order return due to active stock or status conflicts."
+          )
+        );
+      } else {
+        setActionError(extractErrorMessage(err, "Failed to delete purchase order return."));
+      }
     } finally {
       setDeletingId(null);
     }
