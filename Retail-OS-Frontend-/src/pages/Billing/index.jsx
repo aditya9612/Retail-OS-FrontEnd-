@@ -591,8 +591,24 @@ const Billing = () => {
                 invoicesList.unshift(newInvoice);
                 localStorage.setItem('gst_invoices', JSON.stringify(invoicesList));
             }
+
+            // Sync payment to Payments & Settlements register
+            const storedPayments = localStorage.getItem('retail_pos_payments');
+            const paymentsList = storedPayments ? JSON.parse(storedPayments) : [];
+            paymentsList.unshift({
+                id: Date.now(),
+                order_id: parseInt(newInvoice.id.replace(/\D/g, '').slice(-4), 10) || 1001,
+                invoice_number: newInvoice.id,
+                payment_method: paymentMode.toUpperCase(),
+                amount: totals.grandTotal,
+                status: 'completed',
+                transaction_id: `POS-${paymentMode.toUpperCase()}-${Date.now().toString().slice(-6)}`,
+                gateway_name: paymentMode === 'Card' ? 'Pine Labs EDC #01' : paymentMode === 'UPI' ? 'PhonePe Counter QR' : 'Counter Drawer 1',
+                created_at: new Date().toISOString(),
+            });
+            localStorage.setItem('retail_pos_payments', JSON.stringify(paymentsList));
         } catch (e) {
-            console.error('Error saving invoice to localStorage:', e);
+            console.error('Error saving invoice/payment to localStorage:', e);
         }
 
         setShowPreview(true);
@@ -1569,6 +1585,30 @@ const Billing = () => {
                                     </span>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* UPI QR Display Section */}
+                    {paymentMode === 'UPI' && (
+                        <div style={{
+                            background: '#eef2ff',
+                            border: '1.5px solid #c7d2fe',
+                            borderRadius: 10,
+                            padding: '10px 14px',
+                            marginTop: 8,
+                            marginBottom: 8,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <BsQrCode size={20} color="#4f46e5" />
+                                <div>
+                                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#312e81' }}>UPI Dynamic QR Stand Ready</p>
+                                    <p style={{ margin: 0, fontSize: 11, color: '#6366f1' }}>Customer scans on counter screen to pay</p>
+                                </div>
+                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 800, color: '#4f46e5' }}>₹{totals.grandTotal.toFixed(2)}</span>
                         </div>
                     )}
 

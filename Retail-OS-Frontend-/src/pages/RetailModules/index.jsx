@@ -85,61 +85,7 @@ export { CreditNotesPage } from '../CreditNotes';
 /* ─────────────────────────────────────────────────────────────
    3. BILLING & GST: Payments
 ───────────────────────────────────────────────────────────── */
-export const BillingPaymentsPage = () => {
-    return (
-        <ModuleContainer
-            title="Payments & Settlements"
-            subtitle="Real-time register of POS collections, UPI QR settlements, Cards, and cash drawer reconciliations"
-            icon={<BsCreditCard2Front />}
-        >
-            <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-                <StatCard label="Today's Collections" value="₹84,290.00" sub="142 Transactions" color="#10b981" />
-                <StatCard label="UPI / Dynamic QR" value="₹54,120.00" sub="64% of total volume" color="#6366f1" />
-                <StatCard label="Card POS (Pine Labs)" value="₹18,450.00" sub="Settled automatically" color="#0ea5e9" />
-                <StatCard label="Cash In Drawer" value="₹11,720.00" sub="Float: ₹5,000.00" color="#f59e0b" />
-            </div>
-
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 20 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Live Payment Ledger</h3>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                    <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
-                        <tr>
-                            <th style={{ padding: '12px 16px' }}>Txn Ref</th>
-                            <th style={{ padding: '12px 16px' }}>Invoice ID</th>
-                            <th style={{ padding: '12px 16px' }}>Method</th>
-                            <th style={{ padding: '12px 16px' }}>Gateway / Terminal</th>
-                            <th style={{ padding: '12px 16px' }}>Amount</th>
-                            <th style={{ padding: '12px 16px' }}>Time</th>
-                            <th style={{ padding: '12px 16px' }}>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {[
-                            { ref: 'TXN-904123', inv: 'INV-2026-094', method: 'UPI QR', term: 'Razorpay POS', amt: '₹1,450.00', time: '11:42 AM', status: 'Success' },
-                            { ref: 'TXN-904122', inv: 'INV-2026-093', method: 'Credit Card', term: 'PineLabs EDC #01', amt: '₹4,890.00', time: '11:28 AM', status: 'Success' },
-                            { ref: 'TXN-904121', inv: 'INV-2026-092', method: 'Cash', term: 'Counter Drawer 1', amt: '₹620.00', time: '11:15 AM', status: 'Success' },
-                            { ref: 'TXN-904120', inv: 'INV-2026-091', method: 'UPI QR', term: 'PhonePe Merchant', amt: '₹2,340.00', time: '10:52 AM', status: 'Success' },
-                        ].map((tx, i) => (
-                            <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                <td style={{ padding: '12px 16px', fontWeight: 600 }}>{tx.ref}</td>
-                                <td style={{ padding: '12px 16px', color: '#6366f1' }}>{tx.inv}</td>
-                                <td style={{ padding: '12px 16px' }}><span style={{ background: '#f3f4f6', padding: '3px 8px', borderRadius: 6, fontWeight: 600, fontSize: 12 }}>{tx.method}</span></td>
-                                <td style={{ padding: '12px 16px', color: '#6b7280' }}>{tx.term}</td>
-                                <td style={{ padding: '12px 16px', fontWeight: 800 }}>{tx.amt}</td>
-                                <td style={{ padding: '12px 16px', color: '#6b7280' }}>{tx.time}</td>
-                                <td style={{ padding: '12px 16px' }}>
-                                    <span style={{ padding: '3px 8px', borderRadius: 10, background: '#ecfdf5', color: '#059669', fontWeight: 700, fontSize: 11 }}>
-                                        {tx.status}
-                                    </span>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </ModuleContainer>
-    );
-};
+export { BillingPaymentsPage } from '../Payments';
 
 /* ─────────────────────────────────────────────────────────────
    4. PRODUCTS: Barcode
