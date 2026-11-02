@@ -1,7 +1,7 @@
 import React from "react";
 import "./CategoryCards.css";
 
-const CategoryCards = ({ categories = [] }) => {
+const CategoryCards = ({ categories = [], statusFilter = "All", onCardClick }) => {
   const totalCategories = categories.length;
 
   const hasStatusData = categories.some(
@@ -64,33 +64,54 @@ const CategoryCards = ({ categories = [] }) => {
     {
       title: "Total Categories",
       value: totalCategories,
+      filterKey: "All",
     },
     {
       title: "Active Categories",
       value: activeCategories,
+      filterKey: "Active",
     },
     {
       title: "Inactive Categories",
       value: inactiveCategories,
+      filterKey: "Inactive",
     },
     {
       title: "Total Products",
       value: totalProducts,
+      filterKey: "Products",
     },
   ];
 
   return (
     <div className="category-cards">
-      {cards.map((card, index) => (
-        <div
-          className="category-card"
-          key={index}
-        >
-          <h3>{card.title}</h3>
+      {cards.map((card, index) => {
+        const isCardActive =
+          (card.filterKey === "All" && statusFilter === "All") ||
+          (card.filterKey === "Active" && String(statusFilter).toLowerCase() === "active") ||
+          (card.filterKey === "Inactive" && String(statusFilter).toLowerCase() === "inactive") ||
+          (card.filterKey === "Products" && (statusFilter === "Products" || statusFilter === "With Products"));
 
-          <h2>{card.value}</h2>
-        </div>
-      ))}
+        return (
+          <div
+            className={`category-card ${isCardActive ? "active-card" : ""}`}
+            key={index}
+            onClick={() => onCardClick && onCardClick(card.filterKey, card.title)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onCardClick && onCardClick(card.filterKey, card.title);
+              }
+            }}
+            title={`Click to filter by ${card.title}`}
+          >
+            <h3>{card.title}</h3>
+            <h2>{card.value}</h2>
+          </div>
+        );
+      })}
     </div>
   );
 };

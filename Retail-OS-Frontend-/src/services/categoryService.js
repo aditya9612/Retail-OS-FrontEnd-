@@ -1,4 +1,22 @@
 import axiosInstance from "../api/axios";
+import {
+  connectDeliveryPartner,
+  updateDeliveryPartner,
+  deleteDeliveryPartner,
+  uploadServiceability,
+  checkPincodeServiceability,
+  getDeliveryById,
+  getDeliveryLabel,
+  getThermalDeliveryLabel,
+  getDeliveryTracking,
+  getDeliveryHistory,
+  updateDeliveryStatus,
+  cancelDelivery,
+  assignDeliveryPartner,
+  updateDeliveryAddress,
+  recordFailedDeliveryAttempt,
+  collectDeliveryCOD,
+} from "./deliveryService";
 
 const BASE_URL = "/categories";
 
@@ -37,6 +55,46 @@ const category = {
   delete(id) {
     return axiosInstance.delete(`${BASE_URL}/${id}`);
   },
+
+  // =========================================================
+  // Delivery Management API Integration (All 16 Endpoints)
+  // =========================================================
+  connectDeliveryPartner,
+  updateDeliveryPartner,
+  deleteDeliveryPartner,
+  uploadServiceability,
+  checkPincodeServiceability,
+  getDelivery: getDeliveryById,
+  getDeliveryById,
+  getDeliveryLabel,
+  getThermalDeliveryLabel,
+  getDeliveryTracking,
+  getDeliveryHistory,
+  updateDeliveryStatus,
+  cancelDelivery,
+  assignDeliveryPartner,
+  updateDeliveryAddress,
+  recordFailedDeliveryAttempt,
+  collectDeliveryCOD,
+};
+
+export {
+  connectDeliveryPartner,
+  updateDeliveryPartner,
+  deleteDeliveryPartner,
+  uploadServiceability,
+  checkPincodeServiceability,
+  getDeliveryById,
+  getDeliveryLabel,
+  getThermalDeliveryLabel,
+  getDeliveryTracking,
+  getDeliveryHistory,
+  updateDeliveryStatus,
+  cancelDelivery,
+  assignDeliveryPartner,
+  updateDeliveryAddress,
+  recordFailedDeliveryAttempt,
+  collectDeliveryCOD,
 };
 
 export default category;

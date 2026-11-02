@@ -41,6 +41,7 @@ import {
     getDashboardOverview,
     getRevenueVsCost,
     getTopProducts,
+    getRecentTransactions,
     getStores,
     getAnalyticsProducts,
 } from '../../services/dashboard';
@@ -176,10 +177,10 @@ const Dashboard = () => {
     // ── Filters & Selectors ──
     const [stores, setStores] = useState([]);
     const [selectedStore, setSelectedStore] = useState(''); // '' means All Stores (omitted store_id)
-    const [period, setPeriod] = useState('this_year'); // 'this_year' | 'this_month' | 'last_month'
+    const [period, setPeriod] = useState('this_month'); // 'this_year' | 'this_month' | 'last_month'
 
     // Individual chart period overrides (default synchronized with main period)
-    const [overviewChartPeriod, setOverviewChartPeriod] = useState('this_year');
+    const [overviewChartPeriod, setOverviewChartPeriod] = useState('this_month');
     const [revCostChartPeriod, setRevCostChartPeriod] = useState('this_year');
 
     // Dropdown open states
@@ -427,17 +428,19 @@ const Dashboard = () => {
                 overviewResult,
                 revCostResult,
                 topProductsResult,
+                recentTxResult,
                 ordersResult,
                 analyticsProductsResult,
             ] = await Promise.allSettled([
-                getDashboardSummary(storeFilter),
+                getDashboardSummary(mainPeriodVal, storeFilter),
                 getDashboardOverview(ovPeriodVal || mainPeriodVal, storeFilter),
                 getRevenueVsCost(rcPeriodVal || mainPeriodVal, storeFilter),
-                getTopProducts(10, storeFilter),
+                getTopProducts(10, storeFilter, mainPeriodVal),
+                getRecentTransactions(10, storeFilter),
                 getOrders({
                     store_id: storeFilter || undefined,
                     page: 1,
-                    page_size: 5,
+                    page_size: 10,
                 }),
                 getAnalyticsProducts({
                     store_id: storeFilter || undefined,
@@ -454,14 +457,42 @@ const Dashboard = () => {
             if (summaryResult.status === 'fulfilled' && summaryResult.value) {
                 const val = summaryResult.value;
                 setSummary({
+                    mode: val.mode || 'all_stores',
+                    store_id: val.store_id ?? null,
+                    store_name: val.store_name ?? null,
                     today_sales: parseMetric(val.today_sales),
                     monthly_sales: parseMetric(val.monthly_sales),
                     total_customers: parseMetric(val.total_customers),
                     total_revenue: parseMetric(val.total_revenue),
                     low_stock_products: parseMetric(val.low_stock_products),
-                    mode: val.mode || 'all_stores',
                     stores_summary: Array.isArray(val.stores_summary) ? val.stores_summary : [],
+                    total_sales: parseMetric(val.total_sales),
+                    sales_target: parseMetric(val.sales_target),
+                    sales_achievement_percentage: parseMetric(val.sales_achievement_percentage),
+                    total_cost: parseMetric(val.total_cost),
+                    cost_target: parseMetric(val.cost_target),
+                    cost_achievement_percentage: parseMetric(val.cost_achievement_percentage),
+                    products_sold: parseMetric(val.products_sold),
+                    products_target: parseMetric(val.products_target),
+                    products_achievement_percentage: parseMetric(val.products_achievement_percentage),
+                    gross_profit: parseMetric(val.gross_profit),
+                    gross_margin_percentage: parseMetric(val.gross_margin_percentage),
+                    recent_transactions: Array.isArray(val.recent_transactions) ? val.recent_transactions : [],
                 });
+
+                // Populate/enrich stores list dynamically from real stores_summary
+                if (Array.isArray(val.stores_summary) && val.stores_summary.length > 0) {
+                    setStores((prevStores) => {
+                        if (!prevStores || prevStores.length === 0) {
+                            return val.stores_summary.map((s) => ({
+                                id: s.store_id,
+                                name: s.store_name,
+                                is_active: s.is_active !== false,
+                            }));
+                        }
+                        return prevStores;
+                    });
+                }
             } else {
                 hadError = true;
                 errorMsg = summaryResult.reason?.message || 'Failed to load dashboard summary';
@@ -524,9 +555,13 @@ const Dashboard = () => {
                 setTopProducts([]);
             }
 
-            // 5. Recent Transactions (Orders)
+            // 5. Recent Transactions (Real Backend Integration)
             let txList = [];
-            if (ordersResult.status === 'fulfilled' && ordersResult.value) {
+            if (recentTxResult.status === 'fulfilled' && recentTxResult.value?.transactions && recentTxResult.value.transactions.length > 0) {
+                txList = recentTxResult.value.transactions;
+            } else if (summaryResult.status === 'fulfilled' && Array.isArray(summaryResult.value?.recent_transactions) && summaryResult.value.recent_transactions.length > 0) {
+                txList = summaryResult.value.recent_transactions;
+            } else if (ordersResult.status === 'fulfilled' && ordersResult.value) {
                 const rawOrders = ordersResult.value;
                 const ordList = Array.isArray(rawOrders)
                     ? rawOrders
@@ -536,47 +571,10 @@ const Dashboard = () => {
                     ? rawOrders.data
                     : [];
                 if (ordList.length > 0) {
-                    txList = ordList.slice(0, 5);
+                    txList = ordList;
                 }
             }
-
-            if (txList.length === 0) {
-                let invoices = [];
-                try {
-                    const invRes = await getInvoices();
-                    if (invRes) {
-                        const data = Array.isArray(invRes) ? invRes : (invRes?.data || invRes?.items || []);
-                        if (Array.isArray(data) && data.length > 0) invoices = data;
-                    }
-                } catch (_) {}
-
-                try {
-                    const stored = localStorage.getItem('gst_invoices');
-                    if (stored) {
-                        const parsed = JSON.parse(stored);
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                            parsed.forEach(loc => {
-                                if (!invoices.some(inv => String(inv.id || inv.invoice_number) === String(loc.id))) {
-                                    invoices.push(loc);
-                                }
-                            });
-                        }
-                    }
-                } catch (_) {}
-
-                if (invoices.length > 0) {
-                    txList = invoices.slice(0, 5).map((inv, idx) => ({
-                        id: inv.id || inv.invoice_number || `INV-${idx + 1}`,
-                        order_number: inv.invoice_number || inv.id || `INV-${idx + 1}`,
-                        created_at: inv.date || inv.created_at || new Date().toISOString(),
-                        customer_name: inv.customer || inv.customer_name || 'Walk-in Customer',
-                        items: inv.items || [{}],
-                        total_amount: Number(inv.amount ?? inv.total ?? inv.grand_total ?? 0),
-                        status: inv.status || 'Paid',
-                    }));
-                }
-            }
-            setTransactions(txList);
+            setTransactions(txList.slice(0, 10));
 
             if (hadError && errorMsg) {
                 setError(errorMsg);
@@ -708,13 +706,64 @@ const Dashboard = () => {
         // Daily overview (this_month, last_month)
         if (!Array.isArray(overviewData) || overviewData.length === 0) return [];
 
-        return [...overviewData].sort((a, b) => {
+        const sorted = [...overviewData].sort((a, b) => {
             const dayA = parseInt(a.month ?? a.day ?? a.date, 10);
             const dayB = parseInt(b.month ?? b.day ?? b.date, 10);
             if (!isNaN(dayA) && !isNaN(dayB)) return dayA - dayB;
             return String(a.month).localeCompare(String(b.month));
         });
+
+        return sorted.map((item) => {
+            const label = String(item.month ?? item.date ?? '');
+            return {
+                ...item,
+                month: label,
+                fullMonth: label,
+                monthName: label,
+                sales: Number(item.sales ?? item.revenue ?? 0),
+            };
+        });
     }, [overviewChartPeriod, overviewData]);
+
+    // Select milestone dates for monthly overview daily chart to guarantee zero overlap on X-axis ticks
+    const overviewXAxisTicks = useMemo(() => {
+        if (overviewChartPeriod === 'this_year') {
+            return undefined; // All 12 months shown cleanly
+        }
+        if (!Array.isArray(sortedOverviewData) || sortedOverviewData.length === 0) {
+            return undefined;
+        }
+
+        const len = sortedOverviewData.length;
+        // Key milestone dates: 1st, 5th, 10th, 15th, 20th, 25th, and the last day of month (e.g. 30th or 31st)
+        const milestones = [1, 5, 10, 15, 20, 25];
+        const ticks = [];
+
+        sortedOverviewData.forEach((item, idx) => {
+            const str = String(item.month ?? item.date ?? '').trim();
+            let dayNum = null;
+            if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                dayNum = parseInt(str.split('-')[2], 10);
+            } else {
+                const match = str.match(/^(\d{1,2})/);
+                if (match) dayNum = parseInt(match[1], 10);
+            }
+
+            const isLast = idx === len - 1;
+            if ((dayNum !== null && milestones.includes(dayNum)) || isLast) {
+                ticks.push(item.month);
+            }
+        });
+
+        // Fallback: if day numbers could not be parsed, sample every 5th item + last item
+        if (ticks.length <= 1 && len > 5) {
+            return sortedOverviewData
+                .filter((_, idx) => idx === 0 || (idx + 1) % 5 === 0 || idx === len - 1)
+                .map((d) => d.month);
+        }
+
+        return ticks;
+    }, [overviewChartPeriod, sortedOverviewData]);
 
     // Annual sales total matching sum of monthly sales values
     const annualSalesTotal = useMemo(() => {
@@ -1080,6 +1129,28 @@ const Dashboard = () => {
                     </div>
                 </Link>
 
+                <div className="op-card" title="Monthly Sales Total">
+                    <div className="op-icon monthly"><BsCashStack /></div>
+                    <div className="op-info">
+                        <span className="op-label">Monthly Sales</span>
+                        <span className="op-val">{formatCurrency(summary?.monthly_sales ?? 0)}</span>
+                        <span className="op-sub">Current month sales</span>
+                    </div>
+                </div>
+
+                <div className="op-card" title="Total Products Sold">
+                    <div className="op-icon products"><BsBox /></div>
+                    <div className="op-info">
+                        <span className="op-label">Products Sold</span>
+                        <span className="op-val">{formatInteger(summary?.products_sold ?? 0)}</span>
+                        <span className="op-sub">
+                            {summary?.products_target > 0
+                                ? `Target: ${formatInteger(summary.products_target)} (${(summary.products_achievement_percentage || 0).toFixed(0)}%)`
+                                : 'Units sold in period'}
+                        </span>
+                    </div>
+                </div>
+
                 <Link to="/customers" className="op-card" title="View Customers">
                     <div className="op-icon customers"><BsPeopleFill /></div>
                     <div className="op-info">
@@ -1151,7 +1222,15 @@ const Dashboard = () => {
                                         axisLine={false}
                                         tickLine={false}
                                         tick={{ fill: '#64748b', fontSize: 11 }}
+                                        ticks={overviewXAxisTicks}
                                         interval={0}
+                                        tickFormatter={(val) => {
+                                            if (overviewChartPeriod === 'this_year') return val;
+                                            if (overviewXAxisTicks && overviewXAxisTicks.length > 0) {
+                                                return overviewXAxisTicks.includes(val) ? val : '';
+                                            }
+                                            return val;
+                                        }}
                                     />
                                     <YAxis
                                         axisLine={false}
@@ -1238,7 +1317,7 @@ const Dashboard = () => {
                             <span>Zero Sales (₹0.00)</span>
                         </span>
                         <span className="legend-item legend-total">
-                            <span>Annual Total: <strong>{formatCurrency(annualSalesTotal)}</strong></span>
+                            <span>{overviewChartPeriod === 'this_year' ? 'Annual Total: ' : 'Month Total: '}<strong>{formatCurrency(annualSalesTotal)}</strong></span>
                         </span>
                     </div>
                 </div>
@@ -1293,7 +1372,8 @@ const Dashboard = () => {
                                         axisLine={false}
                                         tickLine={false}
                                         tick={{ fill: '#64748b', fontSize: 11 }}
-                                        interval={0}
+                                        interval={revCostChartPeriod === 'this_year' ? 0 : 'preserveStartEnd'}
+                                        minTickGap={16}
                                     />
                                     {/* Left Y-Axis for Revenue */}
                                     <YAxis
@@ -1460,6 +1540,77 @@ const Dashboard = () => {
                 </div>
             </section>
 
+            {/* ── Store-wise Sales Summary (All Stores Mode) ── */}
+            {!selectedStore && summary?.stores_summary?.length > 0 && (
+                <section className="dashboard-section store-summary-section" aria-label="Store Summary">
+                    <div className="dashboard-card">
+                        <div className="dashboard-card-header">
+                            <div className="card-title-group">
+                                <div className="card-header-icon green">
+                                    <BsShop />
+                                </div>
+                                <div>
+                                    <h3 className="card-title">Store-wise Sales Summary</h3>
+                                    <p className="card-subtitle">
+                                        Consolidated performance breakdown across all {summary.stores_summary.length} active stores
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="dashboard-table-wrap">
+                            <table className="dashboard-table">
+                                <thead>
+                                    <tr>
+                                        <th>Store Name</th>
+                                        <th style={{ textAlign: 'center' }}>Store ID</th>
+                                        <th style={{ textAlign: 'right' }}>Today's Sales</th>
+                                        <th style={{ textAlign: 'right' }}>Monthly Sales</th>
+                                        <th style={{ textAlign: 'center' }}>Orders</th>
+                                        <th style={{ textAlign: 'center' }}>Low Stock</th>
+                                        <th style={{ textAlign: 'center' }}>Status</th>
+                                        <th style={{ textAlign: 'right' }}>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {summary.stores_summary.map((st) => (
+                                        <tr key={st.store_id}>
+                                            <td style={{ fontWeight: 600 }}>{st.store_name}</td>
+                                            <td style={{ textAlign: 'center', color: '#64748b' }}>#{st.store_id}</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(st.today_sales)}</td>
+                                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(st.monthly_sales)}</td>
+                                            <td style={{ textAlign: 'center' }}>{formatInteger(st.orders_count)}</td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                {st.low_stock_count > 0 ? (
+                                                    <span style={{ color: '#ef4444', fontWeight: 700 }}>{st.low_stock_count}</span>
+                                                ) : (
+                                                    <span style={{ color: '#10b981' }}>0</span>
+                                                )}
+                                            </td>
+                                            <td style={{ textAlign: 'center' }}>
+                                                <span className={`status-pill ${st.is_active !== false ? 'completed' : 'cancelled'}`}>
+                                                    {st.is_active !== false ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <button
+                                                    type="button"
+                                                    className="store-filter-btn"
+                                                    onClick={() => setSelectedStore(String(st.store_id))}
+                                                    title={`Filter dashboard for ${st.store_name}`}
+                                                >
+                                                    View Store
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            )}
+
             {/* ── Bottom Row: Tables (2 Columns) ── */}
             <section className="bottom-tables-row">
                 {/* 1. Recent Transactions Table */}
@@ -1505,36 +1656,50 @@ const Dashboard = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {transactions.map((ord) => {
-                                        const invoiceNo = ord.order_number || ord.invoice_number || `ORD-${ord.id}`;
-                                        const customerName = ord.customer_name || ord.customer?.name || 'Walk-in Customer';
+                                    {transactions.map((ord, idx) => {
+                                        const orderId = ord.order_id || ord.id || idx;
+                                        const invoiceNo = ord.order_number || ord.invoice_number || `ORD-${orderId}`;
+                                        const customerName = ord.customer_name || ord.customer?.name || (ord.customer_id ? `Customer #${ord.customer_id}` : 'Walk-in Customer');
                                         const distinctCount = Array.isArray(ord.items) && ord.items.length > 0
                                             ? ord.items.length
-                                            : 1;
+                                            : (ord.items_count || 1);
                                         const totalUnits = Array.isArray(ord.items) && ord.items.length > 0
                                             ? ord.items.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
-                                            : (ord.quantity || 1);
-                                        const statusStr = (ord.status || ord.payment_status || 'completed').toLowerCase();
+                                            : (ord.quantity || distinctCount);
+                                        const amount = Number(ord.amount ?? ord.total_amount ?? 0);
+                                        const orderStatus = ord.order_status || ord.status || 'Completed';
+                                        const paymentStatus = ord.payment_status || 'Paid';
 
                                         return (
-                                            <tr key={ord.id}>
+                                            <tr key={orderId}>
                                                 <td>
-                                                    <Link to={`/orders/${ord.id}`} className="table-id-link">
+                                                    <Link to={`/orders/${orderId}`} className="table-id-link">
                                                         {invoiceNo}
                                                     </Link>
                                                 </td>
                                                 <td>{formatDate(ord.created_at)}</td>
                                                 <td>{customerName}</td>
                                                 <td>
-                                                    {totalUnits > distinctCount
-                                                        ? `${totalUnits} units (${distinctCount} item${distinctCount > 1 ? 's' : ''})`
-                                                        : `${totalUnits} unit${totalUnits > 1 ? 's' : ''}`}
+                                                    {ord.items ? (
+                                                        totalUnits > distinctCount
+                                                            ? `${totalUnits} units (${distinctCount} item${distinctCount > 1 ? 's' : ''})`
+                                                            : `${totalUnits} unit${totalUnits > 1 ? 's' : ''}`
+                                                    ) : (
+                                                        `${totalUnits} unit${totalUnits > 1 ? 's' : ''}`
+                                                    )}
                                                 </td>
-                                                <td className="table-amount">{formatCurrency(ord.total_amount)}</td>
+                                                <td className="table-amount">{formatCurrency(amount)}</td>
                                                 <td>
-                                                    <span className={`status-pill ${statusStr}`}>
-                                                        {ord.status || 'Completed'}
-                                                    </span>
+                                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                                        <span className={`status-pill ${orderStatus.toLowerCase()}`}>
+                                                            {orderStatus}
+                                                        </span>
+                                                        {paymentStatus && paymentStatus.toLowerCase() !== orderStatus.toLowerCase() && (
+                                                            <span className={`status-pill ${paymentStatus.toLowerCase()}`}>
+                                                                {paymentStatus}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );

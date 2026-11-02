@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     BsSearch,
     BsBell,
@@ -30,6 +30,8 @@ const formatPrice = (val) => {
 
 const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
@@ -327,8 +329,9 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
 
     return (
         <header className="pos-header">
-            {/* Search Bar */}
-            <div className="header-search-wrap" ref={searchWrapRef} style={{ flex: 1, position: 'relative' }}>
+            {/* Search Bar - hidden on Admin Dashboard */}
+            {!isDashboard ? (
+                <div className="header-search-wrap" ref={searchWrapRef} style={{ flex: 1, position: 'relative' }}>
                 <BsSearch className="header-search-icon" size={14} />
                 <input
                     ref={searchInputRef}
@@ -572,6 +575,9 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                     </div>
                 )}
             </div>
+            ) : (
+                <div style={{ flex: 1 }} />
+            )}
 
             {/* Right side controls */}
             <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>

@@ -127,6 +127,24 @@ export const getDeliveryLabel = async (deliveryId) => {
 };
 
 /**
+ * 10b. Get Thermal Delivery Shipping Label (4x6 inch)
+ * GET /api/v1/delivery/{delivery_id}/label/thermal
+ * @param {number|string} deliveryId
+ * @param {Object|string} [params] - { mode: 'preview'|'view'|'download'|'pdf'|'html'|'json'|'text' } or mode string
+ * @returns {Promise<Object|Blob|string>}
+ */
+export const getThermalDeliveryLabel = async (deliveryId, params = { mode: 'json' }) => {
+    const queryParams = typeof params === 'string' ? { mode: params } : (params || { mode: 'json' });
+    const mode = queryParams.mode || 'json';
+    const isBlob = ['preview', 'download', 'pdf'].includes(mode);
+    const response = await apiClient.get(`${BASE_URL}/${deliveryId}/label/thermal`, {
+        params: queryParams,
+        responseType: isBlob ? 'blob' : (mode === 'html' || mode === 'view' ? 'text' : 'json'),
+    });
+    return response.data;
+};
+
+/**
  * 11. Get Delivery Tracking Information
  * GET /api/v1/delivery/{delivery_id}/tracking
  * @param {number|string} deliveryId
@@ -341,5 +359,31 @@ export const uploadServiceability = async (fileOrFormData) => {
  */
 export const checkPincodeServiceability = async (pincode) => {
     const response = await apiClient.get(`${BASE_URL}/serviceability/${pincode}`);
+    return response.data;
+};
+
+/**
+ * 28. Record Failed Delivery Attempt
+ * POST /api/v1/delivery/{delivery_id}/failed-attempt
+ * @param {number|string} deliveryId
+ * @param {Object} data - { reason: string, remarks?: string, reschedule_date?: string }
+ * @returns {Promise<Object>} { success, message, data: DeliveryResponse }
+ */
+export const recordFailedDeliveryAttempt = async (deliveryId, data) => {
+    const payload = typeof data === 'string' ? { reason: data } : data;
+    const response = await apiClient.post(`${BASE_URL}/${deliveryId}/failed-attempt`, payload);
+    return response.data;
+};
+
+/**
+ * 29. Collect Delivery Cash On Delivery (COD) Payment
+ * PATCH /api/v1/delivery/{delivery_id}/collect-cod
+ * @param {number|string} deliveryId
+ * @param {Object} [data] - { amount?: number }
+ * @returns {Promise<Object>} { success, message, data: DeliveryResponse }
+ */
+export const collectDeliveryCOD = async (deliveryId, data = {}) => {
+    const payload = data && data.amount !== undefined ? { amount: Number(data.amount) } : undefined;
+    const response = await apiClient.patch(`${BASE_URL}/${deliveryId}/collect-cod`, payload || {});
     return response.data;
 };
