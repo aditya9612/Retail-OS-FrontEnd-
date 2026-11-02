@@ -322,6 +322,34 @@
     transition: all 0.15s ease !important;
 }
 
+.inv-page .inv-filter-card .inventory-search-input-wrap {
+    position: relative !important;
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.inv-page .inv-filter-card .inventory-search-icon {
+    position: absolute !important;
+    left: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    color: #94a3b8 !important;
+    pointer-events: none !important;
+    z-index: 2 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 16px !important;
+    height: 16px !important;
+}
+
+.inv-page .inv-filter-card .filter-group .inventory-search-input-wrap input,
+.inv-page .inv-filter-card .filter-group input#inventory-search,
+.inv-page .inv-filter-card .filter-group input.inventory-search-input {
+    padding-left: 38px !important;
+}
+
 .inv-page .inv-filter-card .filter-group input:hover,
 .inv-page .inv-filter-card .filter-group select:hover {
     border-color: #94a3b8 !important;
@@ -1144,5 +1172,10 @@
 @media (max-width: 520px) {
     .inv-kpi-grid {
         grid-template-columns: 1fr;
+    }
+    .inv-page .inv-filter-card .filter-group .inventory-search-input-wrap input,
+    .inv-page .inv-filter-card .filter-group input#inventory-search,
+    .inv-page .inv-filter-card .filter-group input.inventory-search-input {
+        padding-left: 36px !important;
     }
 }

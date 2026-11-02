@@ -128,4 +128,24 @@ export const updatePurchaseOrderStatus = async (
   return response.data;
 };
 
-export { createGRN } from "./grnApi";
+// =====================================================
+// DELETE - Delete Purchase Order
+// =====================================================
+
+export const deletePurchaseOrder = async (
+  purchaseOrderId
+) => {
+  if (!purchaseOrderId) {
+    throw new Error(
+      "Purchase Order ID is required"
+    );
+  }
+
+  const response = await axiosInstance.delete(
+    `/purchase-orders/${purchaseOrderId}`
+  );
+
+  return response.data;
+};
+
+export { createGRN } from "./grnApi";

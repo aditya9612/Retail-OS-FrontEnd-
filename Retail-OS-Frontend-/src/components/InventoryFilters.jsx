@@ -119,6 +119,7 @@ const InventoryFilters = ({
             <input
               id="inventory-search"
               type="text"
+              className="inventory-search-input"
               placeholder="Search by Product Name / SKU / Barcode"
               value={search}
               onChange={(e) =>

@@ -248,14 +248,22 @@
 
 .inventory-filters .inventory-search-icon {
   position: absolute;
-  left: 11px;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   color: #94a3b8;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
 }
 
-.inventory-filters .inventory-search-input-wrap input {
-  padding-left: 34px !important;
+.inventory-filters .inventory-search-input-wrap input,
+.inventory-filters .inventory-search-input {
+  padding-left: 38px !important;
 }
 
 
@@ -660,6 +668,11 @@
     border-radius: 7px;
 
     font-size: 11px;
+  }
+
+  .inventory-filters .inventory-search-input-wrap input,
+  .inventory-filters .inventory-search-input {
+    padding-left: 36px !important;
   }
 
   .inventory-filters .filter-group select {

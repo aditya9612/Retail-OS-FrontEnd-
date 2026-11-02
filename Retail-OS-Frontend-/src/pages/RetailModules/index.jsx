@@ -375,6 +375,9 @@ export const WarehousesPage = () => {
     const [modalError, setModalError] = useState(null);
     const [deleteFeedback, setDeleteFeedback] = useState(null);
 
+    const [rawWarehouses, setRawWarehouses] = useState([]);
+    const allWarehousesRef = useRef([]);
+
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [storeFilter, setStoreFilter] = useState("all");
@@ -410,13 +413,21 @@ export const WarehousesPage = () => {
                 params.store_id = Number(activeStore);
             }
 
-            if (overrideParams.page !== undefined || activeSearch || activeStatus !== "all" || activeStore !== "all") {
-                params.page = activePage;
-                params.page_size = activePageSize;
-            }
+            params.page_size = 100;
 
             const data = await getWarehouses(params);
             const list = extractWarehouses(data);
+
+            if (!activeSearch || String(activeSearch).trim() === "") {
+                allWarehousesRef.current = list;
+                setRawWarehouses(list);
+            } else if (list.length > 0) {
+                setRawWarehouses(list);
+            } else if (allWarehousesRef.current && allWarehousesRef.current.length > 0) {
+                setRawWarehouses(allWarehousesRef.current);
+            } else {
+                setRawWarehouses(list);
+            }
             setWarehouses(list);
         } catch (err) {
             console.error("Failed to fetch warehouses:", err);
@@ -432,9 +443,61 @@ export const WarehousesPage = () => {
         }
     };
 
+    const filteredWarehouses = useMemo(() => {
+        const q = String(search || "").trim().toLowerCase();
+
+        return (rawWarehouses || []).filter((wh) => {
+            if (!wh) return false;
+
+            // Status filter
+            if (statusFilter === "active" && wh.is_active === false) return false;
+            if (statusFilter === "inactive" && wh.is_active !== false) return false;
+
+            // Store filter
+            if (storeFilter && storeFilter !== "all") {
+                const whStoreId = wh.store_id ?? wh.storeId;
+                if (String(whStoreId) !== String(storeFilter)) return false;
+            }
+
+            // Search filter: Warehouse Name, Code, Location / City / Address, ID, Store Name
+            if (!q) return true;
+
+            const name = String(wh.name || "").toLowerCase();
+            const code = String(wh.code || "").toLowerCase();
+            const address = String(wh.address || "").toLowerCase();
+            const location = String(wh.location || "").toLowerCase();
+            const city = String(wh.city || "").toLowerCase();
+            const state = String(wh.state || "").toLowerCase();
+            const id = String(wh.id || "").toLowerCase();
+            const storeName = String(wh.store_name || wh.storeName || "").toLowerCase();
+
+            return (
+                name.includes(q) ||
+                code.includes(q) ||
+                address.includes(q) ||
+                location.includes(q) ||
+                city.includes(q) ||
+                state.includes(q) ||
+                id.includes(q) ||
+                storeName.includes(q)
+            );
+        });
+    }, [rawWarehouses, search, statusFilter, storeFilter]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search, statusFilter, storeFilter]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredWarehouses.length / pageSize));
+    const paginatedWarehouses = useMemo(() => {
+        const startIndex = (page - 1) * pageSize;
+        return filteredWarehouses.slice(startIndex, startIndex + pageSize);
+    }, [filteredWarehouses, page, pageSize]);
+
     const handleSearchSubmit = (e) => {
         if (e) e.preventDefault();
-        fetchWarehouses({ page: 1 });
+        setPage(1);
+        fetchWarehouses({ page: 1, search: search.trim() });
     };
 
     const handleResetFilters = () => {
@@ -442,6 +505,10 @@ export const WarehousesPage = () => {
         setStatusFilter("all");
         setStoreFilter("all");
         setPage(1);
+        if (allWarehousesRef.current && allWarehousesRef.current.length > 0) {
+            setRawWarehouses(allWarehousesRef.current);
+            setWarehouses(allWarehousesRef.current);
+        }
         fetchWarehouses({ search: "", statusFilter: "all", storeFilter: "all", page: 1 });
     };
 
@@ -822,15 +889,18 @@ export const WarehousesPage = () => {
                 }}
             >
                 <div style={{ position: 'relative', flex: '1 1 240px' }}>
-                    <BsSearch style={{ position: 'absolute', left: 12, top: 11, color: '#9ca3af' }} />
+                    <BsSearch style={{ position: 'absolute', left: 12, top: 11, color: '#9ca3af', pointerEvents: 'none' }} />
                     <input
                         type="text"
-                        placeholder="Search by name, code, ID..."
+                        placeholder="Search by name, code, location, ID..."
                         value={search}
-                        onChange={(e) => setSearch(e.target.value)}
+                        onChange={(e) => {
+                            setSearch(e.target.value);
+                            setPage(1);
+                        }}
                         style={{
                             width: '100%',
-                            padding: '8px 12px 8px 36px',
+                            padding: search ? '8px 32px 8px 36px' : '8px 12px 8px 36px',
                             border: '1px solid #d1d5db',
                             borderRadius: 8,
                             fontSize: 13.5,
@@ -839,6 +909,35 @@ export const WarehousesPage = () => {
                             boxSizing: 'border-box'
                         }}
                     />
+                    {search && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSearch("");
+                                setPage(1);
+                                if (allWarehousesRef.current && allWarehousesRef.current.length > 0) {
+                                    setRawWarehouses(allWarehousesRef.current);
+                                }
+                            }}
+                            style={{
+                                position: 'absolute',
+                                right: 10,
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#9ca3af',
+                                cursor: 'pointer',
+                                padding: 2,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                            title="Clear search"
+                        >
+                            <BsX size={18} />
+                        </button>
+                    )}
                 </div>
 
                 <div style={{ flex: '0 0 auto', minWidth: 140 }}>
@@ -975,7 +1074,7 @@ export const WarehousesPage = () => {
                         </button>
                     </div>
                 </div>
-            ) : warehouses.length === 0 ? (
+            ) : filteredWarehouses.length === 0 ? (
                 <div style={{
                     textAlign: 'center',
                     padding: '48px 20px',
@@ -991,7 +1090,7 @@ export const WarehousesPage = () => {
                                 No Matching Warehouses Found
                             </h3>
                             <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#6b7280' }}>
-                                No active or registered warehouses matched your search criteria {storeFilter !== 'all' ? `for Store #${storeFilter}` : ''} (HTTP 200 OK with 0 records).
+                                No active or registered warehouses matched your search criteria {search.trim() ? `for "${search.trim()}"` : ''} {storeFilter !== 'all' ? `(Store #${storeFilter})` : ''}.
                             </p>
                             <button
                                 type="button"
@@ -1021,8 +1120,9 @@ export const WarehousesPage = () => {
                     )}
                 </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-                    {warehouses.map((wh, i) => {
+                <>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+                        {paginatedWarehouses.map((wh, i) => {
                         const isActive = wh.is_active !== false;
                         const code = wh.code || `WH-${wh.id || (i + 1)}`;
                         const name = wh.name || `Warehouse #${wh.id}`;
@@ -1142,7 +1242,67 @@ export const WarehousesPage = () => {
                         );
                     })}
                 </div>
-            )}
+
+                {filteredWarehouses.length > 0 && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginTop: 20,
+                        padding: '12px 4px',
+                        borderTop: '1px solid #e5e7eb',
+                        flexWrap: 'wrap',
+                        gap: 12
+                    }}>
+                        <span style={{ fontSize: 13, color: '#6b7280' }}>
+                            Showing {Math.min(filteredWarehouses.length, (page - 1) * pageSize + 1)} to {Math.min(filteredWarehouses.length, page * pageSize)} of {filteredWarehouses.length} {filteredWarehouses.length === 1 ? 'warehouse' : 'warehouses'}
+                            {search.trim() ? ` matching "${search.trim()}"` : ''}
+                        </span>
+                        {totalPages > 1 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <button
+                                    type="button"
+                                    disabled={page <= 1}
+                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                                    style={{
+                                        background: page <= 1 ? '#f3f4f6' : '#fff',
+                                        color: page <= 1 ? '#9ca3af' : '#374151',
+                                        border: '1px solid #d1d5db',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12.5,
+                                        fontWeight: 600,
+                                        cursor: page <= 1 ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    Previous
+                                </button>
+                                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                                    Page {page} of {totalPages}
+                                </span>
+                                <button
+                                    type="button"
+                                    disabled={page >= totalPages}
+                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                                    style={{
+                                        background: page >= totalPages ? '#f3f4f6' : '#fff',
+                                        color: page >= totalPages ? '#9ca3af' : '#374151',
+                                        border: '1px solid #d1d5db',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12.5,
+                                        fontWeight: 600,
+                                        cursor: page >= totalPages ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </>
+        )}
 
             {/* Warehouse Details Modal (GET /api/v1/warehouses/{id}) */}
             {selectedWarehouseId && (
