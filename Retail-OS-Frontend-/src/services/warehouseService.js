@@ -3,6 +3,7 @@ import {
   listWarehouses,
   getWarehouseDashboard,
   getWarehouseById,
+  createWarehouse,
   deleteWarehouse,
   getWarehouseTransfers,
 } from "../api/warehouseApi";
@@ -15,6 +16,7 @@ export const warehouseService = {
   getWarehouseDashboard,
   getById: getWarehouseById,
   getWarehouseById,
+  createWarehouse,
   deleteWarehouse,
   remove: deleteWarehouse,
   delete: deleteWarehouse,
@@ -27,6 +29,7 @@ export {
   listWarehouses,
   getWarehouseDashboard,
   getWarehouseById,
+  createWarehouse,
   deleteWarehouse,
   getWarehouseTransfers,
 };

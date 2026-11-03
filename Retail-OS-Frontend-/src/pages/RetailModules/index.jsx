@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom';
 import apiClient from '../../services/api';
 import { getInvoices } from '../../services/billingService';
-import { getWarehouses, getWarehouseDashboard, getWarehouseById, deleteWarehouse, getWarehouseTransfers } from '../../api/warehouseApi';
+import { getWarehouses, getWarehouseDashboard, getWarehouseById, createWarehouse, deleteWarehouse, getWarehouseTransfers } from '../../api/warehouseApi';
 import { warehouseService } from '../../services/warehouseService';
 import userService from '../../services/userService';
 import { listStores } from '../../services/inventoryService';
@@ -378,11 +378,29 @@ export const WarehousesPage = () => {
     const [rawWarehouses, setRawWarehouses] = useState([]);
     const allWarehousesRef = useRef([]);
 
+    // Add Warehouse Modal State
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isSubmittingWarehouse, setIsSubmittingWarehouse] = useState(false);
+    const [addFormError, setAddFormError] = useState(null);
+    const [addFormSuccess, setAddFormSuccess] = useState(null);
+    const [availableStores, setAvailableStores] = useState([]);
+    const [loadingStores, setLoadingStores] = useState(false);
+
+    const initialAddForm = {
+        name: "",
+        code: "",
+        store_id: "",
+        address: "",
+    };
+    const [addFormData, setAddFormData] = useState(initialAddForm);
+    const [validationErrors, setValidationErrors] = useState({});
+
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [storeFilter, setStoreFilter] = useState("all");
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(50);
+    const [viewMode, setViewMode] = useState("table");
 
     const hasFetchedRef = useRef(false);
 
@@ -463,7 +481,8 @@ export const WarehousesPage = () => {
             if (!q) return true;
 
             const name = String(wh.name || "").toLowerCase();
-            const code = String(wh.code || "").toLowerCase();
+            const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code ?? "";
+            const code = String(rawCode).toLowerCase();
             const address = String(wh.address || "").toLowerCase();
             const location = String(wh.location || "").toLowerCase();
             const city = String(wh.city || "").toLowerCase();
@@ -698,6 +717,168 @@ export const WarehousesPage = () => {
         }
     }, [searchParams]);
 
+    useEffect(() => {
+        if (isAddModalOpen && availableStores.length === 0) {
+            setLoadingStores(true);
+            listStores()
+                .then((res) => {
+                    const list = res?.data?.data || res?.data || (Array.isArray(res) ? res : []);
+                    setAvailableStores(list);
+                })
+                .catch((err) => {
+                    console.error("Failed to load stores for warehouse modal:", err);
+                })
+                .finally(() => {
+                    setLoadingStores(false);
+                });
+        }
+    }, [isAddModalOpen]);
+
+    const handleOpenAddModal = () => {
+        setAddFormData(initialAddForm);
+        setValidationErrors({});
+        setAddFormError(null);
+        setAddFormSuccess(null);
+        setIsAddModalOpen(true);
+    };
+
+    const handleCloseAddModal = () => {
+        if (isSubmittingWarehouse) return;
+        setIsAddModalOpen(false);
+        setValidationErrors({});
+        setAddFormError(null);
+        setAddFormSuccess(null);
+    };
+
+    const validateAddWarehouseForm = () => {
+        const errors = {};
+        const trimmedName = String(addFormData.name || "").trim();
+        const trimmedCode = String(addFormData.code || "").trim();
+        const trimmedAddress = String(addFormData.address || "").trim();
+
+        if (!trimmedName) {
+            errors.name = "Warehouse name is required";
+        } else if (trimmedName.length < 2) {
+            errors.name = "Warehouse name must be at least 2 characters";
+        } else if (trimmedName.length > 100) {
+            errors.name = "Warehouse name cannot exceed 100 characters";
+        }
+
+        if (!trimmedCode) {
+            errors.code = "Warehouse code is required";
+        } else if (trimmedCode.length < 2) {
+            errors.code = "Warehouse code must be at least 2 characters";
+        } else if (trimmedCode.length > 50) {
+            errors.code = "Warehouse code cannot exceed 50 characters";
+        } else if (/^\d+$/.test(trimmedCode)) {
+            // Backend validation rule: 'Warehouse code cannot contain only numbers'
+            errors.code = "Warehouse code cannot contain only numbers. Please include letters (e.g. WH-001 or WH01).";
+        }
+
+        if (trimmedAddress && trimmedAddress.length < 5) {
+            errors.address = "Address must be at least 5 characters if provided";
+        } else if (trimmedAddress && trimmedAddress.length > 500) {
+            errors.address = "Address cannot exceed 500 characters";
+        }
+
+        setValidationErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
+    const handleCreateWarehouse = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (isSubmittingWarehouse) return;
+
+        if (!validateAddWarehouseForm()) {
+            return;
+        }
+
+        try {
+            setIsSubmittingWarehouse(true);
+            setAddFormError(null);
+            setAddFormSuccess(null);
+
+            const payload = {
+                name: addFormData.name.trim(),
+                code: addFormData.code.trim().toUpperCase(),
+            };
+
+            if (addFormData.store_id && Number(addFormData.store_id) > 0) {
+                payload.store_id = Number(addFormData.store_id);
+            }
+
+            if (addFormData.address && addFormData.address.trim()) {
+                payload.address = addFormData.address.trim();
+            }
+
+            console.log("Submitting new warehouse:", payload);
+            await createWarehouse(payload);
+
+            setAddFormSuccess("Warehouse created successfully!");
+
+            // Refresh warehouse list and dashboard statistics
+            await fetchWarehouses();
+            await fetchDashboard();
+
+            setTimeout(() => {
+                setIsAddModalOpen(false);
+                setAddFormData(initialAddForm);
+                setAddFormSuccess(null);
+            }, 800);
+        } catch (err) {
+            console.error("Create Warehouse Error:", err);
+            const data = err?.response?.data;
+            const backendErrors = {};
+
+            // 1. Extract field-level errors (FastAPI 422: detail = [{ loc, msg, type }] or errors = [{ field, message }])
+            if (Array.isArray(data?.errors)) {
+                data.errors.forEach((e) => {
+                    if (e.field) {
+                        backendErrors[e.field] = e.message;
+                    }
+                });
+            }
+
+            if (Array.isArray(data?.detail)) {
+                data.detail.forEach((d) => {
+                    const field = Array.isArray(d.loc)
+                        ? d.loc[d.loc.length - 1]
+                        : null;
+                    if (field && typeof field === "string") {
+                        const cleanMsg = (d.msg || "").replace(/^Value error,\s*/i, "");
+                        backendErrors[field] = cleanMsg;
+                    }
+                });
+            }
+
+            if (Object.keys(backendErrors).length > 0) {
+                setValidationErrors((prev) => ({ ...prev, ...backendErrors }));
+            }
+
+            // 2. Banner error message
+            const errorMsg =
+                data?.message ||
+                (typeof data?.detail === "string" ? data.detail : null) ||
+                (Array.isArray(data?.detail)
+                    ? data.detail
+                        .map((d) => {
+                            const loc = Array.isArray(d.loc)
+                                ? d.loc.filter((p) => p !== "body").join(".")
+                                : "";
+                            const cleanMsg = (d.msg || "").replace(/^Value error,\s*/i, "");
+                            return loc ? `${loc}: ${cleanMsg}` : cleanMsg;
+                        })
+                        .join(" | ")
+                    : null) ||
+                err?.message ||
+                "Failed to create warehouse. Please check the entered data.";
+
+            setAddFormError(errorMsg);
+        } finally {
+            setIsSubmittingWarehouse(false);
+        }
+    };
+
     const dashboardData = dashboard?.data ?? dashboard;
 
     const totalWarehouses = dashboardLoading
@@ -737,6 +918,46 @@ export const WarehousesPage = () => {
             icon={<BsBuildings />}
             actionBtn={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ display: 'inline-flex', borderRadius: 8, border: '1px solid #d1d5db', background: '#f3f4f6', padding: 2 }}>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('table')}
+                            title="Table View"
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: 6,
+                                border: 'none',
+                                fontSize: 12.5,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                background: viewMode === 'table' ? '#ffffff' : 'transparent',
+                                color: viewMode === 'table' ? '#4f46e5' : '#6b7280',
+                                boxShadow: viewMode === 'table' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            Table View
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setViewMode('cards')}
+                            title="Card View"
+                            style={{
+                                padding: '6px 12px',
+                                borderRadius: 6,
+                                border: 'none',
+                                fontSize: 12.5,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                background: viewMode === 'cards' ? '#ffffff' : 'transparent',
+                                color: viewMode === 'cards' ? '#4f46e5' : '#6b7280',
+                                boxShadow: viewMode === 'cards' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            Card View
+                        </button>
+                    </div>
                     <button
                         onClick={handleRefresh}
                         disabled={loading || dashboardLoading}
@@ -748,10 +969,16 @@ export const WarehousesPage = () => {
                     >
                         <BsArrowRepeat size={16} /> Refresh
                     </button>
-                    <button style={{
-                        background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                        borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                    }}>
+                    <button
+                        type="button"
+                        onClick={handleOpenAddModal}
+                        title="Add New Warehouse"
+                        style={{
+                            background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
+                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                            transition: 'background-color 0.15s ease'
+                        }}
+                    >
                         <BsPlus size={18} /> Add Warehouse
                     </button>
                 </div>
@@ -1121,128 +1348,298 @@ export const WarehousesPage = () => {
                 </div>
             ) : (
                 <>
+                    {viewMode === "table" ? (
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        border: '1px solid #e5e7eb',
+                        overflow: 'hidden',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                    }}>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table style={{
+                                width: '100%',
+                                borderCollapse: 'collapse',
+                                textAlign: 'left',
+                                fontSize: 13
+                            }}>
+                                <thead style={{
+                                    background: '#f9fafb',
+                                    borderBottom: '1px solid #e5e7eb',
+                                    color: '#4b5563',
+                                    fontWeight: 600
+                                }}>
+                                    <tr>
+                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Warehouse Code</th>
+                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Warehouse Name</th>
+                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Store</th>
+                                        <th style={{ padding: '12px 18px', minWidth: 200 }}>Address / Location</th>
+                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Tenant ID</th>
+                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Created Date</th>
+                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Status</th>
+                                        <th style={{ padding: '12px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {paginatedWarehouses.map((wh, i) => {
+                                        const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
+                                        const code = (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "")
+                                            ? String(rawCode).trim()
+                                            : "—";
+                                        const name = wh.name || `Warehouse #${wh.id || (i + 1)}`;
+                                        const address = wh.address || wh.location || "Address not provided";
+                                        const storeId = wh.store_id ?? wh.storeId;
+                                        const storeName = wh.store_name || wh.storeName;
+                                        const tenantId = wh.tenant_id ?? wh.tenantId;
+                                        const isActive = wh.is_active !== false;
+
+                                        return (
+                                            <tr
+                                                key={wh.id || i}
+                                                style={{
+                                                    borderBottom: '1px solid #f3f4f6',
+                                                    transition: 'background-color 0.15s ease'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
+                                                <td style={{ padding: '14px 18px' }}>
+                                                    {code !== "—" ? (
+                                                        <span style={{
+                                                            fontSize: 12,
+                                                            fontWeight: 700,
+                                                            color: '#4f46e5',
+                                                            background: '#eef2ff',
+                                                            padding: '3px 8px',
+                                                            borderRadius: 6,
+                                                            display: 'inline-block',
+                                                            letterSpacing: '0.02em'
+                                                        }}>
+                                                            {code}
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ color: '#9ca3af', fontWeight: 500 }}>—</span>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#111827' }}>
+                                                    {name}
+                                                </td>
+                                                <td style={{ padding: '14px 18px', color: '#374151' }}>
+                                                    {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : '—')}
+                                                </td>
+                                                <td style={{ padding: '14px 18px', color: '#6b7280' }}>
+                                                    {address}
+                                                </td>
+                                                <td style={{ padding: '14px 18px', color: '#10b981', fontWeight: 600 }}>
+                                                    {tenantId !== undefined && tenantId !== null ? `#${tenantId}` : '—'}
+                                                </td>
+                                                <td style={{ padding: '14px 18px', color: '#6b7280', fontSize: 12.5 }}>
+                                                    {wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '—'}
+                                                </td>
+                                                <td style={{ padding: '14px 18px' }}>
+                                                    <span style={{
+                                                        padding: '3px 8px',
+                                                        borderRadius: 10,
+                                                        fontSize: 11.5,
+                                                        fontWeight: 700,
+                                                        background: isActive ? '#ecfdf5' : '#fef2f2',
+                                                        color: isActive ? '#059669' : '#dc2626'
+                                                    }}>
+                                                        {isActive ? (wh.status || 'Active') : 'Inactive'}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleViewWarehouse(wh.id)}
+                                                            style={{
+                                                                background: '#f8fafc',
+                                                                color: '#4f46e5',
+                                                                border: '1px solid #e0e7ff',
+                                                                padding: '6px 12px',
+                                                                borderRadius: 6,
+                                                                fontSize: 12,
+                                                                fontWeight: 600,
+                                                                cursor: 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: 4
+                                                            }}
+                                                        >
+                                                            <BsEye size={13} /> View
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRequestDelete(wh)}
+                                                            disabled={deletingId !== null}
+                                                            title={`Delete Warehouse #${wh.id}`}
+                                                            style={{
+                                                                background: '#fef2f2',
+                                                                color: '#dc2626',
+                                                                border: '1px solid #fee2e2',
+                                                                padding: '6px 12px',
+                                                                borderRadius: 6,
+                                                                fontSize: 12,
+                                                                fontWeight: 600,
+                                                                cursor: deletingId !== null ? 'not-allowed' : 'pointer',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: 4,
+                                                                opacity: deletingId === wh.id ? 0.6 : (deletingId !== null ? 0.4 : 1)
+                                                            }}
+                                                        >
+                                                            <BsTrash size={13} /> {deletingId === wh.id ? 'Deleting...' : 'Delete'}
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
                         {paginatedWarehouses.map((wh, i) => {
-                        const isActive = wh.is_active !== false;
-                        const code = wh.code || `WH-${wh.id || (i + 1)}`;
-                        const name = wh.name || `Warehouse #${wh.id}`;
-                        const address = wh.address || wh.location || "Address not provided";
-                        const storeId = wh.store_id ?? wh.storeId;
-                        const storeName = wh.store_name || wh.storeName;
-                        const tenantId = wh.tenant_id ?? wh.tenantId;
+                            const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
+                            const code = (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "")
+                                ? String(rawCode).trim()
+                                : "—";
+                            const isActive = wh.is_active !== false;
+                            const name = wh.name || `Warehouse #${wh.id || (i + 1)}`;
+                            const address = wh.address || wh.location || "Address not provided";
+                            const storeId = wh.store_id ?? wh.storeId;
+                            const storeName = wh.store_name || wh.storeName;
+                            const tenantId = wh.tenant_id ?? wh.tenantId;
 
-                        return (
-                            <div
-                                key={wh.id || i}
-                                style={{
-                                    background: '#fff',
-                                    borderRadius: 12,
-                                    border: '1px solid #e5e7eb',
-                                    padding: 22,
-                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                                }}
-                            >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', background: '#eef2ff', padding: '2px 8px', borderRadius: 4 }}>
-                                            {code}
-                                        </span>
-                                        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '6px 0 2px 0' }}>
-                                            {name}
-                                        </h3>
-                                        <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
-                                            {address}
-                                        </p>
-                                    </div>
-                                    <span style={{
-                                        background: isActive ? '#ecfdf5' : '#fef2f2',
-                                        color: isActive ? '#059669' : '#dc2626',
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        padding: '3px 8px',
-                                        borderRadius: 10
-                                    }}>
-                                        {isActive ? (wh.status || 'Active') : 'Inactive'}
-                                    </span>
-                                </div>
-                                <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Store</span>
-                                        <strong style={{ fontSize: 13, color: '#111827', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={storeName || (storeId != null ? `Store #${storeId}` : '-')}>
-                                            {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : (wh.items || '-'))}
-                                        </strong>
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Tenant ID</span>
-                                        <strong style={{ fontSize: 14, color: '#10b981' }}>
-                                            {tenantId !== undefined && tenantId !== null ? `#${tenantId}` : (wh.value || '-')}
-                                        </strong>
-                                    </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Created At</span>
-                                        <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>
-                                            {wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '-'}
+                            return (
+                                <div
+                                    key={wh.id || i}
+                                    style={{
+                                        background: '#fff',
+                                        borderRadius: 12,
+                                        border: '1px solid #e5e7eb',
+                                        padding: 22,
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                                        <div>
+                                            <span style={{
+                                                fontSize: 11,
+                                                fontWeight: 700,
+                                                color: code !== "—" ? '#6366f1' : '#9ca3af',
+                                                background: code !== "—" ? '#eef2ff' : '#f3f4f6',
+                                                padding: '2px 8px',
+                                                borderRadius: 4
+                                            }}>
+                                                {code}
+                                            </span>
+                                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '6px 0 2px 0' }}>
+                                                {name}
+                                            </h3>
+                                            <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+                                                {address}
+                                            </p>
+                                        </div>
+                                        <span style={{
+                                            background: isActive ? '#ecfdf5' : '#fef2f2',
+                                            color: isActive ? '#059669' : '#dc2626',
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            padding: '3px 8px',
+                                            borderRadius: 10
+                                        }}>
+                                            {isActive ? (wh.status || 'Active') : 'Inactive'}
                                         </span>
                                     </div>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Updated At</span>
-                                        <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>
-                                            {wh.updated_at ? new Date(wh.updated_at).toLocaleDateString() : (wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '-')}
-                                        </span>
+                                    <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Warehouse Code</span>
+                                            <strong style={{ fontSize: 13, color: '#4f46e5', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {code}
+                                            </strong>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Store</span>
+                                            <strong style={{ fontSize: 13, color: '#111827', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={storeName || (storeId != null ? `Store #${storeId}` : '-')}>
+                                                {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : (wh.items || '-'))}
+                                            </strong>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Tenant ID</span>
+                                            <strong style={{ fontSize: 14, color: '#10b981' }}>
+                                                {tenantId !== undefined && tenantId !== null ? `#${tenantId}` : (wh.value || '-')}
+                                            </strong>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Created At</span>
+                                            <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>
+                                                {wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '-'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Updated At</span>
+                                            <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>
+                                                {wh.updated_at ? new Date(wh.updated_at).toLocaleDateString() : (wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '-')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f3f4f6', display: 'flex', gap: 8 }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleViewWarehouse(wh.id)}
+                                            style={{
+                                                flex: 1,
+                                                background: '#f8fafc',
+                                                color: '#4f46e5',
+                                                border: '1px solid #e0e7ff',
+                                                padding: '7px 12px',
+                                                borderRadius: 8,
+                                                fontSize: 12.5,
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: 6
+                                            }}
+                                        >
+                                            View Details
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleRequestDelete(wh)}
+                                            disabled={deletingId !== null}
+                                            title={`Delete Warehouse #${wh.id}`}
+                                            style={{
+                                                background: '#fef2f2',
+                                                color: '#dc2626',
+                                                border: '1px solid #fee2e2',
+                                                padding: '7px 12px',
+                                                borderRadius: 8,
+                                                fontSize: 12.5,
+                                                fontWeight: 600,
+                                                cursor: deletingId !== null ? 'not-allowed' : 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: 6,
+                                                opacity: deletingId === wh.id ? 0.6 : (deletingId !== null ? 0.4 : 1)
+                                            }}
+                                        >
+                                            <BsTrash size={14} />
+                                            {deletingId === wh.id ? 'Deleting...' : 'Delete'}
+                                        </button>
                                     </div>
                                 </div>
-                                <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f3f4f6', display: 'flex', gap: 8 }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleViewWarehouse(wh.id)}
-                                        style={{
-                                            flex: 1,
-                                            background: '#f8fafc',
-                                            color: '#4f46e5',
-                                            border: '1px solid #e0e7ff',
-                                            padding: '7px 12px',
-                                            borderRadius: 8,
-                                            fontSize: 12.5,
-                                            fontWeight: 600,
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: 6
-                                        }}
-                                    >
-                                        View Details
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleRequestDelete(wh)}
-                                        disabled={deletingId !== null}
-                                        title={`Delete Warehouse #${wh.id}`}
-                                        style={{
-                                            background: '#fef2f2',
-                                            color: '#dc2626',
-                                            border: '1px solid #fee2e2',
-                                            padding: '7px 12px',
-                                            borderRadius: 8,
-                                            fontSize: 12.5,
-                                            fontWeight: 600,
-                                            cursor: deletingId !== null ? 'not-allowed' : 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: 6,
-                                            opacity: deletingId === wh.id ? 0.6 : (deletingId !== null ? 0.4 : 1)
-                                        }}
-                                    >
-                                        <BsTrash size={14} />
-                                        {deletingId === wh.id ? 'Deleting...' : 'Delete'}
-                                    </button>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
+                            );
+                        })}
+                    </div>
+                )}
+                
                 {filteredWarehouses.length > 0 && (
                     <div style={{
                         display: 'flex',
@@ -1431,16 +1828,22 @@ export const WarehousesPage = () => {
                             ) : selectedWarehouse ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span style={{
-                                            fontSize: 12,
-                                            fontWeight: 700,
-                                            color: '#6366f1',
-                                            background: '#eef2ff',
-                                            padding: '3px 10px',
-                                            borderRadius: 6
-                                        }}>
-                                            {selectedWarehouse.code || `WH-${selectedWarehouse.id}`}
-                                        </span>
+                                        {(() => {
+                                            const rawModalCode = selectedWarehouse.code ?? selectedWarehouse.warehouse_code ?? selectedWarehouse.warehouseCode;
+                                            const modalCode = (rawModalCode && String(rawModalCode).trim() !== "") ? String(rawModalCode).trim() : "—";
+                                            return (
+                                                <span style={{
+                                                    fontSize: 12,
+                                                    fontWeight: 700,
+                                                    color: modalCode !== "—" ? '#6366f1' : '#9ca3af',
+                                                    background: modalCode !== "—" ? '#eef2ff' : '#f3f4f6',
+                                                    padding: '3px 10px',
+                                                    borderRadius: 6
+                                                }}>
+                                                    {modalCode}
+                                                </span>
+                                            );
+                                        })()}
                                         <span style={{
                                             fontSize: 11.5,
                                             fontWeight: 700,
@@ -1463,6 +1866,15 @@ export const WarehousesPage = () => {
                                     </div>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Warehouse Code</span>
+                                            <strong style={{ fontSize: 14, color: '#4f46e5' }}>
+                                                {(() => {
+                                                    const rawModalCode = selectedWarehouse.code ?? selectedWarehouse.warehouse_code ?? selectedWarehouse.warehouseCode;
+                                                    return (rawModalCode && String(rawModalCode).trim() !== "") ? String(rawModalCode).trim() : "—";
+                                                })()}
+                                            </strong>
+                                        </div>
                                         <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
                                             <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Warehouse ID</span>
                                             <strong style={{ fontSize: 14, color: '#0f172a' }}>#{selectedWarehouse.id}</strong>
@@ -1856,6 +2268,349 @@ export const WarehousesPage = () => {
                                 {deletingId !== null ? 'Deleting...' : 'Confirm Delete'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ADD WAREHOUSE MODAL */}
+            {isAddModalOpen && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10000,
+                        padding: 20,
+                        backdropFilter: 'blur(3px)'
+                    }}
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget && !isSubmittingWarehouse) {
+                            handleCloseAddModal();
+                        }
+                    }}
+                >
+                    <div
+                        style={{
+                            background: '#ffffff',
+                            borderRadius: 14,
+                            width: '100%',
+                            maxWidth: 540,
+                            maxHeight: '90vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                            border: '1px solid #e5e7eb',
+                            overflow: 'hidden'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div style={{
+                            padding: '18px 24px',
+                            borderBottom: '1px solid #e5e7eb',
+                            background: '#fafafa',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 8,
+                                    background: '#eef2ff',
+                                    color: '#6366f1',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BsBuildings size={18} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                        Add New Warehouse
+                                    </h3>
+                                    <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                        Register a new stock location or central depot
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCloseAddModal}
+                                disabled={isSubmittingWarehouse}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    fontSize: 20,
+                                    lineHeight: 1,
+                                    cursor: isSubmittingWarehouse ? 'not-allowed' : 'pointer',
+                                    color: '#9ca3af',
+                                    padding: '4px 8px'
+                                }}
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Modal Body / Form */}
+                        <form onSubmit={handleCreateWarehouse} style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ padding: '24px', overflowY: 'auto', maxHeight: 'calc(90vh - 140px)' }}>
+                                {/* Error Alert */}
+                                {addFormError && (
+                                    <div style={{
+                                        marginBottom: 18,
+                                        background: '#fef2f2',
+                                        border: '1px solid #fee2e2',
+                                        borderRadius: 8,
+                                        padding: '12px 14px',
+                                        color: '#b91c1c',
+                                        fontSize: 12.5,
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: 8
+                                    }}>
+                                        <BsExclamationTriangle size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                                        <div style={{ flex: 1 }}>{addFormError}</div>
+                                    </div>
+                                )}
+
+                                {/* Success Alert */}
+                                {addFormSuccess && (
+                                    <div style={{
+                                        marginBottom: 18,
+                                        background: '#ecfdf5',
+                                        border: '1px solid #a7f3d0',
+                                        borderRadius: 8,
+                                        padding: '12px 14px',
+                                        color: '#065f46',
+                                        fontSize: 12.5,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8
+                                    }}>
+                                        <BsCheckCircle size={16} style={{ flexShrink: 0 }} />
+                                        <div>{addFormSuccess}</div>
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                    {/* Warehouse Name */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Warehouse Name <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. Central Distribution Depot"
+                                            value={addFormData.name}
+                                            onChange={(e) => {
+                                                setAddFormData(prev => ({ ...prev, name: e.target.value }));
+                                                if (validationErrors.name) {
+                                                    setValidationErrors(prev => ({ ...prev, name: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${validationErrors.name ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingWarehouse}
+                                            required
+                                        />
+                                        {validationErrors.name && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {validationErrors.name}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Warehouse Code */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Warehouse Code <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. WH-MUM-01"
+                                            value={addFormData.code}
+                                            onChange={(e) => {
+                                                setAddFormData(prev => ({ ...prev, code: e.target.value.toUpperCase() }));
+                                                if (validationErrors.code) {
+                                                    setValidationErrors(prev => ({ ...prev, code: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${validationErrors.code ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                fontFamily: 'monospace',
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingWarehouse}
+                                            required
+                                        />
+                                        {validationErrors.code && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {validationErrors.code}
+                                            </span>
+                                        )}
+                                        <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                            Unique identifier (2-50 characters). Must include letters (e.g. WH-001 or WH01; cannot contain only numbers)
+                                        </span>
+                                    </div>
+
+                                    {/* Associated Store */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Associated Store <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
+                                        </label>
+                                        <select
+                                            value={addFormData.store_id}
+                                            onChange={(e) => setAddFormData(prev => ({ ...prev, store_id: e.target.value }))}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: '1px solid #d1d5db',
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                background: '#fff',
+                                                cursor: 'pointer',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingWarehouse || loadingStores}
+                                        >
+                                            <option value="">-- None (Central / Independent Depot) --</option>
+                                            {availableStores.map(st => (
+                                                <option key={st.id} value={st.id}>
+                                                    {st.name} {st.code ? `(${st.code})` : `(Store #${st.id})`}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                            Link to a specific retail branch store or keep unlinked for central warehouse
+                                        </span>
+                                    </div>
+
+                                    {/* Location / Address */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Address / Location Details <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
+                                        </label>
+                                        <textarea
+                                            rows={3}
+                                            placeholder="Enter warehouse physical address, city, or location details..."
+                                            value={addFormData.address}
+                                            onChange={(e) => {
+                                                setAddFormData(prev => ({ ...prev, address: e.target.value }));
+                                                if (validationErrors.address) {
+                                                    setValidationErrors(prev => ({ ...prev, address: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${validationErrors.address ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                resize: 'vertical',
+                                                fontFamily: 'inherit',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingWarehouse}
+                                        />
+                                        {validationErrors.address && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {validationErrors.address}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div style={{
+                                padding: '16px 24px',
+                                borderTop: '1px solid #e5e7eb',
+                                background: '#fafafa',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'flex-end',
+                                gap: 10
+                            }}>
+                                <button
+                                    type="button"
+                                    onClick={handleCloseAddModal}
+                                    disabled={isSubmittingWarehouse}
+                                    style={{
+                                        background: '#f3f4f6',
+                                        color: '#374151',
+                                        border: '1px solid #d1d5db',
+                                        padding: '9px 18px',
+                                        borderRadius: 8,
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        cursor: isSubmittingWarehouse ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingWarehouse}
+                                    style={{
+                                        background: isSubmittingWarehouse ? '#818cf8' : '#6366f1',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        padding: '9px 20px',
+                                        borderRadius: 8,
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        cursor: isSubmittingWarehouse ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        boxShadow: '0 1px 2px rgba(99, 102, 241, 0.2)'
+                                    }}
+                                >
+                                    {isSubmittingWarehouse ? (
+                                        <>
+                                            <span style={{
+                                                display: 'inline-block',
+                                                width: 14,
+                                                height: 14,
+                                                border: '2px solid #ffffff',
+                                                borderTopColor: 'transparent',
+                                                borderRadius: '50%',
+                                                animation: 'spin 1s linear infinite'
+                                            }} />
+                                            <span>Creating...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <BsPlus size={18} />
+                                            <span>Create Warehouse</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}
