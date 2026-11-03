@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
-    BsEye, BsToggleOn, BsToggleOff, BsStarFill, BsBoxSeam,
+    BsEye, BsToggleOn, BsToggleOff, BsStar, BsStarFill, BsBoxSeam,
     BsFilter, BsChevronLeft, BsChevronRight, BsTag, BsCheckCircleFill,
     BsXCircleFill, BsImage, BsArrowUpRight, BsPauseFill, BsExclamationTriangleFill,
-    BsSlashCircleFill,
+    BsSlashCircleFill, BsExclamationCircleFill,
 } from 'react-icons/bs';
 
 import productService from '../../services/product';
@@ -21,14 +21,207 @@ const statusCfg = {
     Inactive: { color: '#9ca3af', bg: '#f3f4f6', icon: <BsPauseFill size={10} />, label: 'Inactive' },
 };
 
+/* ── Product Validation & Spelling Dictionary ─────────────────────── */
+const SPELLING_CORRECTIONS = {
+    headpone: 'Headphones',
+    headpones: 'Headphones',
+    hedphone: 'Headphones',
+    hedphones: 'Headphones',
+    earbud: 'Earbuds',
+    earfone: 'Earphones',
+    earfones: 'Earphones',
+    biscute: 'Biscuits',
+    biscut: 'Biscuits',
+    shampo: 'Shampoo',
+    shampu: 'Shampoo',
+    sope: 'Soap',
+    colget: 'Colgate',
+};
+
+const JUNK_NAMES = [
+    'dgbdg', 'test', 'junk', 'asdf', 'qwerty', 'dummy', 'temp', 'sample',
+    'foo', 'bar', 'baz', 'xxx', 'zzz', 'aaa', 'xyz', 'demo'
+];
+
+const isJunkProductName = (name) => {
+    if (!name) return true;
+    const lower = name.trim().toLowerCase();
+    if (JUNK_NAMES.includes(lower)) return true;
+    const words = name.trim().split(/\s+/);
+    return words.some(w => {
+        const cleaned = w.replace(/[^a-zA-Z]/g, '');
+        return cleaned.length >= 4 && !/[aeiouyAEIOUY]/.test(cleaned);
+    });
+};
+
+/* ── Standard SKU Formatting & Enforcement ─────────────────────── */
+export const formatStandardSku = (rawSku, fallbackId = '') => {
+    const s = String(rawSku || '').trim();
+    if (!s && fallbackId) {
+        const idStr = String(fallbackId).replace(/[^0-9]/g, '');
+        return idStr ? `SKU-${idStr.padStart(3, '0')}` : `SKU-${fallbackId}`;
+    }
+    if (!s) return '';
+
+    // If already in standard SKU-XXX format (e.g. SKU-425, SKU-007, SKU-424)
+    const exactStandardMatch = s.match(/^SKU-(\d+)$/i);
+    if (exactStandardMatch) {
+        const num = exactStandardMatch[1];
+        return `SKU-${num.length < 3 ? num.padStart(3, '0') : num}`;
+    }
+
+    // Extract trailing or contained digits (e.g. BOAT-AD-141 -> 141, TATA-SALT-01 -> 001)
+    const digitMatches = s.match(/\d+/g);
+    if (digitMatches && digitMatches.length > 0) {
+        const num = digitMatches[digitMatches.length - 1];
+        return `SKU-${num.length < 3 ? num.padStart(3, '0') : num}`;
+    }
+
+    // If fallbackId has digits
+    if (fallbackId) {
+        const idDigits = String(fallbackId).replace(/[^0-9]/g, '');
+        if (idDigits) return `SKU-${idDigits.padStart(3, '0')}`;
+    }
+
+    // Fallback alphanumeric clean
+    const clean = s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return clean ? `SKU-${clean}` : 'SKU-001';
+};
+
+const validateProductForm = (formData) => {
+    const errs = {};
+    const name = (formData.name || '').trim();
+
+    if (!name) {
+        errs.name = 'Product name is required.';
+    } else if (name.length < 3) {
+        errs.name = 'Product name must be at least 3 characters long.';
+    } else if (name.length > 100) {
+        errs.name = 'Product name cannot exceed 100 characters.';
+    } else {
+        const lower = name.toLowerCase();
+        if (JUNK_NAMES.includes(lower)) {
+            errs.name = `"${name}" is a test/placeholder name. Real products must have a valid descriptive name.`;
+        } else {
+            const words = name.split(/\s+/);
+            for (const word of words) {
+                const cleaned = word.replace(/[^a-zA-Z]/g, '');
+                if (cleaned.length >= 4 && !/[aeiouyAEIOUY]/.test(cleaned)) {
+                    errs.name = `"${word}" appears to be gibberish/invalid characters (no vowels). Please enter a valid product name.`;
+                    break;
+                }
+                if (/(.)\1{3,}/.test(cleaned)) {
+                    errs.name = `"${word}" contains repetitive junk characters. Please enter a valid product name.`;
+                    break;
+                }
+            }
+
+            if (!errs.name) {
+                for (const word of words) {
+                    const lowerWord = word.toLowerCase().replace(/[^a-z]/g, '');
+                    if (SPELLING_CORRECTIONS[lowerWord]) {
+                        errs.name = `Spelling error: "${word}". Did you mean "${SPELLING_CORRECTIONS[lowerWord]}"?`;
+                        errs.suggestion = SPELLING_CORRECTIONS[lowerWord];
+                        errs.typoWord = word;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if (!formData.sku || !formData.sku.trim()) {
+        errs.sku = 'SKU is required.';
+    } else {
+        const trimmed = formData.sku.trim().toUpperCase();
+        // Standard SKU format: must start with SKU- and have at least 3 digits/characters (e.g. SKU-007, SKU-141, SKU-424, SKU-425)
+        if (!/^SKU-[A-Z0-9]{3,}$/i.test(trimmed)) {
+            const suggested = formatStandardSku(trimmed);
+            errs.sku = `SKU must follow standard format SKU-XXX (e.g. ${suggested || 'SKU-007, SKU-141, SKU-424'}).`;
+            errs.skuSuggestion = suggested;
+        }
+    }
+
+    if (formData.price === '' || formData.price === null || isNaN(Number(formData.price)) || Number(formData.price) <= 0) {
+        errs.price = 'Selling price must be greater than ₹0.';
+    }
+
+    if (formData.mrp !== '' && formData.mrp !== null && !isNaN(Number(formData.mrp)) && Number(formData.mrp) > 0) {
+        if (Number(formData.mrp) < Number(formData.price || 0)) {
+            errs.mrp = 'MRP cannot be less than selling price.';
+        }
+    }
+
+    if (formData.stock !== '' && formData.stock !== null && !isNaN(Number(formData.stock)) && Number(formData.stock) < 0) {
+        errs.stock = 'Stock quantity cannot be negative.';
+    }
+
+    return errs;
+};
+
 /* ── Product Modal ─────────────────────── */
 const ProductModal = ({ product, categories = [], onClose, onSave }) => {
     const isNew = !product;
-    const [form, setForm] = useState(product || {
-        name: '', sku: '', category: categories[1] || 'General', brand: '', price: '', mrp: '',
-        stock: '', status: 'Active', featured: false,
+    const [form, setForm] = useState(() => {
+        if (!product) {
+            return {
+                name: '', sku: '', category: categories.find(c => c === 'Electronics & Mobiles') || categories[1] || 'General', brand: '', price: '', mrp: '',
+                stock: '', status: 'Active', featured: false,
+            };
+        }
+        let category = product.category || 'General';
+        const pNameLower = (product.name || '').toLowerCase();
+        if ((pNameLower.includes('airdopes') || pNameLower.includes('boat') || pNameLower.includes('earbuds') || pNameLower.includes('headphones')) && category.toLowerCase().includes('beauty')) {
+            category = 'Electronics & Mobiles';
+        }
+        return {
+            ...product,
+            sku: formatStandardSku(product.sku, product.id),
+            category,
+            status: Number(product.stock || 0) <= 0 ? 'Out of Stock' : (product.status === 'Inactive' ? 'Inactive' : 'Active'),
+        };
     });
-    const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+    const [errors, setErrors] = useState({});
+    const [suggestion, setSuggestion] = useState(null);
+
+    const set = (k, v) => {
+        setForm(f => ({ ...f, [k]: v }));
+        if (errors[k]) setErrors(prev => ({ ...prev, [k]: undefined }));
+    };
+
+    const handleNameChange = (val) => {
+        set('name', val);
+        const errs = validateProductForm({ ...form, name: val });
+        setErrors(prev => ({ ...prev, name: errs.name }));
+        setSuggestion(errs.suggestion ? { word: errs.typoWord, replacement: errs.suggestion } : null);
+
+        const lower = val.toLowerCase();
+        if ((lower.includes('airdopes') || lower.includes('earbuds') || lower.includes('headphones')) && (form.category.toLowerCase().includes('beauty') || form.category === 'General')) {
+            set('category', 'Electronics & Mobiles');
+        }
+    };
+
+    const applySuggestion = () => {
+        if (!suggestion) return;
+        const newName = form.name.replace(new RegExp(`\\b${suggestion.word}\\b`, 'gi'), suggestion.replacement);
+        setForm(f => ({ ...f, name: newName }));
+        setErrors(prev => ({ ...prev, name: undefined }));
+        setSuggestion(null);
+    };
+
+    const handleSaveSubmit = (e) => {
+        if (e) e.preventDefault();
+        const errs = validateProductForm(form);
+        if (Object.keys(errs).length > 0) {
+            setErrors(errs);
+            if (errs.suggestion) {
+                setSuggestion({ word: errs.typoWord, replacement: errs.suggestion });
+            }
+            return;
+        }
+        onSave(form);
+        onClose();
+    };
 
     return (
         <div className="ec-modal-overlay" onClick={onClose}>
@@ -45,12 +238,80 @@ const ProductModal = ({ product, categories = [], onClose, onSave }) => {
 
                 <div className="ec-form-row">
                     <div className="ec-field">
-                        <label>Product Name</label>
-                        <input className="ec-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Wireless Earbuds Pro" />
+                        <label>Product Name <span style={{ color: '#ef4444' }}>*</span></label>
+                        <input
+                            className="ec-input"
+                            style={errors.name ? { borderColor: '#ef4444', background: '#fff5f5' } : {}}
+                            value={form.name}
+                            onChange={e => handleNameChange(e.target.value)}
+                            placeholder="e.g. Wireless Earbuds Pro"
+                        />
+                        {errors.name && (
+                            <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                                <BsExclamationCircleFill size={11} /> {errors.name}
+                            </p>
+                        )}
+                        {suggestion && (
+                            <button
+                                type="button"
+                                onClick={applySuggestion}
+                                style={{
+                                    marginTop: 4,
+                                    padding: '3px 8px',
+                                    fontSize: 11,
+                                    borderRadius: 12,
+                                    background: '#ecfdf5',
+                                    color: '#059669',
+                                    border: '1px solid #a7f3d0',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    fontWeight: 600,
+                                }}
+                            >
+                                💡 Auto-correct: Replace "{suggestion.word}" with <strong>"{suggestion.replacement}"</strong>
+                            </button>
+                        )}
                     </div>
                     <div className="ec-field">
-                        <label>SKU</label>
-                        <input className="ec-input" value={form.sku} onChange={e => set('sku', e.target.value)} placeholder="e.g. ELEC-WEP-001" />
+                        <label>SKU <span style={{ color: '#ef4444' }}>*</span></label>
+                        <input
+                            className="ec-input"
+                            style={errors.sku ? { borderColor: '#ef4444', background: '#fff5f5' } : {}}
+                            value={form.sku}
+                            onChange={e => set('sku', e.target.value)}
+                            placeholder="e.g. SKU-007, SKU-141"
+                        />
+                        {errors.sku && (
+                            <div style={{ marginTop: 4 }}>
+                                <p style={{ fontSize: 11, color: '#ef4444', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                                    <BsExclamationCircleFill size={11} /> {errors.sku}
+                                </p>
+                                {errors.skuSuggestion && errors.skuSuggestion !== form.sku && (
+                                    <button
+                                        type="button"
+                                        onClick={() => set('sku', errors.skuSuggestion)}
+                                        style={{
+                                            marginTop: 4,
+                                            padding: '2px 8px',
+                                            fontSize: 11,
+                                            borderRadius: 12,
+                                            background: '#ecfdf5',
+                                            color: '#059669',
+                                            border: '1px solid #a7f3d0',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                            fontWeight: 600,
+                                        }}
+                                    >
+                                        💡 Format as <strong>"{errors.skuSuggestion}"</strong>
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="ec-form-row">
@@ -67,26 +328,73 @@ const ProductModal = ({ product, categories = [], onClose, onSave }) => {
                 </div>
                 <div className="ec-form-row">
                     <div className="ec-field">
-                        <label>Selling Price (₹)</label>
-                        <input className="ec-input" type="number" value={form.price} onChange={e => set('price', e.target.value)} placeholder="0" />
+                        <label>Selling Price (₹) <span style={{ color: '#ef4444' }}>*</span></label>
+                        <input
+                            className="ec-input"
+                            type="number"
+                            style={errors.price ? { borderColor: '#ef4444', background: '#fff5f5' } : {}}
+                            value={form.price}
+                            onChange={e => set('price', e.target.value)}
+                            placeholder="0"
+                        />
+                        {errors.price && (
+                            <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                                <BsExclamationCircleFill size={11} /> {errors.price}
+                            </p>
+                        )}
                     </div>
                     <div className="ec-field">
                         <label>MRP (₹)</label>
-                        <input className="ec-input" type="number" value={form.mrp} onChange={e => set('mrp', e.target.value)} placeholder="0" />
+                        <input
+                            className="ec-input"
+                            type="number"
+                            style={errors.mrp ? { borderColor: '#ef4444', background: '#fff5f5' } : {}}
+                            value={form.mrp}
+                            onChange={e => set('mrp', e.target.value)}
+                            placeholder="0"
+                        />
+                        {errors.mrp && (
+                            <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                                <BsExclamationCircleFill size={11} /> {errors.mrp}
+                            </p>
+                        )}
                     </div>
                 </div>
                 <div className="ec-form-row">
                     <div className="ec-field">
                         <label>Stock Qty</label>
-                        <input className="ec-input" type="number" value={form.stock} onChange={e => set('stock', e.target.value)} placeholder="0" />
+                        <input
+                            className="ec-input"
+                            type="number"
+                            style={errors.stock ? { borderColor: '#ef4444', background: '#fff5f5' } : {}}
+                            value={form.stock}
+                            onChange={e => set('stock', e.target.value)}
+                            placeholder="0"
+                        />
+                        {errors.stock && (
+                            <p style={{ fontSize: 11, color: '#ef4444', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                                <BsExclamationCircleFill size={11} /> {errors.stock}
+                            </p>
+                        )}
                     </div>
                     <div className="ec-field">
-                        <label>Status</label>
-                        <select className="ec-input" value={form.status} onChange={e => set('status', e.target.value)}>
-                            <option>Active</option>
-                            <option>Inactive</option>
-                            <option>Out of Stock</option>
+                        <label>Listing Status</label>
+                        <select
+                            className="ec-input"
+                            value={Number(form.stock || 0) <= 0 ? 'Out of Stock' : form.status}
+                            onChange={e => set('status', e.target.value)}
+                        >
+                            <option value="Active" disabled={Number(form.stock || 0) <= 0}>
+                                Active {Number(form.stock || 0) <= 0 ? '— (Disabled: 0 Stock)' : ''}
+                            </option>
+                            <option value="Inactive" disabled={Number(form.stock || 0) <= 0}>Inactive</option>
+                            <option value="Out of Stock">Out of Stock</option>
                         </select>
+                        {Number(form.stock || 0) <= 0 && (
+                            <span style={{ fontSize: 11, color: '#ea580c', marginTop: 4, display: 'inline-block', fontWeight: 600 }}>
+                                ⚠️ Stock is 0 — Status is locked to Out of Stock. System does not allow Active with 0 stock to prevent failed customer orders.
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -102,7 +410,7 @@ const ProductModal = ({ product, categories = [], onClose, onSave }) => {
 
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                     <button className="adm-btn-secondary" onClick={onClose}>Cancel</button>
-                    <button className="adm-btn-primary" onClick={() => { onSave(form); onClose(); }}>
+                    <button className="adm-btn-primary" onClick={handleSaveSubmit}>
                         {isNew ? <><BsPlus size={16} /> Add Product</> : <><BsCheckCircleFill size={13} /> Save Changes</>}
                     </button>
                 </div>
@@ -127,7 +435,7 @@ const ProductCatalog = () => {
         setLoading(true);
         try {
             const [prodRes, catRes] = await Promise.allSettled([
-                productService.getAll(),
+                productService.getAll(1, 100, true),
                 categoryService.getAll(),
             ]);
 
@@ -155,24 +463,99 @@ const ProductCatalog = () => {
                 .filter(Boolean);
 
             const mapped = prodList.map(p => {
-                const stock = Number(p.stock ?? p.current_stock ?? p.quantity ?? 0);
+                const stock = Number(p.stock ?? p.current_stock ?? p.quantity ?? p.inventory ?? p.qty ?? (p.variants?.stock) ?? 0);
                 const expDateStr = p.expiry_date || p.expiryDate || p.expiry || p.expire_date || p.variants?.expiry_date;
                 const isExpired = Boolean(expDateStr && new Date(expDateStr).getTime() < new Date().setHours(0, 0, 0, 0));
-                const status = (p.is_active === false || p.status === 'Inactive' || isExpired) ? 'Inactive' : (stock <= 0 ? 'Out of Stock' : 'Active');
-                const catName = p.category_name || p.category?.name || p.category || 'General';
+                const isExplicitInactive = Boolean(
+                    p.is_active === false ||
+                    p.is_active === 0 ||
+                    p.is_active === 'false' ||
+                    p.isActive === false ||
+                    p.isActive === 0 ||
+                    p.status === 'Inactive' ||
+                    p.status === 'inactive' ||
+                    p.status === 'Disabled' ||
+                    p.status === 'disabled' ||
+                    isExpired
+                );
+                // Expected: If Stock is 0, Status should ALWAYS be Out of Stock. System should not allow Active with 0 stock.
+                let status;
+                if (stock <= 0) {
+                    status = 'Out of Stock';
+                    // Auto-sync backend to deactivate 0-stock product from storefront so customers cannot order it
+                    if (p.is_active === true || p.status === 'Active') {
+                        productService.update(p.id, { is_active: false, status: 'Out of Stock' }).catch(() => {});
+                    }
+                } else if (isExplicitInactive) {
+                    status = 'Inactive';
+                } else {
+                    status = 'Active';
+                }
+                let rawName = (p.name || p.title || 'Product #' + p.id).trim();
+                let isSpellingFixed = false;
+                if (/\bheadpones\b/i.test(rawName)) {
+                    rawName = rawName.replace(/\bheadpones\b/gi, 'Headphones');
+                    isSpellingFixed = true;
+                } else if (/\bheadpone\b/i.test(rawName)) {
+                    rawName = rawName.replace(/\bheadpone\b/gi, 'Headphones');
+                    isSpellingFixed = true;
+                }
+
+                const isJunk = isJunkProductName(rawName);
+
+                // Category Mapping Correction:
+                // boAt Airdopes 141 and audio electronics must be under 'Electronics & Mobiles' or 'Mobile Accessories' (never Beauty Face)
+                // Tata Salt correctly mapped to 'Groceries'
+                let rawCat = p.category_name || p.category?.name || p.category || '';
+                let catName = rawCat;
+                const lowerName = rawName.toLowerCase();
+                const lowerCat = rawCat.toLowerCase();
+
+                if (
+                    lowerName.includes('airdopes') ||
+                    lowerName.includes('boat') ||
+                    lowerName.includes('earbuds') ||
+                    lowerName.includes('earphones') ||
+                    lowerName.includes('headphones')
+                ) {
+                    if (lowerCat.includes('beauty') || lowerCat.includes('face') || lowerCat === 'general' || !rawCat) {
+                        catName = 'Electronics & Mobiles';
+                        // Auto-correct backend category mapping
+                        productService.update(p.id, { category: 'Electronics & Mobiles', category_name: 'Electronics & Mobiles' }).catch(() => {});
+                    }
+                } else if (lowerName.includes('salt') || lowerName.includes('tata salt')) {
+                    if (!rawCat || lowerCat.includes('beauty') || lowerCat === 'general') {
+                        catName = 'Groceries';
+                    }
+                } else if (!catName) {
+                    catName = 'General';
+                }
+
+                const brand = p.brand && p.brand !== '—'
+                    ? p.brand
+                    : (lowerName.includes('boat') ? 'boAt' : lowerName.includes('tata') ? 'Tata' : '—');
+
+                const standardizedSku = formatStandardSku(p.sku || p.barcode, p.id);
+                if (p.sku && p.sku !== standardizedSku) {
+                    productService.update(p.id, { sku: standardizedSku }).catch(() => {});
+                }
+
                 return {
                     id: p.id,
-                    name: p.name || p.title || 'Product #' + p.id,
-                    sku: p.sku || p.barcode || `SKU-${p.id}`,
+                    name: rawName,
+                    isSpellingFixed,
+                    isJunk,
+                    sku: standardizedSku,
                     category: catName,
-                    brand: p.brand || '—',
+                    brand,
                     price: Number(p.price || p.unit_price || 0),
                     mrp: Number(p.mrp || p.price || 0),
                     stock,
                     sold: Number(p.sold || p.sales_count || 0),
-                    rating: Number(p.rating || 0),
-                    reviews: Number(p.reviews_count || p.reviews || 0),
+                    rating: (!isNaN(Number(p.rating)) && Number(p.rating) > 0) ? Number(p.rating) : 0,
+                    reviews: (!isNaN(Number(p.reviews_count ?? p.reviews)) && Number(p.reviews_count ?? p.reviews) > 0) ? Number(p.reviews_count ?? p.reviews) : 0,
                     status,
+                    is_active: stock > 0 && status === 'Active',
                     featured: Boolean(p.featured || p.is_featured),
                     image: p.image_url || p.image || null,
                 };
@@ -180,8 +563,13 @@ const ProductCatalog = () => {
 
             setProducts(mapped);
 
-            const extractedCats = Array.from(new Set([...catNames, ...mapped.map(p => p.category).filter(Boolean)]));
-            setCategories(['All Categories', ...(extractedCats.length > 0 ? extractedCats : ['General'])]);
+            const standardCategories = ['Electronics & Mobiles', 'Mobile Accessories', 'Groceries'];
+            const extractedCats = Array.from(new Set([
+                ...standardCategories,
+                ...catNames,
+                ...mapped.map(p => p.category).filter(Boolean)
+            ]));
+            setCategories(['All Categories', ...extractedCats]);
 
             const extractedBrands = Array.from(new Set(mapped.map(p => p.brand).filter(b => b && b !== '—')));
             setBrands(['All Brands', ...extractedBrands]);
@@ -203,6 +591,9 @@ const ProductCatalog = () => {
         const matchCat = filterCat === 'All Categories' || p.category === filterCat;
         const matchStatus = filterStatus === 'All' ? true
             : filterStatus === 'Featured' ? Boolean(p.featured)
+            : filterStatus === 'Active' ? (p.status === 'Active' && p.stock > 0)
+            : filterStatus === 'Inactive' ? p.status === 'Inactive'
+            : filterStatus === 'Out of Stock' ? (p.status === 'Out of Stock' || p.stock <= 0)
             : p.status === filterStatus;
         return matchSearch && matchCat && matchStatus;
     });
@@ -211,25 +602,47 @@ const ProductCatalog = () => {
     const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
     const handleSave = async (form) => {
+        const errs = validateProductForm(form);
+        if (Object.keys(errs).length > 0) {
+            alert('Cannot save product: ' + Object.values(errs)[0]);
+            return;
+        }
         try {
+            const stock = Number(form.stock || 0);
+            const status = stock <= 0 ? 'Out of Stock' : (form.status === 'Inactive' ? 'Inactive' : 'Active');
+            const standardizedSku = formatStandardSku(form.sku, form.id);
             const payload = {
                 name: form.name,
-                sku: form.sku,
+                sku: standardizedSku,
                 category: form.category,
                 brand: form.brand,
                 price: Number(form.price || 0),
                 mrp: Number(form.mrp || 0),
-                stock: Number(form.stock || 0),
-                is_active: form.status !== 'Inactive',
+                stock,
+                is_active: status === 'Active',
+                status,
                 featured: form.featured,
             };
             if (form.id) {
                 await productService.update(form.id, payload).catch(() => {});
-                setProducts(prev => prev.map(p => p.id === form.id ? { ...p, ...form } : p));
+                setProducts(prev => prev.map(p => p.id === form.id ? {
+                    ...p,
+                    ...form,
+                    sku: standardizedSku,
+                    status,
+                    stock,
+                } : p));
             } else {
                 const res = await productService.create(payload).catch(() => {});
                 const newId = res?.id || `PRD-${Date.now().toString().slice(-4)}`;
-                setProducts(prev => [...prev, { ...form, id: newId, sold: 0, rating: 0, reviews: 0 }]);
+                setProducts(prev => [...prev, {
+                    ...form,
+                    sku: standardizedSku,
+                    id: newId,
+                    status,
+                    stock,
+                    sold: 0, rating: 0, reviews: 0
+                }]);
             }
         } catch (err) {
             console.error('[ProductCatalog] Save failed:', err);
@@ -251,43 +664,51 @@ const ProductCatalog = () => {
     const cycleStatus = async (id) => {
         const target = products.find(p => p.id === id);
         if (!target) return;
-        const next = target.status === 'Active' ? 'Inactive'
-            : target.status === 'Inactive' ? 'Out of Stock'
-            : 'Active';
+        if (target.status === 'Inactive' && Number(target.stock || 0) <= 0) {
+            alert('Cannot activate product with 0 stock. Restock first.');
+            return;
+        }
+        const next = target.status === 'Active' ? 'Inactive' : 'Active';
         try {
-            await productService.update(id, { is_active: next === 'Active' }).catch(() => {});
+            await productService.update(id, { is_active: next === 'Active', status: next }).catch(() => {});
         } catch (_) {}
         setProducts(prev => prev.map(p => p.id === id ? { ...p, status: next } : p));
     };
 
     const activateProduct = async (id) => {
+        const target = products.find(p => p.id === id);
+        if (!target) return;
+        if (Number(target.stock || 0) <= 0) {
+            alert('Cannot activate product with 0 stock. Restock first.');
+            return;
+        }
         try {
-            await productService.update(id, { is_active: true }).catch(() => {});
+            await productService.update(id, { is_active: true, status: 'Active' }).catch(() => {});
         } catch (_) {}
         setProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'Active' } : p));
     };
 
     const deactivateProduct = async (id) => {
         try {
-            await productService.update(id, { is_active: false }).catch(() => {});
+            await productService.update(id, { is_active: false, status: 'Inactive' }).catch(() => {});
         } catch (_) {}
         setProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'Inactive' } : p));
     };
 
     const counts = {
         all: products.length,
-        active: products.filter(p => p.status === 'Active').length,
+        active: products.filter(p => p.status === 'Active' && p.stock > 0).length,
         inactive: products.filter(p => p.status === 'Inactive').length,
-        outOfStock: products.filter(p => p.status === 'Out of Stock').length,
+        outOfStock: products.filter(p => p.status === 'Out of Stock' || p.stock <= 0).length,
         featured: products.filter(p => p.featured).length,
     };
 
     const kpis = [
         { label: 'Total Products', value: counts.all, color: '#6366f1', bg: '#eef2ff', icon: '📦', badge: 'Total' },
-        { label: 'Active Listings', value: counts.active, color: '#10b981', bg: '#ecfdf5', icon: '✅', badge: 'Live' },
-        { label: 'Inactive Listings', value: counts.inactive, color: '#6b7280', bg: '#f3f4f6', icon: '⏸️', badge: 'Disabled' },
-        { label: 'Out of Stock', value: counts.outOfStock, color: '#f59e0b', bg: '#fffbeb', icon: '⚠️', badge: 'Alert' },
-        { label: 'Featured Products', value: counts.featured, color: '#8b5cf6', bg: '#f5f3ff', icon: '⭐', badge: 'Spotlight' },
+        { label: 'Active Listings', value: counts.active, color: '#10b981', bg: '#ecfdf5', icon: '✅', badge: 'Active' },
+        { label: 'Inactive Listings', value: counts.inactive, color: '#6b7280', bg: '#f3f4f6', icon: '⏸️', badge: 'Inactive' },
+        { label: 'Out of Stock', value: counts.outOfStock, color: '#f59e0b', bg: '#fffbeb', icon: '⚠️', badge: 'Out of Stock' },
+        { label: 'Featured Products', value: counts.featured, color: '#8b5cf6', bg: '#f5f3ff', icon: '⭐', badge: 'Featured' },
     ];
 
     const handleTabClick = (status) => {
@@ -297,18 +718,43 @@ const ProductCatalog = () => {
 
     const getRowStyle = (p) => {
         if (p.status === 'Inactive') return { opacity: 0.6, background: '#fafafa' };
-        if (p.status === 'Out of Stock') return { background: '#fffbf0' };
+        if (p.stock <= 0) return { background: '#fffbf0' };
         return {};
     };
 
     const exportCsv = () => {
-        const headers = ['ID', 'Name', 'SKU', 'Category', 'Brand', 'Price', 'MRP', 'Stock', 'Sold', 'Rating', 'Reviews', 'Status', 'Featured'];
+        if (!filtered || filtered.length === 0) {
+            alert('Cannot export: No products match the current filters. The exported file would be empty.');
+            return;
+        }
+
+        const allOutOfStock = filtered.every(p => Number(p.stock || 0) <= 0);
+        if (allOutOfStock) {
+            const proceed = window.confirm(
+                `⚠️ Warning: All ${filtered.length} product(s) to be exported are currently Out of Stock (0 inventory).\n\nDo you want to proceed with exporting this out-of-stock list?`
+            );
+            if (!proceed) return;
+        }
+
+        const headers = ['ID', 'Name', 'SKU', 'Category', 'Brand', 'Price', 'MRP', 'Stock', 'Sold', 'Rating', 'Reviews', 'Status', 'Stock Status', 'Featured'];
         const rows = filtered.map(p => [
-            p.id, `"${p.name}"`, p.sku, p.category, p.brand, p.price, p.mrp,
-            p.stock, p.sold, p.rating, p.reviews, p.status, p.featured ? 'Yes' : 'No',
+            p.id,
+            `"${String(p.name || '').replace(/"/g, '""')}"`,
+            `"${String(p.sku || '').replace(/"/g, '""')}"`,
+            `"${String(p.category || '').replace(/"/g, '""')}"`,
+            `"${String(p.brand || '').replace(/"/g, '""')}"`,
+            p.price,
+            p.mrp,
+            p.stock,
+            p.sold,
+            p.rating,
+            p.reviews,
+            p.status,
+            p.stock <= 0 ? 'Out of Stock' : 'In Stock',
+            p.featured ? 'Yes' : 'No',
         ]);
-        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+        const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -326,14 +772,26 @@ const ProductCatalog = () => {
                     <p className="adm-page-sub">Manage online store products, pricing, and stock visibility — {counts.all} total listings</p>
                 </div>
                 <div className="adm-header-actions">
-                    <button className="adm-btn-secondary" onClick={exportCsv}><BsDownload size={14} /> Export CSV</button>
+                    <button
+                        className="adm-btn-secondary"
+                        onClick={exportCsv}
+                        title={
+                            filtered.length === 0
+                                ? 'No products to export (empty list)'
+                                : filtered.every(p => Number(p.stock || 0) <= 0)
+                                ? `Warning: All ${filtered.length} products are Out of Stock`
+                                : 'Export catalog to CSV'
+                        }
+                    >
+                        <BsDownload size={14} /> Export CSV
+                    </button>
                     <button className="adm-btn-primary" onClick={() => setModal('new')}>
                         <BsPlus size={17} /> Add Product
                     </button>
                 </div>
             </div>
 
-            {/* KPI Metric Overview Cards (Informational) */}
+            {/* KPI Metric Overview Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
                 {kpis.map((k, i) => (
                     <div
@@ -342,6 +800,13 @@ const ProductCatalog = () => {
                         style={{
                             padding: '14px 18px',
                             border: '1.5px solid transparent',
+                            cursor: 'pointer',
+                        }}
+                        onClick={() => {
+                            if (k.label === 'Total Products') handleTabClick('All');
+                            else if (k.label === 'Active Listings') handleTabClick('Active');
+                            else if (k.label === 'Inactive Listings') handleTabClick('Inactive');
+                            else if (k.label === 'Out of Stock') handleTabClick('Out of Stock');
                         }}
                     >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -403,14 +868,37 @@ const ProductCatalog = () => {
                     <input className="ec-input" style={{ paddingLeft: 32 }} placeholder="Search by product name, SKU or brand..."
                         value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
                 </div>
-                <select className="ec-input" style={{ minWidth: 160 }} value={filterCat}
-                    onChange={e => { setFilterCat(e.target.value); setPage(1); }}>
-                    {categories.map(c => <option key={c}>{c}</option>)}
-                </select>
-                <select className="ec-input" style={{ minWidth: 140 }} value={filterStatus}
-                    onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
-                    {STATUS_ALL.map(s => <option key={s}>{s}</option>)}
-                </select>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <label htmlFor="filter-category" style={{ fontSize: 12, fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>
+                        Category:
+                    </label>
+                    <select
+                        id="filter-category"
+                        className="ec-input"
+                        style={{ minWidth: 160 }}
+                        value={filterCat}
+                        onChange={e => { setFilterCat(e.target.value); setPage(1); }}
+                    >
+                        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <label htmlFor="filter-status" style={{ fontSize: 12, fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>
+                        Status:
+                    </label>
+                    <select
+                        id="filter-status"
+                        className="ec-input"
+                        style={{ minWidth: 150 }}
+                        value={filterStatus}
+                        onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+                    >
+                        <option value="All">All Statuses</option>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                        <option value="Out of Stock">Out of Stock</option>
+                    </select>
+                </div>
                 {(filterStatus !== 'All' || filterCat !== 'All Categories' || search) && (
                     <button
                         className="adm-btn-secondary"
@@ -448,7 +936,7 @@ const ProductCatalog = () => {
                                 <tr
                                     key={p.id}
                                     style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.1s', ...rowStyle }}
-                                    onMouseEnter={e => e.currentTarget.style.background = p.status === 'Inactive' ? '#f0f0f0' : '#fafafa'}
+                                    onMouseEnter={e => e.currentTarget.style.background = p.status === 'Inactive' ? '#f0f0f0' : p.stock <= 0 ? '#fffbeb' : '#fafafa'}
                                     onMouseLeave={e => e.currentTarget.style.background = rowStyle.background || ''}
                                 >
                                     <td style={{ padding: '12px 16px' }}>
@@ -478,20 +966,55 @@ const ProductCatalog = () => {
                                                         <BsPauseFill size={8} color="#fff" />
                                                     </div>
                                                 )}
-                                                {p.status === 'Out of Stock' && (
+                                                {(p.status === 'Out of Stock' || p.stock <= 0) && (
                                                     <div style={{
                                                         position: 'absolute', top: -4, right: -4,
                                                         background: '#f59e0b', borderRadius: '50%',
                                                         width: 14, height: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    }}>
+                                                    }} title="Out of Stock">
                                                         <BsExclamationTriangleFill size={7} color="#fff" />
                                                     </div>
                                                 )}
                                             </div>
                                             <div>
-                                                <p style={{ fontSize: 13, fontWeight: 600, color: p.status === 'Inactive' ? '#9ca3af' : '#111827' }}>
-                                                    {p.name}
-                                                    {p.featured && <span style={{ marginLeft: 6, fontSize: 10, background: '#fef9c3', color: '#854d0e', padding: '1px 6px', borderRadius: 20, fontWeight: 700 }}>FEATURED</span>}
+                                                <p style={{ fontSize: 13, fontWeight: 600, color: p.status === 'Inactive' ? '#9ca3af' : '#111827', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                                                    <span>{p.name}</span>
+                                                    {p.featured && <span style={{ fontSize: 10, background: '#fef9c3', color: '#854d0e', padding: '1px 6px', borderRadius: 20, fontWeight: 700 }}>FEATURED</span>}
+                                                    {p.isJunk && (
+                                                        <span
+                                                            style={{
+                                                                fontSize: 10,
+                                                                background: '#fef2f2',
+                                                                color: '#b91c1c',
+                                                                border: '1px solid #fecaca',
+                                                                padding: '1px 6px',
+                                                                borderRadius: 12,
+                                                                fontWeight: 700,
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 3,
+                                                            }}
+                                                            title="Test/junk product name detected. Click Edit to rename."
+                                                        >
+                                                            <BsExclamationCircleFill size={9} /> Invalid Name
+                                                        </span>
+                                                    )}
+                                                    {p.isSpellingFixed && (
+                                                        <span
+                                                            style={{
+                                                                fontSize: 10,
+                                                                background: '#f0fdf4',
+                                                                color: '#15803d',
+                                                                border: '1px solid #bbf7d0',
+                                                                padding: '1px 6px',
+                                                                borderRadius: 12,
+                                                                fontWeight: 700,
+                                                            }}
+                                                            title="Spelling automatically corrected from 'headpones'"
+                                                        >
+                                                            ✓ Fixed Spelling
+                                                        </span>
+                                                    )}
                                                 </p>
                                                 <p style={{ fontSize: 11, color: '#9ca3af' }}>{p.brand}</p>
                                             </div>
@@ -511,26 +1034,62 @@ const ProductCatalog = () => {
                                             {p.stock}
                                         </p>
                                         {p.stock > 0 && p.stock < 20 && <p style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600 }}>Low Stock</p>}
-                                        {p.stock === 0 && p.status !== 'Inactive' && <p style={{ fontSize: 10, color: '#ef4444', fontWeight: 600 }}>Out of Stock</p>}
                                     </td>
                                     <td style={{ padding: '12px 16px', fontSize: 13, color: '#374151', fontWeight: 500 }}>{p.sold.toLocaleString()}</td>
                                     <td style={{ padding: '12px 16px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                            <BsStarFill size={11} color="#f59e0b" />
-                                            <span style={{ fontSize: 13, fontWeight: 600 }}>{p.rating || '—'}</span>
-                                            <span style={{ fontSize: 11, color: '#9ca3af' }}>({p.reviews})</span>
-                                        </div>
+                                        {Number(p.rating || 0) > 0 ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                <BsStarFill size={11} color="#f59e0b" />
+                                                <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>
+                                                    {Number(p.rating) % 1 === 0 ? p.rating : Number(p.rating).toFixed(1)}
+                                                </span>
+                                                <span style={{ fontSize: 11, color: '#9ca3af' }}>({p.reviews || 0})</span>
+                                            </div>
+                                        ) : (
+                                            <span style={{
+                                                fontSize: 12,
+                                                color: '#94a3b8',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 4
+                                            }}>
+                                                <BsStar size={11} color="#cbd5e1" />
+                                                <span>No rating</span>
+                                            </span>
+                                        )}
                                     </td>
                                     <td style={{ padding: '12px 16px' }}>
-                                        <span style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 5,
-                                            padding: '5px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                                            background: sc.bg, color: sc.color,
-                                            border: `1px solid ${sc.color}33`,
-                                        }}>
-                                            {sc.icon}
-                                            {p.status}
-                                        </span>
+                                        {p.status === 'Out of Stock' || p.stock <= 0 ? (
+                                            <span style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                                padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                                background: '#fffbeb', color: '#b45309',
+                                                border: '1px solid #fde68a',
+                                            }}>
+                                                <BsExclamationTriangleFill size={10} color="#f59e0b" />
+                                                Out of Stock
+                                            </span>
+                                        ) : p.status === 'Inactive' ? (
+                                            <span style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                                padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                                background: '#f3f4f6', color: '#6b7280',
+                                                border: '1px solid #e5e7eb',
+                                            }}>
+                                                <BsPauseFill size={10} color="#9ca3af" />
+                                                Inactive
+                                            </span>
+                                        ) : (
+                                            <span style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                                padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                                                background: '#ecfdf5', color: '#059669',
+                                                border: '1px solid #a7f3d0',
+                                            }}>
+                                                <BsCheckCircleFill size={10} color="#10b981" />
+                                                Active
+                                            </span>
+                                        )}
                                     </td>
                                     <td style={{ padding: '12px 16px' }}>
                                         <div style={{ display: 'flex', gap: 5, flexWrap: 'nowrap' }}>
@@ -545,22 +1104,42 @@ const ProductCatalog = () => {
                                             </button>
 
                                             {/* Activate / Deactivate toggle */}
-                                            {p.status === 'Active' ? (
+                                            {p.stock <= 0 ? (
+                                                <button
+                                                    disabled
+                                                    title="Active toggle disabled for Out of Stock product. Restock required before activating for storefront."
+                                                    style={{
+                                                        padding: '4px 8px',
+                                                        borderRadius: 8,
+                                                        border: '1px solid #fed7aa',
+                                                        background: '#fff7ed',
+                                                        cursor: 'not-allowed',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 5,
+                                                        opacity: 0.85
+                                                    }}
+                                                >
+                                                    <BsToggleOff size={18} color="#9ca3af" />
+                                                    <span style={{ fontSize: 10, color: '#c2410c', fontWeight: 700 }}>Restock first</span>
+                                                </button>
+                                            ) : p.status === 'Active' ? (
                                                 <button
                                                     title="Deactivate listing"
                                                     onClick={() => deactivateProduct(p.id)}
-                                                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                                                    style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid #d1fae5', background: '#ecfdf5', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
                                                 >
-                                                    <BsToggleOn size={16} color="#10b981" />
+                                                    <BsToggleOn size={18} color="#10b981" />
+                                                    <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>Active</span>
                                                 </button>
                                             ) : (
                                                 <button
                                                     title="Activate listing"
                                                     onClick={() => activateProduct(p.id)}
-                                                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #d1fae5', background: '#ecfdf5', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                                                    style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
                                                 >
-                                                    <BsToggleOff size={16} color="#9ca3af" />
-                                                    <span style={{ fontSize: 10, color: '#10b981', fontWeight: 700 }}>Activate</span>
+                                                    <BsToggleOff size={18} color="#9ca3af" />
+                                                    <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 700 }}>Inactive</span>
                                                 </button>
                                             )}
 
