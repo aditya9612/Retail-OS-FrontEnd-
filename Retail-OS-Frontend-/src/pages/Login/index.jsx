@@ -24,6 +24,8 @@ import {
 } from "react-icons/bs";
 import { auth } from "../../services/auth.js";
 import { getCurrentUser } from "../../services/user.js";
+import { getAccessToken, decodeToken } from "../../utils/tokenStorage.js";
+import { resolveUserInfo } from "../../utils/userHelpers.js";
 
 // Reusable 6-digit OTP Box Input Component
 const OtpInput = ({ value, onChange, disabled }) => {
@@ -225,19 +227,47 @@ const Login = () => {
 
     // Helper: Post-login success flow
     const handleLoginSuccess = async (loginData, identifier) => {
+        const token = loginData?.access_token || getAccessToken();
+        const tokenPayload = decodeToken(token) || {};
+
+        let fetchedUser = null;
         try {
-            const user = await getCurrentUser();
-            localStorage.setItem("user", JSON.stringify(user));
+            const res = await getCurrentUser(tokenPayload?.sub);
+            fetchedUser = res?.user || res?.data || res;
+            if (!fetchedUser || typeof fetchedUser !== "object" || Array.isArray(fetchedUser)) {
+                fetchedUser = null;
+            }
         } catch (e) {
-            localStorage.setItem(
-                "user",
-                JSON.stringify({
-                    identifier,
-                    role: "User",
-                    logged_at: new Date().toISOString(),
-                })
-            );
+            console.warn("Could not fetch current user details on login:", e);
         }
+
+        const apiUser = loginData?.user || loginData?.data?.user || fetchedUser || {};
+        const { name: resolvedName, email: resolvedEmail, role: resolvedRole } = resolveUserInfo(
+            {
+                ...apiUser,
+                identifier,
+                role: apiUser?.role || tokenPayload?.role,
+            },
+            identifier
+        );
+
+        const userDataToStore = {
+            ...apiUser,
+            id: apiUser?.id || tokenPayload?.sub || 1,
+            tenant_id: apiUser?.tenant_id || tokenPayload?.tenant_id || 1,
+            store_id: apiUser?.store_id || tokenPayload?.store_id || 1,
+            email: resolvedEmail,
+            full_name: resolvedName,
+            name: resolvedName,
+            role: typeof resolvedRole === "object" ? resolvedRole : { name: resolvedRole },
+            identifier,
+            logged_at: new Date().toISOString(),
+        };
+
+        localStorage.setItem("user", JSON.stringify(userDataToStore));
+        window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(new CustomEvent("userProfileUpdated", { detail: userDataToStore }));
+
         navigate("/dashboard");
     };
 

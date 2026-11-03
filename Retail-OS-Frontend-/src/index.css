@@ -2111,15 +2111,20 @@ body {
 /* Two-panel shell */
 .pos-shell {
   display: flex;
-  height: calc(100vh - var(--header-h));
+  height: 100%;
+  max-height: calc(100vh - var(--header-h));
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
   background: var(--color-bg);
+  box-sizing: border-box;
 }
 
 /* ── LEFT panel ── */
 .pos-left {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
+  width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2177,6 +2182,39 @@ body {
     opacity: 0.5;
     transform: scale(0.85);
   }
+}
+
+.pos-open-order-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #4f46e5;
+  color: #ffffff;
+  border: none;
+  border-radius: 9px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pos-open-order-btn:hover {
+  background: #4338ca;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+
+.pos-open-order-badge {
+  background: #ffffff;
+  color: #4f46e5;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 12px;
+  padding: 1px 7px;
+  line-height: 1.4;
 }
 
 .pos-search-row {
@@ -2420,26 +2458,33 @@ body {
 
 /* ── RIGHT panel ── */
 .pos-right {
-  width: 420px;
+  width: 380px;
+  max-width: 400px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  max-height: 100%;
   background: #fff;
   border-left: 1px solid var(--color-border);
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+  box-sizing: border-box;
+  position: relative;
 }
 
 .pos-right-header {
-  padding: 20px 20px 14px;
+  padding: 12px 14px 10px;
   border-bottom: 1px solid #f3f4f6;
   flex-shrink: 0;
+  background: #fff;
 }
 
 .pos-right-header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .pos-right-title-row {
@@ -2449,7 +2494,7 @@ body {
 }
 
 .pos-right-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: #111827;
   letter-spacing: -0.3px;
@@ -2460,48 +2505,68 @@ body {
   color: var(--color-primary);
   font-size: 11px;
   font-weight: 700;
-  padding: 4px 12px;
+  padding: 3px 10px;
   border-radius: 20px;
 }
 
-/* Customer fields */
+.pos-order-panel-close-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.pos-order-panel-close-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #ef4444;
+}
+
+/* Customer fields in 2-column grid to prevent clipping */
 .pos-customer-row {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.pos-cust-field-wrap--full {
+  grid-column: 1 / -1;
 }
 
 .pos-cust-field-wrap {
-  flex: 1;
   position: relative;
+  min-width: 0;
 }
 
 .pos-cust-icon {
   position: absolute;
-  left: 10px;
+  left: 9px;
   top: 50%;
   transform: translateY(-50%);
   color: #9ca3af;
+  pointer-events: none;
 }
 
 .pos-cust-input {
   width: 100%;
-  padding: 8px 10px 8px 28px;
+  padding: 7px 8px 7px 26px;
   border: 1px solid #e5e7eb;
-  border-radius: 9px;
-  font-size: 12px;
+  border-radius: 8px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--color-text);
   background: #f9fafb;
   outline: none;
+  box-sizing: border-box;
   transition: border-color 0.15s, background 0.15s;
-}
-
-.pos-cust-input:only-child {
-  padding-left: 10px;
-}
-
-.pos-cust-field-wrap:not(:has(.pos-cust-icon)) .pos-cust-input {
-  padding-left: 10px;
 }
 
 .pos-cust-input:focus {
@@ -2510,17 +2575,25 @@ body {
 }
 
 .pos-cust-input::placeholder {
-  color: #d1d5db;
+  color: #9ca3af;
 }
 
-/* Cart list */
-.pos-cart-list {
-  flex: 1;
+/* ── Middle Scrollable Body ── */
+.pos-right-content {
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
-  padding: 12px 20px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 10px;
+}
+
+/* Cart list inside scrollable body */
+.pos-cart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .pos-cart-empty {
@@ -2661,14 +2734,14 @@ body {
   background: #fef2f2;
 }
 
-/* ── Right footer (totals + payment) ── */
+/* ── Right options (totals + payment inside scrollable body) ── */
+.pos-right-options,
 .pos-right-footer {
   border-top: 1px solid #f3f4f6;
-  padding: 14px 20px 18px;
-  flex-shrink: 0;
+  padding: 10px 0 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 /* Discount row */
@@ -2873,15 +2946,61 @@ body {
   box-shadow: none;
 }
 
+/* ── Pinned Checkout Action Bar at Bottom of Panel ── */
+.pos-right-checkout-bar {
+  flex-shrink: 0;
+  padding: 10px 14px 14px;
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+}
+
+.pos-checkout-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 2px;
+}
+
+.pos-checkout-total-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pos-checkout-items-count {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.pos-checkout-grand-total {
+  font-size: 20px;
+  font-weight: 900;
+  color: #111827;
+  letter-spacing: -0.5px;
+}
+
 /* ── Receipt Modal ── */
 .pos-receipt-modal {
   background: #fff;
   border-radius: 20px;
   width: 100%;
-  max-width: 440px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+  max-width: 480px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.25);
   position: relative;
   overflow: hidden;
+  margin: auto;
   animation: slideUp 0.22s ease;
 }
 
@@ -2889,9 +3008,9 @@ body {
   position: absolute;
   top: 14px;
   right: 14px;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   border: 1px solid #e5e7eb;
   background: #f9fafb;
   color: #6b7280;
@@ -2899,17 +3018,21 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 10;
+  z-index: 20;
   transition: background 0.15s, color 0.15s;
 }
 
 .pos-receipt-close:hover {
   background: #fef2f2;
+  border-color: #fca5a5;
   color: #ef4444;
 }
 
 .pos-receipt-body {
-  padding: 28px 28px 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px 28px 16px;
 }
 
 .pos-receipt-store {
@@ -3068,9 +3191,13 @@ body {
 }
 
 .pos-receipt-actions {
+  flex-shrink: 0;
   display: flex;
-  gap: 10px;
-  padding: 0 28px 24px;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 28px;
+  background: #ffffff;
+  border-top: 1px solid #f1f5f9;
 }
 
 .pos-receipt-btn-print {
@@ -3120,6 +3247,12 @@ body {
 /* ─────────────────────────────────────────
    Responsive
 ───────────────────────────────────────── */
+@media (max-width: 1280px) {
+  .pos-right {
+    width: 350px;
+  }
+}
+
 @media (max-width: 1024px) {
 
   .dash-charts-row,
@@ -3129,6 +3262,17 @@ body {
 
   .dash-stats {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .pos-right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 360px;
+    max-width: 100%;
+    z-index: 50;
+    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.15);
   }
 }
 
@@ -3149,37 +3293,172 @@ body {
 /* ─────────────────────────────────────────
    Print utilities
 ───────────────────────────────────────── */
+/* ─────────────────────────────────────────
+   POS Receipt Print Styles
+───────────────────────────────────────── */
 @media print {
-  .no-print {
+  /* 1. Global resets */
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    font-size: 12pt !important;
+  }
+
+  /* 2. Hide all non-printable chrome and screen components */
+  nav,
+  header,
+  aside,
+  .sidebar,
+  .no-print,
+  .pos-left,
+  .pos-right,
+  .pos-receipt-close,
+  .pos-receipt-actions,
+  .pos-open-order-btn,
+  .pos-search-row,
+  .pos-categories,
+  .pos-numpad-modal,
+  .pos-barcode-modal,
+  button {
     display: none !important;
   }
 
-  body * {
-    visibility: hidden;
+  /* 3. Strip layout constraints on ancestor tree to prevent clipping */
+  #root,
+  #root > div,
+  #root > div > div,
+  main,
+  .custom-scrollbar,
+  .pos-shell {
+    display: block !important;
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
   }
 
+  /* 4. Modal overlay & wrapper: unconstrain from fixed/hidden */
+  .ec-modal-overlay {
+    position: static !important;
+    display: block !important;
+    inset: auto !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: 100% !important;
+    z-index: auto !important;
+    box-shadow: none !important;
+  }
+
+  .pos-receipt-modal {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    animation: none !important;
+  }
+
+  /* 5. Render receipt in normal document flow */
   #invoice,
+  .pos-receipt-body {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 480px !important;
+    margin: 0 auto !important;
+    padding: 16px 20px !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: #ffffff !important;
+    box-sizing: border-box !important;
+  }
+
   #invoice * {
-    visibility: visible;
+    visibility: visible !important;
+    color: #111827 !important;
   }
 
-  #invoice {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
+  .pos-receipt-store {
+    margin-bottom: 14px !important;
   }
 
-  #invoice-capture,
-  #invoice-capture * {
-    visibility: visible;
+  .pos-receipt-logo {
+    background: #4f46e5 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    display: flex !important;
+    margin: 0 auto 8px !important;
   }
 
-  #invoice-capture {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 80mm;
+  .pos-receipt-divider-dots {
+    border: none !important;
+    border-top: 1px dashed #94a3b8 !important;
+    margin: 10px 0 !important;
+  }
+
+  .pos-receipt-item-row {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .pos-receipt-total-box {
+    background: #f1f5f9 !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    padding: 10px 14px !important;
+    margin-top: 12px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .pos-receipt-total-box * {
+    color: #0f172a !important;
+  }
+
+  @page {
+    size: auto;
+    margin: 8mm;
   }
 }
 

@@ -1,14 +1,28 @@
 import { getAccessToken } from "../utils/tokenStorage";
-// Billing Service — Cart & Invoice APIs
+// Billing Service — Cart & POS Billing APIs (Aligned with OpenAPI / Swagger)
 import apiClient from './api';
 
-// Default store ID. Replace with dynamic value from user profile/context when available.
-const STORE_ID = 1;
+
+/**
+ * Resolves active store ID dynamically from logged-in user profile or context
+ * Falls back to 1 if not configured
+ */
+export const getActiveStoreId = () => {
+    try {
+        const stored = localStorage.getItem('user');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed?.store_id) return Number(parsed.store_id);
+            if (parsed?.store?.id) return Number(parsed.store.id);
+        }
+    } catch (_) {}
+    return 1;
+};
 
 /**
  * Handle API error and extract meaningful message
  */
-const handleApiError = (error) => {
+export const handleApiError = (error) => {
     let message = null;
     const data = error?.response?.data;
     if (data) {
@@ -60,8 +74,12 @@ const request = async (url, options = {}) => {
         } catch (_) { }
         throw new Error(errorMsg);
     }
-    throw new Error(msg);
+    return response.json();
 };
+
+/* ==========================================================================
+   CART OPERATIONS (/api/v1/billing/cart)
+   ========================================================================== */
 
 /**
  * Add an item to the billing cart.
@@ -71,26 +89,40 @@ const request = async (url, options = {}) => {
  * @param {number} payload.product_id
  * @param {number} payload.quantity
  * @param {number} payload.unit_price
- * @param {number} payload.discount
+ * @param {number} [payload.discount=0]
+ * @param {number} [payload.store_id]
  * @returns {Promise<Object>} cart response from server
  */
-export const addCartItem = async ({ product_id, quantity, unit_price, discount }) => {
+export const addCartItem = async ({ product_id, quantity, unit_price, discount = 0, store_id = null, same_state = true }) => {
+    const activeStoreId = store_id || getActiveStoreId();
     try {
-        const response = await apiClient.post(`/billing/cart/add-item?store_id=${STORE_ID}`, {
-            product_id, quantity, unit_price, discount
-        });
+        const payload = {
+            product_id: Number(product_id),
+            quantity: Number(quantity),
+            unit_price: unit_price != null ? Number(unit_price) : null,
+            discount: Number(discount || 0),
+            store_id: Number(activeStoreId),
+            same_state: Boolean(same_state),
+        };
+        const response = await apiClient.post(
+            `/billing/cart/add-item?store_id=${activeStoreId}&same_state=true`,
+            payload
+        );
         return response.data;
     } catch (e) { handleApiError(e); }
 };
 
 /**
  * Update an existing item in the billing cart.
- * PUT /api/v1/billing/cart/update-item?store_id=<STORE_ID>
+ * PUT /api/v1/billing/cart/update-item
  */
-export const updateCartItem = async ({ product_id, quantity, unit_price, discount }) => {
+export const updateCartItem = async ({ product_id, quantity, unit_price, discount = 0 }) => {
     try {
-        const response = await apiClient.put(`/billing/cart/update-item?store_id=${STORE_ID}`, {
-            product_id, quantity, unit_price, discount
+        const response = await apiClient.put('/billing/cart/update-item', {
+            product_id: Number(product_id),
+            quantity: Number(quantity),
+            unit_price: unit_price != null ? Number(unit_price) : null,
+            discount: Number(discount || 0)
         });
         return response.data;
     } catch (e) { handleApiError(e); }
@@ -98,12 +130,12 @@ export const updateCartItem = async ({ product_id, quantity, unit_price, discoun
 
 /**
  * Remove an item from the billing cart.
- * DELETE /api/v1/billing/cart/remove-item?store_id=<STORE_ID>
+ * DELETE /api/v1/billing/cart/remove-item?product_id=<id>
  */
 export const removeCartItem = async (product_id) => {
     try {
-        const response = await apiClient.delete(`/billing/cart/remove-item?store_id=${STORE_ID}`, {
-            data: { product_id }
+        const response = await apiClient.delete('/billing/cart/remove-item', {
+            params: { product_id: Number(product_id) }
         });
         return response.data;
     } catch (e) { handleApiError(e); }
@@ -111,27 +143,186 @@ export const removeCartItem = async (product_id) => {
 
 /**
  * Get the current cart state.
- * GET /api/v1/billing/cart?store_id=<STORE_ID>
+ * GET /api/v1/billing/cart
  */
-export const getCart = async () => {
+export const getCart = async (store_id = null) => {
+    const activeStoreId = store_id || getActiveStoreId();
     try {
-        const response = await apiClient.get(`/billing/cart?store_id=${STORE_ID}`);
+        const response = await apiClient.get('/billing/cart', {
+            params: { store_id: activeStoreId }
+        });
+        return response.data;
+    } catch (e) {
+        if (e?.response?.status === 404) {
+            return null;
+        }
+        handleApiError(e);
+    }
+};
+
+/**
+ * Apply a discount or coupon code to the cart.
+ * POST /api/v1/billing/cart/apply-discount
+ */
+export const applyDiscount = async ({ discount_type, value, coupon_code = null }) => {
+    try {
+        const response = await apiClient.post('/billing/cart/apply-discount', {
+            discount_type,
+            value: Number(value),
+            coupon_code: coupon_code ? String(coupon_code).trim().toUpperCase() : null
+        });
         return response.data;
     } catch (e) { handleApiError(e); }
 };
 
 /**
- * Apply a discount or coupon code to the cart.
- * POST /api/v1/billing/cart/apply-discount?store_id=<STORE_ID>
+ * Hold current billing cart.
+ * POST /api/v1/billing/cart/hold
  */
-export const applyDiscount = async ({ discount_type, value, coupon_code = null }) => {
+export const holdCart = async ({ notes = null, customer_name = null, customer_phone = null, customer_id = null } = {}) => {
     try {
-        const response = await apiClient.post(`/billing/cart/apply-discount?store_id=${STORE_ID}`, {
-            discount_type, value, coupon_code
+        const response = await apiClient.post('/billing/cart/hold', {
+            notes: notes || null,
+            customer_name: customer_name || null,
+            customer_phone: customer_phone || null,
+            customer_id: customer_id ? Number(customer_id) : null,
         });
         return response.data;
     } catch (e) { handleApiError(e); }
 };
+
+/**
+ * List held carts.
+ * GET /api/v1/billing/cart/held
+ */
+export const getHeldCarts = async (params = {}) => {
+    try {
+        const cleanParams = {
+            store_id: params.store_id || getActiveStoreId(),
+            status: params.status || 'held',
+            page: params.page || 1,
+            page_size: params.page_size || 20,
+        };
+        if (params.search && String(params.search).trim()) {
+            cleanParams.search = String(params.search).trim();
+        }
+        const response = await apiClient.get('/billing/cart/held', { params: cleanParams });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Recall a held cart back to active billing.
+ * POST /api/v1/billing/cart/held/{hold_id}/recall
+ */
+export const recallHeldCart = async (holdId, { force_override = true } = {}) => {
+    try {
+        const response = await apiClient.post(`/billing/cart/held/${encodeURIComponent(holdId)}/recall`, {
+            force_override: Boolean(force_override),
+        });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Calculate tender change via server engine with local fallback.
+ * POST /api/v1/billing/tender-change/calculate
+ */
+export const calculateTenderChange = async ({ payable_amount, tendered_amount }) => {
+    try {
+        const response = await apiClient.post('/billing/tender-change/calculate', {
+            payable_amount: Number(payable_amount),
+            tendered_amount: Number(tendered_amount),
+        });
+        return response.data;
+    } catch (_) {
+        const due = Math.max(0, Number(tendered_amount) - Number(payable_amount));
+        return {
+            payable_amount: Number(payable_amount),
+            tendered_amount: Number(tendered_amount),
+            change_due: Math.round(due * 100) / 100,
+            sufficient_tender: Number(tendered_amount) >= Number(payable_amount),
+        };
+    }
+};
+
+/* ==========================================================================
+   CUSTOMER LOOKUP & LOYALTY (Integrated for POS cashier)
+   ========================================================================== */
+
+/**
+ * Search customers by phone or name.
+ * GET /api/v1/customers
+ */
+export const searchCustomers = async (searchQuery) => {
+    try {
+        const query = String(searchQuery || '').trim();
+        if (!query) return [];
+        const cleanDigits = query.replace(/\D/g, '');
+        const params = (cleanDigits.length >= 4) ? { mobile: cleanDigits } : { search: query };
+        const response = await apiClient.get('/customers', { params });
+        const data = response.data;
+        if (Array.isArray(data)) return data;
+        if (Array.isArray(data?.items)) return data.items;
+        if (Array.isArray(data?.customers)) return data.customers;
+        return [];
+    } catch (e) {
+        console.warn('[BillingService] searchCustomers warning:', e.message);
+        return [];
+    }
+};
+
+/**
+ * Quick create a customer on the fly during checkout.
+ * POST /api/v1/customers
+ */
+export const quickCreateCustomer = async ({ name, phone, email = null, gstin = null }) => {
+    try {
+        const response = await apiClient.post('/customers', {
+            name: String(name).trim(),
+            phone: String(phone).trim().replace(/\D/g, ''),
+            email: email ? String(email).trim() : null,
+            gstin: gstin ? String(gstin).trim().toUpperCase() : null,
+            sms_opt_in: true,
+            whatsapp_opt_in: true,
+            status: 'active',
+            segment: 'new',
+        });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/**
+ * Fetch customer loyalty points balance.
+ * GET /api/v1/customers/{customer_id}/loyalty
+ */
+export const getCustomerLoyalty = async (customerId) => {
+    try {
+        if (!customerId) return null;
+        const response = await apiClient.get(`/customers/${encodeURIComponent(customerId)}/loyalty`);
+        return response.data;
+    } catch (_) {
+        return null;
+    }
+};
+
+/**
+ * Redeem customer loyalty points.
+ * POST /api/v1/customers/loyalty/redeem
+ */
+export const redeemCustomerLoyalty = async ({ customer_id, points }) => {
+    try {
+        const response = await apiClient.post('/customers/loyalty/redeem', {
+            customer_id: Number(customer_id),
+            points: Number(points),
+        });
+        return response.data;
+    } catch (e) { handleApiError(e); }
+};
+
+/* ==========================================================================
+   INVOICE / RECEIPT EXPORT & GST
+   ========================================================================== */
 
 /**
  * Fetch a single invoice by its order ID.
@@ -146,82 +337,55 @@ export const getInvoiceByOrderId = async (orderId) => {
 
 /**
  * Fetch and download the PDF for an invoice.
- * GET /api/v1/billing/invoices/{invoices_id}/pdf
+ * GET /api/v1/invoices/{invoice_id}/pdf
  */
 export const downloadInvoicePdf = async (invoiceId) => {
-    const url = `${BASE_URL}/billing/invoices/${encodeURIComponent(invoiceId)}/pdf`;
-    const token = getAccessToken();
-    const headers = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const response = await fetch(url, { method: 'GET', headers });
-    if (!response.ok) {
-        let msg = `Failed to download PDF (${response.status})`;
-        try {
-            const errData = await response.json();
-            msg = errData?.detail?.message || JSON.stringify(errData?.detail) || msg;
-        } catch (_) { }
-        throw new Error(msg);
+    try {
+        const response = await apiClient.get(`/invoices/${encodeURIComponent(invoiceId)}/pdf`, {
+            params: { mode: 'download', document_type: 'invoice' },
+            responseType: 'blob',
+        });
+        const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'application/pdf' });
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `Invoice_${invoiceId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 2000);
+        return { success: true };
+    } catch (e) {
+        handleApiError(e);
     }
-
-    const blob = await response.blob();
-    const blobUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = `Invoice_${invoiceId}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(blobUrl);
 };
 
 /**
  * Normalizes and validates return remarks.
- * Ensures string is between 5 and 500 characters.
- * @param {string|Object} [reason]
- * @returns {string}
  */
 const resolveReturnRemarks = (reason) => {
-    if (!reason) {
-        return 'Customer return requested';
-    }
-    const raw = typeof reason === 'string'
-        ? reason
-        : (reason.remarks || reason.reason || '');
+    if (!reason) return 'Customer return requested';
+    const raw = typeof reason === 'string' ? reason : (reason.remarks || reason.reason || '');
     const trimmed = String(raw).trim();
-    if (!trimmed) {
-        return 'Customer return requested';
-    }
-    if (trimmed.length > 500) {
-        throw new Error('Return remarks cannot exceed 500 characters.');
-    }
-    if (trimmed.length < 5) {
-        throw new Error('Return remarks must be between 5 and 500 characters.');
-    }
+    if (!trimmed) return 'Customer return requested';
+    if (trimmed.length > 500) throw new Error('Return remarks cannot exceed 500 characters.');
+    if (trimmed.length < 5) throw new Error('Return remarks must be between 5 and 500 characters.');
     return trimmed;
 };
 
 /**
  * Return a complete order.
  * POST /api/v1/orders/{order_id}/return
- *
- * @param {number|string} orderId - ID of order to return
- * @param {string|Object} [remarks='Customer return requested'] - Reason / remarks for return (5-500 chars)
- * @returns {Promise<Object>} updated order response
  */
 export const returnOrder = async (orderId, remarks = 'Customer return requested') => {
-    if (!orderId) {
-        throw new Error('Order ID is required to process return.');
-    }
+    if (!orderId) throw new Error('Order ID is required to process return.');
     const validatedRemarks = resolveReturnRemarks(remarks);
     try {
         const response = await apiClient.post(`/orders/${encodeURIComponent(orderId)}/return`, {
             remarks: validatedRemarks,
         });
         return response.data;
-    } catch (e) {
-        handleApiError(e);
-    }
+    } catch (e) { handleApiError(e); }
 };
 
 /**
@@ -240,16 +404,12 @@ export const returnInvoiceItem = async ({ invoice_id, product_id, return_quantit
 /**
  * Fetch all configured GST rates.
  * GET /api/v1/gst-rates
- *
- * @returns {Promise<Array>} list of GST rate objects
  */
 export const getGstRates = async () => {
     try {
         const response = await apiClient.get('/gst-rates');
         return response.data;
-    } catch (e) {
-        throw e;
-    }
+    } catch (e) { throw e; }
 };
 
 /**
@@ -311,7 +471,7 @@ export const getInvoices = async (params = {}) => {
             cleanParams.date_to = params.date_to;
         }
         if (Object.keys(cleanParams).length === 0) {
-            cleanParams.store_id = 1;
+            cleanParams.store_id = getActiveStoreId();
         }
         const response = await apiClient.get('/invoices', { params: cleanParams });
         return response.data;

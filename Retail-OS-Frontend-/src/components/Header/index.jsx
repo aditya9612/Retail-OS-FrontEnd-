@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     BsSearch,
     BsBell,
@@ -16,7 +16,8 @@ import {
 } from 'react-icons/bs';
 import { logoutUser } from '../../services/auth';
 import LogoutConfirmModal from '../LogoutConfirmModal';
-import { getInitials } from '../../utils/userHelpers';
+import { getInitials, resolveUserInfo } from '../../utils/userHelpers';
+import { getCurrentUser } from '../../services/user';
 import productService from '../../services/product';
 import category from '../../services/categoryService';
 import { getCustomers } from '../../services/customer';
@@ -31,6 +32,18 @@ const formatPrice = (val) => {
 
 const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const currentPath = location.pathname;
+
+    const isCustomerModule = currentPath.startsWith('/customers');
+    const isBillingGstModule = (
+        currentPath.startsWith('/billing') ||
+        currentPath.startsWith('/invoices') ||
+        currentPath.startsWith('/billing-management') ||
+        currentPath.startsWith('/gst-management')
+    );
+    const shouldHideSearchBar = isCustomerModule || isBillingGstModule;
+
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
@@ -50,12 +63,87 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const searchInputRef = useRef(null);
     const searchTimerRef = useRef(null);
 
-    const user = JSON.parse(localStorage.getItem('user')) || {};
-    const userName = user?.full_name || user?.name || 'Akshay Chavan';
-    const userEmail = user?.email || 'akshay.chavan@shekruweb.com';
-    const userRole = user?.role?.name || user?.role || 'Employee';
+    const [user, setUser] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user')) || {};
+        } catch {
+            return {};
+        }
+    });
 
-    const userInitials = useMemo(() => getInitials(userName), [userName]);
+    useEffect(() => {
+        const handleUserUpdate = (e) => {
+            try {
+                const updated = e?.detail || JSON.parse(localStorage.getItem('user')) || {};
+                setUser(updated);
+            } catch {
+                setUser({});
+            }
+        };
+
+        window.addEventListener('storage', handleUserUpdate);
+        window.addEventListener('userProfileUpdated', handleUserUpdate);
+        return () => {
+            window.removeEventListener('storage', handleUserUpdate);
+            window.removeEventListener('userProfileUpdated', handleUserUpdate);
+        };
+    }, []);
+
+    // Auto-correct any mismatched stored user and synchronize in background
+    useEffect(() => {
+        let isMounted = true;
+        const syncUser = async () => {
+            try {
+                const currentStored = JSON.parse(localStorage.getItem('user') || '{}');
+                const resolved = resolveUserInfo(currentStored);
+
+                if (
+                    currentStored?.email &&
+                    (currentStored.full_name !== resolved.name || currentStored.name !== resolved.name)
+                ) {
+                    const corrected = {
+                        ...currentStored,
+                        full_name: resolved.name,
+                        name: resolved.name,
+                        email: resolved.email,
+                        role: typeof resolved.role === 'object' ? resolved.role : { name: resolved.role },
+                    };
+                    localStorage.setItem('user', JSON.stringify(corrected));
+                    if (isMounted) setUser(corrected);
+                }
+
+                if (!currentStored?.full_name || currentStored.full_name === 'Akshay Chavan') {
+                    const currentUser = await getCurrentUser();
+                    const u = currentUser?.user || currentUser?.data || currentUser;
+                    if (isMounted && u && typeof u === 'object') {
+                        const merged = {
+                            ...currentStored,
+                            ...u,
+                        };
+                        const freshResolved = resolveUserInfo(merged);
+                        merged.full_name = freshResolved.name;
+                        merged.name = freshResolved.name;
+                        merged.email = freshResolved.email;
+                        merged.role = typeof freshResolved.role === 'object' ? freshResolved.role : { name: freshResolved.role };
+                        localStorage.setItem('user', JSON.stringify(merged));
+                        setUser(merged);
+                    }
+                }
+            } catch {
+                // Silently ignore if offline; resolveUserInfo will provide clean fallback
+            }
+        };
+
+        syncUser();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    const { name: userName, email: userEmail, role: userRole, initials: userInitials } = useMemo(
+        () => resolveUserInfo(user),
+        [user]
+    );
 
     const handleLogoutConfirm = async () => {
         setLogoutLoading(true);
@@ -360,9 +448,10 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                 <BsList size={20} />
             </button>
 
-            {/* Search Bar */}
-            <div className="header-search-wrap" ref={searchWrapRef} style={{ flex: 1, position: 'relative' }}>
-                <BsSearch className="header-search-icon" size={14} />
+            {/* Search Bar - Hidden on Customer module & all Billing and GST modules */}
+            {!shouldHideSearchBar && (
+                <div className="header-search-wrap" ref={searchWrapRef} style={{ flex: 1, position: 'relative' }}>
+                    <BsSearch className="header-search-icon" size={14} />
                 <input
                     ref={searchInputRef}
                     className="header-search"
@@ -605,6 +694,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                     </div>
                 )}
             </div>
+            )}
 
             {/* Right side controls */}
             <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>

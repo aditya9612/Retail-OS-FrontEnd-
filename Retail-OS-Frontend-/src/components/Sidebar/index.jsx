@@ -160,19 +160,63 @@ const Sidebar = ({ collapsed, onToggle }) => {
     const [collapsedGroups, setCollapsedGroups] = useState({});
     const [hoveredItem, setHoveredItem] = useState(null);
 
+    // Compute the single active item based on current route
+    const activeItemPath = useMemo(() => {
+        const allItems = menuGroups.flatMap(g => g.items);
+        const normalizedCurrent = currentPath.length > 1 && currentPath.endsWith('/')
+            ? currentPath.slice(0, -1)
+            : currentPath;
+
+        // 1. Check for exact match (by path or aliasPaths)
+        const exactMatch = allItems.find(item => {
+            const itemNorm = item.path.length > 1 && item.path.endsWith('/') ? item.path.slice(0, -1) : item.path;
+            if (itemNorm === normalizedCurrent) return true;
+            if (item.aliasPaths && item.aliasPaths.some(alias => {
+                const aliasNorm = alias.length > 1 && alias.endsWith('/') ? alias.slice(0, -1) : alias;
+                return aliasNorm === normalizedCurrent;
+            })) {
+                return true;
+            }
+            return false;
+        });
+
+        if (exactMatch) {
+            return exactMatch.path;
+        }
+
+        // 2. If no exact match (e.g. detail sub-routes like /products/123 or /invoices/view/1),
+        // pick the item with the longest matching prefix
+        const prefixMatches = allItems.filter(item => {
+            if (item.path === '/' || item.path === '/dashboard') return false;
+            const itemNorm = item.path.length > 1 && item.path.endsWith('/') ? item.path.slice(0, -1) : item.path;
+            if (normalizedCurrent.startsWith(itemNorm + '/')) return true;
+            if (item.aliasPaths && item.aliasPaths.some(alias => {
+                const aliasNorm = alias.length > 1 && alias.endsWith('/') ? alias.slice(0, -1) : alias;
+                return normalizedCurrent.startsWith(aliasNorm + '/');
+            })) {
+                return true;
+            }
+            return false;
+        });
+
+        if (prefixMatches.length > 0) {
+            prefixMatches.sort((a, b) => b.path.length - a.path.length);
+            return prefixMatches[0].path;
+        }
+
+        return null;
+    }, [currentPath]);
+
     // Auto-open group when active path matches
     useEffect(() => {
+        if (!activeItemPath) return;
         menuGroups.forEach(group => {
-            const hasActiveItem = group.items.some(item =>
-                currentPath === item.path ||
-                (item.aliasPaths && item.aliasPaths.includes(currentPath)) ||
-                (item.path !== '/' && currentPath.startsWith(item.path + '/'))
-            );
+            const hasActiveItem = group.items.some(item => item.path === activeItemPath);
             if (hasActiveItem && collapsedGroups[group.id]) {
                 setCollapsedGroups(prev => ({ ...prev, [group.id]: false }));
             }
         });
-    }, [currentPath]);
+    }, [activeItemPath]);
 
     const toggleGroup = (groupId) => {
         setCollapsedGroups(prev => ({
@@ -201,13 +245,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
     }, [searchQuery]);
 
     const isItemActive = (item) => {
-        if (currentPath === item.path) return true;
-        if (item.aliasPaths && item.aliasPaths.includes(currentPath)) return true;
-        // Avoid marking root or broad paths as active for everything
-        if (item.path !== '/' && item.path !== '/dashboard' && item.path !== '/stores' && currentPath.startsWith(item.path + '/')) {
-            return true;
-        }
-        return false;
+        return activeItemPath === item.path;
     };
 
     return (
@@ -324,7 +362,8 @@ const Sidebar = ({ collapsed, onToggle }) => {
                                                 >
                                                     <NavLink
                                                         to={item.path}
-                                                        className={`sidebar-item ${active ? 'sidebar-item--active' : ''}`}
+                                                        end
+                                                        className={() => `sidebar-item ${active ? 'sidebar-item--active' : ''}`}
                                                     >
                                                         <span className="sidebar-item-icon">{item.icon}</span>
 

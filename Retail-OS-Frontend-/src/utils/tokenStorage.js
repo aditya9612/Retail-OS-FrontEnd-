@@ -31,13 +31,45 @@ const clearLegacyStorage = () => {
     }
 };
 
+export const decodeToken = (token) => {
+    if (!token || typeof token !== 'string') {
+        return null;
+    }
+
+    try {
+        const parts = token.split('.');
+        if (parts.length < 2) return null;
+        const base64Url = parts[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+            atob(base64)
+                .split('')
+                .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                .join('')
+        );
+        return JSON.parse(jsonPayload);
+    } catch {
+        try {
+            return JSON.parse(atob(token.split('.')[1]));
+        } catch {
+            return null;
+        }
+    }
+};
+
+export const getStoredTokenPayload = () => {
+    const token = getAccessToken();
+    return token ? decodeToken(token) : null;
+};
+
 const isTokenValid = (token) => {
     if (!token) {
         return false;
     }
 
     try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
+        const payload = decodeToken(token);
+        if (!payload) return false;
 
         if (!payload.exp) {
             return true;

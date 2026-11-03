@@ -25,6 +25,9 @@ const processQueue = (error, token = null) => {
 
 apiClient.interceptors.request.use(
     async (config) => {
+        if (config.url && config.url.startsWith('/api/v1/')) {
+            config.url = config.url.replace(/^\/api\/v1/, '');
+        }
         const token = getAccessToken();
 
         if (token) {
