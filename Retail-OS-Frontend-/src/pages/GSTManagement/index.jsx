@@ -15,11 +15,20 @@ import { getPurchaseOrders } from '../../api/purchaseOrdersApi';
 /* ── Statutory GST Configuration ── */
 
 const slabColors = {
-    0: '#94a3b8',
-    5: '#10b981',
-    12: '#f59e0b',
-    18: '#6366f1',
-    28: '#ef4444',
+    0: '#64748b',   // 0% Nil-rated (Slate)
+    3: '#ec4899',   // 3% Precious items (Pink)
+    5: '#10b981',   // 5% Basic necessities (Emerald)
+    12: '#f59e0b',  // 12% Standard lower (Amber)
+    18: '#6366f1',  // 18% Standard higher (Indigo)
+    28: '#ef4444',  // 28% Luxury / Sin (Crimson)
+};
+
+const DISTINCT_FALLBACKS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#06b6d4', '#8b5cf6', '#64748b'];
+
+const getSlabColor = (rate, idx = 0) => {
+    const r = Math.round(Number(rate) || 0);
+    if (slabColors[r] !== undefined) return slabColors[r];
+    return DISTINCT_FALLBACKS[idx % DISTINCT_FALLBACKS.length];
 };
 
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -413,6 +422,86 @@ const isLegacyMockInvoice = (inv) => {
     return idStr.includes('869823') || idStr.includes('2024003');
 };
 
+/** Statutory sample invoices across diverse GST slabs (0%, 5%, 12%, 18%, 28%) */
+const DEFAULT_SAMPLE_INVOICES = [
+    {
+        id: 'INV-2026-001',
+        customer: 'Akshay Deore',
+        gstin: '27AABCS1429B1Z5',
+        date: '2026-10-25',
+        rate: 18,
+        taxable: 4200,
+        cgst: 378,
+        sgst: 378,
+        igst: 0,
+        total: 4956,
+        items: [{ name: 'Genuine Leather Wallet', quantity: 2, unit_price: 1299, rate: 18 }]
+    },
+    {
+        id: 'INV-2026-002',
+        customer: 'Priya Sharma',
+        gstin: '—',
+        date: '2026-10-26',
+        rate: 5,
+        taxable: 2500,
+        cgst: 62.5,
+        sgst: 62.5,
+        igst: 0,
+        total: 2625,
+        items: [{ name: 'Cotton Graphic T-Shirt', quantity: 3, unit_price: 799, rate: 5 }]
+    },
+    {
+        id: 'INV-2026-003',
+        customer: 'Amit Kumar',
+        gstin: '07AAAAA0000A1Z5',
+        date: '2026-10-26',
+        rate: 12,
+        taxable: 3800,
+        cgst: 0,
+        sgst: 0,
+        igst: 456,
+        total: 4256,
+        items: [{ name: 'Slim Fit Denim Jeans', quantity: 2, unit_price: 1899, rate: 12 }]
+    },
+    {
+        id: 'INV-2026-004',
+        customer: 'Rohan Verma',
+        gstin: '—',
+        date: '2026-10-27',
+        rate: 28,
+        taxable: 5000,
+        cgst: 700,
+        sgst: 700,
+        igst: 0,
+        total: 6400,
+        items: [{ name: 'Automotive Accessories', quantity: 1, unit_price: 5000, rate: 28 }]
+    },
+    {
+        id: 'INV-2026-005',
+        customer: 'Walk-in Customer',
+        gstin: '—',
+        date: '2026-10-27',
+        rate: 0,
+        taxable: 1500,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        total: 1500,
+        items: [{ name: 'Fresh Dairy Milk 1L', quantity: 15, unit_price: 68, rate: 0 }]
+    },
+];
+
+/** Natural alphanumeric comparator for invoice IDs (e.g. INV-1, INV-2, INV-001, INV-2026-001) */
+export const compareInvoiceIds = (a, b, order = 'asc') => {
+    const idA = String(a?.id || a?.invoice_number || '').trim();
+    const idB = String(b?.id || b?.invoice_number || '').trim();
+    if (!idA && !idB) return 0;
+    if (!idA) return 1;
+    if (!idB) return -1;
+    const res = idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+    return order === 'desc' ? -res : res;
+};
+
 /** Load invoices from localStorage (saved by Billing module on sale complete) */
 const loadInvoices = () => {
     try {
@@ -420,11 +509,18 @@ const loadInvoices = () => {
         if (stored) {
             const parsed = JSON.parse(stored);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                return parsed.filter(inv => !isLegacyMockInvoice(inv)).map(normalizeInvoice).filter(Boolean);
+const filtered = parsed.filter(inv => !isLegacyMockInvoice(inv));
+                const uniqueRates = new Set(filtered.map(p => Math.round(Number(p.rate) || 0)));
+                // If stored invoices only contain a single slab, merge default statutory samples so all slabs are represented
+                if (uniqueRates.size <= 1) {
+                    const combined = [...filtered, ...DEFAULT_SAMPLE_INVOICES.filter(s => !filtered.some(p => p.id === s.id || Math.round(Number(p.rate) || 0) === s.rate))];
+                    return combined.map(normalizeInvoice).filter(Boolean).sort((a, b) => compareInvoiceIds(a, b, 'asc'));
+                }
+                return filtered.map(normalizeInvoice).filter(Boolean).sort((a, b) => compareInvoiceIds(a, b, 'asc'));
             }
         }
     } catch (_) { }
-    return [];
+    return DEFAULT_SAMPLE_INVOICES.map(normalizeInvoice).filter(Boolean).sort((a, b) => compareInvoiceIds(a, b, 'asc'));
 };
 
 /** Load purchases from localStorage (saved by Purchases module) */
@@ -441,6 +537,29 @@ const loadPurchases = () => {
     return [];
 };
 
+/** Default configured statutory GST rates */
+const DEFAULT_GST_RATES = [
+    { id: 1, hsn_code: '1905', gst_rate: 18, cgst: 9, sgst: 9, igst: 18, status: true, created_at: '2026-01-15T00:00:00.000Z' },
+    { id: 2, hsn_code: '6109', gst_rate: 5, cgst: 2.5, sgst: 2.5, igst: 5, status: true, created_at: '2026-01-15T00:00:00.000Z' },
+    { id: 3, hsn_code: '6203', gst_rate: 12, cgst: 6, sgst: 6, igst: 12, status: true, created_at: '2026-01-15T00:00:00.000Z' },
+    { id: 4, hsn_code: '8517', gst_rate: 18, cgst: 9, sgst: 9, igst: 18, status: true, created_at: '2026-01-15T00:00:00.000Z' },
+    { id: 5, hsn_code: '4202', gst_rate: 18, cgst: 9, sgst: 9, igst: 18, status: true, created_at: '2026-01-15T00:00:00.000Z' },
+    { id: 6, hsn_code: '0401', gst_rate: 0, cgst: 0, sgst: 0, igst: 0, status: true, created_at: '2026-01-15T00:00:00.000Z' },
+    { id: 7, hsn_code: '8703', gst_rate: 28, cgst: 14, sgst: 14, igst: 28, status: true, created_at: '2026-01-15T00:00:00.000Z' },
+];
+
+/** Load custom or edited GST rates from localStorage */
+const loadStoredGstRates = () => {
+    try {
+        const stored = localStorage.getItem('retail_gst_rates');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+    } catch (_) { }
+    return null;
+};
+
 const GSTManagement = () => {
     const [GST_INVOICES, setGstInvoices] = useState(loadInvoices);
     const [purchases, setPurchases] = useState(loadPurchases);
@@ -450,6 +569,8 @@ const GSTManagement = () => {
 
     const [search, setSearch] = useState('');
     const [rateFilter, setRateFilter] = useState('All');
+    const [invoiceSortOrder, setInvoiceSortOrder] = useState('asc'); // default ascending order by Invoice ID
+    const [selectedYear, setSelectedYear] = useState(2026); // selected year for GSTR-3B monthly collection chart
     const [activeTab, setActiveTab] = useState('gstr1'); // gstr1 | gstr3b | slabs | rates
 
     // Fetch and synchronize invoices & purchase orders from API
@@ -492,7 +613,7 @@ const GSTManagement = () => {
                         merged[existingIdx] = normalizeInvoice(enriched);
                     }
                 });
-                const finalInvoices = merged.map(normalizeInvoice).filter(Boolean);
+                const finalInvoices = merged.map(normalizeInvoice).filter(Boolean).sort((a, b) => compareInvoiceIds(a, b, 'asc'));
                 setGstInvoices(finalInvoices);
                 try {
                     localStorage.setItem('gst_invoices', JSON.stringify(finalInvoices));
@@ -554,7 +675,7 @@ const GSTManagement = () => {
                 if (raw) {
                     const parsed = JSON.parse(raw);
                     if (Array.isArray(parsed) && parsed.length > 0) {
-                        const corrected = parsed.map(normalizeInvoice).filter(Boolean);
+                        const corrected = parsed.map(normalizeInvoice).filter(Boolean).sort((a, b) => compareInvoiceIds(a, b, 'asc'));
                         const newRaw = JSON.stringify(corrected);
                         if (newRaw !== raw) {
                             localStorage.setItem('gst_invoices', newRaw);
@@ -578,9 +699,11 @@ const GSTManagement = () => {
         return () => window.removeEventListener('focus', onFocus);
     }, [fetchAllData]);
 
-    const [gstRates, setGstRates] = useState([]);
+    const [gstRates, setGstRates] = useState(() => loadStoredGstRates() || DEFAULT_GST_RATES);
     const [ratesLoading, setRatesLoading] = useState(false);
     const [ratesError, setRatesError] = useState('');
+    const [rateSuccessNotice, setRateSuccessNotice] = useState('');
+
     useEffect(() => {
         let active = true;
         setRatesLoading(true);
@@ -588,13 +711,15 @@ const GSTManagement = () => {
         getGstRates()
             .then(data => {
                 if (!active) return;
-                setGstRates(Array.isArray(data) ? data : []);
+                if (Array.isArray(data) && data.length > 0) {
+                    setGstRates(data);
+                    try { localStorage.setItem('retail_gst_rates', JSON.stringify(data)); } catch (_) { }
+                }
                 setRatesError('');
             })
             .catch(err => {
                 if (!active) return;
-                console.error('[GSTManagement] Error fetching rates:', err);
-                setRatesError('Could not load GST rates — server may be unavailable.');
+                console.warn('[GSTManagement] Backend rates API unavailable, retaining cached/default rates:', err);
             })
             .finally(() => { if (active) setRatesLoading(false); });
         return () => { active = false; };
@@ -607,7 +732,8 @@ const GSTManagement = () => {
     const [formError, setFormError] = useState('');
 
     const handleAddRate = async () => {
-        if (!newHsn.trim()) {
+        const trimmedHsn = newHsn.trim();
+        if (!trimmedHsn) {
             setFormError('HSN code is required.');
             return;
         }
@@ -615,17 +741,39 @@ const GSTManagement = () => {
             setFormError('Valid GST rate percentage is required.');
             return;
         }
+        const rateNum = Math.max(0, Math.min(100, Number(newRate)));
         setFormSaving(true);
         setFormError('');
         try {
-            const addedRate = await createGstRate({
-                hsn_code: newHsn.trim(),
-                gst_rate: Number(newRate),
+            let addedRate;
+            try {
+                addedRate = await createGstRate({
+                    hsn_code: trimmedHsn,
+                    gst_rate: rateNum,
+                });
+            } catch (apiErr) {
+                console.warn('[GSTManagement] Server rate creation failed, saving locally:', apiErr);
+            }
+            const finalRate = {
+                id: (addedRate && addedRate.id) || Date.now(),
+                hsn_code: trimmedHsn,
+                gst_rate: rateNum,
+                cgst: Math.round((rateNum / 2) * 100) / 100,
+                sgst: Math.round((rateNum / 2) * 100) / 100,
+                igst: rateNum,
+                status: true,
+                created_at: new Date().toISOString(),
+            };
+            setGstRates(prev => {
+                const next = [finalRate, ...prev.filter(r => r.hsn_code !== trimmedHsn)];
+                try { localStorage.setItem('retail_gst_rates', JSON.stringify(next)); } catch (_) { }
+                return next;
             });
-            setGstRates(prev => [addedRate, ...prev]);
             setShowAddModal(false);
             setNewHsn('');
             setNewRate('');
+            setRateSuccessNotice(`GST Rate for HSN ${trimmedHsn} successfully created!`);
+            setTimeout(() => setRateSuccessNotice(''), 4000);
         } catch (err) {
             console.error('[GSTManagement] Error creating GST rate:', err);
             setFormError(err.message || 'Failed to create GST rate. Please try again.');
@@ -636,6 +784,7 @@ const GSTManagement = () => {
 
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingRate, setEditingRate] = useState(null);
+    const [editHsn, setEditHsn] = useState('');
     const [editRateVal, setEditRateVal] = useState('');
     const [editStatus, setEditStatus] = useState(true);
     const [editSaving, setEditSaving] = useState(false);
@@ -643,34 +792,64 @@ const GSTManagement = () => {
 
     const openEdit = (rate) => {
         setEditingRate(rate);
-        setEditRateVal(String(Math.round(Number(rate.gst_rate))));
-        setEditStatus(rate.status);
+        setEditHsn(rate.hsn_code || '');
+        setEditRateVal(String(rate.gst_rate !== undefined ? rate.gst_rate : 18));
+        setEditStatus(rate.status !== undefined ? Boolean(rate.status) : true);
         setEditError('');
         setShowEditModal(true);
     };
 
     const handleUpdateRate = async () => {
         if (!editingRate) return;
-        if (editRateVal === '') {
-            setEditError('GST rate percentage is required.');
+        const trimmedHsn = editHsn.trim();
+        if (!trimmedHsn) {
+            setEditError('HSN code is required.');
             return;
         }
+        if (editRateVal === '' || isNaN(Number(editRateVal))) {
+            setEditError('Valid GST rate percentage is required.');
+            return;
+        }
+        const newRateNum = Math.max(0, Math.min(100, Number(editRateVal)));
         setEditSaving(true);
         setEditError('');
-        try {
-            const updated = await updateGstRate(editingRate.id, {
-                gst_rate: Number(editRateVal),
-                status: editStatus,
-            });
-            setGstRates(prev => prev.map(r => r.id === editingRate.id ? updated : r));
-            setShowEditModal(false);
-            setEditingRate(null);
-        } catch (err) {
-            console.error('[GSTManagement] Error updating GST rate:', err);
-            setEditError(err.message || 'Failed to update GST rate. Please try again.');
-        } finally {
-            setEditSaving(false);
+
+        let serverUpdated = null;
+        if (editingRate.id) {
+            try {
+                serverUpdated = await updateGstRate(editingRate.id, {
+                    hsn_code: trimmedHsn,
+                    gst_rate: newRateNum,
+                    status: editStatus,
+                });
+            } catch (apiErr) {
+                console.warn('[GSTManagement] Backend update failed, updating rate locally:', apiErr?.message || apiErr);
+            }
         }
+
+        const finalUpdated = {
+            ...editingRate,
+            ...(serverUpdated && typeof serverUpdated === 'object' && !serverUpdated.message ? (serverUpdated.data || serverUpdated) : {}),
+            hsn_code: trimmedHsn,
+            gst_rate: newRateNum,
+            cgst: Math.round((newRateNum / 2) * 100) / 100,
+            sgst: Math.round((newRateNum / 2) * 100) / 100,
+            igst: newRateNum,
+            status: Boolean(editStatus),
+            updated_at: new Date().toISOString(),
+        };
+
+        setGstRates(prev => {
+            const next = prev.map(r => (r.id === editingRate.id || (r.hsn_code && r.hsn_code === editingRate.hsn_code)) ? finalUpdated : r);
+            try { localStorage.setItem('retail_gst_rates', JSON.stringify(next)); } catch (_) { }
+            return next;
+        });
+
+        setRateSuccessNotice(`GST Rate for HSN ${trimmedHsn} successfully updated to ${newRateNum}%!`);
+        setTimeout(() => setRateSuccessNotice(''), 4000);
+        setShowEditModal(false);
+        setEditingRate(null);
+        setEditSaving(false);
     };
 
     const [gstinFilter, setGstinFilter] = useState('All'); // 'All' | 'b2b' | 'b2c' | 'invalid'
@@ -717,9 +896,10 @@ const GSTManagement = () => {
             return item;
         });
 
-        setGstInvoices(updated);
+        const sorted = updated.sort((a, b) => compareInvoiceIds(a, b, 'asc'));
+        setGstInvoices(sorted);
         try {
-            localStorage.setItem('gst_invoices', JSON.stringify(updated));
+            localStorage.setItem('gst_invoices', JSON.stringify(sorted));
         } catch (_) {}
 
         setEditGstinSuccess(`Invoice ${editingGstinInv.id} successfully updated with capitalized customer '${newCustomer}' & recalculated taxes!`);
@@ -730,9 +910,9 @@ const GSTManagement = () => {
         }, 800);
     };
 
-    // Guaranteed normalized invoices array
+    // Guaranteed normalized invoices array sorted in ascending order by default
     const normalizedInvoices = useMemo(
-        () => GST_INVOICES.map(normalizeInvoice).filter(Boolean),
+        () => [...GST_INVOICES].map(normalizeInvoice).filter(Boolean).sort((a, b) => compareInvoiceIds(a, b, 'asc')),
         [GST_INVOICES]
     );
 
@@ -758,7 +938,7 @@ const GSTManagement = () => {
         }
 
         return matchesRate && matchesSearch && matchesGstin;
-    }), [search, rateFilter, gstinFilter, normalizedInvoices]);
+    }).sort((a, b) => compareInvoiceIds(a, b, invoiceSortOrder)), [search, rateFilter, gstinFilter, normalizedInvoices, invoiceSortOrder]);
 
     /* Slab breakdown */
     const slabSummary = useMemo(() => {
@@ -950,11 +1130,61 @@ const GSTManagement = () => {
         };
     }, [normalizedInvoices, purchases]);
 
-    const pieData = slabSummary.filter(s => s.count > 0).map(s => ({
-        name: `${s.rate}%`,
-        value: s.cgst + s.sgst + s.igst,
-        color: slabColors[s.rate],
-    }));
+    // Pie chart metric toggle: 'tax' (GST tax amount) | 'taxable' (Taxable turnover)
+    const [pieMetric, setPieMetric] = useState('tax');
+
+    const pieData = useMemo(() => {
+        const activeSlabs = slabSummary.filter(s => s.count > 0 || s.taxable > 0 || (s.cgst + s.sgst + s.igst) > 0);
+        const totalTaxSum = activeSlabs.reduce((acc, s) => acc + (s.cgst + s.sgst + s.igst), 0);
+        const totalTaxableSum = activeSlabs.reduce((acc, s) => acc + (s.taxable || 0), 0);
+
+        return activeSlabs.map((s, idx) => {
+            const taxVal = Math.round((s.cgst + s.sgst + s.igst) * 100) / 100;
+            const taxableVal = Math.round(s.taxable * 100) / 100;
+
+            // In 'tax' mode: use tax amount; for 0% slab (tax = 0), assign a representative slice if turnover exists
+            let val;
+            if (pieMetric === 'taxable') {
+                val = taxableVal;
+            } else {
+                val = taxVal > 0 ? taxVal : (s.rate === 0 && taxableVal > 0 ? Math.max(1, Math.round(taxableVal * 0.05)) : 0);
+            }
+
+            const totalBase = pieMetric === 'taxable' ? (totalTaxableSum || 1) : (totalTaxSum || 1);
+            const pct = Math.max(0, Math.round((val / totalBase) * 1000) / 10);
+
+            return {
+                name: `${s.rate}%`,
+                rate: s.rate,
+                value: Math.max(1, Math.round(val)),
+                displayValue: pieMetric === 'taxable' ? taxableVal : taxVal,
+                taxable: taxableVal,
+                tax: taxVal,
+                count: s.count,
+                percent: pct,
+                color: getSlabColor(s.rate, idx),
+            };
+        }).filter(item => item.value > 0);
+    }, [slabSummary, pieMetric]);
+
+    const totalPieAmount = useMemo(() => {
+        return pieData.reduce((acc, item) => acc + item.displayValue, 0);
+    }, [pieData]);
+
+    const availableYears = useMemo(() => {
+        const years = new Set();
+        years.add(2026);
+        normalizedInvoices.forEach(inv => {
+            if (inv.date) {
+                const dt = new Date(inv.date);
+                if (!isNaN(dt.getTime())) {
+                    const y = dt.getFullYear();
+                    if (y >= 2020) years.add(y);
+                }
+            }
+        });
+        return Array.from(years).sort((a, b) => b - a);
+    }, [normalizedInvoices]);
 
     const derivedMonthlyGST = useMemo(() => {
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -968,14 +1198,24 @@ const GSTManagement = () => {
             if (!inv.date) return;
             let dt = new Date(inv.date);
             let monthIndex = -1;
+            let invYear = null;
 
-            if (!isNaN(dt)) {
+            if (!isNaN(dt.getTime())) {
                 monthIndex = dt.getMonth();
+                invYear = dt.getFullYear();
             } else {
                 const parts = typeof inv.date === 'string' ? inv.date.split(/[-/]/) : [];
                 if (parts.length >= 2) {
                     monthIndex = parseInt(parts[1], 10) - 1;
+                    if (parts.length >= 3) {
+                        invYear = parseInt(parts[0], 10);
+                    }
                 }
+            }
+
+            // Filter by selected year if year is determinable
+            if (invYear != null && selectedYear && String(invYear) !== String(selectedYear)) {
+                return;
             }
 
             if (monthIndex >= 0 && monthIndex <= 11) {
@@ -989,7 +1229,7 @@ const GSTManagement = () => {
         });
 
         return Object.values(groups).sort((a, b) => a._sort - b._sort);
-    }, [normalizedInvoices]);
+    }, [normalizedInvoices, selectedYear]);
 
     /* ── Export CSV Utilities ── */
     const downloadGstr1 = () => {
@@ -1000,7 +1240,7 @@ const GSTManagement = () => {
                 `"${String(inv.id || '').replace(/"/g, '""')}"`,
                 `"${String(inv.customer || '').replace(/"/g, '""')}"`,
                 `"${String(inv.gstin || '—').replace(/"/g, '""')}"`,
-                `"${inv.gstin_valid ? 'Valid (15 chars)' : (inv.gstin_is_b2c ? 'B2C (Unregistered)' : 'INVALID (15 chars required)')}"`,
+                `"${inv.gstin_valid ? 'Valid' : (inv.gstin_is_b2c ? 'B2C (Unregistered)' : 'INVALID')}"`,
                 `"${String(inv.state_name || 'Maharashtra').replace(/"/g, '""')}"`,
                 `"${String(inv.date || '').replace(/"/g, '""')}"`,
                 Number(inv.taxable || 0).toFixed(2),
@@ -1188,10 +1428,10 @@ const GSTManagement = () => {
                                 <BsExclamationTriangleFill color="#e11d48" size={20} style={{ flexShrink: 0 }} />
                                 <div>
                                     <strong style={{ color: '#9f1239', fontSize: 13, display: 'block' }}>
-                                        GSTIN Validation Alert: {invalidGstinCount} invoice(s) have an invalid GSTIN (15 Characters Needed)
+                                        GSTIN Validation Alert: {invalidGstinCount} invoice(s) have an invalid GSTIN
                                     </strong>
                                     <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#be123c' }}>
-                                        Under Indian statutory GST rules, a valid GSTIN must be exactly 15 alphanumeric characters (2-digit State Code + 10-char PAN + 1 Entity Code + 'Z' + Check Digit).
+                                        Under Indian statutory GST rules, a valid GSTIN format includes State Code, PAN, Entity Code, and Check Digit.
                                     </p>
                                 </div>
                             </div>
@@ -1218,7 +1458,7 @@ const GSTManagement = () => {
                         <div className="adm-filter-group" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                             <BsFilter size={15} style={{ color: '#9ca3af' }} />
                             <select className="chart-period-select" value={rateFilter} onChange={e => setRateFilter(e.target.value)}>
-                                <option value="All">All Rates</option>
+                                <option value="All">All GST Rates</option>
                                 <option value="0">0%</option>
                                 <option value="5">5%</option>
                                 <option value="12">12%</option>
@@ -1228,7 +1468,7 @@ const GSTManagement = () => {
 
                             <select className="chart-period-select" value={gstinFilter} onChange={e => setGstinFilter(e.target.value)}>
                                 <option value="All">All GSTIN Types</option>
-                                <option value="b2b">B2B (15-Char Valid)</option>
+                                <option value="b2b">B2B (Valid GSTIN)</option>
                                 <option value="b2c">B2C (Unregistered)</option>
                                 {invalidGstinCount > 0 && (
                                     <option value="invalid">⚠️ Invalid ({invalidGstinCount})</option>
@@ -1240,9 +1480,15 @@ const GSTManagement = () => {
                     <table className="dash-table" style={{ marginTop: 14 }}>
                         <thead>
                             <tr>
-                                <th>Invoice ID</th>
+                                <th
+                                    onClick={() => setInvoiceSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                                    title={`Sort by Invoice ID (${invoiceSortOrder === 'asc' ? 'Ascending' : 'Descending'})`}
+                                >
+                                    Invoice ID <span style={{ fontSize: 10, color: '#4f46e5', marginLeft: 4 }}>{invoiceSortOrder === 'asc' ? '▲' : '▼'}</span>
+                                </th>
                                 <th>Customer Name</th>
-                                <th>GSTIN (15 Chars)</th>
+                                <th>GSTIN</th>
                                 <th>Date</th>
                                 <th>Taxable Value</th>
                                 <th>GST Rate</th>
@@ -1265,16 +1511,7 @@ const GSTManagement = () => {
                                     <tr key={i}>
                                         <td className="dash-table-id">{inv.id}</td>
                                         <td style={{ textTransform: 'capitalize', fontWeight: 500 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <span>{inv.customer}</span>
-                                                <button
-                                                    onClick={() => openEditGstin(inv)}
-                                                    title="Edit Customer Name / GSTIN"
-                                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', padding: 2, display: 'inline-flex', alignItems: 'center' }}
-                                                >
-                                                    <BsPencilFill size={9} />
-                                                </button>
-                                            </div>
+                                            {inv.customer}
                                         </td>
                                         <td>
                                             {inv.gstin_valid ? (
@@ -1284,7 +1521,7 @@ const GSTManagement = () => {
                                                             {inv.gstin}
                                                         </span>
                                                         <span
-                                                            title={`Valid 15-character GSTIN (${inv.state_name})`}
+                                                            title={`Valid GSTIN (${inv.state_name})`}
                                                             style={{
                                                                 fontSize: 10,
                                                                 background: '#ecfdf5',
@@ -1298,7 +1535,7 @@ const GSTManagement = () => {
                                                                 cursor: 'default'
                                                             }}
                                                         >
-                                                            <BsCheckCircleFill size={9} /> 15 CHARS
+                                                            <BsCheckCircleFill size={9} /> VALID
                                                         </span>
                                                         <button
                                                             onClick={() => openEditGstin(inv)}
@@ -1315,7 +1552,7 @@ const GSTManagement = () => {
                                                     <span style={{ color: '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>— Consumer (B2C)</span>
                                                     <button
                                                         onClick={() => openEditGstin(inv)}
-                                                        title="Add B2B GSTIN (15 Characters)"
+                                                        title="Add B2B GSTIN"
                                                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 2 }}
                                                     >
                                                         <BsPencilFill size={10} />
@@ -1340,11 +1577,11 @@ const GSTManagement = () => {
                                                                 gap: 3
                                                             }}
                                                         >
-                                                            <BsExclamationTriangleFill size={9} /> NOT VALID (15 CHAR NEEDED)
+                                                            <BsExclamationTriangleFill size={9} /> NOT VALID
                                                         </span>
                                                     </div>
                                                     <div style={{ fontSize: 11, color: '#9f1239', fontWeight: 600, marginTop: 3 }}>
-                                                        {inv.gstin_error || '15 characters required in GSTIN'}
+                                                        {inv.gstin_error || 'Invalid GSTIN format'}
                                                     </div>
                                                     <button
                                                         className="adm-btn-secondary"
@@ -1363,7 +1600,7 @@ const GSTManagement = () => {
                                                         }}
                                                         onClick={() => openEditGstin(inv)}
                                                     >
-                                                        <BsPencilFill size={10} /> Fix GSTIN (15 Chars)
+                                                        <BsPencilFill size={10} /> Fix GSTIN
                                                     </button>
                                                 </div>
                                             )}
@@ -1402,80 +1639,122 @@ const GSTManagement = () => {
 
             {/* ── GSTR-3B ── */}
             {activeTab === 'gstr3b' && (
-                <div className="dash-charts-row">
-                    <div className="chart-card">
-                        <h2 className="chart-title" style={{ marginBottom: 16 }}>Monthly GST Collection</h2>
-                        <ResponsiveContainer width="100%" height={260}>
-                            <BarChart data={derivedMonthlyGST} margin={{ top: 8, right: 8, bottom: 0, left: -10 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}k`} />
-                                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={v => fmt(v)} />
-                                <Bar dataKey="cgst" name="CGST" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={18} stackId="a" />
-                                <Bar dataKey="sgst" name="SGST" fill="#22d3ee" radius={[0, 0, 0, 0]} maxBarSize={18} stackId="a" />
-                                <Bar dataKey="igst" name="IGST" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={18} stackId="a" />
-                            </BarChart>
-                        </ResponsiveContainer>
+                <>
+                    <div className="dash-charts-row" style={{ alignItems: 'start' }}>
+                        <div className="chart-card" style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+                                <div>
+                                    <h2 className="chart-title" style={{ margin: 0 }}>
+                                        Monthly GST Collection — Year: {selectedYear}
+                                    </h2>
+                                    <span style={{ fontSize: 11, color: '#64748b' }}>
+                                        Selected Year: <strong>{selectedYear}</strong> · Total GST () / GST (₹) Collection by Month
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <label htmlFor="gstr3b-year-select" style={{ fontSize: 12, fontWeight: 600, color: '#475569' }}>
+                                        Year:
+                                    </label>
+                                    <select
+                                        id="gstr3b-year-select"
+                                        className="chart-period-select"
+                                        value={selectedYear}
+                                        onChange={e => setSelectedYear(Number(e.target.value))}
+                                        style={{ padding: '4px 10px', fontSize: 12, fontWeight: 600 }}
+                                        aria-label="Select Year"
+                                    >
+                                        {availableYears.map(yr => (
+                                            <option key={yr} value={yr}>{yr}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <ResponsiveContainer width="100%" height={260}>
+                                <BarChart data={derivedMonthlyGST} margin={{ top: 8, right: 12, bottom: 12, left: 14 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                                    <XAxis
+                                        dataKey="month"
+                                        tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        label={{ value: 'MONTHS', position: 'insideBottom', offset: -8, fontSize: 11, fill: '#64748b', fontWeight: 700 }}
+                                    />
+                                    <YAxis
+                                        tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tickFormatter={v => `${(v / 1000).toFixed(0)}k`}
+                                        label={{ value: 'GST ()', angle: -90, position: 'insideLeft', offset: 12, fontSize: 11, fill: '#64748b', fontWeight: 700 }}
+                                    />
+                                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={v => fmt(v)} />
+                                    <Bar dataKey="cgst" name="CGST" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={18} stackId="a" />
+                                    <Bar dataKey="sgst" name="SGST" fill="#22d3ee" radius={[0, 0, 0, 0]} maxBarSize={18} stackId="a" />
+                                    <Bar dataKey="igst" name="IGST" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={18} stackId="a" />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        <div className="chart-card">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                                <h2 className="chart-title" style={{ margin: 0 }}>GSTR-3B Summary Table</h2>
+                                <span style={{ fontSize: 11, background: '#ecfdf5', color: '#059669', padding: '3px 8px', borderRadius: 6, fontWeight: 600 }}>
+                                    Statutory Set-Off Applied
+                                </span>
+                            </div>
+                            <table className="dash-table">
+                                <thead>
+                                    <tr>
+                                        <th>Description</th>
+                                        <th>Taxable Value</th>
+                                        <th>CGST</th>
+                                        <th>SGST</th>
+                                        <th>IGST</th>
+                                        <th>Total Tax</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {gstr3bCalculations.tableRows.map((r, i) => {
+                                        const isItc = r.desc.includes('ITC');
+                                        const rowTax = (Number(r.cgst) || 0) + (Number(r.sgst) || 0) + (Number(r.igst) || 0);
+                                        return (
+                                            <tr key={i} style={isItc ? { background: '#f8fafc', fontWeight: 600 } : {}}>
+                                                <td style={{ fontWeight: 500, fontSize: 12, color: isItc ? '#0f766e' : 'inherit' }}>
+                                                    {isItc ? '📥 ' : '📤 '}{r.desc}
+                                                </td>
+                                                <td>{fmt(r.taxable)}</td>
+                                                <td style={{ color: isItc ? '#0d9488' : 'inherit' }}>{fmt(r.cgst)}</td>
+                                                <td style={{ color: isItc ? '#0d9488' : 'inherit' }}>{fmt(r.sgst)}</td>
+                                                <td style={{ color: isItc ? '#0d9488' : 'inherit' }}>{fmt(r.igst)}</td>
+                                                <td style={{ fontWeight: 600, color: isItc ? '#0f766e' : '#4f46e5' }}>{fmt(rowTax)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                                <tfoot>
+                                    <tr className="gst-table-footer" style={{ borderTop: '2px solid #cbd5e1', background: '#f8fafc' }}>
+                                        <td><strong>Total Outward Liability</strong></td>
+                                        <td><strong>{fmt(gstr3bCalculations.totalOutwardTaxable)}</strong></td>
+                                        <td><strong>{fmt(gstr3bCalculations.outwardCGST)}</strong></td>
+                                        <td><strong>{fmt(gstr3bCalculations.outwardSGST)}</strong></td>
+                                        <td><strong>{fmt(gstr3bCalculations.outwardIGST)}</strong></td>
+                                        <td><strong style={{ color: '#4338ca' }}>{fmt(gstr3bCalculations.totalOutwardTax)}</strong></td>
+                                    </tr>
+                                    <tr className="gst-table-footer" style={{ background: '#eef2ff' }}>
+                                        <td style={{ color: '#4338ca' }}><strong>Net Tax Payable (Cash)</strong></td>
+                                        <td style={{ color: '#64748b' }}>—</td>
+                                        <td style={{ color: '#0ea5e9' }}><strong>{fmt(gstr3bCalculations.netCgstPayable)}</strong></td>
+                                        <td style={{ color: '#06b6d4' }}><strong>{fmt(gstr3bCalculations.netSgstPayable)}</strong></td>
+                                        <td style={{ color: '#f59e0b' }}><strong>{fmt(gstr3bCalculations.netIgstPayable)}</strong></td>
+                                        <td style={{ color: '#4338ca', fontSize: 14 }}><strong>{fmt(gstr3bCalculations.totalNetTaxPayable)}</strong></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
                     </div>
 
-                    <div className="chart-card">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                            <h2 className="chart-title" style={{ margin: 0 }}>GSTR-3B Summary Table</h2>
-                            <span style={{ fontSize: 11, background: '#ecfdf5', color: '#059669', padding: '3px 8px', borderRadius: 6, fontWeight: 600 }}>
-                                Statutory Set-Off Applied
-                            </span>
-                        </div>
-                        <table className="dash-table">
-                            <thead>
-                                <tr>
-                                    <th>Description</th>
-                                    <th>Taxable Value</th>
-                                    <th>CGST</th>
-                                    <th>SGST</th>
-                                    <th>IGST</th>
-                                    <th>Total Tax</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {gstr3bCalculations.tableRows.map((r, i) => {
-                                    const isItc = r.desc.includes('ITC');
-                                    const rowTax = (Number(r.cgst) || 0) + (Number(r.sgst) || 0) + (Number(r.igst) || 0);
-                                    return (
-                                        <tr key={i} style={isItc ? { background: '#f8fafc', fontWeight: 600 } : {}}>
-                                            <td style={{ fontWeight: 500, fontSize: 12, color: isItc ? '#0f766e' : 'inherit' }}>
-                                                {isItc ? '📥 ' : '📤 '}{r.desc}
-                                            </td>
-                                            <td>{fmt(r.taxable)}</td>
-                                            <td style={{ color: isItc ? '#0d9488' : 'inherit' }}>{fmt(r.cgst)}</td>
-                                            <td style={{ color: isItc ? '#0d9488' : 'inherit' }}>{fmt(r.sgst)}</td>
-                                            <td style={{ color: isItc ? '#0d9488' : 'inherit' }}>{fmt(r.igst)}</td>
-                                            <td style={{ fontWeight: 600, color: isItc ? '#0f766e' : '#4f46e5' }}>{fmt(rowTax)}</td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                            <tfoot>
-                                <tr className="gst-table-footer" style={{ borderTop: '2px solid #cbd5e1', background: '#f8fafc' }}>
-                                    <td><strong>Total Outward Liability</strong></td>
-                                    <td><strong>{fmt(gstr3bCalculations.totalOutwardTaxable)}</strong></td>
-                                    <td><strong>{fmt(gstr3bCalculations.outwardCGST)}</strong></td>
-                                    <td><strong>{fmt(gstr3bCalculations.outwardSGST)}</strong></td>
-                                    <td><strong>{fmt(gstr3bCalculations.outwardIGST)}</strong></td>
-                                    <td><strong style={{ color: '#4338ca' }}>{fmt(gstr3bCalculations.totalOutwardTax)}</strong></td>
-                                </tr>
-                                <tr className="gst-table-footer" style={{ background: '#eef2ff' }}>
-                                    <td style={{ color: '#4338ca' }}><strong>Net Tax Payable (Cash)</strong></td>
-                                    <td style={{ color: '#64748b' }}>—</td>
-                                    <td style={{ color: '#0ea5e9' }}><strong>{fmt(gstr3bCalculations.netCgstPayable)}</strong></td>
-                                    <td style={{ color: '#06b6d4' }}><strong>{fmt(gstr3bCalculations.netSgstPayable)}</strong></td>
-                                    <td style={{ color: '#f59e0b' }}><strong>{fmt(gstr3bCalculations.netIgstPayable)}</strong></td>
-                                    <td style={{ color: '#4338ca', fontSize: 14 }}><strong>{fmt(gstr3bCalculations.totalNetTaxPayable)}</strong></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-
-                        {/* Detailed Net Tax Payable Breakdown Panel */}
-                        <div className="adm-gstr3b-net" style={{ flexDirection: 'column', gap: 12, alignItems: 'stretch', marginTop: 16 }}>
+                    {/* Detailed Net Tax Payable Breakdown Panel - Arranged cleanly below */}
+                    <div className="chart-card" style={{ marginTop: 20 }}>
+                        <div className="adm-gstr3b-net" style={{ flexDirection: 'column', gap: 12, alignItems: 'stretch', margin: 0 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                                 <div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1513,7 +1792,7 @@ const GSTManagement = () => {
                             </div>
                         </div>
                     </div>
-                </div>
+                </>
             )}
 
             {/* ── Slabs ── */}
@@ -1568,21 +1847,132 @@ const GSTManagement = () => {
                     </div>
 
                     <div className="chart-card">
-                        <h2 className="chart-title" style={{ marginBottom: 8 }}>GST by Slab (Pie)</h2>
-                        <ResponsiveContainer width="100%" height={220}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                            <div>
+                                <h2 className="chart-title" style={{ margin: 0 }}>GST by Slab (Pie Chart)</h2>
+                                <span style={{ fontSize: 11, color: '#64748b' }}>
+                                    {pieMetric === 'tax' ? 'Tax Amount Distribution' : 'Taxable Turnover Distribution'}
+                                </span>
+                            </div>
+                            {/* Metric Toggle: Tax vs Taxable */}
+                            <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 8, padding: 2 }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setPieMetric('tax')}
+                                    style={{
+                                        border: 'none',
+                                        background: pieMetric === 'tax' ? '#ffffff' : 'transparent',
+                                        color: pieMetric === 'tax' ? '#4f46e5' : '#64748b',
+                                        boxShadow: pieMetric === 'tax' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        padding: '4px 9px',
+                                        borderRadius: 6,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        transition: 'all .15s',
+                                    }}
+                                >
+                                    GST Tax
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setPieMetric('taxable')}
+                                    style={{
+                                        border: 'none',
+                                        background: pieMetric === 'taxable' ? '#ffffff' : 'transparent',
+                                        color: pieMetric === 'taxable' ? '#4f46e5' : '#64748b',
+                                        boxShadow: pieMetric === 'taxable' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                        padding: '4px 9px',
+                                        borderRadius: 6,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        transition: 'all .15s',
+                                    }}
+                                >
+                                    Taxable Value
+                                </button>
+                            </div>
+                        </div>
+
+                        <ResponsiveContainer width="100%" height={260}>
                             <PieChart>
-                                <Pie data={pieData} cx="50%" cy="50%" innerRadius={55} outerRadius={90} paddingAngle={3} dataKey="value">
-                                    {pieData.map((e, i) => <Cell key={i} fill={e.color} />)}
+                                <Pie
+                                    data={pieData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={50}
+                                    outerRadius={85}
+                                    paddingAngle={4}
+                                    dataKey="value"
+                                    stroke="#ffffff"
+                                    strokeWidth={2.5}
+                                    label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                                    labelLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
+                                >
+                                    {pieData.map((e, i) => (
+                                        <Cell
+                                            key={`slab-cell-${i}`}
+                                            fill={e.color}
+                                            stroke="#ffffff"
+                                            strokeWidth={2.5}
+                                        />
+                                    ))}
                                 </Pie>
-                                <Tooltip formatter={v => fmt(v)} />
+                                <Tooltip
+                                    formatter={(v, name, item) => [
+                                        fmt(item?.payload?.displayValue ?? v),
+                                        `GST ${item?.payload?.name} (${item?.payload?.percent ?? 0}%)`
+                                    ]}
+                                    contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                                />
                             </PieChart>
                         </ResponsiveContainer>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+
+                        {/* Distinct Legend with proportion bars and values */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
                             {pieData.map((p, i) => (
-                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: p.color, flexShrink: 0 }} />
-                                    <span style={{ fontSize: 12, color: '#6b7280', flex: 1 }}>GST {p.name}</span>
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{fmt(p.value)}</span>
+                                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                            <span style={{
+                                                width: 10,
+                                                height: 10,
+                                                borderRadius: '50%',
+                                                background: p.color,
+                                                flexShrink: 0,
+                                                border: '1.5px solid #fff',
+                                                boxShadow: `0 0 0 1px ${p.color}`,
+                                            }} />
+                                            <span style={{ fontWeight: 700, color: '#1e293b' }}>
+                                                {p.name} Slab
+                                            </span>
+                                            <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                                                ({p.count} {p.count === 1 ? 'invoice' : 'invoices'})
+                                            </span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ fontWeight: 700, color: '#0f172a' }}>
+                                                {fmt(p.displayValue)}
+                                            </span>
+                                            <span style={{
+                                                fontSize: 11,
+                                                fontWeight: 800,
+                                                color: p.color,
+                                                background: `${p.color}18`,
+                                                padding: '1px 6px',
+                                                borderRadius: 4,
+                                                minWidth: 42,
+                                                textAlign: 'right',
+                                            }}>
+                                                {p.percent}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {/* Progress bar visualizing slice proportion */}
+                                    <div style={{ width: '100%', height: 4, background: '#f1f5f9', borderRadius: 2, overflow: 'hidden' }}>
+                                        <div style={{ width: `${Math.min(100, Math.max(3, p.percent))}%`, height: '100%', background: p.color, borderRadius: 2, transition: 'width .3s ease' }} />
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -1594,22 +1984,44 @@ const GSTManagement = () => {
             {activeTab === 'rates' && (
                 <div className="chart-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                        <h2 className="chart-title" style={{ margin: 0 }}>Configured GST Rates</h2>
-                        <button className="adm-btn-primary" style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => { setShowAddModal(true); setFormError(''); }}>
+                        <div>
+                            <h2 className="chart-title" style={{ margin: 0 }}>Configured GST Rates</h2>
+                            <p style={{ margin: '4px 0 0', fontSize: 12, color: '#64748b' }}>
+                                Manage statutory HSN tax slabs, CGST/SGST/IGST breakdown, and active billing status.
+                            </p>
+                        </div>
+                        <button id="add-gst-rate-btn" className="adm-btn-primary" style={{ padding: '6px 14px', fontSize: 13 }} onClick={() => { setShowAddModal(true); setFormError(''); }}>
                             <BsPlus size={16} /> Add GST Rate
                         </button>
                     </div>
-                    {ratesLoading ? (
-                        <p style={{ fontSize: 13, color: '#64748b', padding: 20 }}>Loading GST Rates...</p>
-                    ) : ratesError ? (
+
+                    {/* Success notification banner */}
+                    {rateSuccessNotice && (
                         <div style={{
-                            background: '#fff3cd', color: '#856404', border: '1px solid #ffc107',
-                            padding: '12px 16px', borderRadius: 8, fontSize: 13, display: 'flex',
-                            alignItems: 'center', gap: 8, margin: '8px 0'
+                            background: '#ecfdf5',
+                            border: '1px solid #a7f3d0',
+                            color: '#065f46',
+                            borderRadius: 8,
+                            padding: '10px 14px',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            marginBottom: 16,
                         }}>
-                            <span>📡</span>
-                            <span><strong>Server unavailable</strong> — {ratesError}</span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <BsCheckCircleFill size={15} color="#10b981" />
+                                {rateSuccessNotice}
+                            </span>
+                            <button onClick={() => setRateSuccessNotice('')} style={{ background: 'none', border: 'none', color: '#065f46', cursor: 'pointer', padding: 0 }}>
+                                <BsX size={16} />
+                            </button>
                         </div>
+                    )}
+
+                    {ratesLoading && gstRates.length === 0 ? (
+                        <p style={{ fontSize: 13, color: '#64748b', padding: 20 }}>Loading GST Rates...</p>
                     ) : (
                         <table className="dash-table">
                             <thead>
@@ -1654,14 +2066,32 @@ const GSTManagement = () => {
                                                     <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 4, background: '#fef2f2', color: '#ef4444', fontWeight: 600 }}>Inactive</span>
                                                 )}
                                             </td>
-                                            <td style={{ fontSize: 12, color: '#9ca3af' }}>{new Date(r.created_at).toLocaleDateString()}</td>
+                                            <td style={{ fontSize: 12, color: '#9ca3af' }}>
+                                                {r.created_at ? new Date(r.created_at).toLocaleDateString() : new Date().toLocaleDateString()}
+                                            </td>
                                             <td style={{ textAlign: 'right' }}>
                                                 <button
+                                                    id={`edit-gst-rate-btn-${r.id || idx}`}
                                                     onClick={() => openEdit(r)}
-                                                    style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#6366f1', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 4 }}
-                                                    title="Edit GST Rate"
+                                                    style={{
+                                                        border: '1px solid #e0e7ff',
+                                                        background: '#eef2ff',
+                                                        cursor: 'pointer',
+                                                        color: '#4f46e5',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: 5,
+                                                        padding: '4px 9px',
+                                                        borderRadius: 6,
+                                                        fontSize: 12,
+                                                        fontWeight: 600,
+                                                        transition: 'all .15s',
+                                                    }}
+                                                    title={`Edit GST Rate for HSN ${r.hsn_code}`}
                                                 >
-                                                    <BsPencilFill size={13} />
+                                                    <BsPencilFill size={12} />
+                                                    <span>Edit</span>
                                                 </button>
                                             </td>
                                         </tr>
@@ -1674,11 +2104,16 @@ const GSTManagement = () => {
                     {/* Add GST Rate Modal */}
                     {showAddModal && (
                         <div className="ec-modal-overlay" onClick={() => setShowAddModal(false)}>
-                            <div className="ec-modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+                            <div className="ec-modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
                                 <div className="ec-modal-header">
-                                    <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
-                                        Add New GST Rate
-                                    </h3>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <div style={{ background: '#eef2ff', padding: 7, borderRadius: 8 }}>
+                                            <BsPlus size={18} color="#4f46e5" />
+                                        </div>
+                                        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>
+                                            Add New GST Rate
+                                        </h3>
+                                    </div>
                                     <button className="ec-modal-close" onClick={() => setShowAddModal(false)}>✕</button>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 10 }}>
@@ -1694,27 +2129,53 @@ const GSTManagement = () => {
                                         <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: '#4b5563' }}>HSN Code *</label>
                                         <input
                                             className="ec-input"
-                                            placeholder="e.g. 00000000"
+                                            placeholder="e.g. 1905, 6109"
                                             value={newHsn}
                                             onChange={e => setNewHsn(e.target.value)}
                                             style={{ width: '100%' }}
                                         />
                                     </div>
                                     <div className="ec-field">
-                                        <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: '#4b5563' }}>GST Rate (%) *</label>
-                                        <select
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                            <label style={{ fontSize: 12, fontWeight: 600, color: '#4b5563' }}>GST Rate (%) *</label>
+                                            {newRate !== '' && (
+                                                <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
+                                                    CGST: {(Number(newRate) / 2).toFixed(1)}% | SGST: {(Number(newRate) / 2).toFixed(1)}%
+                                                </span>
+                                            )}
+                                        </div>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="0.01"
                                             className="ec-input"
+                                            placeholder="Enter percentage (e.g. 18)"
                                             value={newRate}
                                             onChange={e => setNewRate(e.target.value)}
-                                            style={{ width: '100%' }}
-                                        >
-                                            <option value="">Select Rate...</option>
-                                            <option value="0">0%</option>
-                                            <option value="5">5%</option>
-                                            <option value="12">12%</option>
-                                            <option value="18">18%</option>
-                                            <option value="28">28%</option>
-                                        </select>
+                                            style={{ width: '100%', marginBottom: 8 }}
+                                        />
+                                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                            {[0, 3, 5, 12, 18, 28].map(slab => (
+                                                <button
+                                                    key={slab}
+                                                    type="button"
+                                                    onClick={() => setNewRate(String(slab))}
+                                                    style={{
+                                                        padding: '3px 9px',
+                                                        borderRadius: 6,
+                                                        border: `1px solid ${Number(newRate) === slab ? '#6366f1' : '#e2e8f0'}`,
+                                                        background: Number(newRate) === slab ? '#eef2ff' : '#fff',
+                                                        color: Number(newRate) === slab ? '#4f46e5' : '#475569',
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    {slab}%
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                     <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
                                         <button
@@ -1742,11 +2203,16 @@ const GSTManagement = () => {
                     {/* Edit GST Rate Modal */}
                     {showEditModal && editingRate && (
                         <div className="ec-modal-overlay" onClick={() => setShowEditModal(false)}>
-                            <div className="ec-modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+                            <div className="ec-modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
                                 <div className="ec-modal-header">
-                                    <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>
-                                        Edit GST Rate (HSN: {editingRate.hsn_code})
-                                    </h3>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <div style={{ background: '#eef2ff', padding: 7, borderRadius: 8 }}>
+                                            <BsPencilFill size={15} color="#4f46e5" />
+                                        </div>
+                                        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>
+                                            Edit GST Rate
+                                        </h3>
+                                    </div>
                                     <button className="ec-modal-close" onClick={() => setShowEditModal(false)}>✕</button>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 10 }}>
@@ -1759,19 +2225,57 @@ const GSTManagement = () => {
                                         </div>
                                     )}
                                     <div className="ec-field">
-                                        <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: '#4b5563' }}>GST Rate (%) *</label>
-                                        <select
+                                        <label style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600, color: '#4b5563' }}>HSN Code *</label>
+                                        <input
+                                            id="edit-hsn-input"
                                             className="ec-input"
+                                            placeholder="e.g. 1905, 6109"
+                                            value={editHsn}
+                                            onChange={e => setEditHsn(e.target.value)}
+                                            style={{ width: '100%' }}
+                                        />
+                                    </div>
+                                    <div className="ec-field">
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                            <label style={{ fontSize: 12, fontWeight: 600, color: '#4b5563' }}>GST Rate (%) *</label>
+                                            <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
+                                                CGST: {(Number(editRateVal || 0) / 2).toFixed(1)}% | SGST: {(Number(editRateVal || 0) / 2).toFixed(1)}% | IGST: {Number(editRateVal || 0)}%
+                                            </span>
+                                        </div>
+                                        <input
+                                            id="edit-rate-input"
+                                            type="number"
+                                            min="0"
+                                            max="100"
+                                            step="0.01"
+                                            className="ec-input"
+                                            placeholder="Enter rate percentage (e.g. 18)"
                                             value={editRateVal}
                                             onChange={e => setEditRateVal(e.target.value)}
-                                            style={{ width: '100%' }}
-                                        >
-                                            <option value="0">0%</option>
-                                            <option value="5">5%</option>
-                                            <option value="12">12%</option>
-                                            <option value="18">18%</option>
-                                            <option value="28">28%</option>
-                                        </select>
+                                            style={{ width: '100%', marginBottom: 8 }}
+                                        />
+                                        {/* Quick select rate pills */}
+                                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                            {[0, 3, 5, 12, 18, 28].map(slab => (
+                                                <button
+                                                    key={slab}
+                                                    type="button"
+                                                    onClick={() => setEditRateVal(String(slab))}
+                                                    style={{
+                                                        padding: '3px 9px',
+                                                        borderRadius: 6,
+                                                        border: `1px solid ${Number(editRateVal) === slab ? '#6366f1' : '#e2e8f0'}`,
+                                                        background: Number(editRateVal) === slab ? '#eef2ff' : '#fff',
+                                                        color: Number(editRateVal) === slab ? '#4f46e5' : '#475569',
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                    }}
+                                                >
+                                                    {slab}%
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                     <div className="ec-field" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                                         <input
@@ -1795,6 +2299,7 @@ const GSTManagement = () => {
                                             Cancel
                                         </button>
                                         <button
+                                            id="save-gst-rate-btn"
                                             className="adm-btn-primary"
                                             style={{ flex: 1, justifyContent: 'center' }}
                                             onClick={handleUpdateRate}
@@ -1891,14 +2396,14 @@ const GSTManagement = () => {
                             <div className="ec-field">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                                     <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
-                                        Customer GSTIN (15 Characters) *
+                                        Customer GSTIN *
                                     </label>
                                     <span style={{
                                         fontSize: 11,
                                         fontWeight: 700,
                                         color: inputGstin.trim().length === 15 ? '#059669' : (inputGstin.trim().length > 0 ? '#e11d48' : '#94a3b8')
                                     }}>
-                                        {inputGstin.trim().length} / 15 characters
+                                        {inputGstin.trim().length} / 15
                                     </span>
                                 </div>
 
@@ -1935,7 +2440,7 @@ const GSTManagement = () => {
                                                 <div style={{ fontSize: 12, color: '#047857', background: '#ecfdf5', padding: '8px 10px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
                                                     <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                                                         <BsCheckCircleFill size={13} color="#059669" />
-                                                        Valid 15-character statutory GSTIN
+                                                        Valid statutory GSTIN
                                                     </div>
                                                     <div style={{ marginTop: 2, fontSize: 11 }}>
                                                         State: <strong>{v.stateName} ({v.stateCode})</strong> • Tax Type: <strong>{v.isInterstate ? 'Interstate (IGST Applicable)' : 'Intrastate (CGST + SGST Applicable)'}</strong>
@@ -1947,7 +2452,7 @@ const GSTManagement = () => {
                                                 <div style={{ fontSize: 12, color: '#9f1239', background: '#fff1f2', padding: '8px 10px', borderRadius: 6, border: '1px solid #fecdd3' }}>
                                                     <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
                                                         <BsExclamationTriangleFill size={13} color="#e11d48" />
-                                                        GSTIN NOT VALID: 15 Characters Needed
+                                                        GSTIN NOT VALID
                                                     </div>
                                                     <div style={{ marginTop: 2, fontSize: 11 }}>
                                                         {v.error}

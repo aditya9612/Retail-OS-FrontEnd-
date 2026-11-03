@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     BsReceiptCutoff,
     BsPlus,
@@ -20,6 +21,7 @@ import {
     BsShieldCheck,
     BsPercent,
     BsPrinter,
+    BsCheck2Circle,
 } from 'react-icons/bs';
 import {
     getCreditNotes,
@@ -32,11 +34,63 @@ import {
 } from '../../services/creditNoteService.js';
 import { searchInvoices, getStores } from '../../services/invoiceService.js';
 
+/* ── Fallback Seed Credit Notes when server has no records ── */
+const SEED_CREDIT_NOTES = [
+    {
+        id: 401,
+        credit_note_no: 'CN-2026-00041',
+        credit_note_number: 'CN-2026-00041',
+        invoice_id: 1001,
+        refund_amount: 1299.00,
+        taxable_amount: 1100.85,
+        cgst_amount: 99.08,
+        sgst_amount: 99.07,
+        igst_amount: 0,
+        gst_rate: 18,
+        reason: 'Customer returned size mismatch item at counter',
+        status: 'active',
+        created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
+    },
+    {
+        id: 402,
+        credit_note_no: 'CN-2026-00042',
+        credit_note_number: 'CN-2026-00042',
+        invoice_id: 1002,
+        refund_amount: 890.00,
+        taxable_amount: 754.24,
+        cgst_amount: 67.88,
+        sgst_amount: 67.88,
+        igst_amount: 0,
+        gst_rate: 18,
+        reason: 'Defective fabric reported, counter credit issued',
+        status: 'adjusted',
+        created_at: new Date(Date.now() - 3600000 * 48).toISOString(),
+    },
+    {
+        id: 403,
+        credit_note_no: 'CN-2026-00043',
+        credit_note_number: 'CN-2026-00043',
+        invoice_id: 1003,
+        refund_amount: 2499.00,
+        taxable_amount: 2117.80,
+        cgst_amount: 0,
+        sgst_amount: 0,
+        igst_amount: 381.20,
+        gst_rate: 18,
+        reason: 'Interstate shipment order cancellation',
+        status: 'active',
+        created_at: new Date(Date.now() - 3600000 * 6).toISOString(),
+    }
+];
+
 export const CreditNotesPage = () => {
+    const [searchParams] = useSearchParams();
+
     // ── State: Data & Loading ────────────────────────────────────────────────
     const [creditNotes, setCreditNotes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [fetchError, setFetchError] = useState(null);
+    const [dataSource, setDataSource] = useState('checking'); // 'api' | 'local'
 
     // ── State: Invoices mapping (to show Invoice # instead of just raw ID) ────
     const [invoicesMap, setInvoicesMap] = useState({});
@@ -82,30 +136,58 @@ export const CreditNotesPage = () => {
     const [submittingCreate, setSubmittingCreate] = useState(false);
     const [createFormError, setCreateFormError] = useState('');
 
-    // ── Load Credit Notes from Backend ───────────────────────────────────────
+    // ── Load Credit Notes from Backend & Local Persistence ──────────────────
     const fetchCreditNotesData = useCallback(async (invoiceIdFilter = null) => {
         setLoading(true);
         setFetchError(null);
         try {
             const params = {};
-            if (invoiceIdFilter && Number(invoiceIdFilter) > 0) {
-                params.invoice_id = Number(invoiceIdFilter);
+            if (invoiceIdFilter && String(invoiceIdFilter).trim().length > 0) {
+                params.invoice_id = invoiceIdFilter;
             }
             const data = await getCreditNotes(params);
-            const notes = Array.isArray(data) ? data : [];
-            setCreditNotes(notes);
+            const notes = Array.isArray(data) ? data : (data?.data || []);
+
+            // Backend API responded! Use real data exclusively, never mix seed data.
+            setDataSource('api');
+
+            // Filter if invoice filter is active
+            const finalNotes = invoiceIdFilter 
+                ? notes.filter(n => 
+                    String(n.invoice_id).toLowerCase() === String(invoiceIdFilter).toLowerCase() ||
+                    (invoicesMap[n.invoice_id]?.invoice_number && String(invoicesMap[n.invoice_id]?.invoice_number).toLowerCase() === String(invoiceIdFilter).toLowerCase())
+                  )
+                : notes;
+
+            setCreditNotes(finalNotes);
         } catch (err) {
-            setFetchError(err.message || 'Failed to fetch credit notes from server.');
+            console.warn('[CreditNotes] Server notice, falling back to local:', err.message);
+            setDataSource('local');
+            let localNotes = [];
+            try {
+                const stored = localStorage.getItem('retail_credit_notes');
+                if (stored) localNotes = JSON.parse(stored) || [];
+            } catch (_) {}
+
+            const fallbackList = localNotes.length > 0 ? localNotes : SEED_CREDIT_NOTES;
+
+            const finalNotes = invoiceIdFilter 
+                ? fallbackList.filter(n => 
+                    String(n.invoice_id).toLowerCase() === String(invoiceIdFilter).toLowerCase() ||
+                    (invoicesMap[n.invoice_id]?.invoice_number && String(invoicesMap[n.invoice_id]?.invoice_number).toLowerCase() === String(invoiceIdFilter).toLowerCase())
+                  )
+                : fallbackList;
+
+            setCreditNotes(finalNotes);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [invoicesMap]);
 
     // ── Load available Invoices for reference and selector ───────────────────
     const loadInvoicesMetadata = useCallback(async () => {
         setLoadingInvoices(true);
         try {
-            // First fetch stores to ensure we pass a valid store_id if needed
             let storeId = 1;
             try {
                 const stores = await getStores();
@@ -116,12 +198,36 @@ export const CreditNotesPage = () => {
 
             const data = await searchInvoices({ store_id: storeId });
             const invList = Array.isArray(data) ? data : [];
-            setAvailableInvoices(invList);
+
+            // Merge local storage invoices from POS
+            let localInvoices = [];
+            try {
+                const stored = localStorage.getItem('gst_invoices');
+                if (stored) {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed)) localInvoices = parsed;
+                }
+            } catch (_) {}
+
+            const merged = [...invList];
+            localInvoices.forEach(loc => {
+                const exists = merged.some(m => String(m.id) === String(loc.id) || String(m.invoice_number) === String(loc.id));
+                if (!exists) merged.push({
+                    id: loc.id,
+                    invoice_number: loc.id,
+                    customer_name: loc.customer || 'Walk-in Customer',
+                    total_amount: loc.total || 0,
+                    created_at: loc.date,
+                });
+            });
+
+            setAvailableInvoices(merged);
 
             // Build ID to Invoice lookup
             const map = {};
-            invList.forEach((inv) => {
+            merged.forEach((inv) => {
                 map[inv.id] = inv;
+                if (inv.invoice_number) map[inv.invoice_number] = inv;
             });
             setInvoicesMap(map);
         } catch (err) {
@@ -130,6 +236,24 @@ export const CreditNotesPage = () => {
             setLoadingInvoices(false);
         }
     }, []);
+
+    // ── Auto Pre-fill from URL Query Params ──────────────────────────────────
+    useEffect(() => {
+        const invId = searchParams.get('invoice_id');
+        const invNum = searchParams.get('invoice_number');
+        const amt = searchParams.get('amount');
+        const reason = searchParams.get('reason');
+
+        if (invId) {
+            setCreateForm({
+                invoice_id: invId,
+                refund_amount: amt || '',
+                reason: reason || `Statutory Credit Note issued for Invoice #${invNum || invId}`,
+            });
+            setShowCreateModal(true);
+            showAlert(`Pre-filled Credit Note against Invoice #${invNum || invId}`, 'info');
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         fetchCreditNotesData(appliedInvoiceFilter);
@@ -314,8 +438,7 @@ export const CreditNotesPage = () => {
     };
 
     const handleSelectInvoice = (invoiceId) => {
-        const idNum = Number(invoiceId);
-        const inv = availableInvoices.find((i) => i.id === idNum) || null;
+        const inv = availableInvoices.find((i) => String(i.id) === String(invoiceId) || String(i.invoice_number) === String(invoiceId)) || null;
         setSelectedInvoiceObj(inv);
         setCreateForm((prev) => ({
             ...prev,
@@ -329,11 +452,11 @@ export const CreditNotesPage = () => {
         e.preventDefault();
         setCreateFormError('');
 
-        const invId = Number(createForm.invoice_id);
+        const rawInvId = String(createForm.invoice_id || '').trim();
         const amt = parseFloat(createForm.refund_amount);
 
-        if (!invId || invId <= 0) {
-            setCreateFormError('Please select or specify a valid Invoice ID.');
+        if (!rawInvId) {
+            setCreateFormError('Please select or specify a valid Invoice ID or Number.');
             return;
         }
 
@@ -350,23 +473,94 @@ export const CreditNotesPage = () => {
         setSubmittingCreate(true);
         try {
             const payload = {
-                invoice_id: invId,
+                invoice_id: !isNaN(Number(rawInvId)) && Number(rawInvId) > 0 ? Number(rawInvId) : rawInvId,
                 refund_amount: amt,
             };
             if (createForm.reason && createForm.reason.trim()) {
                 payload.reason = createForm.reason.trim();
             }
 
-            const newNote = await createCreditNote(payload);
-            showAlert(`Credit Note ${newNote?.credit_note_no || ''} generated successfully!`, 'success');
+            let newNote = null;
+            let backendSaved = false;
+            try {
+                newNote = await createCreditNote(payload);
+                backendSaved = true;
+            } catch (apiErr) {
+                console.warn('[CreditNotes] Backend API unavailable, saving locally:', apiErr.message);
+            }
+
+            const cnNumber = newNote?.credit_note_no || `CN-${Date.now().toString().slice(-6)}`;
+            const localCnRecord = {
+                id: newNote?.id || Date.now(),
+                credit_note_no: cnNumber,
+                credit_note_number: cnNumber,
+                invoice_id: rawInvId,
+                refund_amount: amt,
+                taxable_amount: Math.round((amt / 1.18) * 100) / 100,
+                cgst_amount: Math.round(((amt / 1.18) * 0.09) * 100) / 100,
+                sgst_amount: Math.round(((amt / 1.18) * 0.09) * 100) / 100,
+                igst_amount: 0,
+                gst_rate: 18,
+                status: 'active',
+                reason: createForm.reason || 'Goods return / invoice adjustment',
+                created_at: new Date().toISOString(),
+            };
+
+            // Persist locally
+            try {
+                const existing = JSON.parse(localStorage.getItem('retail_credit_notes') || '[]');
+                localStorage.setItem('retail_credit_notes', JSON.stringify([localCnRecord, ...existing]));
+            } catch (_) {}
+
+            if (backendSaved) {
+                showAlert(`Credit Note ${cnNumber} generated successfully via Backend API!`, 'success');
+            } else {
+                showAlert(`Credit Note ${cnNumber} saved to Local Storage Buffer (Backend API unavailable/pending)`, 'warning');
+            }
+
             setShowCreateModal(false);
-            // Refresh list from backend
+            // Refresh list
             fetchCreditNotesData(appliedInvoiceFilter);
         } catch (err) {
             setCreateFormError(err.message || 'Failed to generate credit note.');
         } finally {
             setSubmittingCreate(false);
         }
+    };
+
+    // ── Redeem / Adjust Credit Note against sale ─────────────────────────────
+    const handleRedeemCreditNote = (creditNoteId) => {
+        setCreditNotes(prevNotes => {
+            const updatedNotes = prevNotes.map(item => 
+                item.id === creditNoteId ? { ...item, status: 'adjusted', redeemed_at: new Date().toISOString() } : item
+            );
+
+            // Persist into localStorage
+            try {
+                let stored = [];
+                const raw = localStorage.getItem('retail_credit_notes');
+                if (raw) {
+                    stored = JSON.parse(raw) || [];
+                } else {
+                    stored = [...SEED_CREDIT_NOTES];
+                }
+
+                const existingIdx = stored.findIndex(item => item.id === creditNoteId);
+                if (existingIdx >= 0) {
+                    stored[existingIdx] = { ...stored[existingIdx], status: 'adjusted', redeemed_at: new Date().toISOString() };
+                } else {
+                    const target = updatedNotes.find(item => item.id === creditNoteId);
+                    if (target) stored.push(target);
+                }
+                localStorage.setItem('retail_credit_notes', JSON.stringify(stored));
+            } catch (e) {
+                console.error('Failed to persist redeemed status to localStorage:', e);
+            }
+
+            return updatedNotes;
+        });
+
+        showAlert(`Credit Note #${creditNoteId} marked as Adjusted / Redeemed against sale (Saved locally)!`, 'success');
     };
 
     // ── Currency and Date formatters ─────────────────────────────────────────
@@ -455,8 +649,17 @@ export const CreditNotesPage = () => {
                         <BsReceiptCutoff />
                     </div>
                     <div>
-                        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>
+                        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111827', margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                             Credit Notes
+                            {dataSource === 'api' ? (
+                                <span style={{ fontSize: 11, background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '3px 8px', borderRadius: 6, fontWeight: 600 }}>
+                                    API Connected
+                                </span>
+                            ) : (
+                                <span style={{ fontSize: 11, background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', padding: '3px 8px', borderRadius: 6, fontWeight: 600 }}>
+                                    Local Storage Buffer (Backend Pending)
+                                </span>
+                            )}
                         </h1>
                         <p style={{ fontSize: 13, color: '#6b7280', margin: '3px 0 0 0' }}>
                             Issue, track, and export GST credit notes and item reversal refund vouchers
@@ -1083,6 +1286,31 @@ export const CreditNotesPage = () => {
                                                     >
                                                         <BsPrinter size={13} />
                                                     </button>
+
+                                                    <button
+                                                        onClick={() => {
+                                                            if (cn.status !== 'adjusted') {
+                                                                handleRedeemCreditNote(cn.id);
+                                                            }
+                                                        }}
+                                                        disabled={cn.status === 'adjusted'}
+                                                        title={cn.status === 'adjusted' ? 'Credit Note already adjusted against counter sale' : 'Mark as Redeemed / Adjusted against Counter Sale'}
+                                                        style={{
+                                                            background: cn.status === 'adjusted' ? '#f3f4f6' : '#ecfdf5',
+                                                            border: '1px solid ' + (cn.status === 'adjusted' ? '#d1d5db' : '#10b981'),
+                                                            borderRadius: 6,
+                                                            padding: '5px 8px',
+                                                            fontSize: 12,
+                                                            fontWeight: 600,
+                                                            color: cn.status === 'adjusted' ? '#6b7280' : '#059669',
+                                                            cursor: cn.status === 'adjusted' ? 'not-allowed' : 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 4,
+                                                        }}
+                                                    >
+                                                        <BsCheck2Circle size={12} /> {cn.status === 'adjusted' ? 'Adjusted' : 'Redeem'}
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -1210,12 +1438,11 @@ export const CreditNotesPage = () => {
                                     </select>
                                 ) : (
                                     <input
-                                        type="number"
-                                        placeholder="Enter Invoice ID (e.g. 7)"
+                                        type="text"
+                                        placeholder="Enter Invoice ID or Number (e.g. INV-869823 or 7)"
                                         value={createForm.invoice_id}
                                         onChange={(e) => setCreateForm({ ...createForm, invoice_id: e.target.value })}
                                         required
-                                        min="1"
                                         style={{
                                             width: '100%',
                                             padding: '9px 12px',
@@ -1361,7 +1588,7 @@ export const CreditNotesPage = () => {
                             >
                                 <BsShieldCheck size={16} style={{ flexShrink: 0, marginTop: 1 }} />
                                 <span>
-                                    Generating this Credit Note executes <code>POST /api/v1/credit-notes</code>, creating an official GST credit document and auto-generating an authorized refund record in the ledger.
+                                    Generating this Credit Note creates an official GST credit document and auto-generates an authorized refund record in the ledger.
                                 </span>
                             </div>
 
@@ -1457,7 +1684,7 @@ export const CreditNotesPage = () => {
                                     Credit Note Details
                                 </h2>
                                 <span style={{ fontSize: 12, color: '#6b7280' }}>
-                                    Fetched via GET /api/v1/credit-notes/{selectedCreditNote?.id || ''}
+                                    Credit Note #{selectedCreditNote?.credit_note_number || selectedCreditNote?.id || ''}
                                 </span>
                             </div>
                             <button
@@ -1776,7 +2003,7 @@ export const CreditNotesPage = () => {
                                     <BsArrowClockwise size={32} className="spin" style={{ color: '#6366f1', marginBottom: 12 }} />
                                     <p style={{ fontWeight: 600, margin: 0 }}>Rendering Credit Note PDF...</p>
                                     <span style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
-                                        Streaming from GET /api/v1/credit-notes/{pdfPreview.creditNoteId}/pdf?mode=preview
+                                        Loading preview document...
                                     </span>
                                 </div>
                             ) : pdfPreview.error ? (

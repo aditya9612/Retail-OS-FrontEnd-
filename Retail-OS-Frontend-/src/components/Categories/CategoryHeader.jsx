@@ -6,6 +6,7 @@ const CategoryHeader = ({
   active,
   inactive,
   onAdd,
+  onExport,
   statusFilter,
   setStatusFilter,
 }) => {
@@ -21,7 +22,7 @@ const CategoryHeader = ({
       {/* Right */}
       <div className="category-header-right">
 
-        <button className="category-btn secondary-btn">
+        <button className="category-btn secondary-btn" type="button" onClick={onExport}>
           Export
         </button>
 

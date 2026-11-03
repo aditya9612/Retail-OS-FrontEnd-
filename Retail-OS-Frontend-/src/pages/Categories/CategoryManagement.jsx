@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import category from "../../services/categoryService";
+import productService from "../../services/product";
 
 import CategoryCards from "../../components/Categories/CategoryCards";
 import CategoryTable, { formatCategoryName } from "../../components/Categories/CategoryTable";
@@ -13,6 +15,7 @@ import "./CategoryManagement.css";
 const PAGE_SIZE = 8;
 
 const CategoryManagement = () => {
+  const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
   const [statusFilter, setStatusFilter] = useState("All");
 
@@ -87,7 +90,31 @@ const CategoryManagement = () => {
       setLoading(true);
       setError("");
 
-      const response = await category.getAll();
+      // Fetch both categories and products in parallel to calculate accurate product counts per category
+      const [catResponse, prodResponse] = await Promise.allSettled([
+        category.getAll(),
+        productService.getAll(1, 1000, true),
+      ]);
+
+      const response = catResponse.status === "fulfilled" ? catResponse.value : { data: [] };
+      const productsData = prodResponse.status === "fulfilled" ? prodResponse.value?.data : null;
+
+      const productList = Array.isArray(productsData?.items)
+        ? productsData.items
+        : Array.isArray(productsData)
+        ? productsData
+        : Array.isArray(productsData?.data)
+        ? productsData.data
+        : [];
+
+      // Build product count map by category_id
+      const productCountsByCat = {};
+      productList.forEach((p) => {
+        const cid = p.category_id || p.category?.id;
+        if (cid) {
+          productCountsByCat[cid] = (productCountsByCat[cid] || 0) + 1;
+        }
+      });
 
       console.log(
         "🔥 Categories API Response:",
@@ -119,9 +146,11 @@ const CategoryManagement = () => {
         );
 
         /*
-         * Get product count from available backend fields.
+         * Get product count from products API or available backend fields.
          */
-        const productCount = getProductCount(item);
+        const productCount = productCountsByCat[item.id] !== undefined
+          ? productCountsByCat[item.id]
+          : getProductCount(item);
 
         /*
          * If backend does not send explicit status,
@@ -237,6 +266,8 @@ if (!status) {
   const filteredCategories =
     statusFilter === "All"
       ? categories
+      : statusFilter === "Products"
+      ? categories.filter((item) => Number(item.products) > 0)
       : categories.filter(
           (item) =>
             item.status?.toLowerCase() ===
@@ -276,6 +307,64 @@ if (!status) {
       startIndex,
       endIndex
     );
+
+  /* =========================================================
+     KPI CARD CLICK HANDLER
+  ========================================================= */
+
+  const handleCardClick = (filterKey) => {
+    if (filterKey === "All") {
+      setStatusFilter("All");
+    } else if (filterKey === "Active") {
+      setStatusFilter("Active");
+    } else if (filterKey === "Inactive") {
+      setStatusFilter("Inactive");
+    } else if (filterKey === "Products") {
+      if (statusFilter === "Products") {
+        setStatusFilter("All");
+      } else {
+        const hasProducts = categories.some((c) => Number(c.products) > 0);
+        if (hasProducts) {
+          setStatusFilter("Products");
+        } else {
+          navigate("/products");
+        }
+      }
+    }
+  };
+
+  /* =========================================================
+     EXPORT HANDLER (CSV)
+  ========================================================= */
+
+  const handleExport = () => {
+    if (!categories || categories.length === 0) {
+      alert("No categories available to export");
+      return;
+    }
+
+    const headers = ["ID", "Category Name", "Total Products", "Status", "Created Date", "Description"];
+    const rows = categories.map((cat) => [
+      cat.id,
+      `"${(cat.name || "").replace(/"/g, '""')}"`,
+      cat.products ?? 0,
+      cat.status || "Active",
+      `"${cat.created || ""}"`,
+      `"${(cat.description || "").replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `categories_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   /* =========================================================
      VIEW
@@ -398,24 +487,31 @@ const handleStatusChange = async (
         ? "Active"
         : "Inactive";
 
-    const payload = {
-      name: formatCategoryName(item.name),
-      description:
-        item.description || "",
-      parent_id:
-        item.parent_id ??
-        null,
-      status: nextStatus,
-      is_active: nextIsActive,
-    };
-
     /*
-     * Call existing category update API
+     * 1. Call dedicated activate/deactivate API
+     * Fallback to patch / update if direct endpoints fail
      */
-    await category.update(item.id, payload);
+    try {
+      if (typeof category.setActiveStatus === "function") {
+        await category.setActiveStatus(item.id, nextIsActive);
+      } else {
+        await category.update(item.id, { is_active: nextIsActive });
+      }
+    } catch (apiErr) {
+      console.warn("Direct activate/deactivate failed, trying fallback payload update:", apiErr);
+      const fallbackPayload = {
+        name: formatCategoryName(item.name),
+        parent_id: item.parent_id ?? null,
+        is_active: nextIsActive,
+      };
+      if (item.description && typeof item.description === "string" && item.description.trim().length >= 3) {
+        fallbackPayload.description = item.description.trim();
+      }
+      await category.update(item.id, fallbackPayload);
+    }
 
     /*
-     * Update UI with the new status.
+     * 2. Update local state immediately with the new status.
      */
     setCategories((previousCategories) =>
       previousCategories.map((categoryItem) =>
@@ -429,8 +525,21 @@ const handleStatusChange = async (
       )
     );
 
+    /*
+     * 3. Prevent category from disappearing when viewing a filtered list:
+     * If the user is currently filtering by "Active" and deactivates a category,
+     * or filtering by "Inactive" and activates a category, reset filter to "All"
+     * so the category remains clearly visible on screen with its new status badge!
+     */
+    if (
+      (statusFilter === "Active" && !nextIsActive) ||
+      (statusFilter === "Inactive" && nextIsActive)
+    ) {
+      setStatusFilter("All");
+    }
+
     console.log(
-      `Category ${item.id} status changed to ${nextStatus}`
+      `Category ${item.id} status successfully changed to ${nextStatus}`
     );
   } catch (error) {
     console.error(
@@ -438,9 +547,13 @@ const handleStatusChange = async (
       error
     );
 
-    setError(
-      "Failed to change category status."
-    );
+    const errorMsg =
+      error?.response?.data?.detail ||
+      error?.response?.data?.message ||
+      "Failed to change category status.";
+
+    alert(typeof errorMsg === "string" ? errorMsg : "Failed to change category status.");
+    setError(typeof errorMsg === "string" ? errorMsg : "Failed to change category status.");
   } finally {
     setLoading(false);
   }
@@ -467,11 +580,6 @@ const handleStatusChange = async (
         return;
       }
 
-      if (selectedCategory && !data?.description?.trim()) {
-        alert("Please enter category description");
-        return;
-      }
-
       const nextStatus =
         data.status ||
         selectedCategory?.status ||
@@ -480,10 +588,12 @@ const handleStatusChange = async (
       const nextIsActive =
         nextStatus.toLowerCase() === "active";
 
+      const cleanDesc = (data.description && typeof data.description === "string" && data.description.trim().length >= 3)
+        ? data.description.trim()
+        : null;
+
       const payload = {
         name: formattedName,
-        description:
-          data.description || "",
         parent_id:
           data.parent_id ??
           selectedCategory?.parent_id ??
@@ -491,6 +601,10 @@ const handleStatusChange = async (
         status: nextStatus,
         is_active: nextIsActive,
       };
+
+      if (cleanDesc) {
+        payload.description = cleanDesc;
+      }
 
       console.log(
         "📦 Category Payload:",
@@ -620,6 +734,7 @@ const handleStatusChange = async (
         active={activeCount}
         inactive={inactiveCount}
         onAdd={handleAdd}
+        onExport={handleExport}
         statusFilter={statusFilter}
         setStatusFilter={setStatusFilter}
       />
@@ -630,6 +745,8 @@ const handleStatusChange = async (
 
       <CategoryCards
         categories={categories}
+        statusFilter={statusFilter}
+        onCardClick={handleCardClick}
       />
 
       {/* =====================================================

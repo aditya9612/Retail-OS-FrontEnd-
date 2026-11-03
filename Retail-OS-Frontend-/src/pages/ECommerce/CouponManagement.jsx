@@ -153,6 +153,22 @@ const DEFAULT_COUPONS = [
         freeDelivery: true,
         status: 'Active',
     },
+    {
+        id: 'cpn-summer30',
+        code: 'SUMMER30',
+        description: '30% off upcoming seasonal launch discount',
+        type: 'Percentage',
+        value: 30,
+        minOrder: 600,
+        maxDiscount: 300,
+        startDate: '2026-11-15',
+        expiry: '2026-12-31',
+        usageLimit: 100,
+        used: 0,
+        eligibility: 'All',
+        freeDelivery: false,
+        status: 'Scheduled',
+    },
 ];
 
 const mapBackendToFrontend = (b) => {
@@ -170,9 +186,15 @@ const mapBackendToFrontend = (b) => {
     }
 
     let status = raw.is_active || raw.status === 'Active' ? 'Active' : 'Inactive';
+    if (raw.status === 'Scheduled' || raw.status === 'scheduled') {
+        status = 'Scheduled';
+    }
+    const startDate = raw.start_date || raw.startDate || '';
     const expiry = raw.end_date || raw.endDate || raw.expiry || raw.expires_at || '';
     if (expiry && new Date(expiry) < new Date()) {
         status = 'Expired';
+    } else if (startDate && new Date(startDate) > new Date()) {
+        status = 'Scheduled';
     }
 
     // Check configured discount value fields first
@@ -793,6 +815,16 @@ const CouponManagement = () => {
     };
 
     // Stats — prefer live API data, fall back to local counts
+    const scheduledCouponsCount = apiStats?.scheduled_coupons ?? coupons.filter(c => {
+        if (c.status === 'Scheduled') return true;
+        if (c.startDate) {
+            const start = new Date(c.startDate);
+            const now = new Date();
+            if (!isNaN(start.getTime()) && start > now) return true;
+        }
+        return false;
+    }).length;
+
     const stats = [
         {
             label: 'Total Coupons',
@@ -805,6 +837,12 @@ const CouponManagement = () => {
             value: statsLoading ? '—' : (apiStats ? apiStats.active_coupons : coupons.filter(c => c.status === 'Active').length),
             color: '#10b981',
             icon: '✅',
+        },
+        {
+            label: 'Scheduled Coupons',
+            value: statsLoading ? '—' : scheduledCouponsCount,
+            color: '#0ea5e9',
+            icon: '📅',
         },
         {
             label: 'Expired Coupons',
@@ -830,7 +868,7 @@ const CouponManagement = () => {
         <div className="dash-page">
             <div className="adm-page-header">
                 <div>
-                    <h1 className="adm-page-title">🏷️ Coupon Management</h1>
+                    <h1 className="adm-page-title">🏷️ Coupons</h1>
                     <p className="adm-page-sub">Create and manage discount coupons for your online store</p>
                 </div>
                 <div className="adm-header-actions" style={{ display: 'flex', gap: 10 }}>
@@ -875,7 +913,7 @@ const CouponManagement = () => {
             )}
 
             {/* Stats — from /api/v1/coupons/stats */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
                 {stats.map((s, i) => (
                     <div key={i} className="adm-kpi-card" style={{ padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -1124,6 +1162,7 @@ const CouponManagement = () => {
                         <select className="ec-input" value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ minWidth: 120 }}>
                             <option>All</option>
                             <option>Active</option>
+                            <option>Scheduled</option>
                             <option>Inactive</option>
                             <option>Expired</option>
                         </select>
@@ -1165,8 +1204,8 @@ const CouponManagement = () => {
                                             </button>
                                             <span style={{
                                                 padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
-                                                background: rc.status === 'Active' ? '#ecfdf5' : rc.status === 'Expired' ? '#fef2f2' : '#f9fafb',
-                                                color: rc.status === 'Active' ? '#10b981' : rc.status === 'Expired' ? '#ef4444' : '#6b7280',
+                                                background: rc.status === 'Active' ? '#ecfdf5' : rc.status === 'Scheduled' ? '#f0f9ff' : rc.status === 'Expired' ? '#fef2f2' : '#f9fafb',
+                                                color: rc.status === 'Active' ? '#10b981' : rc.status === 'Scheduled' ? '#0ea5e9' : rc.status === 'Expired' ? '#ef4444' : '#6b7280',
                                             }}>{rc.status}</span>
                                         </div>
                                     </div>

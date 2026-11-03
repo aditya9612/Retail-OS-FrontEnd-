@@ -235,7 +235,9 @@ export function generateBarcodeLabelsPDF({
     barcodeStandard = 'EAN-13 (Standard Retail)',
     labelSize = '50mm x 25mm (Thermal)',
     copies = 20,
-    storeName = 'RetailOS Store'
+    storeName = 'RetailOS Store',
+    customBarcodeImage = null,
+    action = 'download'
 }) {
     if (!product || (!product.name && !product.barcode)) {
         throw new Error('No product selected or label data available');
@@ -252,7 +254,7 @@ export function generateBarcodeLabelsPDF({
     });
     const priceText = `MRP: Rs. ${formattedPrice} (Incl. of GST)`;
 
-    const barcodeImage = generateBarcodeDataUrl(barcodeNumber, barcodeStandard);
+    const barcodeImage = customBarcodeImage || generateBarcodeDataUrl(barcodeNumber, barcodeStandard);
     const isQR = String(barcodeStandard).toLowerCase().includes('qr');
 
     let doc;
@@ -409,7 +411,44 @@ export function generateBarcodeLabelsPDF({
         }
     }
 
-    const safeFilename = `barcode-labels-${barcodeNumber}.pdf`;
-    doc.save(safeFilename);
+    const fileId = product?.sku ? String(product.sku).replace(/[^a-zA-Z0-9_-]/g, '_') : (product?.id || barcodeNumber);
+    const safeFilename = `barcode-labels-${fileId}.pdf`;
+    if (action === 'print') {
+        const blob = doc.output('blob');
+        const blobUrl = URL.createObjectURL(blob);
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.src = blobUrl;
+        document.body.appendChild(iframe);
+        setTimeout(() => {
+            try {
+                iframe.contentWindow?.focus();
+                iframe.contentWindow?.print();
+            } catch (e) {
+                window.open(blobUrl, '_blank');
+            }
+        }, 500);
+    } else {
+        doc.save(safeFilename);
+    }
     return { doc, filename: safeFilename, copies: cleanCopies };
+}
+
+/**
+ * Download a barcode data URL as a PNG or SVG image file
+ */
+export function downloadBarcodeImage(dataUrl, filename = 'barcode.png') {
+    if (!dataUrl) return false;
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return true;
 }

@@ -459,6 +459,7 @@ export const toCreatePayload = (form, categories = []) => {
 };
 
 // Payload builder for PATCH /api/v1/products/{product_id} (ProductUpdate schema)
+// Sends only modified fields according to industry-standard RESTful PATCH specifications
 export const toUpdatePayload = (form, categories = [], existingProduct = null) => {
     let resolvedCategoryId = null;
     if (form.category_id != null && Number.isInteger(Number(form.category_id)) && Number(form.category_id) > 0) {
@@ -473,11 +474,6 @@ export const toUpdatePayload = (form, categories = [], existingProduct = null) =
         }
     }
 
-    // Determine final image_url:
-    // 1. If user clicked remove image: null
-    // 2. If user entered a valid remote URL: valid remote URL
-    // 3. If user selected a new local file (Base64 preview): NEVER send Base64; send null
-    // 4. If image was unchanged: preserve existing remote server URL if present
     let finalImageUrl = null;
     if (form.imageRemoved) {
         finalImageUrl = null;
@@ -504,28 +500,121 @@ export const toUpdatePayload = (form, categories = [], existingProduct = null) =
         expiry_date: expDateStr,
     };
 
-    return {
-        name: form.name?.trim() || null,
-        sku: form.sku?.trim().toUpperCase() || null,
-        barcode: form.barcode?.trim() || null,
-        description: form.description?.trim() || null,
-        category_id: resolvedCategoryId,
-        brand: form.brand?.trim() || null,
-        hsn_code: form.hsnCode?.trim() || null,
-        gst_rate: gstNum,
-        tax_rate: gstNum,
-        price: sellingPriceNum,
-        selling_price: sellingPriceNum,
-        mrp: mrpNum,
-        cost_price: mrpNum,
-        unit: form.unit?.trim() || 'Pcs',
-        variants: metaVariants,
-        track_batch: false,
-        track_expiry: Boolean(expDateStr),
-        expiry_date: expDateStr,
-        image_url: finalImageUrl,
-        is_active: isProductExpired(expDateStr) ? false : Boolean(form.status),
-    };
+    // If existingProduct is omitted, return full object
+    if (!existingProduct) {
+        return {
+            name: form.name?.trim() || null,
+            sku: form.sku?.trim().toUpperCase() || null,
+            barcode: form.barcode?.trim() || null,
+            description: form.description?.trim() || null,
+            category_id: resolvedCategoryId,
+            brand: form.brand?.trim() || null,
+            hsn_code: form.hsnCode?.trim() || null,
+            gst_rate: gstNum,
+            tax_rate: gstNum,
+            price: sellingPriceNum,
+            selling_price: sellingPriceNum,
+            mrp: mrpNum,
+            cost_price: mrpNum,
+            unit: form.unit?.trim() || 'Pcs',
+            variants: metaVariants,
+            track_batch: false,
+            track_expiry: Boolean(expDateStr),
+            expiry_date: expDateStr,
+            image_url: finalImageUrl,
+            is_active: isProductExpired(expDateStr) ? false : Boolean(form.status),
+        };
+    }
+
+    // Build diff/delta payload: only modified fields are sent to backend PATCH
+    const payload = {};
+
+    const newName = form.name?.trim();
+    if (newName && newName !== (existingProduct.name || '').trim()) {
+        payload.name = newName;
+    }
+
+    const newSku = form.sku?.trim().toUpperCase();
+    if (newSku && newSku !== (existingProduct.sku || '').trim().toUpperCase()) {
+        payload.sku = newSku;
+    }
+
+    const newBarcode = form.barcode?.trim();
+    if (newBarcode && newBarcode !== (existingProduct.barcode || '').trim()) {
+        payload.barcode = newBarcode;
+    }
+
+    const newDesc = form.description?.trim() || null;
+    const oldDesc = existingProduct.description?.trim() || null;
+    if (newDesc !== oldDesc) {
+        payload.description = newDesc;
+    }
+
+    const oldCatId = existingProduct.category_id != null ? Number(existingProduct.category_id) : null;
+    if (resolvedCategoryId != null && resolvedCategoryId !== oldCatId) {
+        payload.category_id = resolvedCategoryId;
+    }
+
+    const newBrand = form.brand?.trim() || null;
+    const oldBrand = (existingProduct.brand || '').trim() || null;
+    if (newBrand !== oldBrand) {
+        payload.brand = newBrand;
+    }
+
+    const newHsn = form.hsnCode?.trim() || null;
+    const oldHsn = (existingProduct.hsn_code || existingProduct.hsnCode || '').trim() || null;
+    if (newHsn !== oldHsn) {
+        payload.hsn_code = newHsn;
+    }
+
+    const oldSellingPrice = Number(existingProduct.selling_price ?? existingProduct.price ?? existingProduct.sellingPrice ?? 0);
+    if (sellingPriceNum > 0 && Math.abs(sellingPriceNum - oldSellingPrice) > 0.001) {
+        payload.selling_price = sellingPriceNum;
+        payload.price = sellingPriceNum;
+    }
+
+    const oldMrp = Number(existingProduct.mrp ?? existingProduct.cost_price ?? existingProduct.mrp_price ?? 0);
+    if (mrpNum > 0 && Math.abs(mrpNum - oldMrp) > 0.001) {
+        payload.mrp = mrpNum;
+        payload.cost_price = mrpNum;
+    }
+
+    const oldGst = Number(existingProduct.gst_rate ?? existingProduct.tax_rate ?? 0);
+    if (Math.abs(gstNum - oldGst) > 0.001) {
+        payload.gst_rate = gstNum;
+        payload.tax_rate = gstNum;
+    }
+
+    const newUnit = form.unit?.trim() || 'Pcs';
+    const oldUnit = (existingProduct.unit || 'Pcs').trim();
+    if (newUnit !== oldUnit) {
+        payload.unit = newUnit;
+    }
+
+    const oldExp = existingProduct.expiry_date || existingProduct.expiryDate || null;
+    if (expDateStr !== oldExp) {
+        payload.expiry_date = expDateStr;
+        payload.track_expiry = Boolean(expDateStr);
+    }
+
+    if (form.imageRemoved) {
+        payload.image_url = null;
+    } else if (finalImageUrl && finalImageUrl !== getValidRemoteImageUrl(existingProduct.image_url || existingProduct.imageUrl)) {
+        payload.image_url = finalImageUrl;
+    }
+
+    const newActive = isProductExpired(expDateStr || existingProduct.expiry_date) ? false : Boolean(form.status);
+    const oldActive = Boolean(existingProduct.is_active ?? existingProduct.status ?? true);
+    if (newActive !== oldActive) {
+        payload.is_active = newActive;
+    }
+
+    const oldFeatured = Boolean(existingProduct.featured === true || existingProduct.featured === 1 || existingProduct.variants?.featured === true);
+    if (Boolean(form.featured) !== oldFeatured) {
+        payload.variants = metaVariants;
+    }
+
+    return payload;
 };
 
 export const toPayload = (form, categories = [], existingProduct = null) => {
@@ -691,7 +780,7 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
 
     // Build edit-form state — mapped from actual API response fields
     const localMeta = product ? getLocalProductMeta(product.id, product.sku) : {};
-    const variants = (typeof product?.variants === 'object' && product?.variants !== null) ? product.variants : {};
+    const variants = (typeof product?.variants === 'object' && product?.variants !== null && !Array.isArray(product?.variants)) ? product.variants : {};
 
     const availableCategories = useMemo(() => {
         const list = Array.isArray(categories) ? [...categories] : [];
@@ -710,23 +799,51 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
                 }
             });
         }
+
+        if (product) {
+            const pCatName = (product.category_name || (typeof product.category === 'object' ? product.category?.name : product.category) || '').trim();
+            const pCatId = product.category_id || (product.category && typeof product.category === 'object' ? product.category.id : null);
+            if (pCatName && pCatName !== '—' && pCatId && Number.isInteger(Number(pCatId)) && Number(pCatId) > 0) {
+                if (!existingIds.has(Number(pCatId))) {
+                    existingIds.add(Number(pCatId));
+                    list.push({ id: Number(pCatId), name: pCatName });
+                }
+            }
+        }
         return list;
-    }, [categories, existingProducts]);
+    }, [categories, existingProducts, product]);
+
+    const prodCatName = (product?.category_name || (typeof product?.category === 'object' ? product?.category?.name : product?.category) || '').trim();
+    const prodCatId = product?.category_id || (product?.category && typeof product?.category === 'object' ? product?.category?.id : null);
 
     const initialCatObj = product
-        ? (availableCategories.find(c => c.id === product.category_id) || availableCategories.find(c => (c.name || '').trim().toLowerCase() === (product.category || '').trim().toLowerCase()))
+        ? (availableCategories.find(c => String(c.id) === String(prodCatId)) ||
+           availableCategories.find(c => (c.name || '').trim().toLowerCase() === prodCatName.toLowerCase()))
         : (availableCategories[0] || null);
 
     const initialCategoryId = product
-        ? (product.category_id ?? initialCatObj?.id ?? null)
+        ? (prodCatId ?? initialCatObj?.id ?? null)
         : (initialCatObj?.id ?? null);
 
     const initialCategoryName = product
-        ? (initialCatObj?.name || (!/^\d+$/.test(String(product.category || '').trim()) ? product.category : '') || '')
+        ? (initialCatObj?.name || prodCatName || '')
         : (initialCatObj?.name || '');
 
-    const existingServerImage = getValidRemoteImageUrl(product?.image_url || product?.imageUrl || variants.image_url || localMeta.imageUrl);
-    const initialPreview = normalizeImageUrl(product?.imageUrl ?? product?.image_url ?? variants.image_url ?? localMeta.imageUrl ?? '') || '';
+    const existingServerImage = getValidRemoteImageUrl(
+        product?.image_url ||
+        product?.imageUrl ||
+        (Array.isArray(product?.images) && product.images[0]?.image_url) ||
+        variants.image_url ||
+        localMeta.imageUrl
+    );
+    const initialPreview = normalizeImageUrl(
+        product?.imageUrl ??
+        product?.image_url ??
+        (Array.isArray(product?.images) && product.images[0]?.image_url) ??
+        variants.image_url ??
+        localMeta.imageUrl ??
+        ''
+    ) || '';
 
     const editInit = product ? {
         ...EMPTY_FORM,
@@ -776,6 +893,18 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
     };
 
     const [form, setForm] = useState(editInit);
+
+    // Synchronize form when product prop updates (e.g. background fetch enriches product details)
+    useEffect(() => {
+        if (product) {
+            setForm(prev => ({
+                ...prev,
+                description: prev.description || String(product.description ?? ''),
+                hsnCode: prev.hsnCode || String(product.hsn_code ?? product.hsnCode ?? ''),
+                brand: prev.brand || String(product.brand ?? product.brand_name ?? ''),
+            }));
+        }
+    }, [product]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
 
@@ -991,7 +1120,7 @@ if (skuError) {
 
         return (
             existingSKU === normalizedSKU &&
-            p.id !== product?.id
+            String(p.id) !== String(product?.id)
         );
     });
 
@@ -1020,8 +1149,8 @@ if (skuError) {
         }
 
         if (form.hsnCode && form.hsnCode.trim()) {
-            if (!/^\d{2,8}$/.test(form.hsnCode.trim())) {
-                newErrors.hsnCode = 'HSN Code must be between 2 and 8 digits';
+            if (!/^\d{4,8}$/.test(form.hsnCode.trim())) {
+                newErrors.hsnCode = 'HSN Code must be between 4 and 8 digits';
             }
         }
 
@@ -1442,7 +1571,7 @@ if (skuError) {
                                 onChange={e => set('hsnCode', e.target.value)}
                                 placeholder="HSN/SAC Code"
                                 inputMode="numeric"
-                                maxLength={4}
+                                maxLength={8}
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
@@ -1944,6 +2073,7 @@ if (skuError) {
                             type="submit"
                             className="adm-btn-primary"
                             disabled={saving}
+                            onClick={handleSubmit}
                             style={{ padding: '8px 16px' }}
                         >
                             {saving ? 'Saving…' : (isNew ? 'Create Product' : 'Update Product')}
@@ -2348,7 +2478,7 @@ const Products = () => {
             });
         }
 
-        // Optimistically insert newly created product into products state immediately
+        // Optimistically insert newly created product or update existing product in state
         if (!id && savedProduct) {
             const mappedNew = mapProductRecord(savedProduct, categoryMap);
             if (mappedNew) {
@@ -2358,23 +2488,30 @@ const Products = () => {
             setSearch('');
             setDebouncedSearch('');
             setKpiFilter('all');
+        } else if (id && savedProduct) {
+            const mappedUpdated = mapProductRecord(savedProduct, categoryMap);
+            if (mappedUpdated) {
+                setProducts(prev => prev.map(p => String(p.id) === String(id) ? { ...p, ...mappedUpdated } : p));
+            }
         }
 
         await fetchProducts(categoryMap, debouncedSearch);
     };
 
     const handleOpenEditModal = async (p) => {
-        if (editLoadingId === p.id) return;
-        setEditLoadingId(p.id);
+        if (!p) return;
+        // Open edit modal immediately with full product details from table record
+        setModal(p);
+
+        // Fetch fresh detailed product in background to enrich if necessary
         try {
             const res = await productService.getById(p.id);
             const detailed = res?.data ?? res;
-            setModal(detailed || p);
+            if (detailed) {
+                setModal(prev => (prev && String(prev.id) === String(p.id) ? { ...p, ...detailed } : prev));
+            }
         } catch (err) {
-            console.warn('Failed to fetch detailed product, falling back to cached item', err);
-            setModal(p);
-        } finally {
-            setEditLoadingId(null);
+            console.warn('Could not fetch detailed product in background, continuing with row data:', err);
         }
     };
 
@@ -2873,48 +3010,7 @@ const Products = () => {
                 })}
             </div>
 
-            {/* 4. FULL-WIDTH SEARCH BAR */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                background: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: 10,
-                padding: '10px 16px',
-                marginBottom: 20,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-            }}>
-                <BsSearch style={{ color: '#9ca3af', marginRight: 12, flexShrink: 0 }} size={16} />
-                <input
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="Search products, barcode or brand..."
-                    style={{
-                        border: 'none',
-                        outline: 'none',
-                        width: '100%',
-                        fontSize: 13,
-                        color: '#111827',
-                        background: 'transparent'
-                    }}
-                />
-                {search && (
-                    <button
-                        onClick={() => setSearch('')}
-                        style={{
-                            background: 'none',
-                            border: 'none',
-                            color: '#9ca3af',
-                            cursor: 'pointer',
-                            fontSize: 14,
-                            padding: '0 4px'
-                        }}
-                    >
-                        ✕
-                    </button>
-                )}
-            </div>
-            {/* Active KPI Filter Banner */}
+{/* Active KPI Filter Banner */}
             {kpiFilter !== 'all' && (
                 <div style={{
                     display: 'flex',
@@ -3375,9 +3471,8 @@ const Products = () => {
 
                                             <button
                                                 className="adm-btn-secondary"
-                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: editLoadingId === p.id ? 'wait' : 'pointer' }}
+                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}
                                                 onClick={() => handleOpenEditModal(p)}
-                                                disabled={editLoadingId === p.id}
                                                 title="Edit"
                                             >
                                                 <BsPencilFill size={13} color="#6366f1" />
@@ -3493,6 +3588,7 @@ const Products = () => {
             </div>
 {modal && (
     <ProductFormModal
+        key={modal === 'new' ? 'new' : `edit-${modal?.id || ''}`}
         product={modal === 'new' ? null : modal}
         existingProducts={products}
         categories={categories}

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { validateSKUFormat } from '../../utils/skuValidator';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
     BsGrid3X3Gap,
     BsPlus,
@@ -16,6 +17,115 @@ import {
     BsToggleOff
 } from 'react-icons/bs';
 import productService from '../../services/product';
+
+// Category-Based Size Charts
+export const CATEGORY_SIZE_CHARTS = {
+    clothing: {
+        key: 'clothing',
+        label: 'Clothing / Apparel',
+        sizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL', '28', '30', '32', '34', '36', '38', '40'],
+        quickPicks: ['S', 'M', 'L', 'XL'],
+        matrixPresets: [
+            { name: 'Standard (XS-XXL)', sizes: ['XS', 'S', 'M', 'L', 'XL', 'XXL'] },
+            { name: 'Waist Sizes (28-40)', sizes: ['28', '30', '32', '34', '36', '38', '40'] }
+        ]
+    },
+    footwear: {
+        key: 'footwear',
+        label: 'Footwear / Shoes',
+        sizes: ['5', '6', '7', '8', '9', '10', '11', '12', 'UK 6', 'UK 7', 'UK 8', 'UK 9', 'UK 10', 'UK 11'],
+        quickPicks: ['7', '8', '9', '10'],
+        matrixPresets: [
+            { name: 'Standard (6-11)', sizes: ['6', '7', '8', '9', '10', '11'] },
+            { name: 'UK Sizes (UK 6-10)', sizes: ['UK 6', 'UK 7', 'UK 8', 'UK 9', 'UK 10'] }
+        ]
+    },
+    accessories: {
+        key: 'accessories',
+        label: 'Accessories / Belts / Watches',
+        sizes: ['Free Size', 'One Size', 'Small', 'Medium', 'Large'],
+        quickPicks: ['Free Size', 'One Size'],
+        matrixPresets: [
+            { name: 'Standard', sizes: ['Free Size', 'One Size'] }
+        ]
+    },
+    kids: {
+        key: 'kids',
+        label: 'Kids / Infant Wear',
+        sizes: ['0-3M', '3-6M', '6-12M', '1-2Y', '2-3Y', '3-4Y', '4-5Y', '5-6Y'],
+        quickPicks: ['0-3M', '6-12M', '1-2Y'],
+        matrixPresets: [
+            { name: 'Infant', sizes: ['0-3M', '3-6M', '6-12M'] },
+            { name: 'Toddler', sizes: ['1-2Y', '2-3Y', '3-4Y', '4-5Y'] }
+        ]
+    }
+};
+
+export const getCategorySizeChart = (categoryName) => {
+    if (!categoryName || typeof categoryName !== 'string') return null;
+    const cat = categoryName.trim().toLowerCase();
+
+    // Check non-size categories first
+    const noSizeCategories = [
+        'electronic', 'mobile', 'grocery', 'groceries', 'food', 'beverage',
+        'beauty', 'cosmetic', 'face', 'home', 'kitchen', 'pet', 'furniture',
+        'hardware', 'book', 'stationery', 'pharmacy', 'medicine'
+    ];
+    if (noSizeCategories.some(k => cat.includes(k))) {
+        return null;
+    }
+
+    // Footwear matching
+    if (['footwear', 'shoe', 'shoes', 'sandal', 'sandals', 'boot', 'boots', 'sneaker', 'sneakers', 'slipper', 'slippers', 'crocs', 'spark'].some(k => cat.includes(k))) {
+        return CATEGORY_SIZE_CHARTS.footwear;
+    }
+
+    // Kids / baby matching
+    if (['kid', 'kids', 'baby', 'infant', 'toddler', 'children'].some(k => cat.includes(k))) {
+        return CATEGORY_SIZE_CHARTS.kids;
+    }
+
+    // Accessories
+    if (['accessory', 'accessories', 'belt', 'watch', 'watches', 'hat', 'cap', 'caps', 'bag', 'bags', 'wallet', 'wallets', 'jewel', 'eyewear'].some(k => cat.includes(k))) {
+        return CATEGORY_SIZE_CHARTS.accessories;
+    }
+
+    // Clothing / Apparel matching
+    if (['cloth', 'cloths', 'clothing', 'apparel', 'garment', 'garments', 'fashion', 'wear', 'shirt', 't-shirt', 'pant', 'pants', 'jean', 'jeans', 'trouser', 'dress', 'kurti', 'saree', 'suit', 'jacket', 'hoodie'].some(k => cat.includes(k))) {
+        return CATEGORY_SIZE_CHARTS.clothing;
+    }
+
+    return null;
+};
+
+// Helper: Extract actual server error message from FastAPI responses
+export const extractErrorMessage = (err, fallback = 'Operation failed') => {
+    if (!err) return fallback;
+    const res = err.response?.data;
+    if (!res) {
+        return err.message || fallback;
+    }
+    if (typeof res.message === 'string' && res.message.trim()) {
+        return res.message.trim();
+    }
+    if (res.detail && typeof res.detail === 'object' && !Array.isArray(res.detail)) {
+        if (typeof res.detail.message === 'string' && res.detail.message.trim()) {
+            return res.detail.message.trim();
+        }
+    }
+    if (typeof res.detail === 'string' && res.detail.trim()) {
+        return res.detail.trim();
+    }
+    if (Array.isArray(res.detail) && res.detail.length > 0) {
+        return res.detail
+            .map(d => {
+                const field = Array.isArray(d.loc) ? d.loc.filter(x => x !== 'body').join('.') : '';
+                return field ? `${field}: ${d.msg}` : d.msg;
+            })
+            .join(', ');
+    }
+    return err.message || fallback;
+};
 
 const PRESET_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '28', '30', '32', '34', '36', '38', '40'];
 const PRESET_COLORS = ['Black', 'White', 'Navy', 'Grey', 'Red', 'Blue', 'Green', 'Yellow', 'Beige', 'Brown'];
@@ -76,9 +186,48 @@ export const ProductVariantModal = ({
     const [filterColor, setFilterColor] = useState('');
     const [filterStatus, setFilterStatus] = useState('all'); // 'all' | 'active' | 'inactive'
 
+    // Barcode operation loading states
+    const [autoAssigningBarcodes, setAutoAssigningBarcodes] = useState(false);
+    const [generatingVariantBarcodeId, setGeneratingVariantBarcodeId] = useState(null);
+    const [generatingFormBarcode, setGeneratingFormBarcode] = useState(false);
+
     const fetchVariantsList = useCallback(async (targetPage = page) => {
         setListLoading(true);
         try {
+            const trimmedSearch = filterSearch.trim();
+
+            // 1. Direct barcode scan / lookup via GET /api/v1/variants/by-barcode/{barcode}
+            if (trimmedSearch && /^\d{8,50}$/.test(trimmedSearch)) {
+                try {
+                    const bcRes = await productService.getVariantByBarcode(trimmedSearch);
+                    const item = bcRes?.data || bcRes;
+                    if (item && item.id) {
+                        setVariants([item]);
+                        setTotalVariants(1);
+                        setListLoading(false);
+                        return;
+                    }
+                } catch (bcErr) {
+                    // Not found by exact barcode (404), fall through to standard search
+                }
+            }
+
+            // 2. Direct SKU lookup via GET /api/v1/variants/by-sku/{sku}
+            if (trimmedSearch && trimmedSearch.length >= 3 && !trimmedSearch.includes(' ')) {
+                try {
+                    const skuRes = await productService.getVariantBySku(trimmedSearch);
+                    const item = skuRes?.data || skuRes;
+                    if (item && item.id) {
+                        setVariants([item]);
+                        setTotalVariants(1);
+                        setListLoading(false);
+                        return;
+                    }
+                } catch (skuErr) {
+                    // Not found by exact SKU (404), fall through to standard search
+                }
+            }
+
             const params = {
                 page: targetPage,
                 page_size: pageSize
@@ -86,8 +235,8 @@ export const ProductVariantModal = ({
             if (filterProduct) {
                 params.product_id = Number(filterProduct);
             }
-            if (filterSearch.trim()) {
-                params.search = filterSearch.trim();
+            if (trimmedSearch) {
+                params.search = trimmedSearch;
             }
             if (filterSize.trim()) {
                 params.size = filterSize.trim();
@@ -115,7 +264,8 @@ export const ProductVariantModal = ({
             }
         } catch (err) {
             console.error('Failed to load variants:', err);
-            showNotify('error', err?.response?.data?.detail || 'Failed to fetch variants from server');
+            const msg = extractErrorMessage(err, 'Failed to fetch variants from server');
+            showNotify('error', msg);
         } finally {
             setListLoading(false);
         }
@@ -135,20 +285,26 @@ export const ProductVariantModal = ({
 
     // Quick active/inactive status toggle in table
     const handleToggleVariantStatus = async (variant) => {
-        if (!variant || !variant.id) return;
+        if (!variant || !variant.id || togglingVariantId === variant.id) return;
         setTogglingVariantId(variant.id);
-        const newStatus = !variant.is_active;
+        const targetStatus = !variant.is_active;
         try {
-            // Use patchVariant to update active status
-            await productService.patchVariant(variant.id, { is_active: newStatus });
-            setVariants(prev => prev.map(v => v.id === variant.id ? { ...v, is_active: newStatus } : v));
-            showNotify('success', `Variant "${variant.variant_name}" marked as ${newStatus ? 'Active' : 'Inactive'}.`);
+            const res = targetStatus
+                ? await productService.activateVariant(variant.id)
+                : await productService.deactivateVariant(variant.id);
+            const updatedData = res?.data ?? res;
+            const finalStatus = (updatedData && typeof updatedData.is_active === 'boolean')
+                ? updatedData.is_active
+                : targetStatus;
+            setVariants(prev => prev.map(v => v.id === variant.id ? { ...v, is_active: finalStatus } : v));
+            showNotify('success', `Variant "${variant.variant_name}" ${finalStatus ? 'activated' : 'deactivated'} successfully.`);
             if (typeof onRefresh === 'function') {
                 onRefresh();
             }
         } catch (err) {
             console.error('Failed to toggle status:', err);
-            showNotify('error', err?.response?.data?.detail || 'Failed to update variant status');
+            const msg = extractErrorMessage(err, `Failed to ${targetStatus ? 'activate' : 'deactivate'} variant`);
+            showNotify('error', msg);
         } finally {
             setTogglingVariantId(null);
         }
@@ -170,9 +326,43 @@ export const ProductVariantModal = ({
     const [formAttributes, setFormAttributes] = useState([{ key: '', value: '' }]); // array of {key, value}
     const [formErrors, setFormErrors] = useState({});
     const [formSubmitting, setFormSubmitting] = useState(false);
+    const isSubmittingRef = useRef(false);
 
     // Editing specific variant state
     const [editingVariantId, setEditingVariantId] = useState(null);
+
+    // Derive selected product and its active size chart for Create/Edit
+    const selectedProduct = useMemo(() => {
+        return productMap.get(Number(formParentId)) || null;
+    }, [productMap, formParentId]);
+
+    const activeCategoryName = useMemo(() => {
+        if (!selectedProduct) return '';
+        return selectedProduct.category_name || 
+               (typeof selectedProduct.category === 'object' ? selectedProduct.category?.name : selectedProduct.category) || 
+               '';
+    }, [selectedProduct]);
+
+    const activeSizeChart = useMemo(() => {
+        return getCategorySizeChart(activeCategoryName);
+    }, [activeCategoryName]);
+
+    // Track previous category to clear/validate incompatible sizes when category changes in create mode
+    const prevCatRef = useRef(activeCategoryName);
+    useEffect(() => {
+        if (activeTab === 'create' && prevCatRef.current && prevCatRef.current !== activeCategoryName) {
+            if (activeSizeChart) {
+                if (formSize && !activeSizeChart.sizes.includes(formSize)) {
+                    setFormSize('');
+                }
+            } else {
+                if (formSize) {
+                    setFormSize('');
+                }
+            }
+        }
+        prevCatRef.current = activeCategoryName;
+    }, [activeTab, activeCategoryName, activeSizeChart, formSize]);
 
     const resetVariantForm = (parentId = '') => {
         setFormParentId(parentId ? String(parentId) : (products[0]?.id ? String(products[0].id) : ''));
@@ -287,12 +477,31 @@ export const ProductVariantModal = ({
         }
 
         const skuTrimmed = formSku.trim().toUpperCase();
-        if (!skuTrimmed) {
-            errors.sku = 'SKU is required';
-        } else if (skuTrimmed.length < 2 || skuTrimmed.length > 100) {
-            errors.sku = 'SKU must be between 2 and 100 characters';
-        } else if (!SKU_REGEX.test(skuTrimmed)) {
-            errors.sku = 'SKU must start with alphanumeric and contain only uppercase letters, numbers, dot, underscore, slash, or hyphen';
+        const skuError = validateSKUFormat(skuTrimmed);
+        if (skuError) {
+            errors.sku = skuError;
+        } else {
+            const parent = productMap.get(Number(formParentId));
+            const parentSku = (parent?.sku || '').trim().toUpperCase();
+            if (parentSku && skuTrimmed === parentSku) {
+                errors.sku = 'Variant SKU cannot be identical to parent product SKU. Every variant must have its own unique SKU.';
+            } else if (Array.isArray(variants)) {
+                const isDuplicateVariant = variants.some(v => 
+                    String(v.id) !== String(editingVariantId) && 
+                    (v.sku || '').trim().toUpperCase() === skuTrimmed
+                );
+                if (isDuplicateVariant) {
+                    errors.sku = `SKU '${skuTrimmed}' is already used by another variant.`;
+                }
+            }
+            if (!errors.sku && Array.isArray(products)) {
+                const isDuplicateProduct = products.some(p => 
+                    (p.sku || '').trim().toUpperCase() === skuTrimmed
+                );
+                if (isDuplicateProduct) {
+                    errors.sku = `SKU '${skuTrimmed}' already exists as a product SKU. Please use a unique SKU.`;
+                }
+            }
         }
 
         const barcodeTrimmed = formBarcode.trim();
@@ -358,8 +567,53 @@ export const ProductVariantModal = ({
 
     const handleSaveVariant = async (e) => {
         e.preventDefault();
+        if (isSubmittingRef.current) return;
         if (!validateVariantForm()) return;
 
+        // Client-side pre-validation against existing variants
+        const trimmedSku = formSku.trim().toUpperCase();
+        const trimmedName = formVariantName.trim();
+        const trimmedSize = formSize.trim();
+        const trimmedColor = formColor.trim();
+        const parentIdNum = Number(formParentId);
+
+        if (!editingVariantId && Array.isArray(variants)) {
+            // Check for duplicate SKU
+            const duplicateSku = variants.some(v => (v.sku || '').trim().toUpperCase() === trimmedSku);
+            if (duplicateSku) {
+                setFormErrors(prev => ({ ...prev, sku: `SKU '${trimmedSku}' is already used by an existing variant.` }));
+                showNotify('error', `SKU '${trimmedSku}' already exists.`);
+                return;
+            }
+
+            // Check for duplicate variant name under same product
+            const duplicateName = variants.some(v => 
+                Number(v.product_id) === parentIdNum && 
+                (v.variant_name || '').trim().toLowerCase() === trimmedName.toLowerCase()
+            );
+            if (duplicateName) {
+                setFormErrors(prev => ({ ...prev, variant_name: `Variant with name '${trimmedName}' already exists for this product.` }));
+                showNotify('error', `Variant with name '${trimmedName}' already exists for this product.`);
+                return;
+            }
+
+            // Check for duplicate size and color under same product
+            if (trimmedSize && trimmedColor) {
+                const duplicateCombo = variants.some(v => 
+                    Number(v.product_id) === parentIdNum && 
+                    (v.size || '').trim().toLowerCase() === trimmedSize.toLowerCase() &&
+                    (v.color || '').trim().toLowerCase() === trimmedColor.toLowerCase()
+                );
+                if (duplicateCombo) {
+                    const comboMsg = `Product variant with size '${trimmedSize}' and color '${trimmedColor}' already exists for this product.`;
+                    setFormErrors(prev => ({ ...prev, size: comboMsg, color: comboMsg }));
+                    showNotify('error', comboMsg);
+                    return;
+                }
+            }
+        }
+
+        isSubmittingRef.current = true;
         setFormSubmitting(true);
         try {
             // Clean attributes
@@ -374,14 +628,19 @@ export const ProductVariantModal = ({
 
             if (editingVariantId) {
                 // Update variant: PUT /api/v1/variants/{variant_id}
+                // Omit size, color, attributes if empty to avoid 422 reject_none validator!
                 const updatePayload = {
-                    variant_name: formVariantName.trim(),
-                    sku: formSku.trim().toUpperCase(),
-                    size: formSize.trim() || null,
-                    color: formColor.trim() || null,
+                    variant_name: trimmedName,
+                    sku: trimmedSku,
                     is_active: formIsActive
                 };
 
+                if (trimmedSize) {
+                    updatePayload.size = trimmedSize;
+                }
+                if (trimmedColor) {
+                    updatePayload.color = trimmedColor;
+                }
                 if (formBarcode.trim()) {
                     updatePayload.barcode = formBarcode.trim();
                 } else {
@@ -396,28 +655,29 @@ export const ProductVariantModal = ({
                 }
                 if (Object.keys(cleanedAttrs).length > 0) {
                     updatePayload.attributes = cleanedAttrs;
-                } else {
-                    updatePayload.attributes = null;
                 }
 
-                await productService.updateVariant(editingVariantId, updatePayload);
-                showNotify('success', `Variant "${formVariantName}" updated successfully!`);
+                await productService.updateVariant(editingVariantId, updatePayload, parentIdNum);
+                showNotify('success', `Variant "${trimmedName}" updated successfully!`);
             } else {
                 // Create variant: POST /api/v1/variants
                 const createPayload = {
-                    product_id: Number(formParentId),
-                    variant_name: formVariantName.trim(),
-                    sku: formSku.trim().toUpperCase(),
-                    size: formSize.trim() || null,
-                    color: formColor.trim() || null,
+                    product_id: parentIdNum,
+                    variant_name: trimmedName,
+                    sku: trimmedSku,
                     is_active: formIsActive,
                     auto_generate_barcode: formAutoBarcode
                 };
 
+                if (trimmedSize) {
+                    createPayload.size = trimmedSize;
+                }
+                if (trimmedColor) {
+                    createPayload.color = trimmedColor;
+                }
                 if (formBarcode.trim()) {
                     createPayload.barcode = formBarcode.trim();
                 }
-
                 if (formSellingPrice !== '') {
                     createPayload.selling_price = Number(formSellingPrice);
                 }
@@ -428,8 +688,8 @@ export const ProductVariantModal = ({
                     createPayload.attributes = cleanedAttrs;
                 }
 
-                await productService.createVariant(createPayload);
-                showNotify('success', `Variant "${formVariantName}" created successfully!`);
+                await productService.createVariant(createPayload, parentIdNum);
+                showNotify('success', `Variant "${trimmedName}" created successfully!`);
             }
 
             // Refresh lists & switch back to list
@@ -440,14 +700,24 @@ export const ProductVariantModal = ({
             setActiveTab('list');
         } catch (err) {
             console.error('Error saving variant:', err);
-            const errDetail = err?.response?.data?.detail;
-            const message = typeof errDetail === 'string'
-                ? errDetail
-                : Array.isArray(errDetail)
-                    ? errDetail.map(d => `${d.loc ? d.loc.join('.') + ': ' : ''}${d.msg}`).join(', ')
-                    : 'Failed to save variant';
-            showNotify('error', message);
+            const errorMsg = extractErrorMessage(err, 'Failed to save variant');
+            showNotify('error', errorMsg);
+
+            // Highlight conflicting form field
+            const lower = errorMsg.toLowerCase();
+            if (lower.includes('sku')) {
+                setFormErrors(prev => ({ ...prev, sku: errorMsg }));
+            } else if (lower.includes('name')) {
+                setFormErrors(prev => ({ ...prev, variant_name: errorMsg }));
+            } else if (lower.includes('size') && lower.includes('color')) {
+                setFormErrors(prev => ({ ...prev, size: errorMsg, color: errorMsg }));
+            } else if (lower.includes('size')) {
+                setFormErrors(prev => ({ ...prev, size: errorMsg }));
+            } else if (lower.includes('barcode')) {
+                setFormErrors(prev => ({ ...prev, barcode: errorMsg }));
+            }
         } finally {
+            isSubmittingRef.current = false;
             setFormSubmitting(false);
         }
     };
@@ -459,19 +729,27 @@ export const ProductVariantModal = ({
     const [deleting, setDeleting] = useState(false);
 
     const handleConfirmDelete = async () => {
-        if (!variantToDelete || !variantToDelete.id) return;
+        if (!variantToDelete || !variantToDelete.id || deleting) return;
         setDeleting(true);
         try {
-            await productService.deleteVariant(variantToDelete.id);
-            showNotify('success', `Variant "${variantToDelete.variant_name}" deleted/deactivated successfully.`);
+            if (variantToDelete.is_active) {
+                // If active, deactivate to preserve data instead of hard deletion
+                await productService.deactivateVariant(variantToDelete.id);
+                showNotify('success', `Variant "${variantToDelete.variant_name}" deactivated successfully.`);
+            } else {
+                // If already inactive, perform delete
+                await productService.deleteVariant(variantToDelete.id);
+                showNotify('success', `Variant "${variantToDelete.variant_name}" removed successfully.`);
+            }
             setVariantToDelete(null);
             fetchVariantsList(page);
             if (typeof onRefresh === 'function') {
                 onRefresh();
             }
         } catch (err) {
-            console.error('Failed to delete variant:', err);
-            showNotify('error', err?.response?.data?.detail || 'Failed to delete variant');
+            console.error('Failed to update variant:', err);
+            const msg = extractErrorMessage(err, 'Failed to update variant');
+            showNotify('error', msg);
         } finally {
             setDeleting(false);
         }
@@ -492,6 +770,42 @@ export const ProductVariantModal = ({
     const [matrixGenerating, setMatrixGenerating] = useState(false);
     const [matrixErrors, setMatrixErrors] = useState({});
 
+    const matrixProduct = useMemo(() => {
+        return productMap.get(Number(matrixProductId)) || null;
+    }, [productMap, matrixProductId]);
+
+    const matrixCategoryName = useMemo(() => {
+        if (!matrixProduct) return '';
+        return matrixProduct.category_name || 
+               (typeof matrixProduct.category === 'object' ? matrixProduct.category?.name : matrixProduct.category) || 
+               '';
+    }, [matrixProduct]);
+
+    const matrixSizeChart = useMemo(() => {
+        return getCategorySizeChart(matrixCategoryName);
+    }, [matrixCategoryName]);
+
+    const handleMatrixProductChange = (productId) => {
+        setMatrixProductId(productId);
+        if (matrixErrors.product_id) {
+            setMatrixErrors(prev => ({ ...prev, product_id: null }));
+        }
+        const parent = productMap.get(Number(productId));
+        if (parent?.sku) {
+            setMatrixSkuPrefix(parent.sku);
+        } else {
+            setMatrixSkuPrefix('');
+        }
+        const catName = parent?.category_name || (typeof parent?.category === 'object' ? parent?.category?.name : parent?.category) || '';
+        const chart = getCategorySizeChart(catName);
+        if (chart) {
+            setMatrixSizes(chart.quickPicks.slice(0, 4));
+        } else {
+            // Category has no size chart: clear sizes so user can generate by color only
+            setMatrixSizes([]);
+        }
+    };
+
     const handleOpenMatrix = (preselectedProductId = null) => {
         const targetId = preselectedProductId || filterProduct || (products[0]?.id ? String(products[0].id) : '');
         setMatrixProductId(targetId);
@@ -501,7 +815,13 @@ export const ProductVariantModal = ({
         } else {
             setMatrixSkuPrefix('');
         }
-        setMatrixSizes(['S', 'M', 'L']);
+        const catName = parent?.category_name || (typeof parent?.category === 'object' ? parent?.category?.name : parent?.category) || '';
+        const chart = getCategorySizeChart(catName);
+        if (chart) {
+            setMatrixSizes(chart.quickPicks.slice(0, 4));
+        } else {
+            setMatrixSizes([]);
+        }
         setMatrixColors(['Black', 'Navy']);
         setMatrixErrors({});
         setActiveTab('matrix');
@@ -555,8 +875,17 @@ export const ProductVariantModal = ({
             errors.sizes_colors = 'Please select or add at least one Size or Color to generate variants.';
         }
 
-        if (matrixSkuPrefix.trim() && matrixSkuPrefix.trim().length > 50) {
-            errors.sku_prefix = 'SKU prefix cannot exceed 50 characters';
+        if (matrixSkuPrefix.trim()) {
+            const prefix = matrixSkuPrefix.trim().toUpperCase();
+            if (prefix.length > 40) {
+                errors.sku_prefix = 'SKU prefix cannot exceed 40 characters';
+            } else if (/\s/.test(prefix)) {
+                errors.sku_prefix = 'SKU prefix cannot contain spaces';
+            } else if (!/^[A-Z0-9-]+$/.test(prefix)) {
+                errors.sku_prefix = 'SKU prefix can only contain uppercase letters (A-Z), numbers (0-9), and hyphens (-)';
+            } else if (prefix.startsWith('-') || prefix.endsWith('-') || /--/.test(prefix)) {
+                errors.sku_prefix = 'SKU prefix cannot start/end with or contain consecutive hyphens (-)';
+            }
         }
 
         if (matrixSellingPrice !== '') {
@@ -621,12 +950,7 @@ export const ProductVariantModal = ({
             setActiveTab('list');
         } catch (err) {
             console.error('Matrix generation failed:', err);
-            const errDetail = err?.response?.data?.detail;
-            const message = typeof errDetail === 'string'
-                ? errDetail
-                : Array.isArray(errDetail)
-                    ? errDetail.map(d => `${d.loc ? d.loc.join('.') + ': ' : ''}${d.msg}`).join(', ')
-                    : 'Failed to generate variant matrix';
+            const message = extractErrorMessage(err, 'Failed to generate variant matrix');
             setMatrixErrors(prev => ({ ...prev, submit: message }));
             showNotify('error', message);
         } finally {
@@ -811,22 +1135,60 @@ export const ProductVariantModal = ({
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {activeTab === 'list' && (
-                            <button
-                                type="button"
-                                onClick={() => fetchVariantsList(page)}
-                                className="adm-btn-secondary"
-                                title="Refresh Variants"
-                                style={{
-                                    padding: '6px 10px',
-                                    fontSize: 12,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 4
-                                }}
-                            >
-                                <BsArrowClockwise size={12} className={listLoading ? 'spin' : ''} />
-                                Refresh
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    disabled={autoAssigningBarcodes}
+                                    onClick={async () => {
+                                        if (autoAssigningBarcodes) return;
+                                        setAutoAssigningBarcodes(true);
+                                        try {
+                                            const res = await productService.generateMissingVariantBarcodes();
+                                            const count = res?.data?.updated_count ?? res?.data?.generated_count ?? res?.updated_count ?? res?.generated_count ?? res?.data?.variants?.length ?? 0;
+                                            showNotify('success', `Successfully auto-generated ${count} missing variant barcodes.`);
+                                            fetchVariantsList(page);
+                                            if (typeof onRefresh === 'function') onRefresh();
+                                        } catch (err) {
+                                            console.error('Failed to generate missing barcodes:', err);
+                                            const msg = err?.response?.data?.message ||
+                                                (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
+                                                'Failed to auto-generate missing barcodes';
+                                            showNotify('error', msg);
+                                        } finally {
+                                            setAutoAssigningBarcodes(false);
+                                        }
+                                    }}
+                                    className="adm-btn-secondary"
+                                    title="Auto-generate barcodes for all variants without a barcode"
+                                    style={{
+                                        padding: '6px 10px',
+                                        fontSize: 12,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        cursor: autoAssigningBarcodes ? 'wait' : 'pointer',
+                                        opacity: autoAssigningBarcodes ? 0.7 : 1
+                                    }}
+                                >
+                                    {autoAssigningBarcodes ? 'Assigning...' : 'Auto-assign Missing Barcodes'}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => fetchVariantsList(page)}
+                                    className="adm-btn-secondary"
+                                    title="Refresh Variants"
+                                    style={{
+                                        padding: '6px 10px',
+                                        fontSize: 12,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 4
+                                    }}
+                                >
+                                    <BsArrowClockwise size={12} className={listLoading ? 'spin' : ''} />
+                                    Refresh
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>
@@ -1149,7 +1511,40 @@ export const ProductVariantModal = ({
                                                                     {v.barcode}
                                                                 </span>
                                                             ) : (
-                                                                <span style={{ color: '#d1d5db' }}>—</span>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={generatingVariantBarcodeId === v.id}
+                                                                    onClick={async () => {
+                                                                        if (generatingVariantBarcodeId === v.id) return;
+                                                                        setGeneratingVariantBarcodeId(v.id);
+                                                                        try {
+                                                                            const res = await productService.generateVariantBarcode(v.id, false);
+                                                                            const generated = res?.data?.barcode || res?.barcode;
+                                                                            showNotify('success', `Barcode generated for ${v.sku}: ${generated}`);
+                                                                            fetchVariantsList(page);
+                                                                            if (typeof onRefresh === 'function') onRefresh();
+                                                                        } catch (err) {
+                                                                            const msg = err?.response?.data?.message ||
+                                                                                (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
+                                                                                'Failed to generate barcode';
+                                                                            showNotify('error', msg);
+                                                                        } finally {
+                                                                            setGeneratingVariantBarcodeId(null);
+                                                                        }
+                                                                    }}
+                                                                    style={{
+                                                                        background: 'none',
+                                                                        border: 'none',
+                                                                        color: '#6366f1',
+                                                                        fontSize: 11,
+                                                                        cursor: generatingVariantBarcodeId === v.id ? 'wait' : 'pointer',
+                                                                        textDecoration: 'underline',
+                                                                        padding: 0
+                                                                    }}
+                                                                    title="Generate Barcode for this variant"
+                                                                >
+                                                                    {generatingVariantBarcodeId === v.id ? 'Generating...' : '+ Generate'}
+                                                                </button>
                                                             )}
                                                         </td>
                                                         <td style={{ padding: '10px 14px' }}>
@@ -1245,7 +1640,38 @@ export const ProductVariantModal = ({
                                                             </button>
                                                         </td>
                                                         <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                                                            <div style={{ display: 'inline-flex', gap: 6 }}>
+                                                            <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                                                                {/* Status Action: Activate / Deactivate */}
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={isTogglingThis}
+                                                                    onClick={() => handleToggleVariantStatus(v)}
+                                                                    title={v.is_active ? "Deactivate Variant" : "Activate Variant"}
+                                                                    style={{
+                                                                        padding: '4px 8px',
+                                                                        borderRadius: 6,
+                                                                        border: v.is_active ? '1px solid #fecaca' : '1px solid #bbf7d0',
+                                                                        background: v.is_active ? '#fff5f5' : '#f0fdf4',
+                                                                        color: v.is_active ? '#b91c1c' : '#15803d',
+                                                                        fontSize: 11,
+                                                                        fontWeight: 600,
+                                                                        cursor: isTogglingThis ? 'wait' : 'pointer',
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        gap: 4
+                                                                    }}
+                                                                >
+                                                                    {isTogglingThis ? (
+                                                                        <BsArrowClockwise size={11} className="spin" />
+                                                                    ) : v.is_active ? (
+                                                                        <BsToggleOn size={14} />
+                                                                    ) : (
+                                                                        <BsToggleOff size={14} />
+                                                                    )}
+                                                                    <span>{v.is_active ? 'Deactivate' : 'Activate'}</span>
+                                                                </button>
+
+                                                                {/* Edit Variant */}
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleOpenEdit(v)}
@@ -1261,6 +1687,8 @@ export const ProductVariantModal = ({
                                                                 >
                                                                     <BsPencilFill size={11} />
                                                                 </button>
+
+                                                                {/* Delete / Deactivate Variant */}
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => setVariantToDelete(v)}
@@ -1455,13 +1883,14 @@ export const ProductVariantModal = ({
                                     <input
                                         type="text"
                                         value={formSku}
+                                        maxLength={50}
                                         onChange={e => {
                                             setFormSku(e.target.value.toUpperCase());
                                             if (formErrors.sku) {
                                                 setFormErrors(prev => ({ ...prev, sku: null }));
                                             }
                                         }}
-                                        placeholder="e.g. TSH-BLK-M-01"
+                                        placeholder="e.g. CLO-NIKE-TSHIRT-BLK-M"
                                         style={{
                                             width: '100%',
                                             padding: '9px 12px',
@@ -1520,6 +1949,48 @@ export const ProductVariantModal = ({
                                             <span>Auto-generate unique EAN-13 Barcode if blank</span>
                                         </label>
                                     )}
+                                    {activeTab === 'edit' && editingVariantId && (
+                                        <button
+                                            type="button"
+                                            disabled={generatingFormBarcode}
+                                            onClick={async () => {
+                                                if (generatingFormBarcode) return;
+                                                setGeneratingFormBarcode(true);
+                                                try {
+                                                    const res = await productService.generateVariantBarcode(editingVariantId, true);
+                                                    const generated = res?.data?.barcode || res?.barcode;
+                                                    if (generated) {
+                                                        setFormBarcode(generated);
+                                                        if (formErrors.barcode) {
+                                                            setFormErrors(prev => ({ ...prev, barcode: null }));
+                                                        }
+                                                        showNotify('success', `Barcode generated: ${generated}`);
+                                                    }
+                                                } catch (err) {
+                                                    console.error('Failed to generate variant barcode:', err);
+                                                    const msg = err?.response?.data?.message ||
+                                                        (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
+                                                        'Failed to generate barcode';
+                                                    showNotify('error', msg);
+                                                } finally {
+                                                    setGeneratingFormBarcode(false);
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '7px 12px',
+                                                borderRadius: 6,
+                                                border: '1px solid #c7d2fe',
+                                                background: '#eef2ff',
+                                                color: '#4f46e5',
+                                                fontSize: 12,
+                                                fontWeight: 600,
+                                                cursor: generatingFormBarcode ? 'wait' : 'pointer',
+                                                opacity: generatingFormBarcode ? 0.7 : 1
+                                            }}
+                                        >
+                                            {generatingFormBarcode ? 'Generating...' : 'Auto-generate EAN-13 Barcode'}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -1528,6 +1999,11 @@ export const ProductVariantModal = ({
                                 <div>
                                     <label style={{ fontSize: 12, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>
                                         Size (Optional, max 50 chars)
+                                        {activeCategoryName && (
+                                            <span style={{ fontWeight: 500, color: '#6366f1', marginLeft: 6 }}>
+                                                [{activeCategoryName}]
+                                            </span>
+                                        )}
                                     </label>
                                     <input
                                         type="text"
@@ -1536,7 +2012,7 @@ export const ProductVariantModal = ({
                                             setFormSize(e.target.value);
                                             if (formErrors.size) setFormErrors(prev => ({ ...prev, size: null }));
                                         }}
-                                        placeholder="e.g. S, M, L, XL, 32, 40"
+                                        placeholder={activeSizeChart ? `e.g. ${activeSizeChart.quickPicks.join(', ')}` : "e.g. Custom size or leave blank"}
                                         style={{
                                             width: '100%',
                                             padding: '9px 12px',
@@ -1549,29 +2025,50 @@ export const ProductVariantModal = ({
                                     {formErrors.size && (
                                         <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 500 }}>{formErrors.size}</span>
                                     )}
-                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
-                                        {PRESET_SIZES.slice(0, 7).map(sz => (
-                                            <button
-                                                key={sz}
-                                                type="button"
-                                                onClick={() => {
-                                                    setFormSize(sz);
-                                                    if (formErrors.size) setFormErrors(prev => ({ ...prev, size: null }));
-                                                }}
-                                                style={{
-                                                    fontSize: 10,
-                                                    padding: '2px 6px',
-                                                    borderRadius: 4,
-                                                    border: '1px solid #e5e7eb',
-                                                    background: formSize === sz ? '#ede9fe' : '#ffffff',
-                                                    color: formSize === sz ? '#6d28d9' : '#4b5563',
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                {sz}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    {activeSizeChart ? (
+                                        <div style={{ marginTop: 6 }}>
+                                            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span>Size Chart ({activeSizeChart.label}):</span>
+                                                {formSize && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormSize('')}
+                                                        style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: 10, cursor: 'pointer', padding: 0 }}
+                                                    >
+                                                        Clear Size
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                                {activeSizeChart.sizes.map(sz => (
+                                                    <button
+                                                        key={sz}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormSize(sz);
+                                                            if (formErrors.size) setFormErrors(prev => ({ ...prev, size: null }));
+                                                        }}
+                                                        style={{
+                                                            fontSize: 11,
+                                                            padding: '2px 8px',
+                                                            borderRadius: 4,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: formSize === sz ? '#ede9fe' : '#ffffff',
+                                                            color: formSize === sz ? '#6d28d9' : '#4b5563',
+                                                            fontWeight: formSize === sz ? 700 : 400,
+                                                            cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        {sz}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div style={{ marginTop: 6, fontSize: 11, color: '#6b7280', background: '#f3f4f6', padding: '6px 10px', borderRadius: 4 }}>
+                                            ℹ️ No size chart configured for category &ldquo;{activeCategoryName || 'unassigned'}&rdquo;. Sizes are optional or you can enter a custom size above.
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div>
@@ -1867,14 +2364,7 @@ export const ProductVariantModal = ({
                                 </label>
                                 <select
                                     value={matrixProductId}
-                                    onChange={e => {
-                                        setMatrixProductId(e.target.value);
-                                        if (matrixErrors.product_id) {
-                                            setMatrixErrors(prev => ({ ...prev, product_id: null }));
-                                        }
-                                        const parent = productMap.get(Number(e.target.value));
-                                        if (parent?.sku) setMatrixSkuPrefix(parent.sku);
-                                    }}
+                                    onChange={e => handleMatrixProductChange(e.target.value)}
                                     style={{
                                         width: '100%',
                                         padding: '9px 12px',
@@ -1908,30 +2398,28 @@ export const ProductVariantModal = ({
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                                     <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
                                         Select Sizes ({matrixSizes.length} selected)
+                                        {matrixCategoryName && (
+                                            <span style={{ fontWeight: 500, color: '#6366f1', marginLeft: 6 }}>
+                                                [{matrixCategoryName}]
+                                            </span>
+                                        )}
                                     </label>
-                                    <div style={{ display: 'flex', gap: 6 }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setMatrixSizes(['XS', 'S', 'M', 'L', 'XL', 'XXL']);
-                                                setMatrixErrors(e => ({ ...e, sizes_colors: null }));
-                                            }}
-                                            style={{ fontSize: 11, background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer' }}
-                                        >
-                                            Standard Clothing
-                                        </button>
-                                        <span style={{ color: '#d1d5db' }}>|</span>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setMatrixSizes(['28', '30', '32', '34', '36', '38']);
-                                                setMatrixErrors(e => ({ ...e, sizes_colors: null }));
-                                            }}
-                                            style={{ fontSize: 11, background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer' }}
-                                        >
-                                            Waist Sizes
-                                        </button>
-                                        <span style={{ color: '#d1d5db' }}>|</span>
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        {matrixSizeChart && matrixSizeChart.matrixPresets && matrixSizeChart.matrixPresets.map((preset, pIdx) => (
+                                            <React.Fragment key={preset.name}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setMatrixSizes(preset.sizes);
+                                                        setMatrixErrors(e => ({ ...e, sizes_colors: null }));
+                                                    }}
+                                                    style={{ fontSize: 11, background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer' }}
+                                                >
+                                                    {preset.name}
+                                                </button>
+                                                <span style={{ color: '#d1d5db' }}>|</span>
+                                            </React.Fragment>
+                                        ))}
                                         <button
                                             type="button"
                                             onClick={() => setMatrixSizes([])}
@@ -1942,34 +2430,40 @@ export const ProductVariantModal = ({
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                                    {PRESET_SIZES.map(sz => {
-                                        const selected = matrixSizes.includes(sz);
-                                        return (
-                                            <button
-                                                key={sz}
-                                                type="button"
-                                                onClick={() => toggleMatrixSize(sz)}
-                                                style={{
-                                                    padding: '5px 12px',
-                                                    borderRadius: 6,
-                                                    fontSize: 12,
-                                                    fontWeight: 600,
-                                                    border: selected ? '1px solid #6366f1' : '1px solid #d1d5db',
-                                                    background: selected ? '#ede9fe' : '#ffffff',
-                                                    color: selected ? '#4338ca' : '#374151',
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 4
-                                                }}
-                                            >
-                                                {selected && <BsCheck2 size={12} />}
-                                                {sz}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                                {matrixSizeChart ? (
+                                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                                        {matrixSizeChart.sizes.map(sz => {
+                                            const selected = matrixSizes.includes(sz);
+                                            return (
+                                                <button
+                                                    key={sz}
+                                                    type="button"
+                                                    onClick={() => toggleMatrixSize(sz)}
+                                                    style={{
+                                                        padding: '5px 12px',
+                                                        borderRadius: 6,
+                                                        fontSize: 12,
+                                                        fontWeight: 600,
+                                                        border: selected ? '1px solid #6366f1' : '1px solid #d1d5db',
+                                                        background: selected ? '#ede9fe' : '#ffffff',
+                                                        color: selected ? '#4338ca' : '#374151',
+                                                        cursor: 'pointer',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 4
+                                                    }}
+                                                >
+                                                    {selected && <BsCheck2 size={12} />}
+                                                    {sz}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div style={{ padding: '8px 12px', background: '#f3f4f6', borderRadius: 6, fontSize: 12, color: '#4b5563', marginBottom: 10 }}>
+                                        ℹ️ No size chart configured for category &ldquo;{matrixCategoryName || 'unassigned'}&rdquo;. You can generate variants by color only (recommended for non-apparel products), or add custom sizes below.
+                                    </div>
+                                )}
 
                                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                     <input

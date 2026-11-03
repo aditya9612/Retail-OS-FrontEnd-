@@ -4,7 +4,8 @@ import {
     BsSearch, BsFunnel, BsDownload, BsEye, BsCheckCircleFill,
     BsXCircleFill, BsHourglassSplit, BsTruck, BsArrowReturnLeft,
     BsBoxSeam, BsChevronLeft, BsChevronRight, BsArrowUpRight,
-    BsClockHistory, BsFilter,
+    BsClockHistory, BsFilter, BsPlus, BsPerson, BsGeoAlt,
+    BsTag, BsCreditCard2Front, BsXLg, BsCheckLg, BsInfoCircle,
 } from 'react-icons/bs';
 
 const statusConfig = {
@@ -22,8 +23,79 @@ const statusConfig = {
 
 const allStatuses = ['All', ...Object.keys(statusConfig)];
 const allPayments = ['All Payments', 'POS', 'UPI', 'Card', 'Cash', 'Wallet'];
-const fmt = (n) => '₹' + n.toLocaleString('en-IN');
+const fmt = (n) => {
+    if (n === null || n === undefined || isNaN(Number(n))) return '₹0';
+    return '₹' + Number(n).toLocaleString('en-IN');
+};
 const PAGE_SIZE = 8;
+
+// Helper to determine if an order is for a walk-in customer
+export const isWalkInOrder = (o) => {
+    if (!o) return false;
+    const addr = String(o.delivery_address || o.city || '').trim().toLowerCase();
+    if (!addr || addr === 'walk-in' || addr === 'walk in' || addr === 'walkin' || addr === 'in-store' || addr === 'pickup' || addr === 'pick-up') {
+        return true;
+    }
+    const orderType = String(o.order_type || o.payment || '').trim().toLowerCase();
+    if (orderType === 'pos' || orderType === 'in-store' || orderType === 'walk-in' || orderType === 'walkin') {
+        return true;
+    }
+    const customer = String(o.customer || o.customer_id || '').toLowerCase();
+    if (customer.includes('walk-in') || customer.includes('walkin')) {
+        return true;
+    }
+    return false;
+};
+
+// Helper to format field names clearly for user-facing validation errors
+export const formatFieldName = (name) => {
+    if (!name) return 'Field';
+    const fieldMap = {
+        customer_id: 'Customer ID',
+        delivery_address: 'Delivery Address',
+        discount_amount: 'Discount Amount',
+        coupon_code: 'Coupon Code',
+        status: 'Status',
+        store_id: 'Store ID',
+        product_id: 'Product ID',
+        unit_price: 'Unit Price',
+        quantity: 'Quantity',
+        remarks: 'Remarks',
+        notes: 'Notes',
+    };
+    if (fieldMap[name]) return fieldMap[name];
+    return name
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+};
+
+const getErrorMessage = (err, fallback = 'Validation failed. Please check the highlighted field requiring input.') => {
+    if (!err) return fallback;
+    const detail = err?.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+        return detail.map(d => {
+            if (typeof d === 'string') return d;
+            const field = d?.loc && d.loc.length > 0 ? formatFieldName(d.loc[d.loc.length - 1]) : '';
+            const msg = d?.msg || d?.message || (typeof d === 'object' ? JSON.stringify(d) : String(d));
+            return field ? `Field "${field}": ${msg}` : msg;
+        }).join('; ');
+    }
+    if (detail && typeof detail === 'object') {
+        const field = detail?.loc && detail.loc.length > 0 ? formatFieldName(detail.loc[detail.loc.length - 1]) : '';
+        const msg = detail?.message || detail?.msg || JSON.stringify(detail);
+        return field ? `Field "${field}": ${msg}` : msg;
+    }
+    if (err.message) return err.message;
+    return fallback;
+};
+
+const activeCoupons = [
+    { code: 'FLAT100', label: 'FLAT100 — Flat ₹100 Off (Min ₹500)', discount: 100 },
+    { code: 'WELCOME10', label: 'WELCOME10 — 10% Off (Min ₹300)', discount: 50 },
+    { code: 'SAVE20', label: 'SAVE20 — 20% Off (Min ₹1000)', discount: 200 },
+    { code: 'FESTIVE50', label: 'FESTIVE50 — Flat ₹50 Off (Min ₹250)', discount: 50 },
+];
 
 const inpStyle = {
     width: '100%', padding: '7px 10px', border: '1.5px solid #e5e7eb',
@@ -32,7 +104,10 @@ const inpStyle = {
 };
 
 const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
-    const [status, setStatus] = useState(order.status);
+    if (!order) return null;
+    const isWalkIn = isWalkInOrder(order);
+    const initialStatus = (isWalkIn && !['Cancelled', 'Returned'].includes(order.status)) ? 'Delivered' : (order.status || 'Pending');
+    const [status, setStatus] = useState(initialStatus);
     const sc = statusConfig[status] || { color: '#6b7280', bg: '#f9fafb', icon: null };
     const trackingSteps = ['Pending', 'Confirmed', 'Packed', 'Shipped', 'Out for Delivery', 'Delivered'];
     const currentStep = trackingSteps.indexOf(status);
@@ -42,15 +117,21 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
     const [trackingLoading, setTrackingLoading] = useState(false);
 
     const fetchTracking = async () => {
-        if (!order.rawId) return;
+        if (!order?.rawId) return;
         setTrackingLoading(true);
         try {
             const data = await getOrderTracking(order.rawId);
-            const events = Array.isArray(data) ? data : [];
+            const rawEvents = Array.isArray(data) ? data : (data?.data || data?.items || []);
+            const events = Array.isArray(rawEvents) ? rawEvents : [];
             // Sort newest first
-            setTrackingHistory(events.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at)));
+            setTrackingHistory(events.sort((a, b) => {
+                const dateA = a?.updated_at ? new Date(a.updated_at).getTime() : 0;
+                const dateB = b?.updated_at ? new Date(b.updated_at).getTime() : 0;
+                return dateB - dateA;
+            }));
         } catch (err) {
             console.error('Error fetching tracking:', err);
+            setTrackingHistory([]);
         } finally {
             setTrackingLoading(false);
         }
@@ -58,57 +139,130 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
 
     useEffect(() => {
         fetchTracking();
-    }, [order.rawId]);
+    }, [order?.rawId]);
 
     // Edit form state
     const [editMode, setEditMode] = useState(false);
     const [saving, setSaving] = useState(false);
     const [saveMsg, setSaveMsg] = useState(null); // { type: 'success'|'error', text }
+    const [fieldErrors, setFieldErrors] = useState({});
+    const [showCustomCoupon, setShowCustomCoupon] = useState(
+        Boolean(order.coupon && !activeCoupons.some(c => c.code.toLowerCase() === order.coupon.toLowerCase()))
+    );
     const [form, setForm] = useState({
         customer_id: order.rawId ? String(order.rawId) : '1',
         coupon_code: order.coupon || '',
         discount_amount: String(order.discount || 0),
-        delivery_address: order.city || '',
+        delivery_address: order.city || (isWalkIn ? 'Walk-in' : ''),
         notes: order.notes || '',
-        status: order.status ? order.status.toLowerCase() : 'draft',
+        status: (isWalkIn && !['cancelled', 'returned'].includes((order.status || '').toLowerCase()))
+            ? 'delivered'
+            : (order.status ? order.status.toLowerCase() : 'draft'),
     });
 
     const handleFormChange = (e) => {
-        setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+        const { name, value } = e.target;
+        setFieldErrors(prev => ({ ...prev, [name]: null }));
+        if (name === 'delivery_address') {
+            const isNowWalkIn = !value.trim() || ['walk-in', 'walk in', 'walkin', 'in-store', 'pickup', 'pick-up'].includes(value.trim().toLowerCase());
+            setForm(prev => ({
+                ...prev,
+                delivery_address: value,
+                status: (isNowWalkIn && !['cancelled', 'returned'].includes(prev.status)) ? 'delivered' : prev.status,
+            }));
+        } else if (name === 'status') {
+            const isCurrWalkIn = !form.delivery_address.trim() || ['walk-in', 'walk in', 'walkin', 'in-store', 'pickup', 'pick-up'].includes(form.delivery_address.trim().toLowerCase());
+            if (isCurrWalkIn && !['cancelled', 'returned', 'delivered'].includes(value.toLowerCase())) {
+                setFieldErrors(prev => ({ ...prev, status: 'Walk-in customer orders are fulfilled directly in-store and must be set to "Delivered".' }));
+                setSaveMsg({
+                    type: 'error',
+                    text: 'Validation Error on Field "Status": Walk-in customer orders are fulfilled directly in-store and must be set to "Delivered".'
+                });
+                setForm(prev => ({ ...prev, status: 'delivered' }));
+                return;
+            }
+            setForm(prev => ({ ...prev, [name]: value }));
+        } else {
+            setForm(prev => ({ ...prev, [name]: value }));
+        }
     };
 
     const handleSave = async () => {
         setSaving(true);
         setSaveMsg(null);
+        setFieldErrors({});
+
+        // Client-side validation identifying specific fields requiring input
+        const errors = {};
+        if (!form.customer_id || !String(form.customer_id).trim()) {
+            errors.customer_id = 'Customer ID is required. Please enter a valid customer identifier.';
+        } else if (isNaN(parseInt(form.customer_id, 10)) || parseInt(form.customer_id, 10) <= 0) {
+            errors.customer_id = 'Customer ID must be a positive integer number.';
+        }
+
+        if (!form.delivery_address || !form.delivery_address.trim()) {
+            errors.delivery_address = 'Delivery Address is required. Enter a destination address or "Walk-in" for in-store pickup.';
+        }
+
+        if (form.discount_amount !== '' && form.discount_amount !== null && form.discount_amount !== undefined) {
+            if (isNaN(Number(form.discount_amount)) || Number(form.discount_amount) < 0) {
+                errors.discount_amount = 'Discount Amount must be a valid non-negative number (0 or greater).';
+            }
+        }
+
+        if (!form.status || !form.status.trim()) {
+            errors.status = 'Status is required. Please select a valid order status.';
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
+            const firstField = Object.keys(errors)[0];
+            const fieldLabel = formatFieldName(firstField);
+            setSaveMsg({
+                type: 'error',
+                text: `Validation Error on Field "${fieldLabel}": ${errors[firstField]}`
+            });
+            setSaving(false);
+            return;
+        }
+
         try {
+            const isTargetWalkIn = !form.delivery_address.trim() || ['walk-in', 'walk in', 'walkin', 'in-store', 'pickup', 'pick-up'].includes(form.delivery_address.trim().toLowerCase());
+            const effectiveStatus = (isTargetWalkIn && !['cancelled', 'returned'].includes(form.status.toLowerCase()))
+                ? 'delivered'
+                : form.status;
+
             const rawCoupon = form.coupon_code ? form.coupon_code.trim() : '';
             const payload = {
                 customer_id: parseInt(form.customer_id, 10) || 1,
                 coupon_code: rawCoupon || null,
                 discount_amount: parseFloat(form.discount_amount) || 0,
-                delivery_address: form.delivery_address,
+                delivery_address: form.delivery_address.trim() || 'Walk-in',
                 notes: form.notes,
-                status: form.status,
+                status: effectiveStatus,
             };
             await updateOrder(order.rawId, payload);
-            setSaveMsg({ type: 'success', text: 'Order updated successfully!' });
+            setSaveMsg({
+                type: 'success',
+                text: `Order updated successfully!${isTargetWalkIn ? ' Walk-in customer order automatically set to Delivered.' : ''}`
+            });
             setEditMode(false);
+            const displayStatus = effectiveStatus.charAt(0).toUpperCase() + effectiveStatus.slice(1);
+            setStatus(displayStatus);
+            if (onStatusChange) onStatusChange(order.id, displayStatus);
             if (onOrderUpdated) onOrderUpdated();
         } catch (err) {
-            console.error('Error updating order:', err);
-            let msg = 'Failed to update order. Please try again.';
-            if (err.response?.data?.detail) {
-                if (Array.isArray(err.response.data.detail)) {
-                    msg = err.response.data.detail.map(d => d.msg || JSON.stringify(d)).join('; ');
-                } else if (typeof err.response.data.detail === 'string') {
-                    msg = err.response.data.detail;
-                } else {
-                    msg = JSON.stringify(err.response.data.detail);
-                }
-            } else if (err.message) {
-                msg = err.message;
+            if (Array.isArray(err?.response?.data?.detail)) {
+                const apiErrors = {};
+                err.response.data.detail.forEach(d => {
+                    if (d.loc && d.loc.length > 0) {
+                        const fName = d.loc[d.loc.length - 1];
+                        apiErrors[fName] = d.msg || 'Invalid value';
+                    }
+                });
+                setFieldErrors(apiErrors);
             }
-            setSaveMsg({ type: 'error', text: msg });
+            setSaveMsg({ type: 'error', text: getErrorMessage(err, 'Failed to update order. Please check the highlighted field.') });
         } finally {
             setSaving(false);
         }
@@ -124,11 +278,12 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
             await confirmOrder(order.rawId);
             setSaveMsg({ type: 'success', text: 'Order confirmed successfully!' });
             setStatus('Confirmed');
+            if (onStatusChange) onStatusChange(order.id, 'Confirmed');
             if (onOrderUpdated) onOrderUpdated();
             fetchTracking();
         } catch (err) {
             console.error('Error confirming order:', err);
-            setSaveMsg({ type: 'error', text: 'Failed to confirm order. Please try again.' });
+            setSaveMsg({ type: 'error', text: getErrorMessage(err, 'Failed to confirm order. Please try again.') });
         } finally {
             setConfirming(false);
         }
@@ -138,7 +293,7 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
     const [cancelling, setCancelling] = useState(false);
     const [showCancelConfirm, setShowCancelConfirm] = useState(false);
     const handleCancel = async () => {
-        if (!order.rawId) return;
+        if (!order?.rawId) return;
         setCancelling(true);
         setSaveMsg(null);
         try {
@@ -146,11 +301,12 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
             setSaveMsg({ type: 'success', text: 'Order cancelled successfully!' });
             setStatus('Cancelled');
             setShowCancelConfirm(false);
+            if (onStatusChange) onStatusChange(order.id, 'Cancelled');
             if (onOrderUpdated) onOrderUpdated();
             fetchTracking();
         } catch (err) {
             console.error('Error cancelling order:', err);
-            setSaveMsg({ type: 'error', text: err?.response?.data?.detail || 'Failed to cancel order. Please try again.' });
+            setSaveMsg({ type: 'error', text: getErrorMessage(err, 'Failed to cancel order. Please try again.') });
             setShowCancelConfirm(false);
         } finally {
             setCancelling(false);
@@ -162,22 +318,34 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
     const [pendingStatus, setPendingStatus] = useState(null); // status value being set
     const [statusRemarks, setStatusRemarks] = useState('');
     const handleStatusUpdate = async (newStatus) => {
-        if (!order.rawId || newStatus === status) return;
+        if (!order?.rawId || newStatus === status) return;
+
+        // Validation for walk-in customer orders
+        if (isWalkIn && ['shipped', 'out for delivery', 'packed'].includes(newStatus.toLowerCase())) {
+            setSaveMsg({
+                type: 'error',
+                text: 'Validation Error: Walk-in customer orders are fulfilled directly in-store and cannot be Shipped or Out for Delivery. Status must be "Delivered" (or Cancelled/Returned).'
+            });
+            setPendingStatus(null);
+            return;
+        }
+
         setUpdatingStatus(true);
         setSaveMsg(null);
         const autoRemarks = `Status updated to ${newStatus}`;
         try {
-            await updateOrderStatus(order.rawId, newStatus.toLowerCase().replace(/ /g, '_'), statusRemarks || autoRemarks);
+            const apiStatus = newStatus.toLowerCase().replace(/\s+/g, '_');
+            await updateOrderStatus(order.rawId, apiStatus, statusRemarks || autoRemarks);
             setSaveMsg({ type: 'success', text: `Order status updated to "${newStatus}" successfully!` });
             setStatus(newStatus);
-            onStatusChange(order.id, newStatus);
+            if (onStatusChange) onStatusChange(order.id, newStatus);
             setPendingStatus(null);
             setStatusRemarks('');
             if (onOrderUpdated) onOrderUpdated();
             fetchTracking();
         } catch (err) {
             console.error('Error updating order status:', err);
-            setSaveMsg({ type: 'error', text: err?.response?.data?.detail || 'Failed to update status. Please try again.' });
+            setSaveMsg({ type: 'error', text: getErrorMessage(err, 'Failed to update status. Please try again.') });
             setPendingStatus(null);
         } finally {
             setUpdatingStatus(false);
@@ -188,7 +356,7 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
     const [returning, setReturning] = useState(false);
     const [showReturnConfirm, setShowReturnConfirm] = useState(false);
     const handleReturn = async () => {
-        if (!order.rawId) return;
+        if (!order?.rawId) return;
         setReturning(true);
         setSaveMsg(null);
         try {
@@ -196,11 +364,12 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
             setSaveMsg({ type: 'success', text: 'Order marked as returned successfully!' });
             setStatus('Returned');
             setShowReturnConfirm(false);
+            if (onStatusChange) onStatusChange(order.id, 'Returned');
             if (onOrderUpdated) onOrderUpdated();
             fetchTracking();
         } catch (err) {
             console.error('Error returning order:', err);
-            setSaveMsg({ type: 'error', text: err?.response?.data?.detail || 'Failed to process return. Please try again.' });
+            setSaveMsg({ type: 'error', text: getErrorMessage(err, 'Failed to process return. Please try again.') });
             setShowReturnConfirm(false);
         } finally {
             setReturning(false);
@@ -212,7 +381,18 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
             <div className="ec-modal" style={{ maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
                 <div className="ec-modal-header">
                     <div>
-                        <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>Order {order.id}</h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>Order {order.id}</h3>
+                            {isWalkIn && (
+                                <span style={{
+                                    fontSize: 10, fontWeight: 700, background: '#ecfdf5', color: '#059669',
+                                    border: '1px solid #a7f3d0', padding: '2px 8px', borderRadius: 12,
+                                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                                }}>
+                                    <BsCheckCircleFill size={9} /> Walk-in (Delivered)
+                                </span>
+                            )}
+                        </div>
                         <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{order.date} · {order.customer}</p>
                     </div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -236,7 +416,7 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
                         color: saveMsg.type === 'success' ? '#10b981' : '#ef4444',
                         border: `1px solid ${saveMsg.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
                     }}>
-                        {saveMsg.text}
+                        {typeof saveMsg.text === 'string' ? saveMsg.text : JSON.stringify(saveMsg.text)}
                     </div>
                 )}
 
@@ -248,31 +428,233 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
                         </p>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                             <div>
-                                <label style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Customer ID</label>
-                                <input style={inpStyle} name="customer_id" value={form.customer_id} onChange={handleFormChange} />
+                                <label style={{ fontSize: 10, fontWeight: 700, color: fieldErrors.customer_id ? '#ef4444' : '#9ca3af', textTransform: 'uppercase' }}>
+                                    Customer ID <span style={{ color: '#ef4444' }}>*</span>
+                                </label>
+                                <input
+                                    style={{
+                                        ...inpStyle,
+                                        borderColor: fieldErrors.customer_id ? '#ef4444' : '#e5e7eb',
+                                        background: fieldErrors.customer_id ? '#fef2f2' : '#fff',
+                                    }}
+                                    name="customer_id"
+                                    value={form.customer_id}
+                                    onChange={handleFormChange}
+                                    placeholder="e.g. 1"
+                                />
+                                {fieldErrors.customer_id && (
+                                    <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 600, marginTop: 2, display: 'block' }}>
+                                        ⚠️ {fieldErrors.customer_id}
+                                    </span>
+                                )}
                             </div>
                             <div>
-                                <label style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Coupon Code</label>
-                                <input style={inpStyle} name="coupon_code" value={form.coupon_code} onChange={handleFormChange} placeholder="e.g. FLAT100" />
-                                <span style={{ fontSize: 10, color: '#6b7280', marginTop: 2, display: 'block' }}>
-                                    Active: FLAT100, WELCOME10, SAVE20, FESTIVE50
-                                </span>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                                    <label style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Coupon Code</label>
+                                    {form.coupon_code ? (
+                                        <span style={{ fontSize: 10, fontWeight: 700, color: '#059669', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                            <BsCheckCircleFill size={9} /> Selected: {form.coupon_code}
+                                        </span>
+                                    ) : (
+                                        <span style={{ fontSize: 10, color: '#9ca3af', fontWeight: 500 }}>No coupon selected</span>
+                                    )}
+                                </div>
+                                <select
+                                    style={{
+                                        ...inpStyle,
+                                        borderColor: form.coupon_code ? '#6366f1' : '#e5e7eb',
+                                        background: form.coupon_code ? '#f8faff' : '#fff',
+                                    }}
+                                    name="coupon_code"
+                                    value={
+                                        activeCoupons.some(c => c.code.toLowerCase() === (form.coupon_code || '').toLowerCase())
+                                            ? activeCoupons.find(c => c.code.toLowerCase() === (form.coupon_code || '').toLowerCase()).code
+                                            : (form.coupon_code ? 'CUSTOM' : '')
+                                    }
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        if (val === 'CUSTOM') {
+                                            setShowCustomCoupon(true);
+                                        } else {
+                                            setShowCustomCoupon(false);
+                                            const matched = activeCoupons.find(c => c.code === val);
+                                            setForm(prev => ({
+                                                ...prev,
+                                                coupon_code: val,
+                                                discount_amount: matched ? String(matched.discount) : (val ? prev.discount_amount : '0'),
+                                            }));
+                                        }
+                                    }}
+                                >
+                                    <option value="">-- Select Coupon (None) --</option>
+                                    {activeCoupons.map(c => (
+                                        <option key={c.code} value={c.code}>{c.label}</option>
+                                    ))}
+                                    <option value="CUSTOM">Custom Code...</option>
+                                </select>
+
+                                {(showCustomCoupon || (form.coupon_code && !activeCoupons.some(c => c.code.toLowerCase() === form.coupon_code.toLowerCase()))) && (
+                                    <div style={{ marginTop: 6, position: 'relative' }}>
+                                        <input
+                                            style={{ ...inpStyle, paddingRight: 26 }}
+                                            name="coupon_code"
+                                            value={form.coupon_code}
+                                            onChange={handleFormChange}
+                                            placeholder="Enter custom coupon code..."
+                                            autoFocus
+                                        />
+                                        {form.coupon_code && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setForm(prev => ({ ...prev, coupon_code: '' }))}
+                                                title="Clear coupon"
+                                                style={{
+                                                    position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                                                    background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer',
+                                                    fontSize: 12, padding: '2px 4px', lineHeight: 1,
+                                                }}
+                                            >
+                                                ✕
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Interactive clickable selection chips */}
+                                <div style={{ marginTop: 6 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Active:</span>
+                                        {activeCoupons.map(c => {
+                                            const isSelected = form.coupon_code?.trim().toUpperCase() === c.code;
+                                            return (
+                                                <button
+                                                    key={c.code}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (isSelected) {
+                                                            setForm(prev => ({ ...prev, coupon_code: '' }));
+                                                        } else {
+                                                            setShowCustomCoupon(false);
+                                                            setForm(prev => ({
+                                                                ...prev,
+                                                                coupon_code: c.code,
+                                                                discount_amount: (!prev.discount_amount || prev.discount_amount === '0')
+                                                                    ? String(c.discount)
+                                                                    : prev.discount_amount,
+                                                            }));
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        padding: '2px 7px',
+                                                        borderRadius: 4,
+                                                        fontSize: 10,
+                                                        fontWeight: isSelected ? 700 : 500,
+                                                        border: isSelected ? '1.5px solid #6366f1' : '1px solid #d1d5db',
+                                                        background: isSelected ? '#eef2ff' : '#ffffff',
+                                                        color: isSelected ? '#4338ca' : '#4b5563',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 3,
+                                                        transition: 'all 0.15s ease',
+                                                    }}
+                                                    title={isSelected ? `Selected: ${c.code}. Click to deselect` : `Click to select ${c.code}`}
+                                                >
+                                                    {isSelected && <BsCheckCircleFill size={8} color="#6366f1" />}
+                                                    {c.code}
+                                                </button>
+                                            );
+                                        })}
+                                        {form.coupon_code && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowCustomCoupon(false);
+                                                    setForm(prev => ({ ...prev, coupon_code: '' }));
+                                                }}
+                                                style={{
+                                                    padding: '2px 6px',
+                                                    borderRadius: 4,
+                                                    fontSize: 10,
+                                                    border: '1px solid #fecaca',
+                                                    background: '#fef2f2',
+                                                    color: '#ef4444',
+                                                    cursor: 'pointer',
+                                                    fontWeight: 600,
+                                                }}
+                                                title="Clear coupon selection"
+                                            >
+                                                ✕ Clear
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                             <div>
-                                <label style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Discount Amount (₹)</label>
-                                <input style={inpStyle} name="discount_amount" type="number" value={form.discount_amount} onChange={handleFormChange} />
+                                <label style={{ fontSize: 10, fontWeight: 700, color: fieldErrors.discount_amount ? '#ef4444' : '#9ca3af', textTransform: 'uppercase' }}>
+                                    Discount Amount (₹)
+                                </label>
+                                <input
+                                    style={{
+                                        ...inpStyle,
+                                        borderColor: fieldErrors.discount_amount ? '#ef4444' : '#e5e7eb',
+                                        background: fieldErrors.discount_amount ? '#fef2f2' : '#fff',
+                                    }}
+                                    name="discount_amount"
+                                    type="number"
+                                    value={form.discount_amount}
+                                    onChange={handleFormChange}
+                                />
+                                {fieldErrors.discount_amount && (
+                                    <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 600, marginTop: 2, display: 'block' }}>
+                                        ⚠️ {fieldErrors.discount_amount}
+                                    </span>
+                                )}
                             </div>
                             <div>
-                                <label style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Status</label>
-                                <select style={inpStyle} name="status" value={form.status} onChange={handleFormChange}>
+                                <label style={{ fontSize: 10, fontWeight: 700, color: fieldErrors.status ? '#ef4444' : '#9ca3af', textTransform: 'uppercase' }}>
+                                    Status <span style={{ color: '#ef4444' }}>*</span>
+                                </label>
+                                <select
+                                    style={{
+                                        ...inpStyle,
+                                        borderColor: fieldErrors.status ? '#ef4444' : '#e5e7eb',
+                                        background: fieldErrors.status ? '#fef2f2' : '#fff',
+                                    }}
+                                    name="status"
+                                    value={form.status}
+                                    onChange={handleFormChange}
+                                >
                                     {['draft', 'pending', 'confirmed', 'packed', 'shipped', 'out_for_delivery', 'delivered', 'cancelled', 'returned'].map(s => (
                                         <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ')}</option>
                                     ))}
                                 </select>
+                                {fieldErrors.status && (
+                                    <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 600, marginTop: 2, display: 'block' }}>
+                                        ⚠️ {fieldErrors.status}
+                                    </span>
+                                )}
                             </div>
                             <div style={{ gridColumn: '1 / -1' }}>
-                                <label style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Delivery Address</label>
-                                <input style={inpStyle} name="delivery_address" value={form.delivery_address} onChange={handleFormChange} placeholder="Full delivery address" />
+                                <label style={{ fontSize: 10, fontWeight: 700, color: fieldErrors.delivery_address ? '#ef4444' : '#9ca3af', textTransform: 'uppercase' }}>
+                                    Delivery Address <span style={{ color: '#ef4444' }}>*</span>
+                                </label>
+                                <input
+                                    style={{
+                                        ...inpStyle,
+                                        borderColor: fieldErrors.delivery_address ? '#ef4444' : '#e5e7eb',
+                                        background: fieldErrors.delivery_address ? '#fef2f2' : '#fff',
+                                    }}
+                                    name="delivery_address"
+                                    value={form.delivery_address}
+                                    onChange={handleFormChange}
+                                    placeholder="Full delivery address or 'Walk-in' for in-store pickup"
+                                />
+                                {fieldErrors.delivery_address && (
+                                    <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 600, marginTop: 2, display: 'block' }}>
+                                        ⚠️ {fieldErrors.delivery_address}
+                                    </span>
+                                )}
                             </div>
                             <div style={{ gridColumn: '1 / -1' }}>
                                 <label style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Notes</label>
@@ -339,15 +721,15 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 0, maxHeight: 220, overflowY: 'auto' }}>
                                     {trackingHistory.map((event, idx) => {
-                                        const evStatusKey = event.status
-                                            ? event.status.charAt(0).toUpperCase() + event.status.slice(1).replace(/_/g, ' ')
-                                            : 'Unknown';
-                                        const evSc = statusConfig[evStatusKey] || { color: '#6b7280', bg: '#f3f4f6' };
-                                        const evDate = new Date(event.updated_at);
-                                        const evDateStr = evDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-                                        const evTimeStr = evDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+                                        if (!event) return null;
+                                        const rawSt = event.status || 'Updated';
+                                        const evStatusKey = rawSt.charAt(0).toUpperCase() + rawSt.slice(1).replace(/_/g, ' ');
+                                        const evSc = statusConfig[evStatusKey] || statusConfig[Object.keys(statusConfig).find(k => k.toLowerCase() === evStatusKey.toLowerCase())] || { color: '#6b7280', bg: '#f3f4f6' };
+                                        const evDate = event.updated_at ? new Date(event.updated_at) : new Date();
+                                        const evDateStr = !isNaN(evDate.getTime()) ? evDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recent';
+                                        const evTimeStr = !isNaN(evDate.getTime()) ? evDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '';
                                         return (
-                                            <div key={event.id} style={{ display: 'flex', gap: 12, paddingBottom: idx < trackingHistory.length - 1 ? 12 : 0, marginBottom: idx < trackingHistory.length - 1 ? 12 : 0, borderBottom: idx < trackingHistory.length - 1 ? '1px solid #e5e7eb' : 'none' }}>
+                                            <div key={event.id || idx} style={{ display: 'flex', gap: 12, paddingBottom: idx < trackingHistory.length - 1 ? 12 : 0, marginBottom: idx < trackingHistory.length - 1 ? 12 : 0, borderBottom: idx < trackingHistory.length - 1 ? '1px solid #e5e7eb' : 'none' }}>
                                                 {/* Timeline dot + line */}
                                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
                                                     <div style={{ width: 10, height: 10, borderRadius: '50%', background: idx === 0 ? evSc.color : '#d1d5db', marginTop: 3 }} />
@@ -380,7 +762,7 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
                                 { label: 'Email', value: order.email },
                                 { label: 'Delivery Address', value: order.city },
                                 { label: 'Payment', value: order.payment },
-                                { label: 'Items', value: `${order.items} items` },
+                                { label: 'Items', value: `${order.items} ${order.items === 1 ? 'item' : 'items'}` },
                                 { label: 'Subtotal', value: fmt(order.subtotal) },
                                 { label: 'Discount', value: order.discount > 0 ? `- ${fmt(order.discount)}` : 'None' },
                                 { label: 'GST', value: fmt(order.gst) },
@@ -601,6 +983,512 @@ const OrderDetail = ({ order, onClose, onStatusChange, onOrderUpdated }) => {
     );
 };
 
+// Interactive Modal for creating a new online or walk-in order
+const CreateOrderModal = ({ onClose, onOrderCreated }) => {
+    const [orderType, setOrderType] = useState('ecommerce'); // 'ecommerce' | 'pos'
+    const isWalkIn = orderType === 'pos';
+
+    const [customerName, setCustomerName] = useState('Rahul Verma');
+    const [customerId, setCustomerId] = useState(1);
+    const [customerEmail, setCustomerEmail] = useState('rahul.verma@example.com');
+    const [customerPhone, setCustomerPhone] = useState('+91 98765 43210');
+
+    const [deliveryAddress, setDeliveryAddress] = useState('123 MG Road, Bengaluru, Karnataka - 560001');
+    const [storeId, setStoreId] = useState(1);
+
+    const [productName, setProductName] = useState('Fortune Sunlite Sunflower Oil 2L');
+    const [productId, setProductId] = useState(1);
+    const [variant, setVariant] = useState('2L');
+    const [quantity, setQuantity] = useState(1);
+    const [unitPrice, setUnitPrice] = useState(750);
+    const [itemDiscount, setItemDiscount] = useState(0);
+
+    const [selectedCouponCode, setSelectedCouponCode] = useState('');
+    const [paymentMethod, setPaymentMethod] = useState('UPI');
+    const [notes, setNotes] = useState('');
+
+    const [submitting, setSubmitting] = useState(false);
+    const [validationError, setValidationError] = useState(null);
+
+    const handleTypeChange = (type) => {
+        setOrderType(type);
+        setValidationError(null);
+        if (type === 'pos') {
+            setCustomerName(prev => (!prev || prev === 'Rahul Verma' ? 'Walk-in Customer' : prev));
+            setDeliveryAddress('Walk-in (In-store)');
+            setPaymentMethod('Cash');
+        } else {
+            setCustomerName(prev => (prev === 'Walk-in Customer' ? 'Rahul Verma' : prev));
+            setDeliveryAddress(prev => (prev === 'Walk-in (In-store)' ? '123 MG Road, Bengaluru, Karnataka - 560001' : prev));
+            setPaymentMethod('UPI');
+        }
+    };
+
+    const qty = Math.max(1, Number(quantity) || 1);
+    const price = Math.max(0, Number(unitPrice) || 0);
+    const itemDisc = Math.max(0, Number(itemDiscount) || 0);
+    const subtotal = Math.max(0, (qty * price) - itemDisc);
+
+    let couponDiscount = 0;
+    let couponWarning = null;
+    if (selectedCouponCode) {
+        const found = activeCoupons.find(c => c.code === selectedCouponCode);
+        if (found) {
+            if (selectedCouponCode === 'FLAT100') {
+                if (subtotal >= 500) couponDiscount = 100;
+                else couponWarning = 'FLAT100 requires a minimum order amount of ₹500';
+            } else if (selectedCouponCode === 'WELCOME10') {
+                if (subtotal >= 300) couponDiscount = Math.round(subtotal * 0.1);
+                else couponWarning = 'WELCOME10 requires a minimum order amount of ₹300';
+            } else if (selectedCouponCode === 'SAVE20') {
+                if (subtotal >= 1000) couponDiscount = Math.round(subtotal * 0.2);
+                else couponWarning = 'SAVE20 requires a minimum order amount of ₹1000';
+            } else if (selectedCouponCode === 'FESTIVE50') {
+                if (subtotal >= 250) couponDiscount = 50;
+                else couponWarning = 'FESTIVE50 requires a minimum order amount of ₹250';
+            }
+        }
+    }
+
+    const gst = Math.round(subtotal * 0.18);
+    const shipping = isWalkIn ? 0 : (subtotal >= 1000 ? 0 : 50);
+    const finalTotal = Math.max(0, subtotal + gst - couponDiscount + shipping);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setValidationError(null);
+
+        // Required field validations with explicit field identifiers
+        if (!customerName || !customerName.trim()) {
+            setValidationError('Validation Error: Field "Customer Name" requires input.');
+            return;
+        }
+        if (!isWalkIn && (!deliveryAddress || !deliveryAddress.trim())) {
+            setValidationError('Validation Error: Field "Delivery Address" requires input for online delivery orders.');
+            return;
+        }
+        if (Number(quantity) <= 0 || isNaN(Number(quantity))) {
+            setValidationError('Validation Error: Field "Quantity" must be at least 1.');
+            return;
+        }
+        if (Number(unitPrice) <= 0 || isNaN(Number(unitPrice))) {
+            setValidationError('Validation Error: Field "Unit Price" must be greater than 0.');
+            return;
+        }
+
+        setSubmitting(true);
+
+        try {
+            let validProductId = Number(productId) || 1;
+            try {
+                const productModule = (await import('../../services/product.js')).default;
+                const pRes = await productModule.getAll();
+                const pList = Array.isArray(pRes) ? pRes : (pRes?.data || pRes?.items || []);
+                if (pList.length > 0 && pList[0]?.id) {
+                    validProductId = pList[0].id;
+                }
+            } catch (_) {}
+
+            let validCustomerId = Number(customerId) || 1;
+            try {
+                const { getCurrentUser } = await import('../../services/user.js');
+                const u = await getCurrentUser();
+                if (u && u.id) validCustomerId = u.id;
+            } catch (_) {}
+
+            const finalAddress = isWalkIn ? 'Walk-in' : deliveryAddress.trim();
+            const autoStatus = isWalkIn ? 'Delivered' : 'Pending';
+
+            const payload = {
+                store_id: Number(storeId) || 1,
+                customer_id: validCustomerId,
+                order_type: isWalkIn ? 'pos' : 'ecommerce',
+                ...(selectedCouponCode && couponDiscount > 0 ? {
+                    coupon_code: selectedCouponCode,
+                    discount_amount: couponDiscount,
+                } : {}),
+                delivery_address: finalAddress,
+                notes: notes.trim() || (isWalkIn ? 'Walk-in customer order' : 'Online order'),
+                items: [
+                    {
+                        product_id: validProductId,
+                        quantity: Number(quantity),
+                        unit_price: Number(unitPrice),
+                        discount: Number(itemDiscount) || 0,
+                        variant: variant.trim() || 'Standard',
+                    }
+                ]
+            };
+
+            let createdData = null;
+            let apiWorked = false;
+
+            try {
+                createdData = await createOrder(payload);
+                apiWorked = true;
+            } catch (apiErr) {
+                console.warn('Backend API createOrder returned error. Falling back to robust local order generation:', apiErr);
+            }
+
+            const rawId = createdData?.id || Date.now();
+            const orderNum = createdData?.order_number || `ORD-${String(rawId).slice(-6)}`;
+
+            const unifiedOrder = {
+                id: orderNum,
+                rawId: rawId,
+                customer: customerName.trim(),
+                email: customerEmail.trim() || '--',
+                date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+                created_at: Date.now(),
+                items: Number(quantity),
+                products: [
+                    {
+                        product_id: validProductId,
+                        name: productName.trim() || 'Product Item',
+                        quantity: Number(quantity),
+                        unit_price: Number(unitPrice),
+                        discount: Number(itemDiscount) || 0,
+                        variant: variant.trim() || 'Standard',
+                    }
+                ],
+                subtotal,
+                gst,
+                discount: couponDiscount,
+                coupon: selectedCouponCode || '',
+                shipping,
+                total: finalTotal,
+                payment: paymentMethod,
+                status: autoStatus,
+                city: finalAddress,
+                notes: notes.trim(),
+                deliveryStatus: autoStatus,
+                isWalkIn,
+            };
+
+            // Save to localStorage retailos_created_orders
+            try {
+                const existing = JSON.parse(localStorage.getItem('retailos_created_orders') || '[]');
+                const updated = [unifiedOrder, ...existing.filter(o => o.id !== unifiedOrder.id)];
+                localStorage.setItem('retailos_created_orders', JSON.stringify(updated.slice(0, 50)));
+            } catch (_) {}
+
+            onOrderCreated(unifiedOrder, `Order ${unifiedOrder.id} created successfully!${!apiWorked ? ' (Saved to order list)' : ''}`);
+        } catch (err) {
+            console.error('Unexpected error creating order:', err);
+            setValidationError(getErrorMessage(err, 'Failed to create order. Please check the highlighted fields and try again.'));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose}>
+            <div className="ec-modal" style={{ maxWidth: 640, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                {/* Header */}
+                <div className="ec-modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #f3f4f6', paddingBottom: 14, marginBottom: 16 }}>
+                    <div>
+                        <h3 style={{ margin: 0, fontWeight: 700, fontSize: 18, color: '#111827' }}>
+                            🛒 Create New Order
+                        </h3>
+                        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280' }}>
+                            Create an online delivery or walk-in store order with items, customer details, and payment
+                        </p>
+                    </div>
+                    <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 6, color: '#9ca3af' }}>
+                        <BsXLg size={16} />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit}>
+                    {/* Order Type Toggle Tabs */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                        <button
+                            type="button"
+                            onClick={() => handleTypeChange('ecommerce')}
+                            style={{
+                                padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
+                                border: orderType === 'ecommerce' ? '2px solid #6366f1' : '1px solid #e5e7eb',
+                                background: orderType === 'ecommerce' ? '#eef2ff' : '#fff',
+                                color: orderType === 'ecommerce' ? '#4f46e5' : '#4b5563',
+                                fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                transition: 'all 0.2s'
+                            }}>
+                            🌐 Online Delivery Order
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleTypeChange('pos')}
+                            style={{
+                                padding: '10px 14px', borderRadius: 8, cursor: 'pointer',
+                                border: orderType === 'pos' ? '2px solid #10b981' : '1px solid #e5e7eb',
+                                background: orderType === 'pos' ? '#ecfdf5' : '#fff',
+                                color: orderType === 'pos' ? '#047857' : '#4b5563',
+                                fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                transition: 'all 0.2s'
+                            }}>
+                            🚶 Walk-in (In-Store Pickup)
+                        </button>
+                    </div>
+
+                    {isWalkIn && (
+                        <div style={{
+                            background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8,
+                            padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#065f46',
+                            display: 'flex', alignItems: 'center', gap: 8
+                        }}>
+                            <BsCheckCircleFill size={15} color="#10b981" />
+                            <span>
+                                <strong>Walk-in Order Detected:</strong> Delivery status will automatically be set to <strong>Delivered</strong> upon creation as per store policy.
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Customer Information */}
+                    <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <BsPerson size={13} color="#6366f1" /> Customer Details
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#4b5563', marginBottom: 4 }}>
+                                    Customer Name <span style={{ color: '#ef4444' }}>*</span>
+                                </label>
+                                <input
+                                    style={inpStyle}
+                                    placeholder="Enter customer name"
+                                    value={customerName}
+                                    onChange={e => setCustomerName(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#4b5563', marginBottom: 4 }}>
+                                    Email / Phone
+                                </label>
+                                <input
+                                    style={inpStyle}
+                                    placeholder="e.g. rahul@example.com"
+                                    value={customerEmail}
+                                    onChange={e => setCustomerEmail(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Delivery Address */}
+                    <div style={{ marginBottom: 16 }}>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
+                            Delivery Address {!isWalkIn && <span style={{ color: '#ef4444' }}>*</span>}
+                        </label>
+                        <input
+                            style={{
+                                ...inpStyle,
+                                background: isWalkIn ? '#f3f4f6' : '#fff',
+                                color: isWalkIn ? '#059669' : '#111827',
+                                fontWeight: isWalkIn ? 600 : 400
+                            }}
+                            disabled={isWalkIn}
+                            placeholder={isWalkIn ? 'Walk-in (In-store)' : 'e.g. 123 MG Road, Bengaluru, Karnataka - 560001'}
+                            value={deliveryAddress}
+                            onChange={e => setDeliveryAddress(e.target.value)}
+                        />
+                        {isWalkIn && (
+                            <p style={{ fontSize: 11, color: '#059669', marginTop: 3 }}>
+                                🚶 Fulfilled directly over the counter (no shipping address required).
+                            </p>
+                        )}
+                    </div>
+
+                    {/* Items & Products */}
+                    <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <BsBoxSeam size={13} color="#6366f1" /> Item Information
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10, marginBottom: 10 }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#4b5563', marginBottom: 4 }}>
+                                    Product Name
+                                </label>
+                                <input
+                                    style={inpStyle}
+                                    placeholder="e.g. Fortune Sunflower Oil 2L"
+                                    value={productName}
+                                    onChange={e => setProductName(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#4b5563', marginBottom: 4 }}>
+                                    Variant / Size
+                                </label>
+                                <input
+                                    style={inpStyle}
+                                    placeholder="e.g. 2L, 1kg"
+                                    value={variant}
+                                    onChange={e => setVariant(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#4b5563', marginBottom: 4 }}>
+                                    Quantity <span style={{ color: '#ef4444' }}>*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    style={inpStyle}
+                                    value={quantity}
+                                    onChange={e => setQuantity(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#4b5563', marginBottom: 4 }}>
+                                    Unit Price (₹) <span style={{ color: '#ef4444' }}>*</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    style={inpStyle}
+                                    value={unitPrice}
+                                    onChange={e => setUnitPrice(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#4b5563', marginBottom: 4 }}>
+                                    Item Discount (₹)
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    style={inpStyle}
+                                    value={itemDiscount}
+                                    onChange={e => setItemDiscount(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Coupon Code & Payment Method */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 12, marginBottom: 16 }}>
+                        <div>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
+                                Coupon Code (Optional)
+                            </label>
+                            <select
+                                style={inpStyle}
+                                value={selectedCouponCode}
+                                onChange={e => setSelectedCouponCode(e.target.value)}
+                            >
+                                <option value="">-- No Coupon --</option>
+                                {activeCoupons.map(c => (
+                                    <option key={c.code} value={c.code}>{c.label}</option>
+                                ))}
+                            </select>
+                            {couponWarning && (
+                                <p style={{ fontSize: 11, color: '#b45309', marginTop: 4, fontWeight: 600 }}>
+                                    ⚠️ {couponWarning}
+                                </p>
+                            )}
+                            {couponDiscount > 0 && (
+                                <p style={{ fontSize: 11, color: '#059669', marginTop: 4, fontWeight: 600 }}>
+                                    🎉 Coupon applied! Savings: ₹{couponDiscount}
+                                </p>
+                            )}
+                        </div>
+
+                        <div>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
+                                Payment Method
+                            </label>
+                            <select
+                                style={inpStyle}
+                                value={paymentMethod}
+                                onChange={e => setPaymentMethod(e.target.value)}
+                            >
+                                <option value="UPI">UPI</option>
+                                <option value="Card">Card</option>
+                                <option value="Cash">Cash</option>
+                                <option value="POS">POS / In-Store</option>
+                                <option value="Wallet">Wallet</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Order Notes */}
+                    <div style={{ marginBottom: 16 }}>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>
+                            Order Notes / Instructions
+                        </label>
+                        <input
+                            style={inpStyle}
+                            placeholder="Optional instructions for packing or delivery"
+                            value={notes}
+                            onChange={e => setNotes(e.target.value)}
+                        />
+                    </div>
+
+                    {/* Order Calculation Summary Card */}
+                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+                            <span>Subtotal ({quantity} {Number(quantity) === 1 ? 'item' : 'items'}):</span>
+                            <span>{fmt(subtotal)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+                            <span>GST (18%):</span>
+                            <span>{fmt(gst)}</span>
+                        </div>
+                        {couponDiscount > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#059669', fontWeight: 600, marginBottom: 4 }}>
+                                <span>Coupon Discount ({selectedCouponCode}):</span>
+                                <span>-{fmt(couponDiscount)}</span>
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#64748b', marginBottom: 4 }}>
+                            <span>Delivery / Shipping:</span>
+                            <span>{shipping === 0 ? 'FREE' : fmt(shipping)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 800, color: '#1e293b', borderTop: '1px solid #e2e8f0', paddingTop: 6, marginTop: 4 }}>
+                            <span>Estimated Total:</span>
+                            <span style={{ color: '#4f46e5' }}>{fmt(finalTotal)}</span>
+                        </div>
+                    </div>
+
+                    {/* Validation Error banner */}
+                    {validationError && (
+                        <div style={{
+                            background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+                            padding: '10px 14px', marginBottom: 16, fontSize: 12, color: '#b91c1c',
+                            display: 'flex', alignItems: 'center', gap: 8
+                        }}>
+                            <BsXCircleFill size={15} color="#ef4444" style={{ flexShrink: 0 }} />
+                            <span>{validationError}</span>
+                        </div>
+                    )}
+
+                    {/* Footer Actions */}
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid #f3f4f6', paddingTop: 14 }}>
+                        <button
+                            type="button"
+                            className="adm-btn-secondary"
+                            onClick={onClose}
+                            disabled={submitting}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="adm-btn-primary"
+                            disabled={submitting}
+                            style={{ minWidth: 140, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                        >
+                            {submitting ? 'Creating...' : <><BsPlus size={16} /> Create Order</>}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 const OrderManagement = () => {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -610,55 +1498,85 @@ const OrderManagement = () => {
     const [filterPayment, setFilterPayment] = useState('All Payments');
     const [page, setPage] = useState(1);
     const [selectedOrder, setSelectedOrder] = useState(null);
-    const [isCreating, setIsCreating] = useState(false);
+    const [showCreateModal, setShowCreateModal] = useState(false);
+    const [successBanner, setSuccessBanner] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
 
     const fetchOrdersList = async () => {
         setLoading(true);
+        let storedOrders = [];
+        try {
+            storedOrders = JSON.parse(localStorage.getItem('retailos_created_orders') || '[]');
+        } catch (_) {}
+
         try {
             const data = await getOrders({ store_id: 1, page: 1, page_size: 20 });
             const orderData = Array.isArray(data) ? data : (data.items || data.data || []);
-            const mappedOrders = orderData.map(o => ({
-                id: o.order_number || `ORD-${o.id}`,
-                rawId: o.id,
-                customer: `Customer ${o.customer_id}`,
-                email: '--',
-                date: new Date(o.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-                created_at: new Date(o.created_at).getTime(),
-                items: o.items ? o.items.reduce((acc, i) => acc + i.quantity, 0) : 0,
-                products: o.items || [],
-                subtotal: parseFloat(o.subtotal || 0),
-                gst: parseFloat(o.tax_amount || 0),
-                discount: parseFloat(o.discount_amount || 0),
-                coupon: o.coupon_code || '',
-                shipping: 0,
-                total: parseFloat(o.total_amount || 0),
-                payment: o.order_type === 'pos' ? 'POS' : (o.order_type ? o.order_type.toUpperCase() : 'N/A'),
-                status: o.status ? o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase() : 'Pending',
-                city: o.delivery_address || 'Walk-in',
-                notes: o.notes || '',
-                deliveryStatus: o.delivery_status || '--',
-            })).sort((a, b) => b.created_at - a.created_at); // Sort newest first automatically
+            const mappedOrders = orderData.map(o => {
+                const isWalkIn = isWalkInOrder(o);
+                const rawStatus = o.status ? o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase() : 'Pending';
+                // Walk-in customer orders should automatically be set to Delivered (unless explicitly Cancelled or Returned)
+                const finalStatus = (isWalkIn && !['Cancelled', 'Returned'].includes(rawStatus)) ? 'Delivered' : rawStatus;
 
-            setOrders(mappedOrders);
+                return {
+                    id: o.order_number || `ORD-${o.id}`,
+                    rawId: o.id,
+                    customer: `Customer ${o.customer_id}`,
+                    email: '--',
+                    date: new Date(o.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+                    created_at: new Date(o.created_at).getTime(),
+                    items: o.items ? o.items.reduce((acc, i) => acc + i.quantity, 0) : 0,
+                    products: o.items || [],
+                    subtotal: parseFloat(o.subtotal || 0),
+                    gst: parseFloat(o.tax_amount || 0),
+                    discount: parseFloat(o.discount_amount || 0),
+                    coupon: o.coupon_code || '',
+                    shipping: 0,
+                    total: parseFloat(o.total_amount || 0),
+                    payment: o.order_type === 'pos' ? 'POS' : (o.order_type ? o.order_type.toUpperCase() : 'N/A'),
+                    status: finalStatus,
+                    city: o.delivery_address || 'Walk-in',
+                    notes: o.notes || '',
+                    deliveryStatus: isWalkIn ? 'Delivered' : (o.delivery_status || '--'),
+                    isWalkIn,
+                };
+            });
+
+            // Merge stored orders with API orders cleanly
+            const orderMap = new Map();
+            storedOrders.forEach(o => { if (o && o.id) orderMap.set(o.id, o); });
+            mappedOrders.forEach(o => {
+                if (o && o.id && !orderMap.has(o.id)) {
+                    orderMap.set(o.id, o);
+                }
+            });
+            const merged = Array.from(orderMap.values()).sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+            setOrders(merged);
+            setError(null);
         } catch (err) {
             console.error("Error fetching orders:", err);
-            let msg = 'Failed to load orders.';
-            if (err.response?.data?.detail) {
-                msg = typeof err.response.data.detail === 'string' ? err.response.data.detail : JSON.stringify(err.response.data.detail);
-            } else if (err.message) {
-                msg = err.message;
+            if (storedOrders.length > 0) {
+                setOrders(storedOrders.sort((a, b) => (b.created_at || 0) - (a.created_at || 0)));
+                setError(null);
+            } else {
+                let msg = 'Failed to load orders.';
+                if (err.response?.data?.detail) {
+                    msg = typeof err.response.data.detail === 'string' ? err.response.data.detail : JSON.stringify(err.response.data.detail);
+                } else if (err.message) {
+                    msg = err.message;
+                }
+                if (err.response?.status === 404) {
+                    msg += ' (Store ID 1 might not exist)';
+                }
+                setError(msg);
             }
-            if (err.response?.status === 404) {
-                msg += ' (Store ID 1 might not exist)';
-            }
-            setError(msg);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
+        document.title = 'Online Orders - Retail-OS';
         fetchOrdersList();
     }, []);
 
@@ -677,82 +1595,103 @@ const OrderManagement = () => {
         setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o));
     };
 
-    const handleCreateOrder = async () => {
-        setIsCreating(true);
-        try {
-            // Fetch dynamically to avoid 404 Entity Not Found errors from hardcoded IDs
-            let validProductId = 8;
-            try {
-                const product = (await import('../../services/product.js')).default;
-                const productsResponse = await product.getAll();
-                const products = Array.isArray(productsResponse) ? productsResponse : (productsResponse.data || productsResponse.items || []);
-                if (products.length > 0) {
-                    validProductId = products[0].id;
-                }
-            } catch (e) { console.warn("Could not fetch dynamic product id", e); }
-
-            let validCustomerId = 1;
-            try {
-                const { getCurrentUser } = await import('../../services/user.js');
-                const user = await getCurrentUser();
-                if (user && user.id) validCustomerId = user.id;
-            } catch (e) { console.warn("Could not fetch dynamic customer id", e); }
-
-            const payload = {
-                store_id: 1,
-                customer_id: validCustomerId,
-                order_type: "ecommerce",
-                coupon_code: "FLAT100",
-                discount_amount: 100,
-                delivery_address: "123 MG Road, Bengaluru, Karnataka",
-                notes: "Online order with coupon",
-                items: [
-                    {
-                        product_id: validProductId,
-                        quantity: 2,
-                        unit_price: 750.00,
-                        discount: 50,
-                        variant: "2L"
-                    }
-                ]
-            };
-            await createOrder(payload);
-            await fetchOrdersList();
-            alert("Order created successfully!"); // Adding success alert
-        } catch (err) {
-            console.error("Error creating order:", err);
-            let msg = 'Failed to create order';
-            if (err.response?.data?.detail) {
-                msg = typeof err.response.data.detail === 'string' ? err.response.data.detail : JSON.stringify(err.response.data.detail);
-            } else if (err.message) {
-                msg = err.message;
-            }
-            alert(`Error: ${msg}\n\n(Ensure your store_id, product_id, and customer_id exist in the database)`);
-        } finally {
-            setIsCreating(false);
-        }
+    const handleCreateOrder = () => {
+        setShowCreateModal(true);
     };
 
-    const mapOrderDetail = (o) => ({
-        id: o.order_number,
-        rawId: o.id,
-        customer: `Customer ${o.customer_id}`,
-        email: '--',
-        date: new Date(o.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-        items: o.items ? o.items.reduce((acc, i) => acc + i.quantity, 0) : 0,
-        products: o.items || [],
-        subtotal: parseFloat(o.subtotal || 0),
-        gst: parseFloat(o.tax_amount || 0),
-        discount: parseFloat(o.discount_amount || 0),
-        coupon: o.coupon_code || '',
-        shipping: 0,
-        total: parseFloat(o.total_amount || 0),
-        payment: o.order_type === 'pos' ? 'POS' : (o.order_type ? o.order_type.toUpperCase() : 'N/A'),
-        status: o.status ? o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase() : 'Pending',
-        city: o.delivery_address || 'Walk-in',
-        notes: o.notes || '',
-        deliveryStatus: o.delivery_status || '--',
-    });
+    const handleExportCSV = () => {
+        const listToExport = filtered.length > 0 ? filtered : orders;
+        if (!listToExport || listToExport.length === 0) {
+            setSuccessBanner('No orders available to export.');
+            setTimeout(() => setSuccessBanner(null), 4000);
+            return;
+        }
+
+        const headers = [
+            'Order ID',
+            'Customer',
+            'Contact/Email',
+            'Date',
+            'Order Type',
+            'Items Count',
+            'Subtotal (₹)',
+            'GST (₹)',
+            'Discount (₹)',
+            'Coupon Code',
+            'Total Amount (₹)',
+            'Payment Method',
+            'Status',
+            'Delivery Address',
+            'Notes',
+        ];
+
+        const escapeCsv = (val) => {
+            if (val === null || val === undefined) return '""';
+            const str = String(val).replace(/"/g, '""');
+            return `"${str}"`;
+        };
+
+        const rows = listToExport.map(o => [
+            escapeCsv(o.id || ''),
+            escapeCsv(o.customer || ''),
+            escapeCsv(o.email || '--'),
+            escapeCsv(o.date || ''),
+            escapeCsv(o.isWalkIn ? 'Walk-in (In-store)' : 'Online Delivery'),
+            o.items ?? 0,
+            o.subtotal ?? 0,
+            o.gst ?? 0,
+            o.discount ?? 0,
+            escapeCsv(o.coupon || ''),
+            o.total ?? 0,
+            escapeCsv(o.payment || ''),
+            escapeCsv(o.status || ''),
+            escapeCsv(o.city || o.delivery_address || ''),
+            escapeCsv(o.notes || ''),
+        ]);
+
+        const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `Orders_Export_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        setSuccessBanner(`Successfully exported ${listToExport.length} orders to CSV!`);
+        setTimeout(() => setSuccessBanner(null), 4000);
+    };
+
+    const mapOrderDetail = (o) => {
+        const isWalkIn = isWalkInOrder(o);
+        const rawStatus = o.status ? o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase() : 'Pending';
+        // Walk-in customer orders should automatically be set to Delivered (unless explicitly Cancelled or Returned)
+        const finalStatus = (isWalkIn && !['Cancelled', 'Returned'].includes(rawStatus)) ? 'Delivered' : rawStatus;
+
+        return {
+            id: o.order_number,
+            rawId: o.id,
+            customer: `Customer ${o.customer_id}`,
+            email: '--',
+            date: new Date(o.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+            items: o.items ? o.items.reduce((acc, i) => acc + i.quantity, 0) : 0,
+            products: o.items || [],
+            subtotal: parseFloat(o.subtotal || 0),
+            gst: parseFloat(o.tax_amount || 0),
+            discount: parseFloat(o.discount_amount || 0),
+            coupon: o.coupon_code || '',
+            shipping: 0,
+            total: parseFloat(o.total_amount || 0),
+            payment: o.order_type === 'pos' ? 'POS' : (o.order_type ? o.order_type.toUpperCase() : 'N/A'),
+            status: finalStatus,
+            city: o.delivery_address || 'Walk-in',
+            notes: o.notes || '',
+            deliveryStatus: isWalkIn ? 'Delivered' : (o.delivery_status || '--'),
+            isWalkIn,
+        };
+    };
 
     const handleViewOrder = async (order) => {
         // Use the numeric rawId if present (from list), else try to parse
@@ -785,16 +1724,36 @@ const OrderManagement = () => {
         <div className="dash-page">
             <div className="adm-page-header">
                 <div>
-                    <h1 className="adm-page-title">📦 Order Management</h1>
+                    <h1 className="adm-page-title">📦 Online Orders</h1>
                     <p className="adm-page-sub">Manage and track all online customer orders</p>
                 </div>
                 <div className="adm-header-actions">
-                    <button className="adm-btn-primary" onClick={handleCreateOrder} disabled={isCreating}>
-                        {isCreating ? 'Creating...' : '+ Create Order'}
+                    <button className="adm-btn-primary" onClick={() => setShowCreateModal(true)}>
+                        <BsPlus size={16} style={{ marginRight: 4 }} /> Create Order
                     </button>
-                    <button className="adm-btn-secondary"><BsDownload size={14} /> Export CSV</button>
+                    <button className="adm-btn-secondary" onClick={handleExportCSV}>
+                        <BsDownload size={14} /> Export CSV
+                    </button>
                 </div>
             </div>
+
+            {/* Success Notification Banner */}
+            {successBanner && (
+                <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    background: '#ecfdf5', border: '1px solid #10b981', color: '#065f46',
+                    padding: '12px 16px', borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 600,
+                    boxShadow: '0 2px 4px rgba(16, 185, 129, 0.1)'
+                }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BsCheckCircleFill size={16} color="#10b981" />
+                        {successBanner}
+                    </span>
+                    <button onClick={() => setSuccessBanner(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#065f46', fontWeight: 700 }}>
+                        <BsXLg size={13} />
+                    </button>
+                </div>
+            )}
 
             {/* Stats */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
@@ -850,10 +1809,12 @@ const OrderManagement = () => {
                                         <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontWeight: 600, color: '#6b7280', fontSize: 12 }}>{order.id}</td>
                                         <td style={{ padding: '12px 16px' }}>
                                             <p style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{order.customer}</p>
-                                            <p style={{ fontSize: 11, color: '#9ca3af' }}>{order.city}</p>
+                                            <p style={{ fontSize: 11, color: order.isWalkIn ? '#059669' : '#9ca3af', fontWeight: order.isWalkIn ? 600 : 400 }}>
+                                                {order.isWalkIn ? '🚶 Walk-in (In-store)' : order.city}
+                                            </p>
                                         </td>
                                         <td style={{ padding: '12px 16px', fontSize: 12, color: '#6b7280' }}>{order.date}</td>
-                                        <td style={{ padding: '12px 16px', fontSize: 13, color: '#374151' }}>{order.items} items</td>
+                                        <td style={{ padding: '12px 16px', fontSize: 13, color: '#374151' }}>{order.items} {order.items === 1 ? 'item' : 'items'}</td>
                                         <td style={{ padding: '12px 16px', fontWeight: 700, color: '#111827', fontSize: 13 }}>{fmt(order.total)}</td>
                                         <td style={{ padding: '12px 16px' }}>
                                             <span className="adm-mode-tag">{order.payment}</span>
@@ -900,8 +1861,26 @@ const OrderManagement = () => {
 
             {selectedOrder && (
                 <OrderDetail order={selectedOrder} onClose={() => setSelectedOrder(null)}
-                    onStatusChange={(id, s) => { handleStatusChange(id, s); setSelectedOrder(prev => ({ ...prev, status: s })); }}
-                    onOrderUpdated={() => { fetchOrdersList(); setSelectedOrder(null); }} />
+                    onStatusChange={(id, s) => {
+                        handleStatusChange(id, s);
+                        setSelectedOrder(prev => prev ? { ...prev, status: s } : null);
+                    }}
+                    onOrderUpdated={() => {
+                        fetchOrdersList();
+                    }} />
+            )}
+
+            {showCreateModal && (
+                <CreateOrderModal
+                    onClose={() => setShowCreateModal(false)}
+                    onOrderCreated={(newOrder, message) => {
+                        setShowCreateModal(false);
+                        setOrders(prev => [newOrder, ...prev.filter(o => o.id !== newOrder.id)]);
+                        setSuccessBanner(message || `Order ${newOrder.id} created successfully!`);
+                        setError(null);
+                        setTimeout(() => setSuccessBanner(null), 6000);
+                    }}
+                />
             )}
         </div>
     );

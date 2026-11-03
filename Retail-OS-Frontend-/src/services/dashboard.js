@@ -17,8 +17,11 @@ const resolveUrl = (endpoint) => {
  * @param {number|string|null} storeId - Optional store ID filter
  * @returns {Promise<Object>} DashboardResponse: { today_sales, monthly_sales, total_customers, total_revenue, low_stock_products, mode, stores_summary }
  */
-export const getDashboardSummary = async (storeId = null) => {
+export const getDashboardSummary = async (period = "this_month", storeId = null) => {
     const params = {};
+    if (period) {
+        params.period = period;
+    }
     if (storeId !== null && storeId !== undefined && storeId !== "") {
         params.store_id = Number(storeId);
     }
@@ -65,10 +68,13 @@ export const getRevenueVsCost = async (period = "this_month", storeId = null) =>
  * @param {number|string|null} storeId - Optional store ID filter
  * @returns {Promise<Object>} TopProductsResponse: { top_products: Array<{ product_name, quantity_sold, revenue }> }
  */
-export const getTopProducts = async (limit = 10, storeId = null) => {
+export const getTopProducts = async (limit = 10, storeId = null, period = null) => {
     const params = { limit };
     if (storeId !== null && storeId !== undefined && storeId !== "") {
         params.store_id = Number(storeId);
+    }
+    if (period) {
+        params.period = period;
     }
     const response = await apiClient.get(resolveUrl("/api/v1/dashboard/top-products"), { params });
     return response.data;
@@ -79,6 +85,22 @@ export const getTopProducts = async (limit = 10, storeId = null) => {
  * Endpoint: GET /api/v1/stores/
  * @returns {Promise<Array>} List of stores
  */
+/**
+ * Fetch latest recent transactions and payment statuses.
+ * Endpoint: GET /api/v1/dashboard/recent-transactions
+ * @param {number} limit - Number of transactions (default 10)
+ * @param {number|string|null} storeId - Optional store ID filter
+ * @returns {Promise<Object>} RecentTransactionsResponse: { transactions: Array<{ order_id, order_number, amount, order_status, payment_status, created_at }> }
+ */
+export const getRecentTransactions = async (limit = 10, storeId = null) => {
+    const params = { limit };
+    if (storeId !== null && storeId !== undefined && storeId !== "") {
+        params.store_id = Number(storeId);
+    }
+    const response = await apiClient.get(resolveUrl("/api/v1/dashboard/recent-transactions"), { params });
+    return response.data;
+};
+
 export const getStores = async () => {
     const response = await apiClient.get(resolveUrl("/api/v1/stores/"));
     return Array.isArray(response.data) ? response.data : (response.data?.items || []);
@@ -107,6 +129,7 @@ const dashboardService = {
     getDashboardOverview,
     getRevenueVsCost,
     getTopProducts,
+    getRecentTransactions,
     getStores,
     getAnalyticsProducts,
 };

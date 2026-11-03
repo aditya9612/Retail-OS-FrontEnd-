@@ -380,7 +380,7 @@ export const voidInvoice = async (invoiceId, reason = 'Customer cancelled at cou
  */
 export const getStores = async () => {
     try {
-        const res = await apiClient.get('/stores/');
+        const res = await apiClient.get('/stores');
         return Array.isArray(res.data) ? res.data : (res.data?.data || []);
     } catch (_) {
         return [];

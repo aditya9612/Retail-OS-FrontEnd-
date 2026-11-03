@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, LineChart, Line,
@@ -10,7 +11,8 @@ import {
     BsBoxArrowUpRight, BsX, BsExclamationTriangleFill, BsListUl,
     BsPlusCircle, BsEyeFill, BsLightningChargeFill, BsArrowRepeat,
     BsFileEarmarkPdf, BsCreditCard, BsTrash, BsSliders, BsInfoCircle,
-    BsCalendar3, BsShop, BsPerson, BsCashStack, BsCheck2Circle
+    BsCalendar3, BsShop, BsPerson, BsCashStack, BsCheck2Circle,
+    BsArrowReturnLeft
 } from 'react-icons/bs';
 
 import {
@@ -143,6 +145,7 @@ const loadLocalInvoices = () => {
 };
 
 const BillingManagement = () => {
+    const navigate = useNavigate();
     // ── Search & Filter State ──────────────────────────────────────────────
     const [searchTerm, setSearchTerm] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -189,7 +192,7 @@ const BillingManagement = () => {
             { product_id: 1, quantity: 1, unit_price: 500, discount: 0 },
         ],
         payments: [
-            { payment_mode: 'cash', amount: 590, transaction_reference: '', amount_tendered: 600, change_due: 10 },
+            { payment_mode: 'cash', amount: 590, transaction_reference: '' },
         ],
     });
 
@@ -952,8 +955,6 @@ const BillingManagement = () => {
                         payment_mode: mode,
                         amount: Number(p.amount) || 0,
                         transaction_reference: p.transaction_reference ? String(p.transaction_reference).trim() : null,
-                        amount_tendered: p.amount_tendered !== null && p.amount_tendered !== '' ? Number(p.amount_tendered) : null,
-                        change_due: p.change_due !== null && p.change_due !== '' ? Number(p.change_due) : null,
                     };
                 }),
             };
@@ -1319,7 +1320,7 @@ const BillingManagement = () => {
                         <BsBoxArrowUpRight size={15} color="#4f46e5" />
                         <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Direct Invoice or Order ID Lookup</span>
                     </div>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Fetch invoice record directly via GET /api/v1/invoices/{'{id}'}</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Fetch invoice record directly by ID</span>
                 </div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                     <div style={{ flex: 1, minWidth: 260, display: 'flex', alignItems: 'center', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '0 12px' }}>
@@ -1797,7 +1798,7 @@ const BillingManagement = () => {
                                                         id={`btn-view-${invId}`}
                                                         onClick={() => handleOpenDetail(inv)}
                                                         className="adm-action-btn"
-                                                        title="Retrieve Complete Details (GET /api/v1/invoices/{invoice_id})"
+                                                        title="Retrieve Complete Details"
                                                         style={{ background: '#eef2ff', color: '#4f46e5' }}
                                                     >
                                                         <BsEyeFill size={13} />
@@ -1808,7 +1809,7 @@ const BillingManagement = () => {
                                                         id={`btn-preview-print-${invId}`}
                                                         onClick={() => openPdfPreviewModal(inv, 'invoice')}
                                                         className="adm-action-btn"
-                                                        title="Preview & Print Invoice (GET /api/v1/invoices/{invoice_id}/pdf)"
+                                                        title="Preview & Print Invoice"
                                                         style={{ background: '#eff6ff', color: '#2563eb' }}
                                                     >
                                                         <BsPrinter size={13} />
@@ -1820,7 +1821,7 @@ const BillingManagement = () => {
                                                         onClick={() => handleDownload(invId, 'invoice', invNumber)}
                                                         disabled={downloadingId === invId}
                                                         className="adm-action-btn"
-                                                        title="Download Tax Invoice PDF (GET /api/v1/invoices/{invoice_id}/pdf?document_type=invoice)"
+                                                        title="Download Tax Invoice PDF"
                                                         style={{ background: '#ecfdf5', color: '#059669' }}
                                                     >
                                                         {downloadingId === invId ? <span style={{ fontSize: 10 }}>⏳</span> : <BsFileEarmarkPdf size={13} />}
@@ -1832,7 +1833,7 @@ const BillingManagement = () => {
                                                         onClick={() => handleDownload(invId, 'bill', invNumber)}
                                                         disabled={downloadingId === invId}
                                                         className="adm-action-btn"
-                                                        title="Download Compact POS Bill (GET /api/v1/invoices/{invoice_id}/pdf?document_type=bill)"
+                                                        title="Download Compact POS Bill"
                                                         style={{ background: '#f0fdf4', color: '#16a34a' }}
                                                     >
                                                         <BsReceiptCutoff size={13} />
@@ -1855,19 +1856,41 @@ const BillingManagement = () => {
                                                         onClick={() => handleGenerateAsync(invId)}
                                                         disabled={asyncLoadingId === invId}
                                                         className="adm-action-btn"
-                                                        title="Submit Async Generation (POST /api/v1/invoices/{invoice_id}/generate-async)"
+                                                        title="Submit Async Generation"
                                                         style={{ background: '#f1f5f9', color: '#475569' }}
                                                     >
                                                         {asyncLoadingId === invId ? <span style={{ fontSize: 10 }}>⏳</span> : <BsLightningChargeFill size={12} />}
                                                     </button>
 
-                                                    {/* 7. Void / Cancel Invoice (Requirement 8) */}
+                                                    {/* 7. Create Return / RMA */}
+                                                    <button
+                                                        id={`btn-return-${invId}`}
+                                                        onClick={() => navigate(`/billing/returns?invoice_id=${inv.id}&invoice_number=${encodeURIComponent(invNumber)}&customer=${encodeURIComponent(inv.customer_name || inv.customer || '')}&amount=${inv.total_amount || 0}&action=return`)}
+                                                        className="adm-action-btn"
+                                                        title="Create Return / Refund Request for this invoice"
+                                                        style={{ background: '#fef3c7', color: '#b45309' }}
+                                                    >
+                                                        <BsArrowReturnLeft size={13} />
+                                                    </button>
+
+                                                    {/* 8. Issue Credit Note */}
+                                                    <button
+                                                        id={`btn-creditnote-${invId}`}
+                                                        onClick={() => navigate(`/billing/credit-notes?invoice_id=${inv.id}&invoice_number=${encodeURIComponent(invNumber)}&customer=${encodeURIComponent(inv.customer_name || inv.customer || '')}&amount=${inv.total_amount || 0}&action=credit_note`)}
+                                                        className="adm-action-btn"
+                                                        title="Issue Credit Note against this invoice"
+                                                        style={{ background: '#f3e8ff', color: '#7e22ce' }}
+                                                    >
+                                                        <BsReceiptCutoff size={13} />
+                                                    </button>
+
+                                                    {/* 9. Void / Cancel Invoice (Requirement 8) */}
                                                     {inv.status !== 'cancelled' && inv.status !== 'void' && (
                                                         <button
                                                             id={`btn-void-${invId}`}
                                                             onClick={() => openVoidModal(inv)}
                                                             className="adm-action-btn"
-                                                            title="Void / Cancel Tax Invoice (POST /api/v1/invoices/{invoice_id}/void)"
+                                                            title="Void / Cancel Tax Invoice"
                                                             style={{ background: '#fef2f2', color: '#dc2626' }}
                                                         >
                                                             <BsTrash size={13} />
@@ -1961,7 +1984,7 @@ const BillingManagement = () => {
                                         Create Tax Invoice
                                     </h2>
                                     <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
-                                        POST /api/v1/invoices · Generates compliant GST tax invoice with line items &amp; payments
+                                        Generates compliant GST tax invoice with line items &amp; payments
                                     </p>
                                 </div>
                             </div>
@@ -2051,7 +2074,7 @@ const BillingManagement = () => {
                                 {/* Same State Toggle (Intra-state vs Inter-state) */}
                                 <div>
                                     <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 4 }}>
-                                        Tax Jurisdiction *
+                                        Tax Jurisdiction
                                     </label>
                                     <select
                                         id="modal-same-state-select"
@@ -2074,7 +2097,7 @@ const BillingManagement = () => {
                                             Invoice Line Items ({newInvoiceData.items.length})
                                         </span>
                                         <span style={{ fontSize: 11, color: '#64748b' }}>
-                                            API fields: product_id, quantity, unit_price, discount
+                                            Select products and adjust quantities
                                         </span>
                                     </div>
                                     <div style={{ display: 'flex', gap: 8 }}>
@@ -2273,7 +2296,7 @@ const BillingManagement = () => {
                                             Payment Splits ({newInvoiceData.payments.length} / max 5)
                                         </span>
                                         <span style={{ fontSize: 11, color: '#64748b' }}>
-                                            Supports multiple modes: cash, upi, card, wallet, qr
+                                            Accept cash, UPI, card, or wallet payments
                                         </span>
                                     </div>
                                     <div style={{ display: 'flex', gap: 8 }}>
@@ -2285,10 +2308,6 @@ const BillingManagement = () => {
                                                 const updated = [...newInvoiceData.payments];
                                                 if (updated.length > 0) {
                                                     updated[0].amount = grandTotal;
-                                                    if (updated[0].payment_mode === 'cash') {
-                                                        updated[0].amount_tendered = Math.ceil(grandTotal);
-                                                        updated[0].change_due = Math.max(0, Math.ceil(grandTotal) - grandTotal);
-                                                    }
                                                 }
                                                 setNewInvoiceData({ ...newInvoiceData, payments: updated });
                                                 showAlert(`Payment amount matched to grand total: ₹${grandTotal.toFixed(2)}`, 'info');
@@ -2315,7 +2334,7 @@ const BillingManagement = () => {
                                                         ...newInvoiceData,
                                                         payments: [
                                                             ...newInvoiceData.payments,
-                                                            { payment_mode: 'upi', amount: 0, transaction_reference: '', amount_tendered: null, change_due: null },
+                                                            { payment_mode: 'upi', amount: 0, transaction_reference: '' },
                                                         ],
                                                     });
                                                 }}
@@ -2336,12 +2355,10 @@ const BillingManagement = () => {
                                     </div>
                                 </div>
 
-                                <div style={{ display: 'grid', gridTemplateColumns: '120px 100px 1.2fr 90px 90px 32px', gap: 8, padding: '4px 8px', fontSize: 11, fontWeight: 600, color: '#64748b' }}>
-                                    <span>Mode *</span>
+                                <div style={{ display: 'grid', gridTemplateColumns: '140px 140px 1fr 36px', gap: 10, padding: '4px 8px', fontSize: 11, fontWeight: 600, color: '#64748b' }}>
+                                    <span>Payment Mode *</span>
                                     <span>Amount (₹) *</span>
-                                    <span>Transaction Ref</span>
-                                    <span>Tendered (₹)</span>
-                                    <span>Change (₹)</span>
+                                    <span>Transaction Reference (Optional)</span>
                                     <span></span>
                                 </div>
 
@@ -2351,8 +2368,8 @@ const BillingManagement = () => {
                                             key={pIdx}
                                             style={{
                                                 display: 'grid',
-                                                gridTemplateColumns: '120px 100px 1.2fr 90px 90px 32px',
-                                                gap: 8,
+                                                gridTemplateColumns: '140px 140px 1fr 36px',
+                                                gap: 10,
                                                 alignItems: 'center',
                                                 background: '#fff',
                                                 padding: '8px 10px',
@@ -2367,7 +2384,7 @@ const BillingManagement = () => {
                                                     updated[pIdx].payment_mode = e.target.value;
                                                     setNewInvoiceData({ ...newInvoiceData, payments: updated });
                                                 }}
-                                                style={{ fontSize: 12, padding: '6px 8px', borderRadius: 4, border: '1px solid #cbd5e1' }}
+                                                style={{ fontSize: 12, padding: '7px 10px', borderRadius: 6, border: '1px solid #cbd5e1' }}
                                             >
                                                 <option value="cash">Cash</option>
                                                 <option value="upi">UPI</option>
@@ -2390,7 +2407,7 @@ const BillingManagement = () => {
                                                     setNewInvoiceData({ ...newInvoiceData, payments: updated });
                                                 }}
                                                 placeholder="Amount"
-                                                style={{ fontSize: 12, padding: '6px 8px', borderRadius: 4, border: '1px solid #cbd5e1' }}
+                                                style={{ fontSize: 12, padding: '7px 10px', borderRadius: 6, border: '1px solid #cbd5e1' }}
                                             />
 
                                             <input
@@ -2401,44 +2418,11 @@ const BillingManagement = () => {
                                                     updated[pIdx].transaction_reference = e.target.value;
                                                     setNewInvoiceData({ ...newInvoiceData, payments: updated });
                                                 }}
-                                                placeholder="Ref / UPI ID / Card Ref"
-                                                style={{ fontSize: 12, padding: '6px 8px', borderRadius: 4, border: '1px solid #cbd5e1' }}
+                                                placeholder="e.g. UPI Ref / Card Last 4 / Cheque No"
+                                                style={{ fontSize: 12, padding: '7px 10px', borderRadius: 6, border: '1px solid #cbd5e1' }}
                                             />
 
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                value={pay.amount_tendered ?? ''}
-                                                onChange={(e) => {
-                                                    const val = e.target.value === '' ? null : Number(e.target.value);
-                                                    const updated = [...newInvoiceData.payments];
-                                                    updated[pIdx].amount_tendered = val;
-                                                    if (val !== null) {
-                                                        updated[pIdx].change_due = Math.max(0, val - Number(updated[pIdx].amount || 0));
-                                                    }
-                                                    setNewInvoiceData({ ...newInvoiceData, payments: updated });
-                                                }}
-                                                placeholder="Tendered"
-                                                style={{ fontSize: 12, padding: '6px 8px', borderRadius: 4, border: '1px solid #cbd5e1' }}
-                                            />
-
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                value={pay.change_due ?? ''}
-                                                onChange={(e) => {
-                                                    const val = e.target.value === '' ? null : Number(e.target.value);
-                                                    const updated = [...newInvoiceData.payments];
-                                                    updated[pIdx].change_due = val;
-                                                    setNewInvoiceData({ ...newInvoiceData, payments: updated });
-                                                }}
-                                                placeholder="Change"
-                                                style={{ fontSize: 12, padding: '6px 8px', borderRadius: 4, border: '1px solid #cbd5e1' }}
-                                            />
-
-                                            <div>
+                                            <div style={{ display: 'flex', justifyContent: 'center' }}>
                                                 {newInvoiceData.payments.length > 1 && (
                                                     <button
                                                         type="button"
@@ -2446,7 +2430,7 @@ const BillingManagement = () => {
                                                             const updated = newInvoiceData.payments.filter((_, i) => i !== pIdx);
                                                             setNewInvoiceData({ ...newInvoiceData, payments: updated });
                                                         }}
-                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}
+                                                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 4 }}
                                                     >
                                                         <BsTrash size={14} />
                                                     </button>
@@ -2497,38 +2481,6 @@ const BillingManagement = () => {
                                         ₹{createTotals.totalPayments.toFixed(2)}
                                     </p>
                                 </div>
-                            </div>
-
-                            {/* Section 5: Live API Request Payload JSON Preview */}
-                            <div style={{ background: '#0f172a', borderRadius: 10, padding: '12px 16px', color: '#f8fafc' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#38bdf8' }}>
-                                        Live Backend Request Payload (POST /api/v1/invoices)
-                                    </span>
-                                    <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                                        Exact JSON payload transmitted to backend
-                                    </span>
-                                </div>
-                                <pre style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', color: '#93c5fd', maxHeight: 130, overflowY: 'auto', background: '#1e293b', padding: 10, borderRadius: 6 }}>
-                                    {JSON.stringify({
-                                        store_id: Number(newInvoiceData.store_id) || 1,
-                                        customer_id: newInvoiceData.customer_id !== null && newInvoiceData.customer_id !== '' ? Number(newInvoiceData.customer_id) : null,
-                                        same_state: Boolean(newInvoiceData.same_state),
-                                        items: newInvoiceData.items.map(it => ({
-                                            product_id: Number(it.product_id) || 1,
-                                            quantity: Number(it.quantity) || 1,
-                                            unit_price: Number(it.unit_price) || 0,
-                                            discount: Number(it.discount) || 0,
-                                        })),
-                                        payments: newInvoiceData.payments.map(p => ({
-                                            payment_mode: p.payment_mode,
-                                            amount: Number(p.amount) || 0,
-                                            transaction_reference: p.transaction_reference ? String(p.transaction_reference).trim() : null,
-                                            amount_tendered: p.amount_tendered !== null && p.amount_tendered !== '' ? Number(p.amount_tendered) : null,
-                                            change_due: p.change_due !== null && p.change_due !== '' ? Number(p.change_due) : null,
-                                        })),
-                                    }, null, 2)}
-                                </pre>
                             </div>
 
                             {/* Modal Footer */}
@@ -2645,7 +2597,12 @@ const BillingManagement = () => {
                                 Breakdown &amp; Details
                             </button>
                             <button
-                                onClick={() => setActiveDetailTab('pdf')}
+                                onClick={() => {
+                                    setActiveDetailTab('pdf');
+                                    if (!pdfPreviewUrl && selectedInvoice?.id) {
+                                        loadPdfWithStatusCheck(selectedInvoice.id, pdfDocType, selectedInvoice.invoice_number);
+                                    }
+                                }}
                                 style={{
                                     padding: '10px 16px',
                                     border: 'none',
@@ -2730,6 +2687,22 @@ const BillingManagement = () => {
                                             <BsPrinter size={13} /> Preview &amp; Print
                                         </button>
                                         <button
+                                            onClick={() => navigate(`/billing/returns?invoice_id=${selectedInvoice.id}&invoice_number=${encodeURIComponent(selectedInvoice.invoice_number || selectedInvoice.id)}&customer=${encodeURIComponent(selectedInvoice.customer_name || selectedInvoice.customer || '')}&amount=${selectedInvoice.total_amount || selectedInvoice.total || 0}&action=return`)}
+                                            className="adm-btn-secondary"
+                                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#fffbeb', color: '#b45309', borderColor: '#fcd34d' }}
+                                            title="Initiate Return / RMA for this invoice"
+                                        >
+                                            <BsArrowReturnLeft size={13} /> Create Return / RMA
+                                        </button>
+                                        <button
+                                            onClick={() => navigate(`/billing/credit-notes?invoice_id=${selectedInvoice.id}&invoice_number=${encodeURIComponent(selectedInvoice.invoice_number || selectedInvoice.id)}&customer=${encodeURIComponent(selectedInvoice.customer_name || selectedInvoice.customer || '')}&amount=${selectedInvoice.total_amount || selectedInvoice.total || 0}&action=credit_note`)}
+                                            className="adm-btn-secondary"
+                                            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#faf5ff', color: '#7e22ce', borderColor: '#d8b4fe' }}
+                                            title="Issue Statutory Credit Note against this invoice"
+                                        >
+                                            <BsReceiptCutoff size={13} /> Issue Credit Note
+                                        </button>
+                                        <button
                                             onClick={() => handleDownload(selectedInvoice.id, 'invoice', selectedInvoice.invoice_number)}
                                             className="adm-btn-secondary"
                                             style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#ecfdf5', color: '#059669', borderColor: '#10b981' }}
@@ -2774,14 +2747,14 @@ const BillingManagement = () => {
                                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                         <div style={{ display: 'flex', gap: 8 }}>
                                             <button
-                                                onClick={() => { setPdfDocType('invoice'); loadPdfPreview(selectedInvoice.id, 'invoice'); }}
+                                                onClick={() => { setPdfDocType('invoice'); loadPdfWithStatusCheck(selectedInvoice.id, 'invoice', selectedInvoice.invoice_number); }}
                                                 className={pdfDocType === 'invoice' ? 'adm-btn-primary' : 'adm-btn-secondary'}
                                                 style={{ fontSize: 12, padding: '4px 10px' }}
                                             >
                                                 Tax Invoice Format
                                             </button>
                                             <button
-                                                onClick={() => { setPdfDocType('bill'); loadPdfPreview(selectedInvoice.id, 'bill'); }}
+                                                onClick={() => { setPdfDocType('bill'); loadPdfWithStatusCheck(selectedInvoice.id, 'bill', selectedInvoice.invoice_number); }}
                                                 className={pdfDocType === 'bill' ? 'adm-btn-primary' : 'adm-btn-secondary'}
                                                 style={{ fontSize: 12, padding: '4px 10px' }}
                                             >
@@ -2789,7 +2762,7 @@ const BillingManagement = () => {
                                             </button>
                                         </div>
                                         <button
-                                            onClick={() => handleDownload(selectedInvoice.id, pdfDocType)}
+                                            onClick={() => handleDownload(selectedInvoice.id, pdfDocType, selectedInvoice.invoice_number)}
                                             className="adm-btn-secondary"
                                             style={{ fontSize: 12, padding: '4px 10px' }}
                                         >
@@ -2797,7 +2770,7 @@ const BillingManagement = () => {
                                         </button>
                                     </div>
 
-                                    {pdfLoading ? (
+                                    {pdfPreviewLoading ? (
                                         <div style={{ padding: 48, textAlign: 'center', color: '#64748b' }}>
                                             <BsArrowRepeat size={20} className="spin" color="#4f46e5" style={{ marginBottom: 8 }} />
                                             <div>Generating PDF document preview…</div>
@@ -2966,7 +2939,7 @@ const BillingManagement = () => {
                                     Async Generation Queued
                                 </h3>
                                 <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>
-                                    POST /api/v1/invoices/{asyncTaskInfo.invoice_id}/generate-async
+                                    Background generation task dispatched
                                 </p>
                             </div>
                         </div>
@@ -3177,12 +3150,9 @@ const BillingManagement = () => {
                                     <div style={{ fontSize: 16, fontWeight: 600 }}>Loading Invoice PDF…</div>
                                     {pdfStatusPolling && (
                                         <div style={{ fontSize: 13, color: '#bae6fd', maxWidth: 400, textAlign: 'center' }}>
-                                            {pdfStatusMessage || 'Checking PDF status (GET /invoices/{id}/pdf-status)…'}
+                                            {pdfStatusMessage || 'Checking PDF readiness status…'}
                                         </div>
                                     )}
-                                    <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                                        GET /api/v1/invoices/{pdfPreviewInvoice.id}/pdf?document_type={pdfDocType}
-                                    </div>
                                 </div>
                             ) : pdfPreviewUrl ? (
                                 <iframe

@@ -160,14 +160,39 @@ const Sidebar = ({ collapsed, onToggle }) => {
     const [collapsedGroups, setCollapsedGroups] = useState({});
     const [hoveredItem, setHoveredItem] = useState(null);
 
+    // Flat list of all navigation items for route matching
+    const allNavItems = useMemo(() => menuGroups.flatMap(group => group.items), []);
+
+    const isItemActive = (item) => {
+        if (currentPath === item.path) return true;
+        if (item.aliasPaths && item.aliasPaths.includes(currentPath)) return true;
+
+        // If another item matches the current path exactly (or by alias),
+        // then this item is not the active one
+        const hasExactMatchElsewhere = allNavItems.some(
+            other => other.path === currentPath || (other.aliasPaths && other.aliasPaths.includes(currentPath))
+        );
+        if (hasExactMatchElsewhere) return false;
+
+        // For nested paths (e.g. deeper subroutes not explicitly in menu),
+        // activate the item with the most specific (longest) matching path prefix
+        if (item.path !== '/' && item.path !== '/dashboard' && currentPath.startsWith(item.path + '/')) {
+            const hasMoreSpecificMatch = allNavItems.some(
+                other => other.path !== item.path &&
+                    other.path !== '/' &&
+                    other.path !== '/dashboard' &&
+                    currentPath.startsWith(other.path + '/') &&
+                    other.path.length > item.path.length
+            );
+            return !hasMoreSpecificMatch;
+        }
+        return false;
+    };
+
     // Auto-open group when active path matches
     useEffect(() => {
         menuGroups.forEach(group => {
-            const hasActiveItem = group.items.some(item =>
-                currentPath === item.path ||
-                (item.aliasPaths && item.aliasPaths.includes(currentPath)) ||
-                (item.path !== '/' && currentPath.startsWith(item.path + '/'))
-            );
+            const hasActiveItem = group.items.some(item => isItemActive(item));
             if (hasActiveItem && collapsedGroups[group.id]) {
                 setCollapsedGroups(prev => ({ ...prev, [group.id]: false }));
             }
@@ -199,16 +224,6 @@ const Sidebar = ({ collapsed, onToggle }) => {
             })
             .filter(group => group.items.length > 0);
     }, [searchQuery]);
-
-    const isItemActive = (item) => {
-        if (currentPath === item.path) return true;
-        if (item.aliasPaths && item.aliasPaths.includes(currentPath)) return true;
-        // Avoid marking root or broad paths as active for everything
-        if (item.path !== '/' && item.path !== '/dashboard' && item.path !== '/stores' && currentPath.startsWith(item.path + '/')) {
-            return true;
-        }
-        return false;
-    };
 
     return (
         <aside
