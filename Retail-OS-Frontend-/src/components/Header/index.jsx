@@ -31,7 +31,19 @@ const formatPrice = (val) => {
 const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
+    // Global search bar is hidden on Dashboard and the 5 specified modules:
+    // 1. Product Master (/products)
+    // 2. Barcode Management (/products/barcode)
+    // 3. Category Management (/categories)
+    // 4. Store Management (/stores, /ecommerce/store)
+    // 5. Store Target Management (/stores/targets)
+    const isSearchHidden =
+        location.pathname === '/dashboard' ||
+        location.pathname === '/' ||
+        location.pathname.startsWith('/products') ||
+        location.pathname.startsWith('/categories') ||
+        location.pathname.startsWith('/stores') ||
+        location.pathname === '/ecommerce/store';
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
@@ -330,7 +342,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     return (
         <header className="pos-header">
             {/* Search Bar - hidden on Admin Dashboard */}
-            {!isDashboard ? (
+            {!isSearchHidden ? (
                 <div className="header-search-wrap" ref={searchWrapRef} style={{ flex: 1, position: 'relative' }}>
                 <BsSearch className="header-search-icon" size={14} />
                 <input

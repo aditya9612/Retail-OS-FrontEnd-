@@ -99,6 +99,8 @@ function App() {
                         <Route path="/billing" element={<Billing />} />
                         <Route path="/invoices" element={<BillingManagement />} />
                         <Route path="/billing-management" element={<BillingManagement />} />
+                        <Route path="/orders" element={<BillingManagement />} />
+                        <Route path="/orders/:id" element={<BillingManagement />} />
                         <Route path="/billing/returns" element={<ReturnsRefundsPage />} />
                         <Route path="/billing/credit-notes" element={<CreditNotesPage />} />
                         <Route path="/gst-management" element={<GSTManagement />} />

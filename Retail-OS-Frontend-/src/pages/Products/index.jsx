@@ -2,12 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
     BsChevronLeft, BsChevronRight, BsToggleOn, BsToggleOff, BsImage,
-    BsStarFill, BsGrid3X3Gap
+    BsStarFill, BsGrid3X3Gap, BsArrowCounterclockwise
 } from 'react-icons/bs';
 import productService from "../../services/product";
 import categoryService from "../../services/categoryService";
 import apiClient from "../../api/axios";
 import ProductVariantModal from "./ProductVariantModal";
+import "../../components/Categories/CategoryCards.css";
 
 export const fetchDatabaseCategories = async () => {
     try {
@@ -741,6 +742,8 @@ export const mapProductRecord = (p, activeCatMap = {}, inventoryExpiryMap = {}) 
         productService.update(p.id, { is_active: false }).catch(() => {});
     }
 
+    const isSoftDeleted = Boolean(localMeta?.soft_deleted || p.variants?.soft_deleted);
+
     return {
         ...p,
         category: catName,
@@ -748,6 +751,7 @@ export const mapProductRecord = (p, activeCatMap = {}, inventoryExpiryMap = {}) 
         is_active: effectiveStatus,
         status: effectiveStatus,
         is_expired: isExpired,
+        is_soft_deleted: isSoftDeleted,
         status_label: statusLabel,
         sellingPrice: priceVal,
         price: priceVal,
@@ -761,6 +765,34 @@ export const mapProductRecord = (p, activeCatMap = {}, inventoryExpiryMap = {}) 
         image_url: imageUrl,
         variants: variants,
     };
+};
+
+export const validateSKUFormat = (sku) => {
+    if (!sku || !String(sku).trim()) {
+        return 'SKU is required';
+    }
+    const value = String(sku).trim().toUpperCase();
+
+    if (value.length < 2) {
+        return 'SKU must be at least 2 characters long';
+    }
+    if (value.length > 50) {
+        return 'SKU cannot exceed 50 characters';
+    }
+    if (value.startsWith('-') || value.startsWith(' ')) {
+        return 'SKU cannot start with a hyphen (-) or space';
+    }
+    if (value.endsWith('-') || value.endsWith(' ')) {
+        return 'SKU cannot end with a hyphen (-) or space';
+    }
+    if (/[ -]{2,}/.test(value)) {
+        return 'SKU cannot contain consecutive spaces or hyphens';
+    }
+    if (!/^[A-Z0-9 -]+$/.test(value)) {
+        return 'SKU can only contain uppercase letters (A-Z), numbers (0-9), spaces, and hyphens (-)';
+    }
+
+    return '';
 };
 
 export const ProductFormModal = ({ product, onClose, onSave, existingProducts = [], categories = [] }) => {
@@ -1071,25 +1103,7 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
             return next;
         });
     };
-    const SKU_REGEX = /^SKU-\d{3,6}$/;
 
-const validateSKUFormat = (sku) => {
-    const value = sku.trim().toUpperCase();
-
-    if (!value) {
-        return 'SKU is required';
-    }
-
-    if (!SKU_REGEX.test(value)) {
-        return 'SKU must be in format SKU-001 with 3 to 6 digits';
-    }
-
-    if (/^SKU-0+$/.test(value)) {
-        return 'SKU cannot be all zeros';
-    }
-
-    return '';
-};
     const validateForm = () => {
         const newErrors = {};
 
@@ -1347,21 +1361,14 @@ if (skuError) {
                             <input
                                 className="adm-search"
                                 value={form.sku}
-                               onChange={e => {
-    let value = e.target.value.toUpperCase();
-
-    if (!value.startsWith('SKU-')) {
-        value = 'SKU-' + value.replace(/^SKU-?/i, '');
-    }
-
-    const digits = value
-        .slice(4)
-        .replace(/\D/g, '')
-        .slice(0, 6);
-
-    set('sku', 'SKU-' + digits);
-}}
-                                placeholder="e.g. SKU-001"
+                                onChange={e => {
+                                    const upper = e.target.value.toUpperCase();
+                                    set('sku', upper);
+                                    if (errors.sku) {
+                                        setErrors(prev => ({ ...prev, sku: undefined }));
+                                    }
+                                }}
+                                placeholder="e.g. SURF EXCEL 001, NIKE123, ABC 250"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
@@ -2150,6 +2157,7 @@ const Products = () => {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [kpiFilter, setKpiFilter] = useState('all'); // 'all' | 'featured' | 'categories' | 'expirySoon'
+    const [showSoftDeleted, setShowSoftDeleted] = useState(false);
     const [page, setPage] = useState(1);
     const [modal, setModal] = useState(null);
     const [showVariantModal, setShowVariantModal] = useState(false);
@@ -2312,18 +2320,23 @@ const Products = () => {
 
     // KPI Metrics calculation
     const kpiStats = useMemo(() => {
-        const total = products.length;
-        const featured = products.filter(p => Boolean(p.featured)).length;
+        const activeList = products.filter(p => !p.is_soft_deleted);
+        const total = activeList.length;
+        const featured = activeList.filter(p => Boolean(p.featured)).length;
         const categorySet = new Set(
-            products.map(p => p.category).filter(c => c && c !== '—')
+            activeList.map(p => p.category).filter(c => c && c !== '—')
         );
         const categoriesCount = categories.length > 0 ? categories.length : categorySet.size;
 
         // Expiry Soon: products expiring within the next 30 days, excluding already expired
-        const expirySoon = products.filter(p => !p.is_expired && (backendExpiringIds.has(p.id) || isNearlyExpiry(p))).length;
+        const expirySoon = activeList.filter(p => !p.is_expired && (backendExpiringIds.has(p.id) || isNearlyExpiry(p))).length;
 
         return { total, featured, categories: categoriesCount, expirySoon };
     }, [products, categories, backendExpiringIds]);
+
+    const softDeletedCount = useMemo(() => {
+        return products.filter(p => Boolean(p.is_soft_deleted)).length;
+    }, [products]);
 
     const categoryFilterList = useMemo(() => {
         const set = new Set();
@@ -2342,9 +2355,16 @@ const Products = () => {
         return Array.from(set);
     }, [categories, products]);
 
-    // Filter by KPI filter, Category, and Search query
+    // Filter by Soft-Delete view, KPI filter, Category, and Search query
     const filtered = useMemo(() => {
         let list = products;
+
+        // 0. Soft-delete segregation
+        if (showSoftDeleted) {
+            list = list.filter(p => Boolean(p.is_soft_deleted));
+        } else {
+            list = list.filter(p => !p.is_soft_deleted);
+        }
 
         // 1. KPI Card Filter
         if (kpiFilter === 'featured') {
@@ -2388,7 +2408,7 @@ const Products = () => {
         }
 
         return list;
-    }, [products, search, selectedCategory, kpiFilter]);
+    }, [products, search, selectedCategory, kpiFilter, showSoftDeleted]);
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const start = (page - 1) * PAGE_SIZE + 1;
@@ -2502,8 +2522,67 @@ const Products = () => {
         }
     };
 
+    const handleSoftDelete = async (product) => {
+        if (!product) return;
+        const confirmMsg = `Soft-delete expired product "${product.name}"?\nIt will be safely archived without deleting database records and excluded from the active listing.`;
+        if (!window.confirm(confirmMsg)) return;
+
+        setDeletingId(product.id);
+        try {
+            if (product.id && product.is_active !== false) {
+                try {
+                    await productService.update(product.id, { is_active: false });
+                } catch (e) {
+                    console.warn('Backend update failed, persisting soft delete locally:', e);
+                }
+            }
+            saveLocalProductMeta(product.id, product.sku, {
+                soft_deleted: true,
+                soft_deleted_at: new Date().toISOString()
+            });
+
+            setProducts(prev => prev.map(p =>
+                p.id === product.id ? { ...p, is_soft_deleted: true, status: false, is_active: false } : p
+            ));
+        } catch (err) {
+            console.error('Error soft-deleting product:', err);
+            alert('Could not soft-delete product: ' + (err?.message || err));
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
+    const handleRestoreProduct = async (product) => {
+        if (!product) return;
+        const confirmMsg = `Restore expired product "${product.name}" back to the active products list?`;
+        if (!window.confirm(confirmMsg)) return;
+
+        setDeletingId(product.id);
+        try {
+            saveLocalProductMeta(product.id, product.sku, {
+                soft_deleted: false,
+                restored_at: new Date().toISOString()
+            });
+
+            setProducts(prev => prev.map(p =>
+                p.id === product.id ? { ...p, is_soft_deleted: false } : p
+            ));
+        } catch (err) {
+            console.error('Error restoring product:', err);
+            alert('Could not restore product: ' + (err?.message || err));
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
     const handleDelete = async (id) => {
         if (deletingId === id) return;
+        const prod = products.find(p => p.id === id);
+        if (prod && (prod.is_expired || isProductExpired(prod))) {
+            await handleSoftDelete(prod);
+            return;
+        }
+
         if (!window.confirm('Are you sure you want to delete this product?')) {
             return;
         }
@@ -2511,7 +2590,6 @@ const Products = () => {
         setDeletingId(id);
         try {
             await productService.delete(id);
-            const prod = products.find(p => p.id === id);
             removeLocalProductMeta(id, prod?.sku);
             await fetchProducts(categoryMap, debouncedSearch);
         } catch (err) {
@@ -2700,42 +2778,6 @@ const Products = () => {
                     box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
                 }
 
-                .kpi-card-clickable {
-                    cursor: pointer;
-                    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-                    user-select: none;
-                }
-
-                .kpi-card-clickable:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-                    border-color: #cbd5e1 !important;
-                }
-
-                .kpi-card-clickable.active-total {
-                    border-color: #2563eb !important;
-                    background: #f0f7ff !important;
-                    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
-                }
-
-                .kpi-card-clickable.active-featured {
-                    border-color: #6366f1 !important;
-                    background: #f5f3ff !important;
-                    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
-                }
-
-                .kpi-card-clickable.active-categories {
-                    border-color: #0891b2 !important;
-                    background: #ecfeff !important;
-                    box-shadow: 0 0 0 2px rgba(8, 145, 178, 0.18);
-                }
-
-                .kpi-card-clickable.active-expiry {
-                    border-color: #f59e0b !important;
-                    background: #fffbeb !important;
-                    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
-                }
-
                 .prod-thumb-clickable {
                     cursor: pointer !important;
                     pointer-events: auto !important;
@@ -2812,20 +2854,20 @@ const Products = () => {
                     </button>
 
                     <button
-                        className="adm-btn-secondary"
+                        className="adm-btn-primary"
                         onClick={() => setShowVariantModal(true)}
                         style={{
                             display: 'flex',
                             alignItems: 'center',
                             gap: 6,
                             padding: '8px 16px',
-                            background: '#fff',
-                            border: '1px solid #e5e7eb',
+                            background: '#6366f1',
+                            border: 'none',
                             borderRadius: 8,
                             fontSize: 13,
-                            fontWeight: 500,
+                            fontWeight: 600,
                             cursor: 'pointer',
-                            color: '#374151'
+                            color: '#fff'
                         }}
                     >
                         <BsGrid3X3Gap size={14} />
@@ -2855,147 +2897,245 @@ const Products = () => {
                 </div>
             </div>
 
-            {/* 2. KPI METRIC CARDS (ALL IN 1 SINGLE ROW) */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: 16,
-                marginBottom: 24,
-                width: '100%'
-            }}>
+            {/* 2. KPI METRIC CARDS (ALL IN 1 SINGLE ROW - CATEGORIES DESIGN) */}
+            <div className="category-cards">
                 {/* Total Products */}
                 <div
-                    className={`kpi-card-clickable ${kpiFilter === 'all' ? 'active-total' : ''}`}
+                    className={`category-card ${kpiFilter === 'all' ? 'active-card' : ''}`}
                     onClick={() => setKpiFilter('all')}
-                    title="Click to view all products"
-                    style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        padding: '16px 20px',
-                        border: '1px solid #edf0f2',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setKpiFilter('all');
+                        }
                     }}
+                    title="Click to view all products"
                 >
-                    <div style={{ fontSize: 20 }}>📦</div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
-                        TOTAL PRODUCTS
-                    </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#2563eb' }}>
-                        {kpiStats.total}
-                    </span>
+                    <h3>Total Products</h3>
+                    <h2>{kpiStats.total}</h2>
                 </div>
 
                 {/* Featured */}
                 <div
-                    className={`kpi-card-clickable ${kpiFilter === 'featured' ? 'active-featured' : ''}`}
+                    className={`category-card ${kpiFilter === 'featured' ? 'active-card' : ''}`}
                     onClick={() => setKpiFilter(prev => prev === 'featured' ? 'all' : 'featured')}
-                    title="Click to filter featured products"
-                    style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        padding: '16px 20px',
-                        border: '1px solid #edf0f2',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setKpiFilter(prev => prev === 'featured' ? 'all' : 'featured');
+                        }
                     }}
+                    title="Click to filter featured products"
                 >
-                    <div style={{ fontSize: 20, color: '#eab308' }}>
-                        <BsStarFill size={20} />
-                    </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
-                        FEATURED
-                    </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#6366f1' }}>
-                        {kpiStats.featured}
-                    </span>
+                    <h3>Featured</h3>
+                    <h2>{kpiStats.featured}</h2>
                 </div>
 
                 {/* Categories */}
                 <div
-                    className={`kpi-card-clickable ${kpiFilter === 'categories' ? 'active-categories' : ''}`}
+                    className={`category-card ${kpiFilter === 'categories' ? 'active-card' : ''}`}
                     onClick={() => setKpiFilter(prev => prev === 'categories' ? 'all' : 'categories')}
-                    title="Click to filter products with category"
-                    style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        padding: '16px 20px',
-                        border: '1px solid #edf0f2',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setKpiFilter(prev => prev === 'categories' ? 'all' : 'categories');
+                        }
                     }}
+                    title="Click to filter products with category"
                 >
-                    <div style={{ fontSize: 20 }}>🏷️</div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
-                        CATEGORIES
-                    </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#0891b2' }}>
-                        {kpiStats.categories}
-                    </span>
+                    <h3>Categories</h3>
+                    <h2>{kpiStats.categories}</h2>
                 </div>
 
                 {/* Expiry Soon */}
                 <div
-                    className={`kpi-card-clickable ${kpiFilter === 'expirySoon' ? 'active-expiry' : ''}`}
+                    className={`category-card ${kpiFilter === 'expirySoon' ? 'active-card' : ''}`}
                     onClick={() => setKpiFilter(prev => prev === 'expirySoon' ? 'all' : 'expirySoon')}
-                    title="Click to view products expiring within 30 days"
-                    style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        padding: '16px 20px',
-                        border: '1px solid #edf0f2',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setKpiFilter(prev => prev === 'expirySoon' ? 'all' : 'expirySoon');
+                        }
                     }}
+                    title="Click to view products expiring within 30 days"
                 >
-                    <div style={{ fontSize: 20 }}>⏳</div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
-                        EXPIRY SOON
-                    </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#f59e0b' }}>
-                        {kpiStats.expirySoon}
-                    </span>
+                    <h3>Expiry Soon</h3>
+                    <h2>{kpiStats.expirySoon}</h2>
                 </div>
             </div>
 
-            {/* 3. CATEGORY PILL LIST */}
+            {/* 3. SEARCH BAR, CATEGORY FILTER & SOFT DELETED PRODUCTS IN SINGLE HORIZONTAL ROW */}
             <div style={{
                 display: 'flex',
+                gap: 12,
                 alignItems: 'center',
-                gap: 8,
-                overflowX: 'auto',
-                paddingBottom: 6,
                 marginBottom: 16,
-                scrollbarWidth: 'none'
+                flexWrap: 'wrap'
             }}>
-                {['All', ...categoryFilterList].map(cat => {
-                    const isSelected = String(selectedCategory || '').trim().toLowerCase() === String(cat || '').trim().toLowerCase();
-                    return (
+                {/* Search Bar */}
+                <div style={{
+                    flex: '1 1 320px',
+                    minWidth: 240,
+                    display: 'flex',
+                    alignItems: 'center',
+                    background: '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 10,
+                    padding: '0 16px',
+                    height: 42,
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                    boxSizing: 'border-box'
+                }}>
+                    <BsSearch style={{ color: '#9ca3af', marginRight: 12, flexShrink: 0 }} size={16} />
+                    <input
+                        value={search}
+                        onChange={e => {
+                            setSearch(e.target.value);
+                            setPage(1);
+                        }}
+                        placeholder="Search products, barcode or brand..."
+                        style={{
+                            border: 'none',
+                            outline: 'none',
+                            width: '100%',
+                            fontSize: 13,
+                            color: '#111827',
+                            background: 'transparent'
+                        }}
+                    />
+                    {search && (
                         <button
-                            key={cat}
                             type="button"
-                            className={`cat-pill ${isSelected ? 'active' : ''}`}
-                            onClick={() => {
-                                setSelectedCategory(cat);
-                                setPage(1);
+                            onClick={() => setSearch('')}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#9ca3af',
+                                cursor: 'pointer',
+                                fontSize: 14,
+                                padding: '0 4px',
+                                display: 'flex',
+                                alignItems: 'center'
                             }}
-                            aria-pressed={isSelected}
-                            title={`Filter by ${cat}`}
+                            title="Clear search"
                         >
-                            {isSelected && <span className="cat-pill-dot" />}
-                            <span>{cat}</span>
+                            ✕
                         </button>
-                    );
-                })}
+                    )}
+                </div>
+
+                {/* Category Filter Dropdown */}
+                <div style={{
+                    flex: '0 1 240px',
+                    minWidth: 180,
+                    display: 'flex',
+                    alignItems: 'center',
+                    background: '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 10,
+                    padding: '0 14px',
+                    height: 42,
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                    boxSizing: 'border-box'
+                }}>
+                    <select
+                        value={selectedCategory}
+                        onChange={e => {
+                            setSelectedCategory(e.target.value);
+                            setPage(1);
+                        }}
+                        style={{
+                            border: 'none',
+                            outline: 'none',
+                            width: '100%',
+                            fontSize: 13,
+                            color: selectedCategory === 'All' ? '#6b7280' : '#111827',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            fontWeight: 500
+                        }}
+                    >
+                        <option value="All">All Categories</option>
+                        {categoryFilterList.map(cat => (
+                            <option key={cat} value={cat}>
+                                {cat}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Soft Deleted Products Option */}
+                <button
+                    type="button"
+                    onClick={() => { setShowSoftDeleted(prev => !prev); setPage(1); }}
+                    style={{
+                        padding: '0 16px',
+                        height: 42,
+                        borderRadius: 10,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        border: showSoftDeleted ? '1px solid #ef4444' : '1px solid #e5e7eb',
+                        background: showSoftDeleted ? '#fef2f2' : '#ffffff',
+                        color: showSoftDeleted ? '#dc2626' : '#6b7280',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        whiteSpace: 'nowrap',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                        boxSizing: 'border-box',
+                        flexShrink: 0
+                    }}
+                    title="Toggle view of soft-deleted products"
+                >
+                    Soft Deleted Products ({softDeletedCount})
+                </button>
             </div>
+
+            {/* Soft-Deleted Expired Products Banner */}
+            {showSoftDeleted && (
+                <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 16px',
+                    marginBottom: 16,
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: 10,
+                    fontSize: 13,
+                    color: '#991b1b'
+                }}>
+                    <span>
+                        <strong>Soft-Deleted Expired Archive:</strong> These expired products are hidden from the active listing, stock operations, and POS billing. Click "Restore" on any product to return it to the active product list.
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => { setShowSoftDeleted(false); setPage(1); }}
+                        style={{
+                            background: '#ffffff',
+                            border: '1px solid #fca5a5',
+                            borderRadius: 6,
+                            padding: '4px 10px',
+                            fontSize: 12,
+                            color: '#b91c1c',
+                            cursor: 'pointer',
+                            fontWeight: 600
+                        }}
+                    >
+                        Back to Active Products
+                    </button>
+                </div>
+            )}
 
 {/* Active KPI Filter Banner */}
             {kpiFilter !== 'all' && (
@@ -3429,51 +3569,84 @@ const Products = () => {
                                             justifyContent: 'center',
                                             alignItems: 'center'
                                         }}>
-                                            <button
-                                                className="adm-btn-secondary"
-                                                style={{
-                                                    padding: '6px 8px',
-                                                    borderRadius: 6,
-                                                    border: '1px solid #e5e7eb',
-                                                    background: '#fff',
-                                                    cursor: p.is_expired ? 'not-allowed' : (togglingId === p.id ? 'wait' : 'pointer'),
-                                                    opacity: p.is_expired ? 0.7 : 1
-                                                }}
-                                                onClick={() => toggleStatus(p)}
-                                                disabled={togglingId === p.id || p.is_expired}
-                                                title={
-                                                    p.is_expired
-                                                        ? "Expired (Product has expired — Inactive)"
-                                                        : (p.status ? "Active (Click to deactivate)" : "Inactive (Click to activate)")
-                                                }
-                                            >
-                                                {p.is_expired ? (
-                                                    <BsToggleOff size={16} color="#ef4444" />
-                                                ) : p.status ? (
-                                                    <BsToggleOn size={16} color="#10b981" />
-                                                ) : (
-                                                    <BsToggleOff size={16} color="#9ca3af" />
-                                                )}
-                                            </button>
+                                            {showSoftDeleted ? (
+                                                <button
+                                                    className="adm-btn-secondary"
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        borderRadius: 6,
+                                                        border: '1px solid #10b981',
+                                                        background: '#ecfdf5',
+                                                        color: '#059669',
+                                                        fontSize: 12,
+                                                        fontWeight: 600,
+                                                        cursor: deletingId === p.id ? 'wait' : 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 4
+                                                    }}
+                                                    onClick={() => handleRestoreProduct(p)}
+                                                    disabled={deletingId === p.id}
+                                                    title="Restore expired product to active list"
+                                                >
+                                                    <BsArrowCounterclockwise size={13} />
+                                                    Restore
+                                                </button>
+                                            ) : (
+                                                <>
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            padding: '6px 8px',
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#fff',
+                                                            cursor: p.is_expired ? 'not-allowed' : (togglingId === p.id ? 'wait' : 'pointer'),
+                                                            opacity: p.is_expired ? 0.7 : 1
+                                                        }}
+                                                        onClick={() => toggleStatus(p)}
+                                                        disabled={togglingId === p.id || p.is_expired}
+                                                        title={
+                                                            p.is_expired
+                                                                ? "Expired (Product has expired — Inactive)"
+                                                                : (p.status ? "Active (Click to deactivate)" : "Inactive (Click to activate)")
+                                                        }
+                                                    >
+                                                        {p.is_expired ? (
+                                                            <BsToggleOff size={16} color="#ef4444" />
+                                                        ) : p.status ? (
+                                                            <BsToggleOn size={16} color="#10b981" />
+                                                        ) : (
+                                                            <BsToggleOff size={16} color="#9ca3af" />
+                                                        )}
+                                                    </button>
 
-                                            <button
-                                                className="adm-btn-secondary"
-                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}
-                                                onClick={() => handleOpenEditModal(p)}
-                                                title="Edit"
-                                            >
-                                                <BsPencilFill size={13} color="#6366f1" />
-                                            </button>
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}
+                                                        onClick={() => handleOpenEditModal(p)}
+                                                        title="Edit"
+                                                    >
+                                                        <BsPencilFill size={13} color="#6366f1" />
+                                                    </button>
 
-                                            <button
-                                                className="adm-btn-secondary"
-                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: deletingId === p.id ? 'wait' : 'pointer' }}
-                                                onClick={() => handleDelete(p.id)}
-                                                disabled={deletingId === p.id}
-                                                title="Delete"
-                                            >
-                                                <BsTrashFill size={13} color="#ef4444" />
-                                            </button>
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            padding: '6px 8px',
+                                                            borderRadius: 6,
+                                                            border: p.is_expired ? '1px solid #fca5a5' : '1px solid #e5e7eb',
+                                                            background: p.is_expired ? '#fef2f2' : '#fff',
+                                                            cursor: deletingId === p.id ? 'wait' : 'pointer'
+                                                        }}
+                                                        onClick={() => p.is_expired ? handleSoftDelete(p) : handleDelete(p.id)}
+                                                        disabled={deletingId === p.id}
+                                                        title={p.is_expired ? "Soft Delete Expired Product (Archive safely)" : "Delete"}
+                                                    >
+                                                        <BsTrashFill size={13} color="#ef4444" />
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -3490,7 +3663,7 @@ const Products = () => {
                                             fontSize: 14
                                         }}
                                     >
-                                        No products found
+                                        {showSoftDeleted ? 'No soft-deleted expired products found' : 'No products found'}
                                     </td>
                                 </tr>
                             )}
