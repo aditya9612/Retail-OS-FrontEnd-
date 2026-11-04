@@ -3,15 +3,25 @@ import "./purchase.css";
 
 import {
   getPurchaseOrders,
+  getAllPurchaseOrders,
   getPurchaseOrder,
   createPurchaseOrder,
   updatePurchaseOrder,
   updatePurchaseOrderStatus,
   receivePurchaseOrder,
+  approvePurchaseOrder,
+  cancelPurchaseOrder,
+  getPurchaseOrderStats,
+  getPurchaseOrderPdf,
   deletePurchaseOrder,
+  extractPurchaseOrdersList,
 } from "../../api/purchaseOrdersApi";
 
+
 import { getSuppliers, createSupplier } from "../../api/supplierApi";
+import { listStores } from "../../services/inventoryService";
+import { getWarehouses } from "../../api/warehouseApi";
+import productService from "../../services/product";
 import axiosInstance from "../../api/axios";
 
 /* =====================================================
@@ -44,6 +54,10 @@ import {
   BsTrash,
   BsArrowRepeat,
   BsX,
+  BsCheckLg,
+  BsSlashCircle,
+  BsFileEarmarkPdf,
+  BsBoxSeam,
 } from "react-icons/bs";
 
 /* =====================================================
@@ -55,6 +69,18 @@ const STATUS_CONFIG = {
     color: "#f59e0b",
     bg: "#fffbeb",
     icon: <BsClockHistory size={11} />,
+  },
+
+  Draft: {
+    color: "#6b7280",
+    bg: "#f3f4f6",
+    icon: <BsClockHistory size={11} />,
+  },
+
+  Approved: {
+    color: "#2563eb",
+    bg: "#eff6ff",
+    icon: <BsCheckCircleFill size={11} />,
   },
 
   Received: {
@@ -80,7 +106,9 @@ const getDisplayStatus = (status) => {
 
   if (value === "received") return "Received";
   if (value === "cancelled" || value === "canceled") return "Cancelled";
-  if (value === "draft" || value === "pending") return "Pending";
+  if (value === "approved") return "Approved";
+  if (value === "draft") return "Draft";
+  if (value === "pending") return "Pending";
 
   if (!value) return "Pending";
 
@@ -284,6 +312,7 @@ const PurchaseFormModal = ({
   stores,
   onClose,
   onSave,
+  onSupplierAdded,
 }) => {
   const isNew = !purchase;
   const [showAddSupplier, setShowAddSupplier] = useState(false);
@@ -293,12 +322,17 @@ const PurchaseFormModal = ({
   const [form, setForm] = useState(() => {
     const defaultSupplierId =
       suppliers && suppliers.length > 0 ? String(suppliers[0].id) : "1";
+    const defaultStoreId =
+      stores && stores.length > 0 ? String(stores[0].id) : "1";
+    const defaultProductId =
+      products && products.length > 0 ? String(products[0].id) : "1";
 
     if (!purchase) {
       return {
         ...EMPTY_FORM,
         supplier: defaultSupplierId,
-        storeId: "1",
+        storeId: defaultStoreId,
+        productId: defaultProductId,
         purchaseDate: new Date().toISOString().split("T")[0],
         items: "1",
         subtotal: "1000",
@@ -524,17 +558,32 @@ const PurchaseFormModal = ({
           </div>
 
           <div className="ec-field">
-            <label>Store ID *</label>
+            <label>Store / Destination *</label>
 
-            <input
-              className="ec-input"
-              type="number"
-              value={form.storeId}
-              onChange={(e) =>
-                set("storeId", e.target.value)
-              }
-              placeholder="Enter Store ID"
-            />
+            {stores && stores.length > 0 ? (
+              <select
+                className="ec-input"
+                value={form.storeId}
+                onChange={(e) => set("storeId", e.target.value)}
+              >
+                <option value="">-- Select Store --</option>
+                {stores.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.name || s.store_name || `Store #${s.id}`} (Store ID: {s.id})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="ec-input"
+                type="number"
+                value={form.storeId}
+                onChange={(e) =>
+                  set("storeId", e.target.value)
+                }
+                placeholder="Enter Store ID"
+              />
+            )}
           </div>
         </div>
 
@@ -573,6 +622,36 @@ const PurchaseFormModal = ({
             />
           </div>
         </div>
+
+        {/* Product (for new purchase) */}
+        {isNew && products && products.length > 0 && (
+          <div className="ec-form-row">
+            <div className="ec-field">
+              <label>Product *</label>
+              <select
+                className="ec-input"
+                value={form.productId}
+                onChange={(e) => {
+                  const pid = e.target.value;
+                  set("productId", pid);
+                  const selProd = products.find((p) => String(p.id) === String(pid));
+                  if (selProd) {
+                    const price = Number(selProd.cost_price || selProd.purchase_price || selProd.price || 100);
+                    const qty = Number(form.items) || 1;
+                    set("subtotal", String(price * qty));
+                    set("total", String(price * qty));
+                  }
+                }}
+              >
+                {products.map((p) => (
+                  <option key={p.id} value={String(p.id)}>
+                    {p.name || p.product_name || `Product #${p.id}`} {p.sku ? `(${p.sku})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
 
         {/* Items */}
 
@@ -1231,18 +1310,51 @@ const PurchaseDetailsModal = ({
    PURCHASES PAGE
 ===================================================== */
 
-const isDraftPurchase = (purchase) =>
-  String(
+const getPurchaseStatus = (purchase) => {
+  return String(
     purchase?.backendStatus ||
       purchase?.rawData?.status ||
+      purchase?.status ||
       ""
-  ).toLowerCase() === "draft";
+  ).trim().toLowerCase();
+};
+
+const isDraftPurchase = (purchase) => {
+  const st = getPurchaseStatus(purchase);
+  return st === "draft" || st === "pending";
+};
+
+const isApprovedPurchase = (purchase) => {
+  const st = getPurchaseStatus(purchase);
+  return st === "approved";
+};
+
+const isReceivedPurchase = (purchase) => {
+  const st = getPurchaseStatus(purchase);
+  return st === "received";
+};
+
+const isCancelledPurchase = (purchase) => {
+  const st = getPurchaseStatus(purchase);
+  return st === "cancelled" || st === "canceled";
+};
+
+const isReceivablePurchase = (purchase) => {
+  const st = getPurchaseStatus(purchase);
+  return st === "approved" || st === "draft" || st === "pending";
+};
 
 const Purchases = () => {
   const [purchases, setPurchases] =
     useState([]);
 
   const [suppliers, setSuppliers] =
+    useState([]);
+
+  const [stores, setStores] =
+    useState([]);
+
+  const [products, setProducts] =
     useState([]);
 
   const [loading, setLoading] =
@@ -1277,6 +1389,38 @@ const Purchases = () => {
 
   const [deleteError, setDeleteError] =
     useState("");
+
+  // APPROVE STATE
+  const [purchaseToApprove, setPurchaseToApprove] =
+    useState(null);
+  const [approvingId, setApprovingId] =
+    useState(null);
+  const [approveError, setApproveError] =
+    useState("");
+
+  // RECEIVE STATE
+  const [purchaseToReceive, setPurchaseToReceive] =
+    useState(null);
+  const [receivingId, setReceivingId] =
+    useState(null);
+  const [receiveInvoiceNo, setReceiveInvoiceNo] =
+    useState("");
+  const [receiveError, setReceiveError] =
+    useState("");
+
+  // CANCEL STATE
+  const [purchaseToCancel, setPurchaseToCancel] =
+    useState(null);
+  const [cancellingId, setCancellingId] =
+    useState(null);
+  const [cancelReason, setCancelReason] =
+    useState("");
+  const [cancelError, setCancelError] =
+    useState("");
+
+  // DOWNLOAD PDF STATE
+  const [downloadingId, setDownloadingId] =
+    useState(null);
 
   /* =====================================================
      NORMALIZE SINGLE PURCHASE RESPONSE
@@ -1490,83 +1634,322 @@ const Purchases = () => {
      RECEIVE PURCHASE
   ===================================================== */
 
-  const handleReceivePurchase = async (
-    purchase
-  ) => {
-    if (!purchase?.backendId) {
-      alert("Purchase ID not found.");
-      return;
-    }
+  /* =====================================================
+     APPROVE PURCHASE ORDER
+  ===================================================== */
+  const handleApproveClick = (purchase) => {
+    setApproveError("");
+    setPurchaseToApprove(purchase);
+  };
 
-    if (!isDraftPurchase(purchase)) {
-      alert(
-        "Only draft purchases can be received."
-      );
+  const handleCancelApprove = () => {
+    if (approvingId !== null) return;
+    setPurchaseToApprove(null);
+    setApproveError("");
+  };
+
+  const handleConfirmApprove = async () => {
+    if (!purchaseToApprove) return;
+    const actualId =
+      purchaseToApprove.backendId ??
+      purchaseToApprove?.rawData?.id ??
+      purchaseToApprove.id;
+
+    if (!actualId) {
+      setApproveError("Purchase order ID is required for approval.");
       return;
     }
 
     try {
-      const response =
-        await receivePurchaseOrder(
-          purchase.backendId
+      setApprovingId(actualId);
+      setApproveError("");
+      const response = await approvePurchaseOrder(actualId);
+      const successMsg =
+        response?.message ||
+        response?.data?.message ||
+        `Purchase order ${purchaseToApprove.id || actualId} approved successfully.`;
+      setSuccess(successMsg);
+      setError("");
+      setPurchaseToApprove(null);
+      await fetchPurchases();
+    } catch (err) {
+      console.error("Approve Purchase Error:", err);
+      setApproveError(
+        extractErrorMessage(err, "Failed to approve purchase order.")
+      );
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  /* =====================================================
+     RECEIVE PURCHASE ORDER
+  ===================================================== */
+  const handleReceiveClick = (purchase) => {
+    setReceiveError("");
+    setReceiveInvoiceNo(
+      purchase.invoiceNumber && purchase.invoiceNumber !== "-"
+        ? purchase.invoiceNumber
+        : ""
+    );
+    setPurchaseToReceive(purchase);
+  };
+
+  const handleCancelReceive = () => {
+    if (receivingId !== null) return;
+    setPurchaseToReceive(null);
+    setReceiveError("");
+  };
+
+  const handleConfirmReceive = async () => {
+    if (!purchaseToReceive) return;
+    const actualId =
+      purchaseToReceive.backendId ??
+      purchaseToReceive?.rawData?.id ??
+      purchaseToReceive.id;
+
+    if (!actualId) {
+      setReceiveError("Purchase order ID is required to receive.");
+      return;
+    }
+
+    try {
+      setReceivingId(actualId);
+      setReceiveError("");
+      const payload = receiveInvoiceNo.trim()
+        ? { invoice_number: receiveInvoiceNo.trim() }
+        : {};
+      const response = await receivePurchaseOrder(actualId, payload);
+      const successMsg =
+        response?.message ||
+        response?.data?.message ||
+        `Purchase order ${purchaseToReceive.id || actualId} received successfully.`;
+      setSuccess(successMsg);
+      setError("");
+      setPurchaseToReceive(null);
+      await fetchPurchases();
+    } catch (err) {
+      console.error("Receive Purchase Error:", err);
+      setReceiveError(
+        extractErrorMessage(err, "Failed to receive purchase order.")
+      );
+    } finally {
+      setReceivingId(null);
+    }
+  };
+
+  const handleReceivePurchase = async (purchase) => {
+    handleReceiveClick(purchase);
+  };
+
+  /* =====================================================
+     CANCEL PURCHASE ORDER
+  ===================================================== */
+  const handleCancelClick = (purchase) => {
+    setCancelError("");
+    setCancelReason("");
+    setPurchaseToCancel(purchase);
+  };
+
+  const handleCloseCancelModal = () => {
+    if (cancellingId !== null) return;
+    setPurchaseToCancel(null);
+    setCancelError("");
+    setCancelReason("");
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!purchaseToCancel) return;
+    const actualId =
+      purchaseToCancel.backendId ??
+      purchaseToCancel?.rawData?.id ??
+      purchaseToCancel.id;
+
+    if (!actualId) {
+      setCancelError("Purchase order ID is required for cancellation.");
+      return;
+    }
+
+    try {
+      setCancellingId(actualId);
+      setCancelError("");
+      const reason = cancelReason.trim() || "Cancelled by procurement manager";
+      const response = await cancelPurchaseOrder(actualId, {
+        cancellation_reason: reason,
+      });
+      const successMsg =
+        response?.message ||
+        response?.data?.message ||
+        `Purchase order ${purchaseToCancel.id || actualId} cancelled successfully.`;
+      setSuccess(successMsg);
+      setError("");
+      setPurchaseToCancel(null);
+      await fetchPurchases();
+    } catch (err) {
+      console.error("Cancel Purchase Error:", err);
+      setCancelError(
+        extractErrorMessage(err, "Failed to cancel purchase order.")
+      );
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  /* =====================================================
+     DOWNLOAD PURCHASE ORDER PDF
+  ===================================================== */
+  const handleDownloadPdf = async (purchase) => {
+    const actualId =
+      purchase?.backendId ??
+      purchase?.rawData?.id ??
+      purchase?.id;
+
+    if (!actualId) {
+      alert("Purchase order ID not found.");
+      return;
+    }
+
+    try {
+      setDownloadingId(actualId);
+
+      // Call backend PDF API via Axios
+      // GET /api/v1/purchase-orders/{id}/pdf?format=pdf&mode=download
+      const response = await getPurchaseOrderPdf(actualId, "pdf", "download");
+
+      // Verify response content
+      const contentType =
+        response.headers?.["content-type"] ||
+        response.headers?.get?.("content-type") ||
+        "";
+
+      let blobData = response.data;
+
+      // If backend returned JSON error inside blob
+      if (
+        blobData instanceof Blob &&
+        (contentType.includes("application/json") ||
+          blobData.type === "application/json")
+      ) {
+        const text = await blobData.text();
+        let errMsg = "Failed to download purchase order PDF.";
+        try {
+          const json = JSON.parse(text);
+          errMsg = json.detail || json.message || errMsg;
+        } catch (_) {
+          errMsg = text || errMsg;
+        }
+        throw new Error(errMsg);
+      } else if (typeof blobData === "object" && !(blobData instanceof Blob)) {
+        throw new Error(
+          blobData.detail ||
+            blobData.message ||
+            "Failed to download purchase order PDF."
         );
+      }
 
-      const result =
-        response?.data ?? response;
+      // Extract filename from Content-Disposition header if available
+      const disposition =
+        response.headers?.["content-disposition"] ||
+        response.headers?.get?.("content-disposition") ||
+        "";
+      let filename = `Purchase_Order_${purchase.id || actualId}.pdf`;
+      if (disposition) {
+        const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+        if (utf8Match && utf8Match[1]) {
+          filename = decodeURIComponent(utf8Match[1].trim());
+        } else {
+          const match = disposition.match(
+            /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i
+          );
+          if (match && match[1]) {
+            filename = match[1].replace(/['"]/g, "").trim();
+          }
+        }
+      }
 
-      console.log(
-        "RECEIVE PURCHASE API:",
-        response
-      );
+      // Ensure .pdf extension
+      if (!filename.toLowerCase().endsWith(".pdf")) {
+        filename += ".pdf";
+      }
 
-      setPurchases((prev) =>
-        prev.map((p) =>
-          p.backendId ===
-          purchase.backendId
-            ? {
-                ...p,
-                status: "Received",
-                backendStatus:
-                  "received",
-                paymentStatus: "Paid",
-                rawData: {
-                  ...(p.rawData || {}),
-                  ...(result || {}),
-                  status: "received",
-                },
-              }
-            : p
-        )
-      );
+      // Trigger browser download with binary Blob
+      const blob =
+        blobData instanceof Blob
+          ? blobData
+          : new Blob([blobData], { type: "application/pdf" });
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.setAttribute("download", filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
 
-      alert(
-        "Purchase order received successfully."
+      setSuccess(
+        `Purchase order ${purchase.id || actualId} PDF downloaded successfully.`
       );
     } catch (err) {
-      console.error(
-        "Receive Purchase Error:",
-        err
-      );
+      console.error("Download PDF Error:", err);
 
-      console.error(
-        "Response:",
-        err?.response?.data
-      );
+      let errorMsg = "Failed to download purchase order PDF.";
 
-      const detail =
-        err?.response?.data?.detail;
+      if (err.response) {
+        const status = err.response.status;
+        let serverDetail = "";
 
-      const message =
-        detail?.message ||
-        detail ||
-        err?.response?.data?.message ||
-        "Failed to receive purchase order.";
+        // Axios with responseType: "blob" delivers error response body as a Blob
+        if (err.response.data instanceof Blob) {
+          try {
+            const text = await err.response.data.text();
+            const json = JSON.parse(text);
+            serverDetail =
+              (typeof json.detail === "object" && json.detail?.message) ||
+              (typeof json.detail === "string" && json.detail) ||
+              json.message ||
+              json.error ||
+              "";
+          } catch (_) {
+            // Not JSON text
+          }
+        } else if (
+          typeof err.response.data === "object" &&
+          err.response.data !== null
+        ) {
+          serverDetail =
+            (typeof err.response.data.detail === "object" &&
+              err.response.data.detail?.message) ||
+            (typeof err.response.data.detail === "string" &&
+              err.response.data.detail) ||
+            err.response.data.message ||
+            err.response.data.error ||
+            "";
+        }
 
-      alert(
-        typeof message === "string"
-          ? message
-          : JSON.stringify(message)
-      );
+        if (status === 401) {
+          errorMsg =
+            "Your session has expired or is invalid. Please log in again to download the purchase order PDF.";
+        } else if (status === 403) {
+          errorMsg =
+            serverDetail ||
+            "Forbidden (403): You do not have permission to download this purchase order PDF.";
+        } else if (serverDetail) {
+          errorMsg =
+            typeof serverDetail === "string"
+              ? serverDetail
+              : JSON.stringify(serverDetail);
+        } else if (status === 404) {
+          errorMsg = `Purchase order #${actualId} PDF was not found (404).`;
+        } else {
+          errorMsg = `Server error (${status}): Failed to download purchase order PDF.`;
+        }
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+
+      alert(errorMsg);
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -1652,39 +2035,10 @@ const Purchases = () => {
           updatedStatus
         );
 
-        const statusValue =
-          String(
-            updatedStatus?.status ||
-              newStatus ||
-              ""
-          ).toLowerCase();
-
-        setPurchases((prev) =>
-          prev.map((p) =>
-            p.backendId ===
-            purchase.backendId
-              ? {
-                  ...p,
-
-                  status:
-                    statusValue ===
-                    "received"
-                      ? "Received"
-                      : statusValue ===
-                        "cancelled"
-                      ? "Cancelled"
-                      : "Pending",
-
-                  backendStatus:
-                    statusValue,
-                }
-              : p
-          )
-        );
-
         alert(
           "Purchase status updated successfully."
         );
+        await fetchPurchases();
       } catch (err) {
         console.error(
           "Update Purchase Status Error:",
@@ -1696,10 +2050,11 @@ const Purchases = () => {
           err?.response?.data
         );
 
-        alert(
-          err?.response?.data?.detail ||
-            "Failed to update purchase status."
+        const errorMsg = extractErrorMessage(
+          err,
+          "Failed to update purchase status."
         );
+        alert(errorMsg);
       }
     };
   /* =====================================================
@@ -1711,78 +2066,115 @@ const Purchases = () => {
       setLoading(true);
       setError("");
 
-      const suppliersData = await getSuppliers();
+      const [suppliersData, purchasesData, storesData, productsData] = await Promise.allSettled([
+        getSuppliers(),
+        getAllPurchaseOrders(),
+        listStores().catch(() => getWarehouses().catch(() => [])),
+        productService.getAll(1, 100).catch(() => ({ data: [] })),
+      ]);
 
-      console.log("Suppliers API:", suppliersData);
-
-      const supplierList = Array.isArray(suppliersData)
-        ? suppliersData
-        : suppliersData?.data || [];
-
+      // Extract suppliers safely
+      const rawSuppliers = suppliersData.status === "fulfilled" ? suppliersData.value : null;
+      const supplierList = extractSuppliers(rawSuppliers);
       setSuppliers(supplierList);
 
-      const data = await getPurchaseOrders(1, PURCHASE_FETCH_SIZE);
+      // Extract stores
+      const rawStores = storesData.status === "fulfilled" ? storesData.value : [];
+      const storeList = Array.isArray(rawStores) ? rawStores : rawStores?.data || rawStores?.items || [];
+      setStores(storeList);
 
-      console.log("Purchase Orders API:", data);
+      // Extract products
+      const rawProducts = productsData.status === "fulfilled" ? productsData.value : [];
+      const productList = Array.isArray(rawProducts) ? rawProducts : rawProducts?.data || rawProducts?.items || [];
+      setProducts(productList);
 
-      const purchaseList = Array.isArray(data) ? data : data?.data || [];
+      // Extract purchase orders
+      if (purchasesData.status === "rejected") {
+        throw purchasesData.reason;
+      }
 
-      const mappedPurchases = purchaseList.map((po) => ({
-        backendId: po.id,
+      const rawPurchases = purchasesData.value;
+      const purchaseList = extractPurchaseOrdersList(rawPurchases);
 
-        id: po.po_number || `PO-${po.id}`,
+      console.log("Purchase Orders API fetched all records:", purchaseList.length, purchaseList);
 
-        supplierId: po.supplier_id,
+      const mappedPurchases = purchaseList.map((po) => {
+        const supId = po.supplier_id;
+        const matchedSupplier = supplierList.find(
+          (supplier) => Number(supplier.id) === Number(supId)
+        );
 
-        supplier:
-          supplierList.find(
-            (supplier) => Number(supplier.id) === Number(po.supplier_id)
-          )?.name || `Supplier #${po.supplier_id}`,
+        const stId = po.store_id ?? po.warehouse_id ?? "";
+        const matchedStore = storeList.find(
+          (store) => Number(store.id) === Number(stId)
+        );
 
-        storeId: po.store_id ?? "",
+        const itemsList = getPurchaseItems(po);
+        const totalItemsCount =
+          Number(po.total_quantity) > 0
+            ? Number(po.total_quantity)
+            : itemsList.length > 0
+            ? itemsList.reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+            : Number(po.items_count || po.total_items || 0);
 
-        // Invoice number must come only from invoice fields.
-        invoiceNumber: po.invoice_number || po.invoice_no || "-",
+        return {
+          backendId: po.id,
 
-        purchaseDate: po.created_at || "",
+          id: po.po_number || po.order_number || `PO-${po.id}`,
 
-        items:
-          po.items?.reduce(
-            (sum, item) => sum + Number(item.quantity || 0),
-            0
-          ) || 0,
+          supplierId: supId,
 
-        subtotal: Number(po.total_amount || 0),
+          supplier:
+            po.supplier_name ||
+            matchedSupplier?.name ||
+            (supId ? `Supplier #${supId}` : "-"),
 
-        gst: 0,
-        discount: 0,
+          storeId: stId,
 
-        total: Number(po.total_amount || 0),
+          storeName:
+            po.store_name ||
+            po.warehouse_name ||
+            matchedStore?.name ||
+            matchedStore?.store_name ||
+            (stId ? `Store #${stId}` : "-"),
 
-        paymentStatus:
-          po.payment_status ||
-          po.paymentStatus ||
-          (po.status === "received" ? "Paid" : "Pending"),
+          invoiceNumber: po.invoice_number || po.invoice_no || "-",
 
-        status: getDisplayStatus(po.status),
+          purchaseDate: po.created_at || "",
 
-        backendStatus: String(po.status || "").toLowerCase(),
+          items: totalItemsCount,
 
-        // Keep the complete line-item objects for View details.
-        itemDetails: getPurchaseItems(po),
+          subtotal: Number(po.subtotal ?? po.total_amount ?? 0),
 
-        rawData: po,
+          gst: Number(po.tax_amount || 0),
+          discount: Number(po.discount_amount || 0),
 
-        remarks: po.remarks || "",
-      }));
+          total: Number(po.total_amount || 0),
+
+          paymentStatus:
+            po.payment_status ||
+            po.paymentStatus ||
+            (po.status === "received" ? "Paid" : "Pending"),
+
+          status: getDisplayStatus(po.status),
+
+          backendStatus: String(po.status || "").toLowerCase(),
+
+          itemDetails: itemsList,
+
+          rawData: po,
+
+          remarks: po.notes || po.remarks || "",
+        };
+      });
 
       setPurchases(mappedPurchases);
     } catch (err) {
       console.error("Purchase Orders API Error:", err);
-
       console.error("Response:", err?.response?.data);
-
-      setError("Failed to load purchase orders");
+      const errorMsg = extractErrorMessage(err, "Failed to load purchase orders.");
+      setError(errorMsg);
+      setPurchases([]);
     } finally {
       setLoading(false);
     }
@@ -1885,14 +2277,14 @@ const Purchases = () => {
       ================================================= */
 
       if (modal === "new") {
-        const quantity = Number(form.items) || 1;
-        const totalAmount = Number(form.total) || 0;
-        const unitPrice = quantity > 0 ? totalAmount / quantity : 0;
+        const quantity = Math.max(1, Number(form.items) || 1);
+        const totalAmount = Math.max(0, Number(form.total) || 0);
+        const unitPrice =
+          quantity > 0 && totalAmount > 0
+            ? Number((totalAmount / quantity).toFixed(2))
+            : 1;
 
         let supplierId = Number(form.supplier);
-        const storeId = Number(form.storeId) || 1;
-
-        // If no valid supplier ID, pick from available suppliers or default
         if (!supplierId || isNaN(supplierId)) {
           if (suppliers && suppliers.length > 0 && suppliers[0]?.id) {
             supplierId = Number(suppliers[0].id);
@@ -1901,136 +2293,41 @@ const Purchases = () => {
           }
         }
 
-        const buildPayload = (sId, stId) => ({
-          supplier_id: Number(sId),
-          store_id: Number(stId),
-          remarks: form.remarks || "Purchase created from RetailOS",
+        const storeId = Number(form.storeId) || undefined;
+        const productId =
+          Number(form.productId) ||
+          (products && products[0]?.id ? Number(products[0].id) : 1);
+
+        const payload = {
+          supplier_id: supplierId,
+          ...(storeId ? { store_id: storeId } : {}),
+          notes: form.remarks || form.notes || "Purchase created from RetailOS",
+          ...(form.invoiceNumber && form.invoiceNumber !== "-"
+            ? { invoice_number: form.invoiceNumber.trim() }
+            : {}),
+          ...(form.purchaseDate
+            ? { expected_delivery_date: `${form.purchaseDate}T00:00:00` }
+            : {}),
+          discount_amount: Number(form.discount) || 0,
           items: [
             {
-              product_id: 13,
+              product_id: productId,
               quantity: quantity,
               unit_price: unitPrice,
+              unit_cost: unitPrice,
             },
           ],
-        });
-
-        console.log(
-          "CREATE PAYLOAD:",
-          payload
-        );
-
-        const createdResponse =
-          await createPurchaseOrder(
-            payload
-          );
-
-        const created =
-          createdResponse?.data ??
-          createdResponse;
-
-        console.log(
-          "CREATE SUCCESS:",
-          createdResponse
-        );
-
-        const newPurchase = {
-          backendId:
-            created?.id,
-
-          id:
-            created?.po_number ||
-            `PO-${created?.id}`,
-
-          supplierId:
-            created?.supplier_id ||
-            Number(form.supplier),
-
-          supplier:
-            suppliers.find(
-              (supplier) =>
-                Number(
-                  supplier.id
-                ) ===
-                Number(
-                  created?.supplier_id ||
-                    form.supplier
-                )
-            )?.name ||
-            `Supplier #${
-              created?.supplier_id ||
-              form.supplier
-            }`,
-
-          storeId:
-            created?.store_id ??
-            Number(form.storeId),
-
-          invoiceNumber:
-            created?.invoice_number ||
-            created?.invoice_no ||
-            form.invoiceNumber ||
-            `INV-${created?.id}`,
-          purchaseDate:
-            created?.created_at ||
-            form.purchaseDate ||
-            "",
-
-          items: quantity,
-
-          subtotal: totalAmount,
-
-          gst:
-            Number(form.gst) || 0,
-
-          discount:
-            Number(form.discount) ||
-            0,
-
-          total: totalAmount,
-
-          paymentStatus:
-            form.status ===
-            "Received"
-              ? "Paid"
-              : form.paymentStatus ||
-                "Pending",
-
-          status:
-            created?.status ===
-            "received"
-              ? "Received"
-              : created?.status ===
-                "cancelled"
-              ? "Cancelled"
-              : "Pending",
-
-          backendStatus:
-            String(
-              created?.status ||
-                "draft"
-            ).toLowerCase(),
-
-          rawData:
-            created || {},
-
-          remarks:
-            created?.remarks ||
-            form.remarks ||
-            "",
         };
 
-        setPurchases((prev) => [
-          newPurchase,
-          ...prev,
-        ]);
+        console.log("CREATE PAYLOAD:", payload);
+
+        const createdResponse = await createPurchaseOrder(payload);
+        console.log("CREATE SUCCESS:", createdResponse);
 
         setError("");
         setModal(null);
-
-        alert(
-          "Purchase created successfully!"
-        );
-
+        alert("Purchase created successfully!");
+        await fetchPurchases();
         return;
       }
 
@@ -2387,15 +2684,12 @@ const Purchases = () => {
 
       const matchSearch =
         !q ||
-        purchase.id
-          ?.toLowerCase()
-          .includes(q) ||
-        purchase.supplier
-          ?.toLowerCase()
-          .includes(q) ||
-        purchase.invoiceNumber
-          ?.toLowerCase()
-          .includes(q);
+        purchase.id?.toLowerCase().includes(q) ||
+        String(purchase.backendId || "").includes(q) ||
+        purchase.supplier?.toLowerCase().includes(q) ||
+        purchase.invoiceNumber?.toLowerCase().includes(q) ||
+        purchase.storeName?.toLowerCase().includes(q) ||
+        String(purchase.storeId || "").includes(q);
 
       const matchStatus =
         filterStatus === "All" ||
@@ -2479,9 +2773,14 @@ const Purchases = () => {
         p.status === "Cancelled"
     ).length;
 
+  const approvedCount = purchases.filter(
+    (p) => p.status === "Approved"
+  ).length;
+
   const STATUS_TABS = [
     { key: "All", label: "All Purchases", count: purchases.length, dotColor: "#6366f1" },
     { key: "Pending", label: "Pending", count: pendingCount, dotColor: "#f59e0b" },
+    { key: "Approved", label: "Approved", count: approvedCount, dotColor: "#2563eb" },
     { key: "Received", label: "Received", count: receivedCount, dotColor: "#10b981" },
     { key: "Cancelled", label: "Cancelled", count: cancelledCount, dotColor: "#ef4444" },
   ];
@@ -2560,7 +2859,25 @@ const Purchases = () => {
             </p>
           </div>
 
-          <div className="adm-header-actions">
+          <div className="adm-header-actions" style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="adm-btn-secondary"
+              onClick={() => fetchPurchases()}
+              disabled={loading}
+              title="Refresh Purchases"
+              aria-label="Refresh Purchases"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 14px",
+                cursor: loading ? "not-allowed" : "pointer",
+              }}
+            >
+              <BsArrowRepeat size={15} />
+              <span>Refresh</span>
+            </button>
             <button
               type="button"
               className="adm-btn-primary"
@@ -2795,6 +3112,7 @@ const Purchases = () => {
             >
               <option value="All">All Statuses</option>
               <option value="Pending">⏳ Pending</option>
+              <option value="Approved">✔️ Approved</option>
               <option value="Received">✅ Received</option>
               <option value="Cancelled">❌ Cancelled</option>
             </select>
@@ -2848,16 +3166,16 @@ const Purchases = () => {
         {/* TABLE */}
 
         <div
-          className="chart-card"
+          className="chart-card purchase-table-container"
           style={{
             padding: 0,
-            overflow:
-              "hidden",
+            overflowX: "auto",
           }}
         >
           <table
             style={{
               width: "100%",
+              minWidth: "1050px",
               borderCollapse:
                 "collapse",
             }}
@@ -2892,7 +3210,9 @@ const Purchases = () => {
                         padding:
                           "12px 14px",
                         textAlign:
-                          "left",
+                          heading === "Actions" ? "right" : "left",
+                        minWidth:
+                          heading === "Actions" ? "250px" : undefined,
                         fontSize: 11,
                         fontWeight: 700,
                         color:
@@ -3044,7 +3364,7 @@ const Purchases = () => {
                             margin: 0,
                           }}
                         >
-                          {purchase.storeId ?? "-"}
+                          {purchase.storeName || (purchase.storeId ? `Store #${purchase.storeId}` : "-")}
                         </p>
 
                         <span
@@ -3054,7 +3374,7 @@ const Purchases = () => {
                               "#9ca3af",
                           }}
                         >
-                          Store ID
+                          {purchase.storeId ? `Store ID: ${purchase.storeId}` : "Destination"}
                         </span>
                       </td>
 
@@ -3177,138 +3497,195 @@ const Purchases = () => {
                         style={{
                           padding:
                             "12px 14px",
+                          minWidth: "250px",
+                          textAlign: "right",
                         }}
                       >
-                        <div
-                          style={{
-                            display:
-                              "flex",
-                            gap: 6,
-                          }}
-                        >
-                          {/* VIEW */}
+                        {(() => {
+                          const pStatus = getPurchaseStatus(purchase);
+                          const isDraft =
+                            pStatus === "draft" || pStatus === "pending";
+                          const isApproved = pStatus === "approved";
+                          const isReceived = pStatus === "received";
+                          const isCancelled =
+                            pStatus === "cancelled" || pStatus === "canceled";
 
-                          <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            style={{
-                              padding:
-                                "5px 9px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 5,
-                              cursor:
-                                "pointer",
-                            }}
-                            title="View"
-                            aria-label="View purchase order"
-                            onClick={() =>
-                              handleViewPurchase(
-                                purchase
-                              )
-                            }
-                          >
-                            <BsEye size={14} />
-                          </button>
+                          // Status-based action rules:
+                          // - Draft / Pending: View, Edit, Delete, Approve, Cancel, Download / PDF
+                          // - Approved: View, Receive, Cancel, Download / PDF
+                          // - Received: View, Download / PDF
+                          // - Cancelled: View, Download / PDF
+                          // - Unknown: View, Download / PDF
+                          const showView = true;
+                          const showEdit = isDraft;
+                          const showApprove = isDraft;
+                          const showReceive = isApproved;
+                          const showCancel = isDraft || isApproved;
+                          const showDownload = true;
+                          const showDelete = isDraft;
 
-                          {/* EDIT */}
+                          const pKey =
+                            purchase.backendId ??
+                            purchase?.rawData?.id ??
+                            purchase.id;
 
-                          <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            style={{
-                              padding:
-                                "5px 9px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 5,
-                              cursor: isDraftPurchase(purchase)
-                                ? "pointer"
-                                : "not-allowed",
-                              opacity: isDraftPurchase(purchase)
-                                ? 1
-                                : 0.45,
-                            }}
-                            disabled={!isDraftPurchase(purchase)}
-                            title={
-                              isDraftPurchase(purchase)
-                                ? "Edit"
-                                : "Only draft orders can be edited"
-                            }
-                            aria-label="Edit purchase order"
-                            onClick={() =>
-                              handleEditPurchase(
-                                purchase
-                              )
-                            }
-                          >
-                            <BsPencilFill size={14} />
-                          </button>
+                          return (
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: 6,
+                                alignItems: "center",
+                                justifyContent: "flex-end",
+                                flexWrap: "nowrap",
+                              }}
+                            >
+                              {/* VIEW */}
+                              {showView && (
+                                <button
+                                  type="button"
+                                  className="adm-btn-secondary"
+                                  title="View Purchase Order"
+                                  aria-label="View"
+                                  onClick={() =>
+                                    handleViewPurchase(purchase)
+                                  }
+                                >
+                                  <BsEye size={14} />
+                                </button>
+                              )}
 
-                          {/* RECEIVE */}
+                              {/* EDIT */}
+                              {showEdit && (
+                                <button
+                                  type="button"
+                                  className="adm-btn-secondary"
+                                  title="Edit Purchase Order"
+                                  aria-label="Edit"
+                                  onClick={() =>
+                                    handleEditPurchase(purchase)
+                                  }
+                                >
+                                  <BsPencilFill size={14} />
+                                </button>
+                              )}
 
-                          <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            style={{
-                              padding: "5px 9px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: isDraftPurchase(purchase)
-                                ? "pointer"
-                                : "not-allowed",
-                              opacity: isDraftPurchase(purchase)
-                                ? 1
-                                : 0.45,
-                            }}
-                            disabled={!isDraftPurchase(purchase)}
-                            onClick={() =>
-                              handleReceivePurchase(purchase)
-                            }
-                            title="Receive"
-                            aria-label="Receive purchase order"
-                          >
-                            <BsCheckCircleFill size={14} />
-                          </button>
+                              {/* APPROVE */}
+                              {showApprove && (
+                                <button
+                                  type="button"
+                                  className="adm-btn-secondary adm-btn-approve"
+                                  title="Approve Purchase Order"
+                                  aria-label="Approve"
+                                  disabled={approvingId === pKey}
+                                  onClick={() =>
+                                    handleApproveClick(purchase)
+                                  }
+                                >
+                                  {approvingId === pKey ? (
+                                    <BsArrowRepeat
+                                      className="animate-spin"
+                                      size={14}
+                                    />
+                                  ) : (
+                                    <BsCheckLg size={14} />
+                                  )}
+                                </button>
+                              )}
 
-                          {/* DELETE */}
+                              {/* RECEIVE */}
+                              {showReceive && (
+                                <button
+                                  type="button"
+                                  className="adm-btn-secondary adm-btn-receive"
+                                  title="Receive Purchase Order"
+                                  aria-label="Receive"
+                                  disabled={receivingId === pKey}
+                                  onClick={() =>
+                                    handleReceiveClick(purchase)
+                                  }
+                                >
+                                  {receivingId === pKey ? (
+                                    <BsArrowRepeat
+                                      className="animate-spin"
+                                      size={14}
+                                    />
+                                  ) : (
+                                    <BsBoxSeam size={14} />
+                                  )}
+                                </button>
+                              )}
 
-                          <button
-                            type="button"
-                            className="adm-btn-secondary adm-btn-delete"
-                            style={{
-                              padding: "5px 9px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: isDraftPurchase(purchase) && deletingId !== (purchase.backendId ?? purchase?.rawData?.id ?? purchase.id)
-                                ? "pointer"
-                                : "not-allowed",
-                              opacity: isDraftPurchase(purchase) && deletingId !== (purchase.backendId ?? purchase?.rawData?.id ?? purchase.id)
-                                ? 1
-                                : 0.45,
-                            }}
-                            disabled={
-                              !isDraftPurchase(purchase) ||
-                              deletingId ===
-                                (purchase.backendId ??
-                                  purchase?.rawData?.id ??
-                                  purchase.id)
-                            }
-                            onClick={() =>
-                              handleDeleteClick(purchase)
-                            }
-                            title={
-                              isDraftPurchase(purchase)
-                                ? "Delete"
-                                : "Only draft orders can be deleted"
-                            }
-                            aria-label="Delete purchase order"
-                          >
-                            <BsTrash size={14} />
-                          </button>
-                        </div>
+                              {/* CANCEL */}
+                              {showCancel && (
+                                <button
+                                  type="button"
+                                  className="adm-btn-secondary adm-btn-cancel"
+                                  title="Cancel Purchase Order"
+                                  aria-label="Cancel"
+                                  disabled={cancellingId === pKey}
+                                  onClick={() =>
+                                    handleCancelClick(purchase)
+                                  }
+                                >
+                                  {cancellingId === pKey ? (
+                                    <BsArrowRepeat
+                                      className="animate-spin"
+                                      size={14}
+                                    />
+                                  ) : (
+                                    <BsSlashCircle size={14} />
+                                  )}
+                                </button>
+                              )}
+
+                              {/* DOWNLOAD / PDF */}
+                              {showDownload && (
+                                <button
+                                  type="button"
+                                  className="adm-btn-secondary adm-btn-pdf"
+                                  title="Download Purchase Order PDF"
+                                  aria-label="PDF"
+                                  disabled={downloadingId === pKey}
+                                  onClick={() =>
+                                    handleDownloadPdf(purchase)
+                                  }
+                                >
+                                  {downloadingId === pKey ? (
+                                    <BsArrowRepeat
+                                      className="animate-spin"
+                                      size={14}
+                                    />
+                                  ) : (
+                                    <BsFileEarmarkPdf size={14} />
+                                  )}
+                                </button>
+                              )}
+
+                              {/* DELETE */}
+                              {showDelete && (
+                                <button
+                                  type="button"
+                                  className="adm-btn-secondary adm-btn-delete"
+                                  title="Delete Purchase Order"
+                                  aria-label="Delete"
+                                  disabled={deletingId === pKey}
+                                  onClick={() =>
+                                    handleDeleteClick(purchase)
+                                  }
+                                >
+                                  {deletingId === pKey ? (
+                                    <BsArrowRepeat
+                                      className="animate-spin"
+                                      size={14}
+                                    />
+                                  ) : (
+                                    <BsTrash size={14} />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
@@ -3517,6 +3894,11 @@ const Purchases = () => {
             }
             onSave={handleSave}
             suppliers={suppliers}
+            stores={stores}
+            products={products}
+            onSupplierAdded={(newSup) => {
+              setSuppliers((prev) => [newSup, ...prev]);
+            }}
           />
         )}
 
@@ -3531,6 +3913,436 @@ const Purchases = () => {
               setModal(null)
             }
           />
+        )}
+
+        {/* APPROVE CONFIRMATION MODAL */}
+        {purchaseToApprove && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(15, 23, 42, 0.55)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: 20,
+              backdropFilter: "blur(3px)",
+            }}
+          >
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: 12,
+                maxWidth: 440,
+                width: "100%",
+                padding: "24px",
+                boxShadow:
+                  "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 10px 0",
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "#111827",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <BsCheckLg style={{ color: "#059669" }} size={18} />
+                Approve Purchase Order
+              </h3>
+              <p
+                style={{
+                  margin: "0 0 16px 0",
+                  fontSize: 13.5,
+                  color: "#4b5563",
+                  lineHeight: 1.5,
+                }}
+              >
+                Are you sure you want to approve purchase order{" "}
+                <strong>
+                  {purchaseToApprove.poNumber ||
+                    purchaseToApprove.id ||
+                    `#${purchaseToApprove.backendId}`}
+                </strong>
+                ? Once approved, it can be received into inventory.
+              </p>
+              {approveError && (
+                <div
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fee2e2",
+                    color: "#dc2626",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    marginBottom: 16,
+                  }}
+                >
+                  {approveError}
+                </div>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                }}
+              >
+                <button
+                  type="button"
+                  className="adm-btn-secondary"
+                  disabled={approvingId !== null}
+                  onClick={handleCancelApprove}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    cursor: approvingId !== null ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="adm-btn-secondary adm-btn-approve"
+                  disabled={approvingId !== null}
+                  onClick={handleConfirmApprove}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    cursor: approvingId !== null ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  {approvingId !== null ? (
+                    <BsArrowRepeat className="animate-spin" size={14} />
+                  ) : (
+                    <BsCheckLg size={14} />
+                  )}
+                  {approvingId !== null ? "Approving..." : "Confirm Approval"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* RECEIVE CONFIRMATION MODAL */}
+        {purchaseToReceive && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(15, 23, 42, 0.55)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: 20,
+              backdropFilter: "blur(3px)",
+            }}
+          >
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: 12,
+                maxWidth: 440,
+                width: "100%",
+                padding: "24px",
+                boxShadow:
+                  "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 10px 0",
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "#111827",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <BsBoxSeam style={{ color: "#0284c7" }} size={18} />
+                Receive Purchase Order
+              </h3>
+              <p
+                style={{
+                  margin: "0 0 14px 0",
+                  fontSize: 13.5,
+                  color: "#4b5563",
+                  lineHeight: 1.5,
+                }}
+              >
+                Receive order{" "}
+                <strong>
+                  {purchaseToReceive.poNumber ||
+                    purchaseToReceive.id ||
+                    `#${purchaseToReceive.backendId}`}
+                </strong>{" "}
+                into inventory stock.
+              </p>
+
+              <div style={{ marginBottom: 16 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    color: "#374151",
+                    marginBottom: 6,
+                  }}
+                >
+                  Invoice / DC Number (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={receiveInvoiceNo}
+                  onChange={(e) => setReceiveInvoiceNo(e.target.value)}
+                  placeholder="e.g. INV-2026-001"
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #d1d5db",
+                    fontSize: 13,
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {receiveError && (
+                <div
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fee2e2",
+                    color: "#dc2626",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    marginBottom: 16,
+                  }}
+                >
+                  {receiveError}
+                </div>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                }}
+              >
+                <button
+                  type="button"
+                  className="adm-btn-secondary"
+                  disabled={receivingId !== null}
+                  onClick={handleCancelReceive}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    cursor: receivingId !== null ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="adm-btn-secondary adm-btn-receive"
+                  disabled={receivingId !== null}
+                  onClick={handleConfirmReceive}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    cursor: receivingId !== null ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  {receivingId !== null ? (
+                    <BsArrowRepeat className="animate-spin" size={14} />
+                  ) : (
+                    <BsBoxSeam size={14} />
+                  )}
+                  {receivingId !== null ? "Receiving..." : "Confirm Receipt"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CANCEL CONFIRMATION MODAL */}
+        {purchaseToCancel && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(15, 23, 42, 0.55)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              padding: 20,
+              backdropFilter: "blur(3px)",
+            }}
+          >
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: 12,
+                maxWidth: 440,
+                width: "100%",
+                padding: "24px",
+                boxShadow:
+                  "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e5e7eb",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 10px 0",
+                  fontSize: 17,
+                  fontWeight: 700,
+                  color: "#111827",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <BsSlashCircle style={{ color: "#d97706" }} size={18} />
+                Cancel Purchase Order
+              </h3>
+              <p
+                style={{
+                  margin: "0 0 14px 0",
+                  fontSize: 13.5,
+                  color: "#4b5563",
+                  lineHeight: 1.5,
+                }}
+              >
+                Are you sure you want to cancel purchase order{" "}
+                <strong>
+                  {purchaseToCancel.poNumber ||
+                    purchaseToCancel.id ||
+                    `#${purchaseToCancel.backendId}`}
+                </strong>
+                ?
+              </p>
+
+              <div style={{ marginBottom: 16 }}>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    color: "#374151",
+                    marginBottom: 6,
+                  }}
+                >
+                  Cancellation Reason
+                </label>
+                <textarea
+                  rows={3}
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="e.g. Supplier out of stock, duplicate order..."
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #d1d5db",
+                    fontSize: 13,
+                    outline: "none",
+                    resize: "vertical",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+
+              {cancelError && (
+                <div
+                  style={{
+                    background: "#fef2f2",
+                    border: "1px solid #fee2e2",
+                    color: "#dc2626",
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    fontSize: 13,
+                    marginBottom: 16,
+                  }}
+                >
+                  {cancelError}
+                </div>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: 10,
+                }}
+              >
+                <button
+                  type="button"
+                  className="adm-btn-secondary"
+                  disabled={cancellingId !== null}
+                  onClick={handleCloseCancelModal}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    cursor: cancellingId !== null ? "not-allowed" : "pointer",
+                  }}
+                >
+                  Keep Order
+                </button>
+                <button
+                  type="button"
+                  className="adm-btn-secondary adm-btn-cancel"
+                  disabled={cancellingId !== null}
+                  onClick={handleConfirmCancel}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    cursor: cancellingId !== null ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  {cancellingId !== null ? (
+                    <BsArrowRepeat className="animate-spin" size={14} />
+                  ) : (
+                    <BsSlashCircle size={14} />
+                  )}
+                  {cancellingId !== null ? "Cancelling..." : "Confirm Cancel"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* DELETE CONFIRMATION MODAL */}

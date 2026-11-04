@@ -47,7 +47,12 @@ axiosInstance.interceptors.request.use(
     });
 
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      if (config.headers?.set) {
+        config.headers.set("Authorization", `Bearer ${token}`);
+      } else {
+        config.headers = config.headers || {};
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
 
     return config;
@@ -108,7 +113,12 @@ axiosInstance.interceptors.response.use(
           failedQueue.push({ resolve, reject });
         })
           .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
+            if (originalRequest.headers?.set) {
+              originalRequest.headers.set("Authorization", `Bearer ${token}`);
+            } else {
+              originalRequest.headers = originalRequest.headers || {};
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
             return axiosInstance(originalRequest);
           })
           .catch((err) => Promise.reject(err));
@@ -130,7 +140,7 @@ axiosInstance.interceptors.response.use(
 
       try {
         const response = await axios.post(
-          "https://api-testing.myretailos.com/api/v1/auth/refresh",
+          `${normalizedBaseURL}/auth/refresh`,
           { refresh_token: refreshToken },
           { headers: { "Content-Type": "application/json" } }
         );
@@ -143,7 +153,12 @@ axiosInstance.interceptors.response.use(
         });
 
         axiosInstance.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
-        originalRequest.headers.Authorization = `Bearer ${access_token}`;
+        if (originalRequest.headers?.set) {
+          originalRequest.headers.set("Authorization", `Bearer ${access_token}`);
+        } else {
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+        }
 
         processQueue(null, access_token);
         return axiosInstance(originalRequest);

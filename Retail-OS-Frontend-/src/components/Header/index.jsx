@@ -42,8 +42,9 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
         currentPath.startsWith('/billing-management') ||
         currentPath.startsWith('/gst-management')
     );
-    const shouldHideSearchBar = isCustomerModule || isBillingGstModule;
-
+    const isDashboard = currentPath === '/dashboard' || currentPath === '/';
+    const isStoreTransfers = currentPath === '/inventory/store-transfers' || currentPath.startsWith('/inventory/store-transfers/');
+    const shouldHideSearchBar = isCustomerModule || isBillingGstModule || isDashboard || isStoreTransfers;
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
@@ -448,7 +449,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                 <BsList size={20} />
             </button>
 
-            {/* Search Bar - Hidden on Customer module & all Billing and GST modules */}
+            {/* Search Bar - Hidden on Customer module, Billing/GST, Dashboard, and Store Transfers */}
             {!shouldHideSearchBar && (
                 <div className="header-search-wrap" ref={searchWrapRef} style={{ flex: 1, position: 'relative' }}>
                     <BsSearch className="header-search-icon" size={14} />

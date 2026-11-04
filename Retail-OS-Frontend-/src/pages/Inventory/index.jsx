@@ -414,18 +414,24 @@ expiry_date:
 ========================================================= */
 
 const getItemStock = (item) => {
-    if (
-        item?.quantity !== undefined &&
-        item?.quantity !== null
-    ) {
-        return Number(item.quantity);
-    }
+    const candidates = [
+        item?.quantity,
+        item?.stock,
+        item?.available_stock,
+        item?.available_quantity,
+        item?.availableQuantity,
+        item?.current_stock,
+        item?.currentStock,
+        item?.qty,
+    ];
 
-    if (
-        item?.stock !== undefined &&
-        item?.stock !== null
-    ) {
-        return Number(item.stock);
+    for (const val of candidates) {
+        if (val !== undefined && val !== null && val !== "") {
+            const num = Number(val);
+            if (Number.isFinite(num)) {
+                return num;
+            }
+        }
     }
 
     return 0;
@@ -444,20 +450,18 @@ const getItemMinStock = (item) => {
         item?.product?.low_stock_threshold,
         item?.product?.minimum_stock,
         item?.product?.min_stock,
+        item?.product?.minStock,
         item?.product?.reorder_level,
+        item?.product?.reorderLevel,
     ];
 
     for (const val of candidates) {
-        if (val !== undefined && val !== null) {
+        if (val !== undefined && val !== null && val !== "") {
             const num = Number(val);
             if (Number.isFinite(num) && num > 0) {
                 return num;
             }
         }
-    }
-
-    if (item?.is_low_stock === true || item?.stock_status === "Low Stock" || item?.stock_status === "Critical") {
-        return 10;
     }
 
     return 0;
@@ -483,12 +487,15 @@ const getItemSellingPrice = (item) => {
 
 /* =========================================================
    STOCK STATUS
+   Strictly determined by available quantity and minimum stock /
+   reorder threshold. Selling/purchase price does NOT determine status.
 ========================================================= */
 
 const stockStatus = (item) => {
     const stock = getItemStock(item);
     const minStock = getItemMinStock(item);
 
+    // 1. Available Quantity <= 0 -> Out of Stock
     if (stock <= 0) {
         return {
             label: "Out of Stock",
@@ -497,6 +504,7 @@ const stockStatus = (item) => {
         };
     }
 
+    // 2. Available Quantity > 0 and below or equal to Minimum Stock -> Low Stock
     const isLow =
         item?.is_low_stock === true ||
         item?.stock_status === "Low Stock" ||
@@ -513,6 +521,7 @@ const stockStatus = (item) => {
         };
     }
 
+    // 3. Available Quantity greater than Minimum Stock (or minStock === 0) -> In Stock
     return {
         label: "In Stock",
         color: "#059669",
@@ -2361,28 +2370,7 @@ const Inventory = () => {
                 (item) => item.is_low_stock === true || stockStatus(item).label === "Low Stock"
             );
 
-            if (!hasMarkedLowStock) {
-                const candidate = finalInventory
-                    .filter((item) => getItemStock(item) > 0)
-                    .sort((a, b) => getItemStock(a) - getItemStock(b))[0];
-
-                if (candidate && getItemStock(candidate) <= 10) {
-                    finalInventory = finalInventory.map((item) => {
-                        if (item === candidate) {
-                            return {
-                                ...item,
-                                is_low_stock: true,
-                                stock_status: "Low Stock",
-                                low_stock_threshold:
-                                    Number(item?.low_stock_threshold) > 0
-                                        ? Number(item.low_stock_threshold)
-                                        : 10,
-                            };
-                        }
-                        return item;
-                    });
-                }
-            }
+            // Preserving genuine inventory status without artificial mutation
 
             console.log(
                 "MERGED INVENTORY =>",
@@ -3229,13 +3217,13 @@ const fetchValuation = async () => {
 
             const isLowMatch =
                 effectiveStatusFilter === "Low Stock" &&
+                stock > 0 &&
                 (st.label === "Low Stock" ||
                     st.label === "Critical" ||
                     item?.is_low_stock === true ||
                     item?.stock_status === "Low Stock" ||
                     item?.stock_status === "Critical" ||
-                    (minStock > 0 && stock <= minStock) ||
-                    stock <= 0);
+                    (minStock > 0 && stock <= minStock));
 
             const isOutMatch =
                 effectiveStatusFilter === "Out of Stock" &&
@@ -3539,21 +3527,26 @@ if (action === "transfer") {
         );
 
     const lowStockCount =
-        inventory.filter(
-            (item) =>
+        inventory.filter((item) => {
+            const stock = getItemStock(item);
+            if (stock <= 0) return false;
+            const minStock = getItemMinStock(item);
+            return (
                 stockStatus(item).label === "Low Stock" ||
                 item?.is_low_stock === true ||
                 item?.stock_status === "Low Stock" ||
-                (getItemMinStock(item) > 0 && getItemStock(item) <= getItemMinStock(item)) ||
-                getItemStock(item) <= 0
-        ).length;
+                (minStock > 0 && stock <= minStock)
+            );
+        }).length;
 
     const outOfStockCount =
-        inventory.filter(
-            (item) =>
-                getItemStock(item) <= 0 ||
+        inventory.filter((item) => {
+            const stock = getItemStock(item);
+            return (
+                stock <= 0 ||
                 stockStatus(item).label === "Out of Stock"
-        ).length;
+            );
+        }).length;
 
     /* =====================================================
        DASHBOARD KPI HELPERS
