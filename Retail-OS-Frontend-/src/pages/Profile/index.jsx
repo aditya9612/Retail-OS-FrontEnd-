@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     BsPerson,
     BsEnvelope,
@@ -12,19 +12,71 @@ import {
     BsEye,
     BsEyeSlash,
 } from 'react-icons/bs';
-import { getInitials } from '../../utils/userHelpers';
+import { getInitials, resolveUserInfo } from '../../utils/userHelpers';
 import { auth } from '../../services/auth';
 
 const Profile = () => {
-    const storedUser = JSON.parse(localStorage.getItem('user')) || {};
+    const [storedUser, setStoredUser] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user')) || {};
+        } catch {
+            return {};
+        }
+    });
+
+    const resolved = useMemo(() => resolveUserInfo(storedUser), [storedUser]);
 
     const [userForm, setUserForm] = useState({
-        name: storedUser?.full_name || storedUser?.name || 'Akshay Chavan',
-        email: storedUser?.email || 'akshay.chavan@shekruweb.com',
-        phone: storedUser?.phone || '+91 98345 78460',
-        address: storedUser?.address || 'Pune Main Branch, Maharashtra',
-        role: storedUser?.role?.name || storedUser?.role || 'System Administrator',
+        name: resolved.name,
+        email: resolved.email,
+        phone: (storedUser?.phone && storedUser.phone !== '+91 98345 78460') ? storedUser.phone : '',
+        address: (storedUser?.address && storedUser.address !== 'Pune Main Branch, Maharashtra') ? storedUser.address : '',
+        role: resolved.role,
     });
+
+    // Auto-correct localStorage if stored name mismatches credentials
+    useEffect(() => {
+        if (storedUser?.email && (storedUser.full_name !== resolved.name || storedUser.name !== resolved.name)) {
+            const corrected = {
+                ...storedUser,
+                full_name: resolved.name,
+                name: resolved.name,
+                email: resolved.email,
+                role: typeof resolved.role === 'object' ? resolved.role : { name: resolved.role },
+            };
+            localStorage.setItem('user', JSON.stringify(corrected));
+            window.dispatchEvent(new Event('storage'));
+            window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: corrected }));
+        }
+    }, [resolved.name, resolved.email, storedUser]);
+
+    // Keep form in sync when user data updates
+    useEffect(() => {
+        setUserForm(prev => ({
+            ...prev,
+            name: resolved.name,
+            email: resolved.email,
+            role: resolved.role,
+        }));
+    }, [resolved.name, resolved.email, resolved.role]);
+
+    useEffect(() => {
+        const handleUserUpdate = (e) => {
+            try {
+                const updated = e?.detail || JSON.parse(localStorage.getItem('user')) || {};
+                setStoredUser(updated);
+            } catch {
+                setStoredUser({});
+            }
+        };
+
+        window.addEventListener('storage', handleUserUpdate);
+        window.addEventListener('userProfileUpdated', handleUserUpdate);
+        return () => {
+            window.removeEventListener('storage', handleUserUpdate);
+            window.removeEventListener('userProfileUpdated', handleUserUpdate);
+        };
+    }, []);
 
     const [showPinModal, setShowPinModal] = useState(false);
     const [currentPin, setCurrentPin] = useState('');
@@ -54,8 +106,18 @@ const Profile = () => {
 
     const handleSaveProfile = (e) => {
         e.preventDefault();
-        const updated = { ...storedUser, full_name: userForm.name, email: userForm.email, phone: userForm.phone, address: userForm.address };
+        const updated = {
+            ...storedUser,
+            full_name: userForm.name,
+            name: userForm.name,
+            email: userForm.email,
+            phone: userForm.phone,
+            address: userForm.address,
+            is_custom_name: true,
+        };
         localStorage.setItem('user', JSON.stringify(updated));
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: updated }));
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
     };
