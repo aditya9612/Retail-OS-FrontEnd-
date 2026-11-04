@@ -125,6 +125,8 @@ const PurchaseOrderReturns = () => {
   // Lookup by Number State
   const [lookupNumber, setLookupNumber] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupResult, setLookupResult] = useState(null);
+  const [lookupError, setLookupError] = useState("");
 
   // Row Processing States
   const [approvingId, setApprovingId] = useState(null);
@@ -573,54 +575,85 @@ const PurchaseOrderReturns = () => {
   // GET /api/v1/purchase-order-returns/by-number/{return_number}
   // =====================================================
   const handleLookupByNumber = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
+    if (e) {
+      if (typeof e.preventDefault === "function") e.preventDefault();
+      if (typeof e.stopPropagation === "function") e.stopPropagation();
+    }
 
     if (lookupLoading) return;
 
-    const trimmed = lookupNumber.trim();
-    if (!trimmed) {
-      setActionError("Please enter a return number.");
-      return;
-    }
+    const trimmed = String(lookupNumber || "").trim();
 
     try {
       setLookupLoading(true);
+      setLookupError("");
       setActionError("");
       setActionSuccess("");
       setDetailsError("");
 
-      const res = await getPurchaseOrderReturnByNumber(trimmed);
-      console.log("Lookup By Number API Response:", res);
+      if (!trimmed) {
+        setLookupError("Please enter a Return Number (e.g. POR-20261027064857-50D2), Debit Note #, or Return ID to lookup.");
+        setLookupLoading(false);
+        return;
+      }
 
-      const returnData = res?.data ?? res;
+      let returnData = null;
+
+      try {
+        const res = await getPurchaseOrderReturnByNumber(trimmed);
+        console.log("Lookup By Number API Response:", res);
+        returnData = res?.data ?? res;
+      } catch (byNumErr) {
+        // If 404 and input is numeric (e.g. "12" or "#12"), attempt fallback to lookup by ID
+        const cleanDigits = trimmed.replace(/^#/, "").trim();
+        if (/^\d+$/.test(cleanDigits)) {
+          try {
+            const idRes = await getPurchaseOrderReturnById(Number(cleanDigits));
+            returnData = idRes?.data ?? idRes;
+          } catch (_) {
+            throw byNumErr;
+          }
+        } else {
+          throw byNumErr;
+        }
+      }
+
       if (
         returnData &&
         (returnData.id || returnData.return_number || returnData.debit_note_number)
       ) {
+        setLookupResult(returnData);
         setSelectedReturn(returnData);
+        setLookupError("");
         setActionSuccess(
           `Found Return #${returnData.id ?? ""} (${
             returnData.return_number || returnData.debit_note_number || trimmed
           })`
         );
       } else {
-        setActionError("No purchase order return found for this return number.");
+        setLookupResult(null);
+        setLookupError(`No purchase order return record found for '${trimmed}'.`);
       }
     } catch (err) {
-      console.error("Failed to lookup return by number:", err);
+      console.error("Failed to lookup return:", err);
+      setLookupResult(null);
       if (err?.response?.status === 404) {
-        setActionError("No purchase order return found for this return number.");
-      } else if (err?.response?.status === 422) {
-        const message = extractErrorMessage(err, "Invalid return number format.");
-        setActionError(message);
+        setLookupError(`No purchase order return found matching '${trimmed}'. Please verify the Return Number.`);
       } else if (err?.response?.status === 401) {
-        setActionError("Unauthorized. Please check your credentials or log in again.");
+        setLookupError("Unauthorized (401). Please check your credentials or log in again.");
+      } else if (err?.response?.status === 403) {
+        setLookupError("Access denied (403). You do not have permission to view purchase returns.");
+      } else if (err?.response?.status === 422) {
+        const message = extractErrorMessage(err, "Invalid return number format (422).");
+        setLookupError(message);
+      } else if (err?.response?.status >= 500) {
+        setLookupError("Backend server error (500). Please try again later.");
       } else {
         const message = extractErrorMessage(
           err,
-          `Failed to lookup return with number '${trimmed}'.`
+          `Failed to lookup return '${trimmed}'.`
         );
-        setActionError(message);
+        setLookupError(message);
       }
     } finally {
       setLookupLoading(false);
@@ -1512,15 +1545,30 @@ const PurchaseOrderReturns = () => {
       )}
 
       {/* QUICK LOOKUP BY RETURN NUMBER BAR (GET /by-number/{return_number}) */}
-      <form className="purchase-order-returns-lookup-bar" onSubmit={handleLookupByNumber}>
+      <form
+        className="purchase-order-returns-lookup-bar"
+        onSubmit={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          handleLookupByNumber(e);
+        }}
+      >
         <input
           type="text"
           className="purchase-order-returns-lookup-input"
-          placeholder="Lookup by Return Number (e.g. POR-20261027064857-50D2)..."
+          placeholder="Lookup by Return Number (e.g. POR-20261027064857-50D2) or Debit Note #..."
           value={lookupNumber}
           onChange={(e) => {
             setLookupNumber(e.target.value);
             if (actionError) setActionError("");
+            if (lookupError) setLookupError("");
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              handleLookupByNumber(e);
+            }
           }}
           disabled={lookupLoading}
         />
@@ -1528,9 +1576,13 @@ const PurchaseOrderReturns = () => {
           <button
             type="button"
             className="purchase-order-returns-lookup-clear"
-            onClick={() => {
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
               setLookupNumber("");
               setActionError("");
+              setLookupError("");
+              setLookupResult(null);
             }}
             disabled={lookupLoading}
             title="Clear lookup input"
@@ -1539,13 +1591,199 @@ const PurchaseOrderReturns = () => {
           </button>
         )}
         <button
-          type="submit"
+          type="button"
           className="purchase-order-returns-lookup-btn"
-          disabled={lookupLoading || !lookupNumber.trim()}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleLookupByNumber(e);
+          }}
+          disabled={lookupLoading}
+          title="Lookup purchase order return from backend API"
         >
           {lookupLoading ? "Looking up..." : "Lookup Return"}
         </button>
       </form>
+
+      {/* LOOKUP ERROR BANNER WITH RETRY */}
+      {lookupError && (
+        <div
+          className="purchase-order-returns-error"
+          style={{
+            margin: "0 0 12px 0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <span>{lookupError}</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleLookupByNumber(e);
+              }}
+              style={{
+                padding: "3px 10px",
+                fontSize: 11,
+                cursor: "pointer",
+                borderRadius: 4,
+                border: "1px solid #f87171",
+                background: "#ffffff",
+                color: "#dc2626",
+                fontWeight: 600,
+              }}
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => setLookupError("")}
+              style={{
+                padding: "3px 8px",
+                fontSize: 11,
+                cursor: "pointer",
+                borderRadius: 4,
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                color: "#64748b",
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* LOOKUP RESULT PREVIEW CARD */}
+      {lookupResult && (
+        <div
+          className="purchase-order-return-details"
+          style={{
+            margin: "0 0 16px 0",
+            borderColor: "#6366f1",
+            boxShadow: "0 4px 12px rgba(99, 102, 241, 0.08)",
+          }}
+        >
+          <div className="purchase-order-return-details-header">
+            <div>
+              <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Lookup Return Result</span>
+                <span
+                  className={
+                    "purchase-order-return-status status-" +
+                    String(lookupResult.status || "").toLowerCase()
+                  }
+                  style={{ fontSize: 11, padding: "2px 8px" }}
+                >
+                  {lookupResult.status || "N/A"}
+                </span>
+              </h3>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>
+                Found via <code>/by-number/</code> API endpoint
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              {lookupResult.id && (
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPdf(lookupResult.id, lookupResult)}
+                  disabled={downloadingPdfId === lookupResult.id}
+                  title="Download Debit Note PDF"
+                >
+                  {downloadingPdfId === lookupResult.id ? "Downloading..." : "Download PDF"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setLookupResult(null)}
+                title="Close lookup result preview"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          <div className="purchase-order-return-details-grid">
+            <p>
+              <strong>Return ID:</strong> {lookupResult.id ?? "N/A"}
+            </p>
+            <p>
+              <strong>Return Number:</strong>{" "}
+              <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#4f46e5" }}>
+                {lookupResult.return_number || lookupResult.return_no || "N/A"}
+              </span>
+            </p>
+            <p>
+              <strong>Debit Note #:</strong> {lookupResult.debit_note_number ?? "N/A"}
+            </p>
+            <p>
+              <strong>PO Number:</strong>{" "}
+              {lookupResult.purchase_order_number ||
+                (lookupResult.purchase_order_id
+                  ? `PO #${lookupResult.purchase_order_id}`
+                  : "N/A")}
+            </p>
+            <p>
+              <strong>Supplier:</strong>{" "}
+              {lookupResult.supplier_name ||
+                lookupResult.supplier?.name ||
+                (lookupResult.supplier_id ? `Supplier #${lookupResult.supplier_id}` : "N/A")}
+            </p>
+            <p>
+              <strong>Total Debit:</strong>{" "}
+              <strong style={{ color: "#059669" }}>
+                {formatCurrency(lookupResult.total_amount ?? lookupResult.amount)}
+              </strong>
+            </p>
+            <p>
+              <strong>Store / Warehouse:</strong>{" "}
+              {lookupResult.store_name || lookupResult.warehouse_name || "N/A"}
+            </p>
+            <p>
+              <strong>Reason:</strong> {lookupResult.reason || "N/A"}
+            </p>
+          </div>
+
+          {Array.isArray(lookupResult.items) && lookupResult.items.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <h5 style={{ margin: "0 0 6px", fontSize: 12, color: "#334155" }}>
+                Returned Items ({lookupResult.items.length})
+              </h5>
+              <div className="purchase-order-returns-table-wrapper">
+                <table className="purchase-order-returns-table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>SKU</th>
+                      <th>Quantity</th>
+                      <th>Unit Price</th>
+                      <th>Total Cost</th>
+                      <th>Item Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lookupResult.items.map((it, idx) => (
+                      <tr key={it.id || idx}>
+                        <td>{it.product_name || `Product #${it.product_id || "-"}`}</td>
+                        <td>{it.product_sku || it.sku || "-"}</td>
+                        <td>{it.quantity ?? 0}</td>
+                        <td>{formatCurrency(it.unit_price ?? it.cost_price ?? 0)}</td>
+                        <td>{formatCurrency(it.total_cost ?? it.total_amount ?? 0)}</td>
+                        <td>{it.reason || it.item_reason || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* CREATE RETURN MODAL / FORM */}
       {showCreateForm && (

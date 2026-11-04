@@ -32,6 +32,8 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const navigate = useNavigate();
     const location = useLocation();
     const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
+    const isStoreTransfers = location.pathname === '/inventory/store-transfers' || location.pathname.startsWith('/inventory/store-transfers/');
+    const hideSearch = isDashboard || isStoreTransfers;
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
@@ -329,8 +331,8 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
 
     return (
         <header className="pos-header">
-            {/* Search Bar - hidden on Admin Dashboard */}
-            {!isDashboard ? (
+            {/* Search Bar - hidden on Admin Dashboard and Store Transfers page (which has its own main search) */}
+            {!hideSearch ? (
                 <div className="header-search-wrap" ref={searchWrapRef} style={{ flex: 1, position: 'relative' }}>
                 <BsSearch className="header-search-icon" size={14} />
                 <input

@@ -316,6 +316,14 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
   const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
     if (!supplier?.id) return;
     let isMounted = true;
     const fetchHistory = async () => {
@@ -360,16 +368,43 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
 
   const supplierName =
     data?.supplier_name || supplier?.name || `Supplier #${supplier?.id}`;
+
+  const purchaseOrders = useMemo(() => {
+    if (Array.isArray(data?.purchase_history)) return data.purchase_history;
+    if (Array.isArray(data?.data?.purchase_history)) return data.data.purchase_history;
+    if (Array.isArray(data?.data)) return data.data;
+    if (Array.isArray(data)) return data;
+    return [];
+  }, [data]);
+
+  const filteredOrders = useMemo(() => {
+    if (!statusFilter || statusFilter === "all") return purchaseOrders;
+    const norm = statusFilter.toLowerCase();
+    return purchaseOrders.filter((order) => {
+      const orderStatus = String(order?.status || "").toLowerCase();
+      if (norm === "draft" && (orderStatus === "draft" || orderStatus === "pending")) return true;
+      if (norm === "pending" && (orderStatus === "draft" || orderStatus === "pending")) return true;
+      if (norm === "received" && (orderStatus === "received" || orderStatus === "completed")) return true;
+      return orderStatus === norm;
+    });
+  }, [purchaseOrders, statusFilter]);
+
   const totalPurchases =
-    data?.total_purchases !== undefined && data?.total_purchases !== null
+    statusFilter === "all" && data?.total_purchases !== undefined && data?.total_purchases !== null
       ? data.total_purchases
       : loading
       ? "..."
-      : 0;
-  const totalAmountSpent = data?.total_amount_spent ?? 0;
-  const purchaseOrders = Array.isArray(data?.purchase_history)
-    ? data.purchase_history
-    : [];
+      : filteredOrders.length;
+
+  const totalAmountSpent = useMemo(() => {
+    if (statusFilter === "all" && data?.total_amount_spent !== undefined && data?.total_amount_spent !== null && Number(data.total_amount_spent) > 0) {
+      return data.total_amount_spent;
+    }
+    return filteredOrders.reduce(
+      (sum, o) => sum + (Number(o?.total_amount) || 0),
+      0
+    );
+  }, [data, filteredOrders, statusFilter]);
 
   return (
     <div className="sup-modal-overlay" onClick={onClose}>
@@ -470,16 +505,17 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <option value="all">All Statuses</option>
-                <option value="completed">Completed</option>
                 <option value="received">Received</option>
-                <option value="ordered">Ordered</option>
+                <option value="partially_received">Partially Received</option>
+                <option value="approved">Approved</option>
+                <option value="draft">Draft</option>
                 <option value="pending">Pending</option>
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
 
             <span className="sup-hist-record-count">
-              Showing <strong>{purchaseOrders.length}</strong> purchase record(s)
+              Showing <strong>{filteredOrders.length}</strong> purchase record(s)
             </span>
           </div>
 
@@ -505,7 +541,7 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
               </div>
             )}
 
-            {!loading && !error && purchaseOrders.length === 0 && (
+            {!loading && !error && filteredOrders.length === 0 && (
               <div className="sup-empty-state" style={{ padding: 48 }}>
                 <div className="sup-empty-icon">📦</div>
                 <p className="sup-empty-title">No purchase history records found</p>
@@ -513,7 +549,7 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
               </div>
             )}
 
-          {!loading && !error && purchaseOrders.length > 0 && (
+          {!loading && !error && filteredOrders.length > 0 && (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr
@@ -524,8 +560,8 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
                 >
                   {[
                     "Order / PO #",
-                    "Invoice #",
-                    "Date",
+                    "Purchase Date",
+                    "Supplier Name",
                     "Store / Warehouse",
                     "Status",
                     "Quantity",
@@ -548,7 +584,7 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
                 </tr>
               </thead>
               <tbody>
-                {purchaseOrders.map((order) => {
+                {filteredOrders.map((order) => {
                   const isExpanded = expandedOrderId === order.id;
                   const orderDate = formatDate(order.created_at);
                   const statusNormalized = (
@@ -590,7 +626,19 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
                             color: "#111827",
                           }}
                         >
-                          {orderIdentifier}
+                          <span style={{ fontFamily: "monospace" }}>{orderIdentifier}</span>
+                          {order.invoice_number && (
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: 11,
+                                color: "#64748b",
+                                fontWeight: 400,
+                              }}
+                            >
+                              Inv: {order.invoice_number}
+                            </span>
+                          )}
                           {hasItems && (
                             <span
                               style={{
@@ -604,26 +652,27 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
                           )}
                         </td>
 
-                        {/* Invoice # */}
+                        {/* Purchase Date */}
                         <td
                           style={{
                             padding: "10px 12px",
                             fontSize: 12,
-                            color: "#4b5563",
-                          }}
-                        >
-                          {order.invoice_number || "-"}
-                        </td>
-
-                        {/* Date */}
-                        <td
-                          style={{
-                            padding: "10px 12px",
-                            fontSize: 12,
-                            color: "#6b7280",
+                            color: "#475569",
                           }}
                         >
                           {orderDate}
+                        </td>
+
+                        {/* Supplier Name */}
+                        <td
+                          style={{
+                            padding: "10px 12px",
+                            fontSize: 12,
+                            color: "#1e293b",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {order.supplier_name || supplier?.name || supplierName || "—"}
                         </td>
 
                         {/* Store / Warehouse */}
@@ -634,7 +683,13 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
                             color: "#374151",
                           }}
                         >
-                          {order.warehouse_name || order.store_name || "-"}
+                          {order.warehouse_name ||
+                            order.store_name ||
+                            (order.warehouse_id
+                              ? `Warehouse #${order.warehouse_id}`
+                              : order.store_id
+                              ? `Store #${order.store_id}`
+                              : "—")}
                         </td>
 
                         {/* Status */}
@@ -1361,11 +1416,11 @@ const Supplier = () => {
           <table className="sup-table">
             <thead>
               <tr>
-                <th style={{ width: "28%" }}>Supplier</th>
-                <th style={{ width: "20%" }}>Email</th>
-                <th style={{ width: "16%" }}>Phone</th>
-                <th style={{ width: "22%" }}>Address & GSTIN</th>
-                <th className="text-right" style={{ width: "14%" }}>Actions</th>
+                <th style={{ width: "24%" }}>Supplier</th>
+                <th style={{ width: "18%" }}>Email</th>
+                <th style={{ width: "14%" }}>Phone</th>
+                <th style={{ width: "20%" }}>Address & GSTIN</th>
+                <th className="text-right" style={{ width: "24%" }}>Actions</th>
               </tr>
             </thead>
 
@@ -1461,12 +1516,14 @@ const Supplier = () => {
                       <div className="sup-actions">
                         {/* PURCHASE HISTORY */}
                         <button
+                          type="button"
                           className="sup-btn-action sup-btn-history"
-                          title="View Purchase History"
+                          title="Purchase History"
+                          aria-label={`Purchase History for ${supplier.name || "supplier"}`}
                           onClick={() => setHistorySupplier(supplier)}
                         >
                           <BsClockHistory size={13} />
-                          <span>History</span>
+                          <span>Purchase History</span>
                         </button>
 
                         {/* EDIT */}

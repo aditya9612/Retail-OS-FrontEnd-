@@ -3554,4 +3554,236 @@ body {
 
 .modal-scrollable-body::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
-}
+}
+
+/* ─────────────────────────────────────────
+   Store Transfers Action Buttons
+───────────────────────────────────────── */
+.store-transfers-actions-cell {
+  padding: 10px 14px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.store-transfers-actions-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.store-transfers-action-divider {
+  width: 1px;
+  height: 16px;
+  background-color: #e2e8f0;
+  margin: 0 3px;
+  flex-shrink: 0;
+}
+
+.store-transfer-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+  user-select: none;
+  border: 1px solid transparent;
+}
+
+.store-transfer-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* Button variants */
+.store-transfer-btn-view {
+  background: #f8fafc;
+  color: #4f46e5;
+  border-color: #e0e7ff;
+}
+.store-transfer-btn-view:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+}
+
+.store-transfer-btn-items {
+  background: #f8fafc;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+.store-transfer-btn-items:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+.store-transfer-btn-items.active {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+.store-transfer-btn-approve {
+  background: #ecfdf5;
+  color: #059669;
+  border-color: #a7f3d0;
+}
+.store-transfer-btn-approve:hover:not(:disabled) {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.store-transfer-btn-reject {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+.store-transfer-btn-reject:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.store-transfer-btn-dispatch {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #bfdbfe;
+}
+.store-transfer-btn-dispatch:hover:not(:disabled) {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.store-transfer-btn-receive {
+  background: #ecfdf5;
+  color: #059669;
+  border-color: #a7f3d0;
+}
+.store-transfer-btn-receive:hover:not(:disabled) {
+  background: #d1fae5;
+  border-color: #6ee7b7;
+}
+
+.store-transfer-btn-discrepancy {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+.store-transfer-btn-discrepancy:hover:not(:disabled) {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+/* ─────────────────────────────────────────
+   Store Transfers Modal Action Buttons
+───────────────────────────────────────── */
+.store-transfers-modal-footer {
+  padding: 14px 22px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justifyContent: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.store-transfers-modal-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.store-transfer-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: all 0.15s ease-in-out;
+  border: 1px solid transparent;
+  user-select: none;
+}
+
+.store-transfer-modal-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.store-transfer-modal-btn-approve {
+  background: #059669;
+  color: #ffffff;
+  border-color: #059669;
+}
+.store-transfer-modal-btn-approve:hover:not(:disabled) {
+  background: #047857;
+  border-color: #047857;
+}
+
+.store-transfer-modal-btn-reject {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
+}
+.store-transfer-modal-btn-reject:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.store-transfer-modal-btn-dispatch {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+.store-transfer-modal-btn-dispatch:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.store-transfer-modal-btn-receive {
+  background: #059669;
+  color: #ffffff;
+  border-color: #059669;
+}
+.store-transfer-modal-btn-receive:hover:not(:disabled) {
+  background: #047857;
+  border-color: #047857;
+}
+
+.store-transfer-modal-btn-discrepancy {
+  background: #d97706;
+  color: #ffffff;
+  border-color: #d97706;
+}
+.store-transfer-modal-btn-discrepancy:hover:not(:disabled) {
+  background: #b45309;
+  border-color: #b45309;
+}
+
+.store-transfer-modal-btn-close {
+  background: #ffffff;
+  color: #374151;
+  border-color: #d1d5db;
+}
+.store-transfer-modal-btn-close:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: #111827;
+}

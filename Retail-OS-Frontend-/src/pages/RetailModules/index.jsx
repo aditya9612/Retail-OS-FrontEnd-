@@ -9162,7 +9162,7 @@ export const StoreTransfersPage = () => {
                                     Transfer Analytics & Insights
                                 </h3>
                                 <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280' }}>
-                                    Route volume, top products, and recent activity from GET /api/v1/store-transfers/summary
+                                    Route volume, top transferred products, and recent transfer activity
                                 </p>
                             </div>
                         </div>
@@ -9441,7 +9441,7 @@ export const StoreTransfersPage = () => {
                 </div>
 
                 <span style={{ fontSize: 12, color: '#6b7280' }}>
-                    GET /api/v1/store-transfers?skip=0&limit=100
+                    Store Transfer Directory
                 </span>
             </div>
 
@@ -9485,7 +9485,7 @@ export const StoreTransfersPage = () => {
                                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 130 }}>Status</th>
                                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 150, whiteSpace: 'nowrap' }}>Created Date</th>
                                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 140 }}>Approved By</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', textAlign: 'center', minWidth: 320, whiteSpace: 'nowrap' }}>Actions</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 14px', textAlign: 'left', minWidth: 360, whiteSpace: 'nowrap' }}>Actions</th>
                             </tr>
                         </thead>
                     <tbody>
@@ -9702,195 +9702,24 @@ export const StoreTransfersPage = () => {
                                             </td>
 
                                             {/* Transfer Actions */}
-                                            <td style={{ padding: '12px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
-                                                    {/* Approve button - only visible for Pending transfers */}
-                                                    {normalizeStatus(statusRaw) === 'pending' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRequestApprove(tr)}
-                                                            disabled={isSrcInactive || approvingTransferId === trId || rejectingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId}
-                                                            title={isSrcInactive ? "Cannot approve this transfer because its source store is inactive or has been deleted." : "Approve this stock transfer"}
-                                                            style={{
-                                                                background: isSrcInactive ? '#f3f4f6' : '#ecfdf5',
-                                                                color: isSrcInactive ? '#9ca3af' : '#059669',
-                                                                border: isSrcInactive ? '1px solid #e5e7eb' : '1px solid #a7f3d0',
-                                                                padding: '5px 9px',
-                                                                borderRadius: 6,
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: (isSrcInactive || approvingTransferId === trId || rejectingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId) ? 'not-allowed' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4
-                                                            }}
-                                                        >
-                                                            <BsCheckCircle size={13} /> {approvingTransferId === trId ? "..." : "Approve"}
-                                                        </button>
-                                                    )}
-                                                    {/* Reject button - only visible for Pending transfers */}
-                                                    {normalizeStatus(statusRaw) === 'pending' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRequestReject(tr)}
-                                                            disabled={rejectingTransferId === trId || approvingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId}
-                                                            title="Reject this stock transfer"
-                                                            style={{
-                                                                background: '#fef2f2',
-                                                                color: '#dc2626',
-                                                                border: '1px solid #fecaca',
-                                                                padding: '5px 9px',
-                                                                borderRadius: 6,
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: (rejectingTransferId === trId || approvingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId) ? 'not-allowed' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4
-                                                            }}
-                                                        >
-                                                            <BsXCircle size={13} /> {rejectingTransferId === trId ? "..." : "Reject"}
-                                                        </button>
-                                                    )}
-                                                    {/* Dispatch button - only visible for Approved transfers */}
-                                                    {normalizeStatus(statusRaw) === 'approved' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRequestDispatch(tr)}
-                                                            disabled={dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingTransferId === trId}
-                                                            title="Dispatch this approved stock transfer"
-                                                            style={{
-                                                                background: '#eff6ff',
-                                                                color: '#2563eb',
-                                                                border: '1px solid #bfdbfe',
-                                                                padding: '5px 9px',
-                                                                borderRadius: 6,
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: (dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingTransferId === trId) ? 'not-allowed' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4
-                                                            }}
-                                                        >
-                                                            <BsTruck size={13} /> {dispatchingTransferId === trId ? "..." : "Dispatch"}
-                                                        </button>
-                                                    )}
-                                                    {/* Receive button - only visible for Dispatched transfers */}
-                                                    {normalizeStatus(statusRaw) === 'dispatched' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRequestReceive(tr)}
-                                                            disabled={receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId}
-                                                            title="Receive this dispatched stock transfer"
-                                                            style={{
-                                                                background: '#ecfdf5',
-                                                                color: '#059669',
-                                                                border: '1px solid #a7f3d0',
-                                                                padding: '5px 9px',
-                                                                borderRadius: 6,
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: (receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId) ? 'not-allowed' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4
-                                                            }}
-                                                        >
-                                                            <BsBoxSeam size={13} /> {receivingTransferId === trId ? "..." : "Receive"}
-                                                        </button>
-                                                    )}
-                                                    {/* Receive With Discrepancy button */}
-                                                    {normalizeStatus(statusRaw) === 'dispatched' ? (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRequestReceiveWithDiscrepancy(tr)}
-                                                            disabled={receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId || receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId}
-                                                            title="Receive this dispatched transfer with discrepancy breakdown (good, damaged, missing)"
-                                                            style={{
-                                                                background: '#fffbeb',
-                                                                color: '#b45309',
-                                                                border: '1px solid #fde68a',
-                                                                padding: '5px 9px',
-                                                                borderRadius: 6,
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: (receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId || receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId) ? 'not-allowed' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4
-                                                            }}
-                                                        >
-                                                            <BsExclamationTriangle size={13} /> {verifyingDiscrepancyStatusId === trId ? "Verifying..." : receivingDiscrepancyTransferId === trId ? "..." : "Discrepancy"}
-                                                        </button>
-                                                    ) : (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => handleRequestReceiveWithDiscrepancy(tr)}
-                                                            title={
-                                                                normalizeStatus(statusRaw) === 'pending'
-                                                                    ? `Receive with Discrepancy is disabled: transfer is pending approval and dispatch`
-                                                                    : normalizeStatus(statusRaw) === 'approved'
-                                                                    ? `Receive with Discrepancy is disabled: transfer must be dispatched first`
-                                                                    : normalizeStatus(statusRaw) === 'received'
-                                                                    ? `Transfer already received`
-                                                                    : `Receive with Discrepancy is disabled for "${statusRaw}" transfers`
-                                                            }
-                                                            style={{
-                                                                background: '#f9fafb',
-                                                                color: '#9ca3af',
-                                                                border: '1px solid #e5e7eb',
-                                                                padding: '5px 9px',
-                                                                borderRadius: 6,
-                                                                fontSize: 12,
-                                                                fontWeight: 500,
-                                                                cursor: verifyingDiscrepancyStatusId === trId ? 'wait' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4,
-                                                                opacity: 0.75
-                                                            }}
-                                                        >
-                                                            <BsExclamationTriangle size={13} /> {verifyingDiscrepancyStatusId === trId ? "Verifying..." : "Discrepancy"}
-                                                        </button>
-                                                    )}
+                                            <td className="store-transfers-actions-cell" style={{ padding: '10px 14px', textAlign: 'left', minWidth: 360, whiteSpace: 'nowrap' }}>
+                                                <div className="store-transfers-actions-wrapper" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-start', gap: 5, flexWrap: 'nowrap' }}>
+                                                    {/* 1. View button - Logical primary inspection action across ALL statuses */}
                                                     <button
                                                         type="button"
+                                                        className="store-transfer-action-btn store-transfer-btn-view"
                                                         onClick={() => handleOpenDetailsModal(trId)}
-                                                        title="View full transfer details (GET API)"
-                                                        style={{
-                                                            background: '#eef2ff',
-                                                            color: '#4f46e5',
-                                                            border: '1px solid #c7d2fe',
-                                                            padding: '5px 9px',
-                                                            borderRadius: 6,
-                                                            fontSize: 12,
-                                                            fontWeight: 600,
-                                                            cursor: 'pointer',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 4
-                                                        }}
+                                                        title="View full transfer details"
                                                     >
                                                         <BsEye size={13} /> View
                                                     </button>
+
+                                                    {/* 2. Items breakdown expand/collapse toggle - Available on ALL transfers */}
                                                     <button
                                                         type="button"
+                                                        className={`store-transfer-action-btn store-transfer-btn-items ${isExpanded ? 'active' : ''}`}
                                                         onClick={() => toggleExpandRow(trId)}
-                                                        title={isExpanded ? "Hide items breakdown" : "View items breakdown"}
-                                                        style={{
-                                                            background: isExpanded ? '#f1f5f9' : '#f9fafb',
-                                                            color: '#475569',
-                                                            border: '1px solid #e2e8f0',
-                                                            padding: '5px 9px',
-                                                            borderRadius: 6,
-                                                            fontSize: 12,
-                                                            fontWeight: 600,
-                                                            cursor: 'pointer',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 4
-                                                        }}
+                                                        title={isExpanded ? "Hide product items breakdown" : "View product items breakdown"}
                                                     >
                                                         {isExpanded ? (
                                                             <>Hide <BsChevronUp size={11} /></>
@@ -9898,6 +9727,79 @@ export const StoreTransfersPage = () => {
                                                             <>Items <BsChevronDown size={11} /></>
                                                         )}
                                                     </button>
+
+                                                    {/* Subtle visual divider before status progression buttons */}
+                                                    {['pending', 'approved', 'dispatched'].includes(statusNorm) && (
+                                                        <span className="store-transfers-action-divider" style={{ width: 1, height: 16, background: '#e2e8f0', margin: '0 3px', flexShrink: 0 }} />
+                                                    )}
+
+                                                    {/* 3. Status-based Workflow Progression Actions */}
+
+                                                    {/* Pending transfers: Approve */}
+                                                    {statusNorm === 'pending' && (
+                                                        <button
+                                                            type="button"
+                                                            className="store-transfer-action-btn store-transfer-btn-approve"
+                                                            onClick={() => handleRequestApprove(tr)}
+                                                            disabled={isSrcInactive || approvingTransferId === trId || rejectingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId}
+                                                            title={isSrcInactive ? "Cannot approve this transfer because its source store is inactive or has been deleted." : "Approve this stock transfer"}
+                                                            style={isSrcInactive ? { background: '#f3f4f6', color: '#9ca3af', borderColor: '#e5e7eb', cursor: 'not-allowed' } : {}}
+                                                        >
+                                                            <BsCheckCircle size={13} /> {approvingTransferId === trId ? "..." : "Approve"}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Pending transfers: Reject */}
+                                                    {statusNorm === 'pending' && (
+                                                        <button
+                                                            type="button"
+                                                            className="store-transfer-action-btn store-transfer-btn-reject"
+                                                            onClick={() => handleRequestReject(tr)}
+                                                            disabled={rejectingTransferId === trId || approvingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId}
+                                                            title="Reject this stock transfer"
+                                                        >
+                                                            <BsXCircle size={13} /> {rejectingTransferId === trId ? "..." : "Reject"}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Approved transfers: Dispatch */}
+                                                    {statusNorm === 'approved' && (
+                                                        <button
+                                                            type="button"
+                                                            className="store-transfer-action-btn store-transfer-btn-dispatch"
+                                                            onClick={() => handleRequestDispatch(tr)}
+                                                            disabled={dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingTransferId === trId}
+                                                            title="Dispatch this approved stock transfer"
+                                                        >
+                                                            <BsTruck size={13} /> {dispatchingTransferId === trId ? "..." : "Dispatch"}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Dispatched transfers: Receive */}
+                                                    {statusNorm === 'dispatched' && (
+                                                        <button
+                                                            type="button"
+                                                            className="store-transfer-action-btn store-transfer-btn-receive"
+                                                            onClick={() => handleRequestReceive(tr)}
+                                                            disabled={receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId}
+                                                            title="Receive this dispatched stock transfer"
+                                                        >
+                                                            <BsBoxSeam size={13} /> {receivingTransferId === trId ? "..." : "Receive"}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Dispatched transfers: Receive With Discrepancy */}
+                                                    {statusNorm === 'dispatched' && (
+                                                        <button
+                                                            type="button"
+                                                            className="store-transfer-action-btn store-transfer-btn-discrepancy"
+                                                            onClick={() => handleRequestReceiveWithDiscrepancy(tr)}
+                                                            disabled={receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId || receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId}
+                                                            title="Receive this dispatched transfer with discrepancy breakdown (good, damaged, missing)"
+                                                        >
+                                                            <BsExclamationTriangle size={13} /> {verifyingDiscrepancyStatusId === trId ? "Verifying..." : receivingDiscrepancyTransferId === trId ? "..." : "Discrepancy"}
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -9936,9 +9838,9 @@ export const StoreTransfersPage = () => {
                                                                     <thead>
                                                                         <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', textAlign: 'left', background: '#f8fafc' }}>
                                                                             <th style={{ padding: '8px 12px' }}>Product ID</th>
-                                                                            <th style={{ padding: '8px 12px' }}>Product Name</th>
+                                                                            <th style={{ padding: '8px 12px' }}>Product Details</th>
                                                                             <th style={{ padding: '8px 12px' }}>SKU</th>
-                                                                            <th style={{ padding: '8px 12px', textAlign: 'right' }}>Transfer Quantity</th>
+                                                                            <th style={{ padding: '8px 12px', textAlign: 'right' }}>Quantity</th>
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody>
@@ -10101,7 +10003,7 @@ export const StoreTransfersPage = () => {
                                         Transfer Details {detailsData?.transfer_number ? `— ${detailsData.transfer_number}` : (selectedDetailsTransferId ? `— #${selectedDetailsTransferId}` : '')}
                                     </h3>
                                     <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280' }}>
-                                        Full record from GET /api/v1/store-transfers/{selectedDetailsTransferId}
+                                        Complete transfer details and itemized product breakdown
                                     </p>
                                 </div>
                             </div>
@@ -10327,7 +10229,7 @@ export const StoreTransfersPage = () => {
                                             <thead>
                                                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>
                                                     <th style={{ padding: '8px 12px' }}>Product ID</th>
-                                                    <th style={{ padding: '8px 12px' }}>Product Name</th>
+                                                    <th style={{ padding: '8px 12px' }}>Product Details</th>
                                                     <th style={{ padding: '8px 12px' }}>SKU</th>
                                                     {(detailsData.has_discrepancy || detailsData.items?.some(it => it.damaged_quantity > 0 || it.missing_quantity > 0)) ? (
                                                         <>
@@ -10395,21 +10297,13 @@ export const StoreTransfersPage = () => {
                         </div>
 
                         {/* Modal Footer */}
-                        <div style={{
-                            padding: '12px 22px',
-                            background: '#f9fafb',
-                            borderTop: '1px solid #e5e7eb',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            flexWrap: 'wrap',
-                            gap: 10
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <div className="store-transfers-modal-footer">
+                            <div className="store-transfers-modal-actions-left">
                                 {detailsData && normalizeStatus(detailsData.status) === 'pending' && (
                                     <>
                                         <button
                                             type="button"
+                                            className="store-transfer-modal-btn store-transfer-modal-btn-approve"
                                             disabled={
                                                 (detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id))) ||
                                                 approvingTransferId === detailsData.id ||
@@ -10421,51 +10315,23 @@ export const StoreTransfersPage = () => {
                                                     ? "Cannot approve this transfer because its source store is inactive or has been deleted."
                                                     : "Approve this stock transfer"
                                             }
-                                            style={{
-                                                background: detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id)) ? '#9ca3af' : '#059669',
-                                                border: 'none',
-                                                color: '#fff',
-                                                padding: '7px 18px',
-                                                borderRadius: 6,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: (
-                                                    (detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id))) ||
-                                                    approvingTransferId === detailsData.id ||
-                                                    rejectingTransferId === detailsData.id
-                                                ) ? 'not-allowed' : 'pointer',
-                                                opacity: (
-                                                    (detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id))) ||
-                                                    approvingTransferId === detailsData.id
-                                                ) ? 0.7 : 1,
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6
-                                            }}
+                                            style={
+                                                detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id))
+                                                    ? { background: '#9ca3af', borderColor: '#9ca3af', cursor: 'not-allowed' }
+                                                    : {}
+                                            }
                                         >
-                                            <BsCheckCircleFill size={13} />
+                                            <BsCheckCircleFill size={14} />
                                             {approvingTransferId === detailsData.id ? 'Approving...' : 'Approve Transfer'}
                                         </button>
                                         <button
                                             type="button"
+                                            className="store-transfer-modal-btn store-transfer-modal-btn-reject"
                                             disabled={rejectingTransferId === detailsData.id || approvingTransferId === detailsData.id}
                                             onClick={() => handleRequestReject(detailsData)}
-                                            style={{
-                                                background: '#dc2626',
-                                                border: 'none',
-                                                color: '#fff',
-                                                padding: '7px 18px',
-                                                borderRadius: 6,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: (rejectingTransferId === detailsData.id || approvingTransferId === detailsData.id) ? 'not-allowed' : 'pointer',
-                                                opacity: rejectingTransferId === detailsData.id ? 0.7 : 1,
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6
-                                            }}
+                                            title="Reject this stock transfer"
                                         >
-                                            <BsXCircleFill size={13} />
+                                            <BsXCircleFill size={14} />
                                             {rejectingTransferId === detailsData.id ? 'Rejecting...' : 'Reject Transfer'}
                                         </button>
                                     </>
@@ -10473,22 +10339,10 @@ export const StoreTransfersPage = () => {
                                 {detailsData && normalizeStatus(detailsData.status) === 'approved' && (
                                     <button
                                         type="button"
+                                        className="store-transfer-modal-btn store-transfer-modal-btn-dispatch"
                                         disabled={dispatchingTransferId === detailsData.id}
                                         onClick={() => handleRequestDispatch(detailsData)}
-                                        style={{
-                                            background: '#2563eb',
-                                            border: 'none',
-                                            color: '#fff',
-                                            padding: '7px 18px',
-                                            borderRadius: 6,
-                                            fontSize: 13,
-                                            fontWeight: 600,
-                                            cursor: dispatchingTransferId === detailsData.id ? 'not-allowed' : 'pointer',
-                                            opacity: dispatchingTransferId === detailsData.id ? 0.7 : 1,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 6
-                                        }}
+                                        title="Dispatch this approved stock transfer"
                                     >
                                         <BsTruck size={14} />
                                         {dispatchingTransferId === detailsData.id ? 'Dispatching...' : 'Dispatch Transfer'}
@@ -10498,44 +10352,20 @@ export const StoreTransfersPage = () => {
                                     <>
                                         <button
                                             type="button"
+                                            className="store-transfer-modal-btn store-transfer-modal-btn-receive"
                                             disabled={receivingTransferId === detailsData.id || receivingDiscrepancyTransferId === detailsData.id || verifyingDiscrepancyStatusId === detailsData.id}
                                             onClick={() => handleRequestReceive(detailsData)}
-                                            style={{
-                                                background: '#059669',
-                                                border: 'none',
-                                                color: '#fff',
-                                                padding: '7px 18px',
-                                                borderRadius: 6,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: (receivingTransferId === detailsData.id || receivingDiscrepancyTransferId === detailsData.id || verifyingDiscrepancyStatusId === detailsData.id) ? 'not-allowed' : 'pointer',
-                                                opacity: receivingTransferId === detailsData.id ? 0.7 : 1,
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6
-                                            }}
+                                            title="Receive this dispatched stock transfer"
                                         >
                                             <BsBoxSeam size={14} />
                                             {receivingTransferId === detailsData.id ? 'Receiving...' : 'Receive Transfer'}
                                         </button>
                                         <button
                                             type="button"
+                                            className="store-transfer-modal-btn store-transfer-modal-btn-discrepancy"
                                             disabled={receivingDiscrepancyTransferId === detailsData.id || verifyingDiscrepancyStatusId === detailsData.id || receivingTransferId === detailsData.id}
                                             onClick={() => handleRequestReceiveWithDiscrepancy(detailsData)}
-                                            style={{
-                                                background: '#d97706',
-                                                border: 'none',
-                                                color: '#fff',
-                                                padding: '7px 18px',
-                                                borderRadius: 6,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: (receivingDiscrepancyTransferId === detailsData.id || verifyingDiscrepancyStatusId === detailsData.id || receivingTransferId === detailsData.id) ? 'not-allowed' : 'pointer',
-                                                opacity: (receivingDiscrepancyTransferId === detailsData.id || verifyingDiscrepancyStatusId === detailsData.id) ? 0.7 : 1,
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6
-                                            }}
+                                            title="Receive transfer with discrepancy recorded (good, damaged, missing)"
                                         >
                                             <BsExclamationTriangle size={14} />
                                             {verifyingDiscrepancyStatusId === detailsData.id ? 'Verifying...' : receivingDiscrepancyTransferId === detailsData.id ? 'Receiving...' : 'Receive with Discrepancy'}
@@ -10547,11 +10377,11 @@ export const StoreTransfersPage = () => {
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         gap: 6,
-                                        padding: '5px 12px',
+                                        padding: '6px 14px',
                                         borderRadius: 6,
                                         background: detailsData.has_discrepancy ? '#fffbeb' : '#f8fafc',
                                         border: `1px solid ${detailsData.has_discrepancy ? '#fde68a' : '#e2e8f0'}`,
-                                        fontSize: 12,
+                                        fontSize: 12.5,
                                         color: detailsData.has_discrepancy ? '#b45309' : '#64748b'
                                     }}>
                                         <BsExclamationTriangle size={13} color={detailsData.has_discrepancy ? '#d97706' : '#94a3b8'} />
@@ -10565,17 +10395,8 @@ export const StoreTransfersPage = () => {
                             </div>
                             <button
                                 type="button"
+                                className="store-transfer-modal-btn store-transfer-modal-btn-close"
                                 onClick={handleCloseDetailsModal}
-                                style={{
-                                    background: '#fff',
-                                    border: '1px solid #d1d5db',
-                                    color: '#374151',
-                                    padding: '7px 18px',
-                                    borderRadius: 6,
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    cursor: 'pointer'
-                                }}
                             >
                                 Close
                             </button>
@@ -10672,19 +10493,19 @@ export const StoreTransfersPage = () => {
                                 rowGap: 8,
                                 columnGap: 12
                             }}>
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer #:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
                                 <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
                                     {confirmApproveTransfer.transfer_number || `#${confirmApproveTransfer.id}`}
                                 </span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
                                 <span>{confirmApproveTransfer.source_store_name || confirmApproveTransfer.source_store || `Store #${confirmApproveTransfer.source_store_id || 'N/A'}`}</span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
                                 <span>{confirmApproveTransfer.destination_store_name || confirmApproveTransfer.destination_store || `Store #${confirmApproveTransfer.destination_store_id || 'N/A'}`}</span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Items:</span>
-                                <span>{confirmApproveTransfer.total_items ?? (confirmApproveTransfer.items?.length ?? 1)} item(s) (Qty: {confirmApproveTransfer.total_quantity ?? '—'})</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items:</span>
+                                <span>{confirmApproveTransfer.total_items ?? (confirmApproveTransfer.items?.length ?? 1)} item(s) (Quantity: {confirmApproveTransfer.total_quantity ?? '—'})</span>
                             </div>
                             <p style={{ margin: '14px 0 0', fontSize: 12, color: '#6b7280' }}>
                                 This action will validate source stock availability and transition this transfer to Approved.
@@ -10838,19 +10659,19 @@ export const StoreTransfersPage = () => {
                                 columnGap: 12,
                                 marginBottom: 16
                             }}>
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer #:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
                                 <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
                                     {confirmRejectTransfer.transfer_number || `#${confirmRejectTransfer.id}`}
                                 </span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
                                 <span>{confirmRejectTransfer.source_store_name || confirmRejectTransfer.source_store || `Store #${confirmRejectTransfer.source_store_id || 'N/A'}`}</span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
                                 <span>{confirmRejectTransfer.destination_store_name || confirmRejectTransfer.destination_store || `Store #${confirmRejectTransfer.destination_store_id || 'N/A'}`}</span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Items:</span>
-                                <span>{confirmRejectTransfer.total_items ?? (confirmRejectTransfer.items?.length ?? 1)} item(s) (Qty: {confirmRejectTransfer.total_quantity ?? '—'})</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items:</span>
+                                <span>{confirmRejectTransfer.total_items ?? (confirmRejectTransfer.items?.length ?? 1)} item(s) (Quantity: {confirmRejectTransfer.total_quantity ?? '—'})</span>
                             </div>
 
                             {/* Rejection Reason Input */}
@@ -11042,12 +10863,12 @@ export const StoreTransfersPage = () => {
                                 rowGap: 8,
                                 columnGap: 12
                             }}>
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer #:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
                                 <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
                                     {confirmDispatchTransfer.transfer_number || `#${confirmDispatchTransfer.id}`}
                                 </span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Current Status:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Status:</span>
                                 <span>
                                     <span style={{
                                         display: 'inline-block',
@@ -11062,14 +10883,14 @@ export const StoreTransfersPage = () => {
                                     </span>
                                 </span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
                                 <span>{confirmDispatchTransfer.source_store_name || confirmDispatchTransfer.source_store || `Store #${confirmDispatchTransfer.source_store_id || 'N/A'}`}</span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
                                 <span>{confirmDispatchTransfer.destination_store_name || confirmDispatchTransfer.destination_store || `Store #${confirmDispatchTransfer.destination_store_id || 'N/A'}`}</span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Items:</span>
-                                <span>{confirmDispatchTransfer.total_items ?? (confirmDispatchTransfer.items?.length ?? 1)} item(s) (Qty: {confirmDispatchTransfer.total_quantity ?? '—'})</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items:</span>
+                                <span>{confirmDispatchTransfer.total_items ?? (confirmDispatchTransfer.items?.length ?? 1)} item(s) (Quantity: {confirmDispatchTransfer.total_quantity ?? '—'})</span>
                             </div>
                         </div>
 
@@ -11215,12 +11036,12 @@ export const StoreTransfersPage = () => {
                                 rowGap: 8,
                                 columnGap: 12
                             }}>
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer #:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
                                 <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
                                     {confirmReceiveTransfer.transfer_number || `#${confirmReceiveTransfer.id}`}
                                 </span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Current Status:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Status:</span>
                                 <span>
                                     <span style={{
                                         display: 'inline-block',
@@ -11235,13 +11056,13 @@ export const StoreTransfersPage = () => {
                                     </span>
                                 </span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
                                 <span>{confirmReceiveTransfer.source_store_name || confirmReceiveTransfer.source_store || `Store #${confirmReceiveTransfer.source_store_id || 'N/A'}`}</span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
                                 <span>{confirmReceiveTransfer.destination_store_name || confirmReceiveTransfer.destination_store || `Store #${confirmReceiveTransfer.destination_store_id || 'N/A'}`}</span>
 
-                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Items & Units:</span>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items & Quantity:</span>
                                 <span>{confirmReceiveTransfer.total_items ?? (confirmReceiveTransfer.items?.length ?? 1)} item(s) | Total: {Number(confirmReceiveTransfer.total_quantity ?? 0).toLocaleString()} units</span>
                             </div>
 
@@ -11260,9 +11081,9 @@ export const StoreTransfersPage = () => {
                                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                                         <thead>
                                             <tr style={{ background: '#f3f4f6', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>
-                                                <th style={{ padding: '6px 10px', color: '#4b5563', fontWeight: 600 }}>Product</th>
+                                                <th style={{ padding: '6px 10px', color: '#4b5563', fontWeight: 600 }}>Product Details</th>
                                                 <th style={{ padding: '6px 10px', color: '#4b5563', fontWeight: 600 }}>SKU</th>
-                                                <th style={{ padding: '6px 10px', color: '#4b5563', fontWeight: 600, textAlign: 'right' }}>Qty</th>
+                                                <th style={{ padding: '6px 10px', color: '#4b5563', fontWeight: 600, textAlign: 'right' }}>Quantity</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -11439,9 +11260,9 @@ export const StoreTransfersPage = () => {
                             gap: 12
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                                <span><strong>Transfer:</strong> <span style={{ fontFamily: 'monospace', color: '#4f46e5' }}>{discrepancyTransfer.transfer_number || `#${discrepancyTransfer.id}`}</span></span>
-                                <span><strong>From:</strong> {discrepancyTransfer.source_store_name || `Store #${discrepancyTransfer.source_store_id || 'N/A'}`}</span>
-                                <span><strong>To:</strong> {discrepancyTransfer.destination_store_name || `Store #${discrepancyTransfer.destination_store_id || 'N/A'}`}</span>
+                                <span><strong>Transfer Number:</strong> <span style={{ fontFamily: 'monospace', color: '#4f46e5' }}>{discrepancyTransfer.transfer_number || `#${discrepancyTransfer.id}`}</span></span>
+                                <span><strong>Source Store:</strong> {discrepancyTransfer.source_store_name || `Store #${discrepancyTransfer.source_store_id || 'N/A'}`}</span>
+                                <span><strong>Destination Store:</strong> {discrepancyTransfer.destination_store_name || `Store #${discrepancyTransfer.destination_store_id || 'N/A'}`}</span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <span style={{
@@ -11497,12 +11318,12 @@ export const StoreTransfersPage = () => {
                                     <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', fontSize: 12.5 }}>
                                         <thead>
                                             <tr style={{ background: '#f3f4f6', borderBottom: '1px solid #e5e7eb', color: '#4b5563', textAlign: 'left' }}>
-                                                <th style={{ padding: '8px 10px', minWidth: 160 }}>Product</th>
-                                                <th style={{ padding: '8px 8px', width: 85, textAlign: 'center' }}>Dispatched</th>
-                                                <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Received (Good)</th>
-                                                <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Damaged</th>
-                                                <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Missing</th>
-                                                <th style={{ padding: '8px 8px', width: 80, textAlign: 'center' }}>Accounted</th>
+                                                <th style={{ padding: '8px 10px', minWidth: 160 }}>Product Details</th>
+                                                <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Dispatched Qty</th>
+                                                <th style={{ padding: '8px 8px', width: 105, textAlign: 'center' }}>Good Qty</th>
+                                                <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Damaged Qty</th>
+                                                <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Missing Qty</th>
+                                                <th style={{ padding: '8px 8px', width: 85, textAlign: 'center' }}>Accounted Qty</th>
                                                 <th style={{ padding: '8px 10px', minWidth: 180 }}>Item Remarks</th>
                                             </tr>
                                         </thead>
@@ -11706,10 +11527,10 @@ export const StoreTransfersPage = () => {
                                         justifyContent: 'space-between'
                                     }}>
                                         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                                            <span>Dispatched: <strong>{totalDisp}</strong></span>
-                                            <span>Good Received: <strong style={{ color: '#047857' }}>{totalRec}</strong></span>
-                                            <span>Damaged: <strong style={{ color: '#dc2626' }}>{totalDmg}</strong></span>
-                                            <span>Missing: <strong style={{ color: '#d97706' }}>{totalMis}</strong></span>
+                                            <span>Dispatched Quantity: <strong>{totalDisp}</strong></span>
+                                            <span>Good Quantity: <strong style={{ color: '#047857' }}>{totalRec}</strong></span>
+                                            <span>Damaged Quantity: <strong style={{ color: '#dc2626' }}>{totalDmg}</strong></span>
+                                            <span>Missing Quantity: <strong style={{ color: '#d97706' }}>{totalMis}</strong></span>
                                         </div>
                                         <div>
                                             {isAllBalanced ? (
