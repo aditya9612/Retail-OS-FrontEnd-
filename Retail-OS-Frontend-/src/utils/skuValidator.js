@@ -3,13 +3,12 @@
  *
  * Rules:
  * 1. Mandatory field.
- * 2. Minimum length: 3 characters.
+ * 2. Minimum length: 2 characters.
  * 3. Maximum length: 50 characters.
- * 4. Allowed characters: uppercase English letters (A-Z), numbers (0-9), and hyphens (-).
- * 5. Disallow spaces.
- * 6. Disallow special characters (@, #, $, %, &, /, _, etc.).
- * 7. Disallow SKU starting or ending with a hyphen.
- * 8. Disallow consecutive hyphens (--).
+ * 4. Allowed characters: uppercase English letters (A-Z), numbers (0-9), hyphens (-), and spaces.
+ * 5. Disallow special characters (@, #, $, %, &, /, _, etc.).
+ * 6. Disallow SKU starting or ending with a hyphen or space.
+ * 7. Disallow consecutive hyphens or spaces.
  */
 
 export const normalizeSku = (sku) => {
@@ -23,40 +22,34 @@ export const validateSKUFormat = (sku) => {
     }
 
     const rawStr = String(sku);
-    if (!rawStr.trim()) {
+    const value = rawStr.trim().toUpperCase();
+    if (!value) {
         return 'SKU is required';
     }
 
-    if (/\s/.test(rawStr)) {
-        return 'SKU cannot contain spaces';
-    }
-
-    const value = rawStr.trim().toUpperCase();
-
-    if (value.length < 3) {
-        return 'SKU must be at least 3 characters long';
+    if (value.length < 2) {
+        return 'SKU must be at least 2 characters long';
     }
 
     if (value.length > 50) {
         return 'SKU cannot exceed 50 characters';
     }
 
-    if (value.startsWith('-')) {
-        return 'SKU cannot start with a hyphen (-)';
+    if (value.startsWith('-') || value.startsWith(' ')) {
+        return 'SKU cannot start with a hyphen (-) or space';
     }
 
-    if (value.endsWith('-')) {
-        return 'SKU cannot end with a hyphen (-)';
+    if (value.endsWith('-') || value.endsWith(' ')) {
+        return 'SKU cannot end with a hyphen (-) or space';
     }
 
-    if (/--/.test(value)) {
-        return 'SKU cannot contain consecutive hyphens (--)';
+    if (/[ -]{2,}/.test(value)) {
+        return 'SKU cannot contain consecutive hyphens or spaces';
     }
 
-    if (!/^[A-Z0-9-]+$/.test(value)) {
-        return 'SKU can only contain uppercase letters (A-Z), numbers (0-9), and hyphens (-)';
+    if (!/^[A-Z0-9 -]+$/.test(value)) {
+        return 'SKU can only contain uppercase letters (A-Z), numbers (0-9), spaces, and hyphens (-)';
     }
 
     return '';
 };
-

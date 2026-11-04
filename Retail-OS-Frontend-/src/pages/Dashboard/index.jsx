@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
+import '../../components/Categories/CategoryCards.css';
 import {
     ResponsiveContainer,
     BarChart,
@@ -16,6 +17,9 @@ import {
     BsShop,
     BsCalendar3,
     BsChevronDown,
+    BsChevronLeft,
+    BsChevronRight,
+    BsEye,
     BsBarChartFill,
     BsCart3,
     BsPeopleFill,
@@ -105,6 +109,77 @@ const formatSyncTime = (date) => {
         hour12: true,
     });
 };
+
+const formatStatusLabel = (str) => {
+    if (!str) return '—';
+    return String(str)
+        .trim()
+        .replace(/[_-]+/g, ' ')
+        .split(' ')
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+};
+
+const parseTransactionStatuses = (ord) => {
+    if (!ord) return { order: 'Completed', payment: 'Paid' };
+
+    const rawOrder = ord.order_status || '';
+    const rawPayment = ord.payment_status || '';
+    const rawCombined = String(ord.status || '').toLowerCase().trim();
+    const rawOrderLower = String(rawOrder).toLowerCase().trim();
+
+    // Explicit mapping from requirements specification
+    const combinedMap = {
+        draftpending: { order: 'Draft', payment: 'Pending' },
+        confirmedpending: { order: 'Confirmed', payment: 'Pending' },
+        partially_returnedpending: { order: 'Partially Returned', payment: 'Pending' },
+        partiallyreturnedpending: { order: 'Partially Returned', payment: 'Pending' },
+        confirmedpaid: { order: 'Confirmed', payment: 'Paid' },
+        completedpaid: { order: 'Completed', payment: 'Paid' },
+        draftpaid: { order: 'Draft', payment: 'Paid' },
+        cancelledpaid: { order: 'Cancelled', payment: 'Paid' },
+        cancelledpending: { order: 'Cancelled', payment: 'Pending' },
+        pendingpending: { order: 'Pending', payment: 'Pending' },
+        returnedpaid: { order: 'Returned', payment: 'Paid' },
+        returnedpending: { order: 'Returned', payment: 'Pending' },
+    };
+
+    if (rawCombined && combinedMap[rawCombined]) {
+        return combinedMap[rawCombined];
+    }
+    if (rawOrderLower && combinedMap[rawOrderLower]) {
+        return combinedMap[rawOrderLower];
+    }
+
+    // If combined string ends with known payment keywords (e.g. "partially_returnedpending")
+    const combinedCandidate = rawOrderLower || rawCombined;
+    const paymentKeywords = ['pending', 'paid', 'failed', 'refunded', 'unpaid'];
+    for (const pKey of paymentKeywords) {
+        if (combinedCandidate.endsWith(pKey) && combinedCandidate.length > pKey.length) {
+            const prefix = combinedCandidate.slice(0, -pKey.length);
+            return {
+                order: formatStatusLabel(prefix),
+                payment: rawPayment ? formatStatusLabel(rawPayment) : formatStatusLabel(pKey),
+            };
+        }
+    }
+
+    // Independent fields or fallback
+    const order = rawOrder || ord.status || 'Completed';
+    const payment = rawPayment || 'Paid';
+
+    return {
+        order: formatStatusLabel(order),
+        payment: formatStatusLabel(payment),
+    };
+};
+
+const getStatusClass = (status) => {
+    if (!status) return '';
+    return String(status).toLowerCase().trim().replace(/[\s_]+/g, '-');
+};
+
 
 const CALENDAR_MONTHS = [
     { short: 'Jan', full: 'January', monthNum: 1 },
@@ -202,6 +277,12 @@ const Dashboard = () => {
     const [revenueVsCost, setRevenueVsCost] = useState(null);
     const [topProducts, setTopProducts] = useState([]);
     const [transactions, setTransactions] = useState([]);
+
+    // ── Table Pagination State ──
+    const [storePage, setStorePage] = useState(1);
+    const STORES_PER_PAGE = 5;
+    const [txPage, setTxPage] = useState(1);
+    const TX_PER_PAGE = 5;
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -436,11 +517,11 @@ const Dashboard = () => {
                 getDashboardOverview(ovPeriodVal || mainPeriodVal, storeFilter),
                 getRevenueVsCost(rcPeriodVal || mainPeriodVal, storeFilter),
                 getTopProducts(10, storeFilter, mainPeriodVal),
-                getRecentTransactions(10, storeFilter),
+                getRecentTransactions(20, storeFilter),
                 getOrders({
                     store_id: storeFilter || undefined,
                     page: 1,
-                    page_size: 10,
+                    page_size: 20,
                 }),
                 getAnalyticsProducts({
                     store_id: storeFilter || undefined,
@@ -574,7 +655,7 @@ const Dashboard = () => {
                     txList = ordList;
                 }
             }
-            setTransactions(txList.slice(0, 10));
+            setTransactions(txList.slice(0, 20));
 
             if (hadError && errorMsg) {
                 setError(errorMsg);
@@ -626,6 +707,29 @@ const Dashboard = () => {
         const current = summary.stores_summary.find((s) => String(s.store_id) === String(selectedStore));
         return current ? Number(current.orders_count || 0) : null;
     }, [selectedStore, summary]);
+
+    // Reset pagination when data or filter changes
+    useEffect(() => {
+        setStorePage(1);
+    }, [summary?.stores_summary, selectedStore]);
+
+    useEffect(() => {
+        setTxPage(1);
+    }, [transactions, selectedStore]);
+
+    const totalStorePages = Math.max(1, Math.ceil((summary?.stores_summary?.length || 0) / STORES_PER_PAGE));
+    const paginatedStores = useMemo(() => {
+        const list = summary?.stores_summary || [];
+        const start = (storePage - 1) * STORES_PER_PAGE;
+        return list.slice(start, start + STORES_PER_PAGE);
+    }, [summary?.stores_summary, storePage]);
+
+    const totalTxPages = Math.max(1, Math.ceil((transactions?.length || 0) / TX_PER_PAGE));
+    const paginatedTransactions = useMemo(() => {
+        const list = transactions || [];
+        const start = (txPage - 1) * TX_PER_PAGE;
+        return list.slice(start, start + TX_PER_PAGE);
+    }, [transactions, txPage]);
 
     // ── Financial Performance Metrics ──
     // Formulas:
@@ -1013,110 +1117,112 @@ const Dashboard = () => {
                 </div>
             )}
 
-            {/* ── Financial Performance Summary Cards (4 Cards) ── */}
-            <section className="kpi-grid" aria-label="Financial Performance Indicators">
+            {/* ── Financial Performance Summary Cards (4 Cards - Product Master CategoryCards Design) ── */}
+            <div className="category-cards kpi-cards-grid" aria-label="Financial Performance Indicators">
                 {/* 1. Total Sales / Revenue */}
-                <Link to="/reports" className="kpi-card" title="View Sales Reports">
-                    <div className="kpi-icon-wrap revenue">
-                        <BsCashStack />
-                    </div>
-                    <div className="kpi-content">
-                        <span className="kpi-label">Total Sales / Revenue</span>
-                        {loading ? (
-                            <div className="skeleton-box" style={{ width: 110, height: 26, margin: '4px 0' }} />
-                        ) : (
-                            <h2 className="kpi-value">
-                                {formatCurrency(financialMetrics.revenue)}
-                            </h2>
-                        )}
-                        <span className="kpi-subtitle trend-up">
-                            <BsArrowUp style={{ display: 'inline', marginRight: 3 }} />
-                            {PERIOD_LABELS[period]}
-                        </span>
+                <Link to="/reports" className="category-card kpi-category-card revenue" title="View Sales Reports">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                            <h3>Total Sales / Revenue</h3>
+                            {loading ? (
+                                <div className="skeleton-box" style={{ width: 110, height: 26, margin: '4px 0' }} />
+                            ) : (
+                                <h2>{formatCurrency(financialMetrics.revenue)}</h2>
+                            )}
+                            <span className="kpi-subtitle trend-up" style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                <BsArrowUp style={{ display: 'inline' }} />
+                                {PERIOD_LABELS[period]}
+                            </span>
+                        </div>
+                        <div className="kpi-icon-wrap revenue">
+                            <BsCashStack />
+                        </div>
                     </div>
                 </Link>
 
                 {/* 2. Total Cost (COGS) */}
                 <button
                     type="button"
-                    className="kpi-card"
+                    className="category-card kpi-category-card cost"
                     title="Click to view Cost of Goods Sold (COGS) breakdown and accounting formula"
                     onClick={() => setActiveMetricModal('cost')}
                     aria-haspopup="dialog"
                     aria-label={`Total Cost (COGS): ${formatCurrency(financialMetrics.cost)}. Click to view calculation and breakdown.`}
                 >
-                    <div className="kpi-icon-wrap cost">
-                        <BsTagFill />
-                    </div>
-                    <div className="kpi-content">
-                        <span className="kpi-label">Total Cost (COGS)</span>
-                        {loading ? (
-                            <div className="skeleton-box" style={{ width: 90, height: 26, margin: '4px 0' }} />
-                        ) : (
-                            <h2 className="kpi-value">
-                                {formatCurrency(financialMetrics.cost)}
-                            </h2>
-                        )}
-                        <span className="kpi-subtitle">
-                            Cost of Goods Sold &bull; Click for details
-                        </span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                            <h3>Total Cost (COGS)</h3>
+                            {loading ? (
+                                <div className="skeleton-box" style={{ width: 90, height: 26, margin: '4px 0' }} />
+                            ) : (
+                                <h2>{formatCurrency(financialMetrics.cost)}</h2>
+                            )}
+                            <span className="kpi-subtitle" style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                Cost of Goods Sold &bull; Click for details
+                            </span>
+                        </div>
+                        <div className="kpi-icon-wrap cost">
+                            <BsTagFill />
+                        </div>
                     </div>
                 </button>
 
                 {/* 3. Gross Profit */}
                 <button
                     type="button"
-                    className="kpi-card"
+                    className="category-card kpi-category-card profit"
                     title="Click to view Gross Profit breakdown and accounting formula"
                     onClick={() => setActiveMetricModal('profit')}
                     aria-haspopup="dialog"
                     aria-label={`Gross Profit: ${formatCurrency(financialMetrics.grossProfit)}. Click to view formula and breakdown.`}
                 >
-                    <div className="kpi-icon-wrap profit">
-                        <BsGraphUpArrow />
-                    </div>
-                    <div className="kpi-content">
-                        <span className="kpi-label">Gross Profit</span>
-                        {loading ? (
-                            <div className="skeleton-box" style={{ width: 90, height: 26, margin: '4px 0' }} />
-                        ) : (
-                            <h2 className={`kpi-value ${financialMetrics.grossProfit >= 0 ? 'profit-positive' : 'profit-negative'}`}>
-                                {formatCurrency(financialMetrics.grossProfit)}
-                            </h2>
-                        )}
-                        <span className="kpi-subtitle">
-                            Net Sales &minus; COGS &bull; Click for details
-                        </span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                            <h3>Gross Profit</h3>
+                            {loading ? (
+                                <div className="skeleton-box" style={{ width: 90, height: 26, margin: '4px 0' }} />
+                            ) : (
+                                <h2 style={{ color: financialMetrics.grossProfit >= 0 ? '#059669' : '#dc2626' }}>
+                                    {formatCurrency(financialMetrics.grossProfit)}
+                                </h2>
+                            )}
+                            <span className="kpi-subtitle" style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                Net Sales &minus; COGS &bull; Click for details
+                            </span>
+                        </div>
+                        <div className="kpi-icon-wrap profit">
+                            <BsGraphUpArrow />
+                        </div>
                     </div>
                 </button>
 
                 {/* 4. Gross Profit Margin (%) */}
                 <button
                     type="button"
-                    className="kpi-card"
+                    className="category-card kpi-category-card margin"
                     title="Click to view Gross Profit Margin and Markup breakdown"
                     onClick={() => setActiveMetricModal('margin')}
                     aria-haspopup="dialog"
                     aria-label={`Gross Profit Margin: ${financialMetrics.grossMargin.toFixed(2)}%. Click to view formula and breakdown.`}
                 >
-                    <div className="kpi-icon-wrap margin">
-                        <BsPercent />
-                    </div>
-                    <div className="kpi-content">
-                        <span className="kpi-label">Gross Profit Margin</span>
-                        {loading ? (
-                            <div className="skeleton-box" style={{ width: 80, height: 26, margin: '4px 0' }} />
-                        ) : (
-                            <h2 className="kpi-value">
-                                {`${financialMetrics.grossMargin.toFixed(2)}%`}
-                            </h2>
-                        )}
-                        <span className="kpi-subtitle">
-                            Markup: {`${financialMetrics.markup.toFixed(2)}%`} &bull; Click for details
-                        </span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                            <h3>Gross Profit Margin</h3>
+                            {loading ? (
+                                <div className="skeleton-box" style={{ width: 80, height: 26, margin: '4px 0' }} />
+                            ) : (
+                                <h2>{`${financialMetrics.grossMargin.toFixed(2)}%`}</h2>
+                            )}
+                            <span className="kpi-subtitle" style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                Markup: {`${financialMetrics.markup.toFixed(2)}%`} &bull; Click for details
+                            </span>
+                        </div>
+                        <div className="kpi-icon-wrap margin">
+                            <BsPercent />
+                        </div>
                     </div>
                 </button>
-            </section>
+            </div>
 
             {/* ── Operational Quick Metrics Strip ── */}
             <section className="operational-strip" aria-label="Operational Metrics">
@@ -1540,8 +1646,8 @@ const Dashboard = () => {
                 </div>
             </section>
 
-            {/* ── Store-wise Sales Summary (All Stores Mode) ── */}
-            {!selectedStore && summary?.stores_summary?.length > 0 && (
+            {/* ── Store-wise Sales Summary ── */}
+            {summary?.stores_summary?.length > 0 && (
                 <section className="dashboard-section store-summary-section" aria-label="Store Summary">
                     <div className="dashboard-card">
                         <div className="dashboard-card-header">
@@ -1562,51 +1668,114 @@ const Dashboard = () => {
                             <table className="dashboard-table">
                                 <thead>
                                     <tr>
-                                        <th>Store Name</th>
-                                        <th style={{ textAlign: 'center' }}>Store ID</th>
+                                        <th style={{ textAlign: 'left' }}>Store</th>
                                         <th style={{ textAlign: 'right' }}>Today's Sales</th>
                                         <th style={{ textAlign: 'right' }}>Monthly Sales</th>
                                         <th style={{ textAlign: 'center' }}>Orders</th>
                                         <th style={{ textAlign: 'center' }}>Low Stock</th>
                                         <th style={{ textAlign: 'center' }}>Status</th>
-                                        <th style={{ textAlign: 'right' }}>Action</th>
+                                        <th style={{ textAlign: 'center', width: 70 }}>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {summary.stores_summary.map((st) => (
-                                        <tr key={st.store_id}>
-                                            <td style={{ fontWeight: 600 }}>{st.store_name}</td>
-                                            <td style={{ textAlign: 'center', color: '#64748b' }}>#{st.store_id}</td>
-                                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(st.today_sales)}</td>
-                                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(st.monthly_sales)}</td>
-                                            <td style={{ textAlign: 'center' }}>{formatInteger(st.orders_count)}</td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                {st.low_stock_count > 0 ? (
-                                                    <span style={{ color: '#ef4444', fontWeight: 700 }}>{st.low_stock_count}</span>
-                                                ) : (
-                                                    <span style={{ color: '#10b981' }}>0</span>
-                                                )}
-                                            </td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                <span className={`status-pill ${st.is_active !== false ? 'completed' : 'cancelled'}`}>
-                                                    {st.is_active !== false ? 'Active' : 'Inactive'}
-                                                </span>
-                                            </td>
-                                            <td style={{ textAlign: 'right' }}>
-                                                <button
-                                                    type="button"
-                                                    className="store-filter-btn"
-                                                    onClick={() => setSelectedStore(String(st.store_id))}
-                                                    title={`Filter dashboard for ${st.store_name}`}
-                                                >
-                                                    View Store
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {paginatedStores.map((st) => {
+                                        const storeName = st.store_name || stores.find(s => String(s.id) === String(st.store_id))?.name || (st.store_id ? `Store #${st.store_id}` : '—');
+                                        const isSelected = String(selectedStore) === String(st.store_id);
+                                        return (
+                                            <tr key={st.store_id} style={isSelected ? { background: '#f8fafc' } : {}}>
+                                                <td style={{ fontWeight: 600 }}>{storeName}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(st.today_sales)}</td>
+                                                <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(st.monthly_sales)}</td>
+                                                <td style={{ textAlign: 'center' }}>{formatInteger(st.orders_count)}</td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    {st.low_stock_count > 0 ? (
+                                                        <span style={{ color: '#ef4444', fontWeight: 700 }}>{st.low_stock_count}</span>
+                                                    ) : (
+                                                        <span style={{ color: '#10b981' }}>0</span>
+                                                    )}
+                                                </td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <span className={`status-pill ${st.is_active !== false ? 'completed' : 'cancelled'}`}>
+                                                        {st.is_active !== false ? 'Active' : 'Inactive'}
+                                                    </span>
+                                                </td>
+                                                <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                                                    <button
+                                                        type="button"
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            padding: '6px 8px',
+                                                            borderRadius: 6,
+                                                            border: isSelected ? '1.5px solid #6366f1' : '1px solid #e5e7eb',
+                                                            background: isSelected ? '#eef2ff' : '#ffffff',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                        onClick={() => setSelectedStore(prev => String(prev) === String(st.store_id) ? '' : String(st.store_id))}
+                                                        title={isSelected ? `Currently viewing ${storeName} (click to clear filter)` : `View metrics for ${storeName}`}
+                                                    >
+                                                        <BsEye size={14} color={isSelected ? '#4f46e5' : '#6366f1'} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
+
+                        {summary.stores_summary.length > 0 && (
+                            <div className="dashboard-pagination">
+                                <span className="dashboard-pagination-info">
+                                    Showing {(storePage - 1) * STORES_PER_PAGE + 1}–{Math.min(storePage * STORES_PER_PAGE, summary.stores_summary.length)} of {summary.stores_summary.length}
+                                    &nbsp;|&nbsp; Page {storePage} of {totalStorePages}
+                                </span>
+                                <div className="dashboard-pagination-controls">
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary dashboard-pagination-nav-btn"
+                                        style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: storePage === 1 ? 'not-allowed' : 'pointer' }}
+                                        disabled={storePage === 1}
+                                        onClick={() => setStorePage((p) => p - 1)}
+                                    >
+                                        <BsChevronLeft size={12} />
+                                    </button>
+                                    {Array.from({ length: totalStorePages }, (_, i) => i + 1).map((n) => (
+                                        <button
+                                            key={n}
+                                            type="button"
+                                            className={`dashboard-pagination-num-btn ${n === storePage ? 'active' : ''}`}
+                                            onClick={() => setStorePage(n)}
+                                            style={{
+                                                width: 30,
+                                                height: 30,
+                                                borderRadius: 6,
+                                                border: `1.5px solid ${n === storePage ? '#6366f1' : '#e5e7eb'}`,
+                                                background: n === storePage ? '#eef2ff' : '#fff',
+                                                color: n === storePage ? '#6366f1' : '#6b7280',
+                                                fontSize: 12,
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {n}
+                                        </button>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary dashboard-pagination-nav-btn"
+                                        style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: storePage === totalStorePages ? 'not-allowed' : 'pointer' }}
+                                        disabled={storePage === totalStorePages}
+                                        onClick={() => setStorePage((p) => p + 1)}
+                                    >
+                                        <BsChevronRight size={12} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </section>
             )}
@@ -1625,7 +1794,7 @@ const Dashboard = () => {
                             </div>
                         </div>
 
-                        <Link to="/orders" className="card-view-all">
+                        <Link to="/invoices" className="card-view-all">
                             View All
                         </Link>
                     </div>
@@ -1647,59 +1816,69 @@ const Dashboard = () => {
                             <table className="dashboard-table">
                                 <thead>
                                     <tr>
-                                        <th>Invoice No.</th>
-                                        <th>Date &amp; Time</th>
-                                        <th>Customer</th>
-                                        <th>Items (Qty)</th>
-                                        <th>Amount</th>
-                                        <th>Status</th>
+                                        <th style={{ textAlign: 'left', padding: '12px 14px' }}>Invoice No.</th>
+                                        <th style={{ textAlign: 'left', padding: '12px 14px' }}>Date &amp; Time</th>
+                                        <th style={{ textAlign: 'left', padding: '12px 14px' }}>Customer</th>
+                                        <th style={{ textAlign: 'right', padding: '12px 14px' }}>Amount</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 14px', minWidth: 125 }}>Order Status</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 14px', minWidth: 110 }}>Payment Status</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 14px', width: 70 }}>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {transactions.map((ord, idx) => {
+                                    {paginatedTransactions.map((ord, idx) => {
                                         const orderId = ord.order_id || ord.id || idx;
                                         const invoiceNo = ord.order_number || ord.invoice_number || `ORD-${orderId}`;
                                         const customerName = ord.customer_name || ord.customer?.name || (ord.customer_id ? `Customer #${ord.customer_id}` : 'Walk-in Customer');
-                                        const distinctCount = Array.isArray(ord.items) && ord.items.length > 0
-                                            ? ord.items.length
-                                            : (ord.items_count || 1);
-                                        const totalUnits = Array.isArray(ord.items) && ord.items.length > 0
-                                            ? ord.items.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
-                                            : (ord.quantity || distinctCount);
                                         const amount = Number(ord.amount ?? ord.total_amount ?? 0);
-                                        const orderStatus = ord.order_status || ord.status || 'Completed';
-                                        const paymentStatus = ord.payment_status || 'Paid';
+                                        const { order: orderStatus, payment: paymentStatus } = parseTransactionStatuses(ord);
 
                                         return (
                                             <tr key={orderId}>
-                                                <td>
-                                                    <Link to={`/orders/${orderId}`} className="table-id-link">
+                                                <td style={{ padding: '12px 14px', verticalAlign: 'middle' }}>
+                                                    <Link to="/invoices" className="table-id-link" title={`View ${invoiceNo}`}>
                                                         {invoiceNo}
                                                     </Link>
                                                 </td>
-                                                <td>{formatDate(ord.created_at)}</td>
-                                                <td>{customerName}</td>
-                                                <td>
-                                                    {ord.items ? (
-                                                        totalUnits > distinctCount
-                                                            ? `${totalUnits} units (${distinctCount} item${distinctCount > 1 ? 's' : ''})`
-                                                            : `${totalUnits} unit${totalUnits > 1 ? 's' : ''}`
-                                                    ) : (
-                                                        `${totalUnits} unit${totalUnits > 1 ? 's' : ''}`
-                                                    )}
+                                                <td style={{ padding: '12px 14px', verticalAlign: 'middle', whiteSpace: 'nowrap', color: '#64748b' }}>
+                                                    {formatDate(ord.created_at)}
                                                 </td>
-                                                <td className="table-amount">{formatCurrency(amount)}</td>
-                                                <td>
-                                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                                        <span className={`status-pill ${orderStatus.toLowerCase()}`}>
-                                                            {orderStatus}
-                                                        </span>
-                                                        {paymentStatus && paymentStatus.toLowerCase() !== orderStatus.toLowerCase() && (
-                                                            <span className={`status-pill ${paymentStatus.toLowerCase()}`}>
-                                                                {paymentStatus}
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                                <td style={{ padding: '12px 14px', verticalAlign: 'middle', fontWeight: 500, color: '#1e293b' }}>
+                                                    {customerName}
+                                                </td>
+                                                <td className="table-amount" style={{ padding: '12px 14px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 600 }}>
+                                                    {formatCurrency(amount)}
+                                                </td>
+                                                <td style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                    <span className={`status-pill ${getStatusClass(orderStatus)}`}>
+                                                        {orderStatus}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                    <span className={`status-pill ${getStatusClass(paymentStatus)}`}>
+                                                        {paymentStatus}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                    <Link
+                                                        to="/invoices"
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            padding: '6px 8px',
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            textDecoration: 'none',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                        title={`View details for ${invoiceNo}`}
+                                                    >
+                                                        <BsEye size={14} color="#6366f1" />
+                                                    </Link>
                                                 </td>
                                             </tr>
                                         );
@@ -1708,6 +1887,56 @@ const Dashboard = () => {
                             </table>
                         )}
                     </div>
+
+                    {transactions.length > 0 && (
+                        <div className="dashboard-pagination">
+                            <span className="dashboard-pagination-info">
+                                Showing {(txPage - 1) * TX_PER_PAGE + 1}–{Math.min(txPage * TX_PER_PAGE, transactions.length)} of {transactions.length}
+                                &nbsp;|&nbsp; Page {txPage} of {totalTxPages}
+                            </span>
+                            <div className="dashboard-pagination-controls">
+                                <button
+                                    type="button"
+                                    className="adm-btn-secondary dashboard-pagination-nav-btn"
+                                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: txPage === 1 ? 'not-allowed' : 'pointer' }}
+                                    disabled={txPage === 1}
+                                    onClick={() => setTxPage((p) => p - 1)}
+                                >
+                                    <BsChevronLeft size={12} />
+                                </button>
+                                {Array.from({ length: totalTxPages }, (_, i) => i + 1).map((n) => (
+                                    <button
+                                        key={n}
+                                        type="button"
+                                        className={`dashboard-pagination-num-btn ${n === txPage ? 'active' : ''}`}
+                                        onClick={() => setTxPage(n)}
+                                        style={{
+                                            width: 30,
+                                            height: 30,
+                                            borderRadius: 6,
+                                            border: `1.5px solid ${n === txPage ? '#6366f1' : '#e5e7eb'}`,
+                                            background: n === txPage ? '#eef2ff' : '#fff',
+                                            color: n === txPage ? '#6366f1' : '#6b7280',
+                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {n}
+                                    </button>
+                                ))}
+                                <button
+                                    type="button"
+                                    className="adm-btn-secondary dashboard-pagination-nav-btn"
+                                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: txPage === totalTxPages ? 'not-allowed' : 'pointer' }}
+                                    disabled={txPage === totalTxPages}
+                                    onClick={() => setTxPage((p) => p + 1)}
+                                >
+                                    <BsChevronRight size={12} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* 2. Top Selling Products Table */}

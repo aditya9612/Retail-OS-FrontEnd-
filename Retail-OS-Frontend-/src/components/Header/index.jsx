@@ -35,6 +35,14 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const location = useLocation();
     const currentPath = location.pathname;
 
+    // Global search bar is hidden on:
+    // 1. Customer module (/customers) - [from t1]
+    // 2. Billing & GST module (/billing, /invoices, /billing-management, /gst-management) - [from t1]
+    // 3. Dashboard (/dashboard, /) - [from t1 & Punam]
+    // 4. Store Transfers (/inventory/store-transfers) - [from t1]
+    // 5. Product Master (/products) & Barcode (/products/barcode) - [from Punam]
+    // 6. Category Management (/categories) - [from Punam]
+    // 7. Store Management & Targets (/stores, /stores/targets, /ecommerce/store) - [from Punam]
     const isCustomerModule = currentPath.startsWith('/customers');
     const isBillingGstModule = (
         currentPath.startsWith('/billing') ||
@@ -44,7 +52,20 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     );
     const isDashboard = currentPath === '/dashboard' || currentPath === '/';
     const isStoreTransfers = currentPath === '/inventory/store-transfers' || currentPath.startsWith('/inventory/store-transfers/');
-    const shouldHideSearchBar = isCustomerModule || isBillingGstModule || isDashboard || isStoreTransfers;
+    const isProductModule = currentPath.startsWith('/products');
+    const isCategoryModule = currentPath.startsWith('/categories');
+    const isStoreModule = currentPath.startsWith('/stores') || currentPath === '/ecommerce/store';
+
+    const shouldHideSearchBar = (
+        isCustomerModule ||
+        isBillingGstModule ||
+        isDashboard ||
+        isStoreTransfers ||
+        isProductModule ||
+        isCategoryModule ||
+        isStoreModule
+    );
+    const isSearchHidden = shouldHideSearchBar;
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
@@ -449,8 +470,8 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                 <BsList size={20} />
             </button>
 
-            {/* Search Bar - Hidden on Customer module, Billing/GST, Dashboard, and Store Transfers */}
-            {!shouldHideSearchBar && (
+            {/* Global Search Bar - Hidden on Customer, Billing/GST, Dashboard, Store Transfers, Products, Categories, Stores */}
+            {!shouldHideSearchBar ? (
                 <div className="header-search-wrap" ref={searchWrapRef} style={{ flex: 1, position: 'relative' }}>
                     <BsSearch className="header-search-icon" size={14} />
                 <input
@@ -695,6 +716,8 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                     </div>
                 )}
             </div>
+            ) : (
+                <div style={{ flex: 1 }} />
             )}
 
             {/* Right side controls */}
@@ -963,4 +986,3 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
 };
 
 export default Header;
-

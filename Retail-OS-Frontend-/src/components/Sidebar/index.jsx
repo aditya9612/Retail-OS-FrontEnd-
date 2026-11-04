@@ -244,8 +244,42 @@ const Sidebar = ({ collapsed, onToggle }) => {
             .filter(group => group.items.length > 0);
     }, [searchQuery]);
 
+    // Flatten all items across menu groups for exact path checking
+    const allMenuItems = useMemo(() => {
+        return menuGroups.flatMap(group => group.items);
+    }, []);
+
     const isItemActive = (item) => {
-        return activeItemPath === item.path;
+        // 1. Single active item resolution [from t1]
+        if (activeItemPath) {
+            return activeItemPath === item.path;
+        }
+
+        // 2. Direct path or alias match fallback [from Punam]
+        if (currentPath === item.path) return true;
+        if (item.aliasPaths && item.aliasPaths.includes(currentPath)) return true;
+
+        // If another item in the sidebar matches currentPath exactly or via alias,
+        // do not mark this broader parent item as active
+        const hasExactMatchElsewhere = allMenuItems.some(
+            other => other.path !== item.path &&
+                (other.path === currentPath || (other.aliasPaths && other.aliasPaths.includes(currentPath)))
+        );
+        if (hasExactMatchElsewhere) {
+            return false;
+        }
+
+        // Avoid marking root or broad paths as active for everything
+        if (item.path !== '/' && item.path !== '/dashboard' && currentPath.startsWith(item.path + '/')) {
+            // Ensure no other menu item has a longer/more specific matching prefix
+            const hasMoreSpecificItem = allMenuItems.some(
+                other => other.path !== item.path &&
+                    other.path.length > item.path.length &&
+                    currentPath.startsWith(other.path)
+            );
+            return !hasMoreSpecificItem;
+        }
+        return false;
     };
 
     return (
