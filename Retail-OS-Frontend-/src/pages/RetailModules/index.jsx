@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import apiClient from '../../services/api';
 import { getInvoices } from '../../services/billingService';
 import productService from '../../services/product';
-import { generateBarcodeDataUrl, generateBarcodeLabelsPDF, downloadBarcodeImage } from './barcodeUtils';
+import { generateBarcodeDataUrl, generateBarcodeLabelsPDF, downloadBarcodeImage, generateBarcodeSVG, generateLabelSVG, downloadBarcodeSVG, downloadLabelSVG, downloadBlob } from './barcodeUtils';
 import {
     BsSearch, BsPlus, BsDownload, BsFilter, BsCheckCircleFill, BsClockHistory,
     BsXCircleFill, BsPrinter, BsUpcScan, BsBuildings, BsTruck, BsArrowRepeat,
@@ -422,14 +422,15 @@ export const BarcodePage = () => {
         try {
             // GET /api/v1/products/{product_id}
             const res = await productService.getById(productId);
-            const freshProd = res?.data?.product || res?.data || null;
+            const freshProd = res?.data?.product || res?.data?.data || res?.data || null;
             if (freshProd) {
                 setSelectedProduct(freshProd);
                 // If product already has a barcode, fetch its printable label
                 if (freshProd.barcode) {
                     try {
                         const labelRes = await productService.getBarcodeLabel(freshProd.id, 'json');
-                        setBackendLabel(labelRes?.data || labelRes);
+                        const labelData = labelRes?.data?.data || labelRes?.data || labelRes;
+                        setBackendLabel(labelData);
                     } catch {
                         setBackendLabel(null);
                     }
@@ -532,7 +533,16 @@ export const BarcodePage = () => {
             let generatedBarcode = currentProd.barcode;
             try {
                 const genRes = await productService.generateBarcode(currentProd.id, true);
-                generatedBarcode = genRes?.data?.barcode || genRes?.barcode || genRes?.data;
+                const candidateBarcode = (
+                    genRes?.data?.barcode ||
+                    genRes?.data?.data?.barcode ||
+                    genRes?.data?.product?.barcode ||
+                    genRes?.barcode ||
+                    (typeof genRes?.data === 'string' ? genRes.data : null)
+                );
+                if (candidateBarcode && typeof candidateBarcode === 'string') {
+                    generatedBarcode = candidateBarcode;
+                }
             } catch (genErr) {
                 // If 409 Conflict, barcode already exists; fallback without overwrite
                 if (genErr?.response?.status === 409 && currentProd.barcode) {
@@ -549,19 +559,27 @@ export const BarcodePage = () => {
             }
 
             // Step 3: Retrieve GET /api/v1/products/{product_id}/barcode-label?mode=json
-            const labelRes = await productService.getBarcodeLabel(currentProd.id, 'json');
-            const data = labelRes?.data || labelRes;
-            setBackendLabel(data);
+            let labelData = null;
+            try {
+                const labelRes = await productService.getBarcodeLabel(currentProd.id, 'json');
+                labelData = labelRes?.data?.data || labelRes?.data || labelRes;
+            } catch (labelErr) {
+                console.warn('Could not retrieve barcode label sticker data:', labelErr);
+            }
 
-            if (data?.barcode && data.barcode !== currentProd.barcode) {
-                currentProd = { ...currentProd, barcode: data.barcode };
-                setSelectedProduct(currentProd);
-                setProducts(prev => prev.map(p => p.id === currentProd.id ? { ...p, barcode: data.barcode } : p));
+            if (labelData && typeof labelData === 'object') {
+                setBackendLabel(labelData);
+                const serverBarcode = labelData?.barcode || labelData?.data?.barcode;
+                if (serverBarcode && typeof serverBarcode === 'string' && serverBarcode !== currentProd.barcode) {
+                    currentProd = { ...currentProd, barcode: serverBarcode };
+                    setSelectedProduct(currentProd);
+                    setProducts(prev => prev.map(p => p.id === currentProd.id ? { ...p, barcode: serverBarcode } : p));
+                }
             }
 
             setStatusMessage({
                 type: 'success',
-                text: `Barcode successfully generated: ${data?.barcode || currentProd.barcode || ''} for ${currentProd.name}!`
+                text: `Barcode successfully generated: ${labelData?.barcode || currentProd.barcode || generatedBarcode || ''} for ${currentProd.name}!`
             });
         } catch (err) {
             console.error('Failed to generate/retrieve barcode label:', err);
@@ -574,8 +592,8 @@ export const BarcodePage = () => {
         }
     };
 
-    // 2. Download Barcode standalone image (PNG)
-    const handleDownloadBarcode = () => {
+    // 2. Download Barcode standalone image (PNG / Server binary)
+    const handleDownloadBarcode = async () => {
         if (!selectedProduct) {
             setStatusMessage({ type: 'error', text: 'Please select a product first.' });
             return;
@@ -584,19 +602,80 @@ export const BarcodePage = () => {
             setStatusMessage({ type: 'error', text: 'No barcode has been generated for this product yet. Click "Generate & Preview Labels" first.' });
             return;
         }
-        if (!previewBarcodeImg) {
+
+        const fileId = selectedProduct.sku ? String(selectedProduct.sku).replace(/[^a-zA-Z0-9_-]/g, '_') : selectedProduct.id;
+        const filename = `barcode-${fileId}-${previewBarcodeNumber}.png`;
+
+        // Attempt server binary download first via GET /api/v1/products/{id}/barcode-label?mode=download
+        try {
+            const blobRes = await productService.getBarcodeLabel(selectedProduct.id, 'download');
+            const blobData = blobRes?.data || blobRes;
+            if (blobData instanceof Blob && blobData.size > 0) {
+                downloadBlob(blobData, filename);
+                setStatusMessage({ type: 'success', text: `Downloaded server barcode image: ${filename}` });
+                return;
+            }
+        } catch (serverErr) {
+            console.warn('Server download endpoint fallback to rendered barcode graphic:', serverErr);
+        }
+
+        if (previewBarcodeImg) {
+            const success = downloadBarcodeImage(previewBarcodeImg, filename);
+            if (success) {
+                setStatusMessage({
+                    type: 'success',
+                    text: `Downloaded barcode image: ${filename}`
+                });
+            }
+        } else {
             setStatusMessage({ type: 'error', text: 'No barcode graphic available to download.' });
+        }
+    };
+
+    // Download standalone barcode vector SVG
+    const handleDownloadBarcodeSVG = () => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product first.' });
+            return;
+        }
+        if (!previewBarcodeNumber) {
+            setStatusMessage({ type: 'error', text: 'No barcode has been generated for this product yet. Click "Generate & Preview Labels" first.' });
             return;
         }
         const fileId = selectedProduct.sku ? String(selectedProduct.sku).replace(/[^a-zA-Z0-9_-]/g, '_') : selectedProduct.id;
-        const filename = `barcode-${fileId}-${previewBarcodeNumber}.png`;
-        const success = downloadBarcodeImage(previewBarcodeImg, filename);
-        if (success) {
-            setStatusMessage({
-                type: 'success',
-                text: `Downloaded barcode image: ${filename}`
-            });
+        const filename = `barcode-${fileId}-${previewBarcodeNumber}.svg`;
+        const svgString = generateBarcodeSVG(previewBarcodeNumber, barcodeStandard);
+        downloadBarcodeSVG(svgString, filename);
+        setStatusMessage({
+            type: 'success',
+            text: `Downloaded vector barcode SVG: ${filename}`
+        });
+    };
+
+    // Download complete label vector SVG
+    const handleDownloadLabelSVG = () => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product first.' });
+            return;
         }
+        if (!previewBarcodeNumber) {
+            setStatusMessage({ type: 'error', text: 'No barcode has been generated for this product yet. Click "Generate & Preview Labels" first.' });
+            return;
+        }
+        const fileId = selectedProduct.sku ? String(selectedProduct.sku).replace(/[^a-zA-Z0-9_-]/g, '_') : selectedProduct.id;
+        const filename = `barcode-label-${fileId}-${previewBarcodeNumber}.svg`;
+        const svgString = generateLabelSVG({
+            product: selectedProduct,
+            barcode: previewBarcodeNumber,
+            storeName: backendLabel?.store_name || 'RetailOS Store',
+            mrp: backendLabel?.mrp ?? selectedProduct.mrp ?? selectedProduct.selling_price ?? selectedProduct.price ?? 0,
+            barcodeStandard
+        });
+        downloadLabelSVG(svgString, filename);
+        setStatusMessage({
+            type: 'success',
+            text: `Downloaded vector barcode label sticker SVG: ${filename}`
+        });
     };
 
     // 3. Download Barcode Labels as PDF
@@ -1039,7 +1118,7 @@ export const BarcodePage = () => {
 
                         {/* Quick actions for Live Label Preview */}
                         {selectedProduct && previewBarcodeNumber && (
-                            <div style={{ display: 'flex', gap: 10, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
                                 <button
                                     type="button"
                                     onClick={() => handlePrintWithCopies(1)}
@@ -1078,6 +1157,44 @@ export const BarcodePage = () => {
                                     }}
                                 >
                                     <BsImage size={13} /> Download Barcode (PNG)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadBarcodeSVG}
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5
+                                    }}
+                                >
+                                    <BsDownload size={13} /> Download Barcode (SVG)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadLabelSVG}
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5
+                                    }}
+                                >
+                                    <BsDownload size={13} /> Download Label (SVG)
                                 </button>
                             </div>
                         )}
