@@ -370,7 +370,7 @@ if (!status) {
      VIEW
   ========================================================= */
 
-  const handleView = (item) => {
+  const handleView = async (item) => {
     console.log(
       "👁️ Viewing Category:",
       item
@@ -379,6 +379,19 @@ if (!status) {
     setSelectedCategory(item);
     setIsViewMode(true);
     setShowModal(true);
+
+    if (item?.id) {
+      try {
+        const prodRes = await category.getProducts(item.id);
+        const prodData = prodRes?.data?.data || prodRes?.data?.items || prodRes?.data || [];
+        const count = typeof prodRes?.data?.total === "number"
+          ? prodRes.data.total
+          : (Array.isArray(prodData) ? prodData.length : (item.products ?? 0));
+        setSelectedCategory((prev) => (prev && prev.id === item.id ? { ...prev, products: count } : prev));
+      } catch (viewErr) {
+        console.warn("Could not load products for category view:", viewErr);
+      }
+    }
   };
 
   /* =========================================================
