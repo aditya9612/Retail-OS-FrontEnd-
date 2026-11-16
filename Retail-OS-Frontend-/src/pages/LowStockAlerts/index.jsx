@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { calculateStockStatus, getItemStock, getItemMinStock } from "../../utils/stockStatus";
 import { useNavigate } from "react-router-dom";
 
 import LowStockAlert from "../../components/LowStockAlert";
 import {
     lowStock,
+    listInventory,
     listProducts,
     listStores,
     getProductById,
@@ -186,45 +188,15 @@ const getCleanStoreName = (store) => {
 };
 
 /* =========================================================
-   STOCK STATUS
-   0 qty or negative      -> Out of Stock
-   positive qty < min     -> Critical
-   positive qty == min    -> Low Stock
-   qty > min              -> In Stock
+   STOCK STATUS (Standardized via calculateStockStatus)
+   0 qty or negative        -> Out of Stock
+   0 < qty < minStock       -> Low Stock
+   qty === minStock         -> At Reorder
+   qty > minStock           -> In Stock
 ========================================================= */
 
 const getStockStatus = (item) => {
-    const stock = Number(
-        item?.quantity ??
-        item?.available_quantity ??
-        item?.stock ??
-        item?.current_stock ??
-        0
-    ) || 0;
-
-    const minStock = Number(
-        item?.low_stock_threshold ??
-        item?.minimum_stock ??
-        item?.reorderLevel ??
-        item?.reorder_level ??
-        item?.minStock ??
-        item?.min_stock ??
-        0
-    ) || 0;
-
-    if (stock <= 0) {
-        return "Out of Stock";
-    }
-
-    if (minStock > 0 && stock < minStock) {
-        return "Critical";
-    }
-
-    if (minStock > 0 && stock === minStock) {
-        return "Low Stock";
-    }
-
-    return "In Stock";
+    return calculateStockStatus(item).label;
 };
 
 /* =========================================================
@@ -551,28 +523,56 @@ const LowStockAlerts = () => {
                 return;
             }
 
-            const results = await Promise.allSettled(
-                validStoreIds.map((storeId) => lowStock(storeId))
-            );
+            const [lowStockResults, invRes] = await Promise.allSettled([
+                Promise.allSettled(validStoreIds.map((storeId) => lowStock(storeId))),
+                listInventory(),
+            ]);
 
             const combinedItems = [];
             const errors = [];
+            const seenKeys = new Set();
 
-            results.forEach((res, index) => {
-                if (res.status === "fulfilled") {
-                    const data = getArrayFromResponse(res.value);
-                    if (Array.isArray(data)) {
-                        data.forEach((item) => {
-                            combinedItems.push({
-                                ...item,
-                                store_id: item?.store_id ?? validStoreIds[index],
-                            });
-                        });
-                    }
-                } else {
-                    errors.push(res.reason);
+            // First add inventory items
+            if (invRes.status === "fulfilled") {
+                const invData = getArrayFromResponse(invRes.value);
+                if (Array.isArray(invData)) {
+                    invData.forEach((item) => {
+                        const statusObj = calculateStockStatus(item);
+                        // Low Stock Alerts view focuses on items needing attention (not excess In Stock)
+                        if (statusObj.label !== "In Stock") {
+                            const key = item?.id ? `id-${item.id}` : `${item?.product_id}-${item?.store_id}`;
+                            if (!seenKeys.has(key)) {
+                                seenKeys.add(key);
+                                combinedItems.push(item);
+                            }
+                        }
+                    });
                 }
-            });
+            }
+
+            // Also merge any items from lowStock endpoints
+            if (lowStockResults.status === "fulfilled") {
+                lowStockResults.value.forEach((res, index) => {
+                    if (res.status === "fulfilled") {
+                        const data = getArrayFromResponse(res.value);
+                        if (Array.isArray(data)) {
+                            data.forEach((item) => {
+                                const resolvedStoreId = item?.store_id ?? validStoreIds[index];
+                                const key = item?.id ? `id-${item.id}` : `${item?.product_id}-${resolvedStoreId}`;
+                                if (!seenKeys.has(key)) {
+                                    seenKeys.add(key);
+                                    combinedItems.push({
+                                        ...item,
+                                        store_id: resolvedStoreId,
+                                    });
+                                }
+                            });
+                        }
+                    } else {
+                        errors.push(res.reason);
+                    }
+                });
+            }
 
             if (errors.length > 0 && combinedItems.length === 0) {
                 const firstError = errors[0];
@@ -725,51 +725,14 @@ const LowStockAlerts = () => {
                 storeFilter === "All Stores" ||
                 item?.store_name === storeFilter;
 
-            const stock = Number(
-                item?.quantity ??
-                item?.available_quantity ??
-                item?.stock ??
-                item?.current_stock ??
-                0
-            ) || 0;
-
-            const minStock = Number(
-                item?.low_stock_threshold ??
-                item?.minimum_stock ??
-                item?.reorderLevel ??
-                item?.reorder_level ??
-                item?.minStock ??
-                item?.min_stock ??
-                0
-            ) || 0;
-
-            const itemStatus =
-                item?.stock_status ||
-                getStockStatus(item);
-
-            const isLowStockMatch =
-                statusFilter === "Low Stock" &&
-                (itemStatus === "Low Stock" ||
-                    itemStatus === "Critical" ||
-                    item?.is_low_stock === true ||
-                    (minStock > 0 && stock <= minStock) ||
-                    stock <= 0);
-
-            const isCriticalMatch =
-                statusFilter === "Critical" &&
-                (itemStatus === "Critical" ||
-                    (minStock > 0 && stock < minStock));
-
-            const isOutOfStockMatch =
-                statusFilter === "Out of Stock" &&
-                (itemStatus === "Out of Stock" || stock <= 0);
+            const st = calculateStockStatus(item);
 
             const matchStatus =
-                statusFilter === "All Status" ||
-                itemStatus === statusFilter ||
-                isLowStockMatch ||
-                isCriticalMatch ||
-                isOutOfStockMatch;
+                statusFilter === "All Status"
+                    ? (st.label === "Low Stock" || st.label === "At Reorder" || st.label === "Out of Stock")
+                    : statusFilter === "Critical"
+                    ? st.label === "Low Stock"
+                    : st.label === statusFilter;
 
             return matchSearch && matchStore && matchStatus;
         });
@@ -863,8 +826,8 @@ const LowStockAlerts = () => {
                         }}
                     >
                         <option value="All Status">All Status</option>
-                        <option value="Critical">Critical</option>
                         <option value="Low Stock">Low Stock</option>
+                        <option value="At Reorder">At Reorder</option>
                         <option value="Out of Stock">Out of Stock</option>
                     </select>
 

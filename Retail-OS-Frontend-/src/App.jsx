@@ -115,9 +115,12 @@ function App() {
 
                         {/* 4. INVENTORY */}
                         <Route path="/inventory" element={<Inventory />} />
+                        <Route path="/inventory/dashboard" element={<Inventory />} />
+                        <Route path="/inventory/stock" element={<Inventory />} />
                         <Route path="/inventory/warehouses" element={<WarehousesPage />} />
                         <Route path="/purchases" element={<Purchases />} />
                         <Route path="/suppliers" element={<Supplier />} />
+                        <Route path="/inventory/suppliers" element={<Supplier />} />
                         <Route path="/inventory/grn" element={<GRNPage />} />
                         <Route path="/inventory/purchase-returns" element={<PurchaseOrderReturns />} />
                         <Route path="/purchase-order-returns" element={<PurchaseOrderReturns />} />

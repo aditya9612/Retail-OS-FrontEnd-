@@ -21,7 +21,7 @@ import {
     BsStars, BsPlug, BsDisplay, BsCashStack, BsArrowReturnLeft, BsReceiptCutoff,
     BsCreditCard2Front, BsBoxSeam, BsSend, BsGear, BsTag, BsExclamationTriangle, BsImage,
     BsTrash, BsShop, BsChevronLeft, BsChevronRight, BsX, BsEye, BsCheckCircle, BsXCircle,
-    BsChevronDown, BsChevronUp
+    BsChevronDown, BsChevronUp, BsActivity, BsTable
 } from 'react-icons/bs';
 
 
@@ -1021,8 +1021,9 @@ export const WarehousesPage = () => {
     const [statusFilter, setStatusFilter] = useState("all");
     const [storeFilter, setStoreFilter] = useState("all");
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(50);
+    const [pageSize, setPageSize] = useState(10);
     const [viewMode, setViewMode] = useState("table");
+    const [warehouseTab, setWarehouseTab] = useState("status"); // "status" | "details"
 
     const hasFetchedRef = useRef(false);
 
@@ -1128,6 +1129,16 @@ export const WarehousesPage = () => {
     useEffect(() => {
         setPage(1);
     }, [search, statusFilter, storeFilter]);
+
+    useEffect(() => {
+        const mainEl = document.querySelector('main');
+        if (mainEl) {
+            mainEl.classList.add('warehouse-main-scroll');
+            return () => {
+                mainEl.classList.remove('warehouse-main-scroll');
+            };
+        }
+    }, []);
 
     const totalPages = Math.max(1, Math.ceil(filteredWarehouses.length / pageSize));
     const paginatedWarehouses = useMemo(() => {
@@ -1534,50 +1545,159 @@ export const WarehousesPage = () => {
             : "₹0.00";
 
     return (
-        <ModuleContainer
-            title="Warehouses & Stock Locations"
-            subtitle="Central depots, store stockrooms, transit hubs and multi-location inventory levels"
-            icon={<BsBuildings />}
-            actionBtn={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ display: 'inline-flex', borderRadius: 8, border: '1px solid #d1d5db', background: '#f3f4f6', padding: 2 }}>
+        <div className="warehouse-page-root" style={{ width: '100%', minHeight: '100%' }}>
+            <style>{`
+                /* Warehouse Page Full-Width & External Whitespace Elimination */
+                .warehouse-page-root {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                }
+                .warehouse-page-root > div {
+                    max-width: 100% !important;
+                    width: 100% !important;
+                    margin: 0 !important;
+                    padding: 20px 24px !important;
+                    box-sizing: border-box !important;
+                }
+                @media (max-width: 768px) {
+                    .warehouse-page-root > div {
+                        padding: 14px 16px !important;
+                    }
+                }
+
+                /* Page-level vertical scrollbar enhancements */
+                .warehouse-main-scroll::-webkit-scrollbar,
+                main:has(.warehouse-page-root)::-webkit-scrollbar,
+                body:has(.warehouse-page-root) main::-webkit-scrollbar {
+                    width: 10px !important;
+                    height: 10px !important;
+                }
+                .warehouse-main-scroll::-webkit-scrollbar-track,
+                main:has(.warehouse-page-root)::-webkit-scrollbar-track,
+                body:has(.warehouse-page-root) main::-webkit-scrollbar-track {
+                    background: #f1f5f9 !important;
+                    border-radius: 6px;
+                    border: 1px solid #e2e8f0;
+                }
+                .warehouse-main-scroll::-webkit-scrollbar-thumb,
+                main:has(.warehouse-page-root)::-webkit-scrollbar-thumb,
+                body:has(.warehouse-page-root) main::-webkit-scrollbar-thumb {
+                    background: #94a3b8 !important;
+                    border-radius: 6px;
+                    border: 2px solid #f1f5f9;
+                }
+                .warehouse-main-scroll::-webkit-scrollbar-thumb:hover,
+                main:has(.warehouse-page-root)::-webkit-scrollbar-thumb:hover,
+                body:has(.warehouse-page-root) main::-webkit-scrollbar-thumb:hover {
+                    background: #64748b !important;
+                }
+                .warehouse-main-scroll,
+                main:has(.warehouse-page-root) {
+                    scrollbar-width: thin !important;
+                    scrollbar-color: #94a3b8 #f1f5f9 !important;
+                }
+
+                /* Table horizontal & vertical scrollbar enhancements */
+                .warehouse-page-root .warehouse-table-scroll {
+                    width: 100%;
+                    max-height: 480px;
+                    overflow-x: auto !important;
+                    overflow-y: auto !important;
+                    scrollbar-width: thin !important;
+                    scrollbar-color: #94a3b8 #f1f5f9 !important;
+                    -webkit-overflow-scrolling: touch;
+                    position: relative;
+                }
+                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar {
+                    width: 10px !important;
+                    height: 10px !important;
+                }
+                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-track {
+                    background: #f1f5f9 !important;
+                    border-radius: 6px;
+                    border: 1px solid #e2e8f0;
+                }
+                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-thumb {
+                    background: #94a3b8 !important;
+                    border-radius: 6px;
+                    border: 2px solid #f1f5f9;
+                }
+                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-thumb:hover {
+                    background: #64748b !important;
+                }
+                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-corner {
+                    background: #f1f5f9 !important;
+                }
+            `}</style>
+            <ModuleContainer
+                className="warehouse-page-container"
+                title="Warehouses & Stock Locations"
+                subtitle="Central depots, store stockrooms, transit hubs and multi-location inventory levels"
+                icon={<BsBuildings />}
+                headerStyle={{ marginBottom: 14, paddingBottom: 12 }}
+                style={{ width: '100%', maxWidth: '100%', margin: 0, padding: '16px 24px 20px 24px', boxSizing: 'border-box' }}
+                actionBtn={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <div
+                        className="warehouse-segmented-tabs"
+                        style={{
+                            display: 'inline-flex',
+                            borderRadius: 8,
+                            border: '1px solid #d1d5db',
+                            background: '#f3f4f6',
+                            padding: 2
+                        }}
+                    >
                         <button
                             type="button"
-                            onClick={() => setViewMode('table')}
-                            title="Table View"
+                            id="tab-wh-status-header"
+                            onClick={() => setWarehouseTab('status')}
+                            title="Warehouse Status"
                             style={{
-                                padding: '6px 12px',
+                                padding: '6px 14px',
                                 borderRadius: 6,
                                 border: 'none',
                                 fontSize: 12.5,
                                 fontWeight: 600,
                                 cursor: 'pointer',
-                                background: viewMode === 'table' ? '#ffffff' : 'transparent',
-                                color: viewMode === 'table' ? '#4f46e5' : '#6b7280',
-                                boxShadow: viewMode === 'table' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                                transition: 'all 0.15s ease'
+                                background: warehouseTab === 'status' ? '#ffffff' : 'transparent',
+                                color: warehouseTab === 'status' ? '#4f46e5' : '#6b7280',
+                                boxShadow: warehouseTab === 'status' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                transition: 'all 0.15s ease',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6
                             }}
                         >
-                            Table View
+                            <BsActivity size={13} style={{ color: warehouseTab === 'status' ? '#4f46e5' : '#9ca3af' }} />
+                            Warehouse Status
                         </button>
                         <button
                             type="button"
-                            onClick={() => setViewMode('cards')}
-                            title="Card View"
+                            id="tab-wh-details-header"
+                            onClick={() => setWarehouseTab('details')}
+                            title="Warehouse Details"
                             style={{
-                                padding: '6px 12px',
+                                padding: '6px 14px',
                                 borderRadius: 6,
                                 border: 'none',
                                 fontSize: 12.5,
                                 fontWeight: 600,
                                 cursor: 'pointer',
-                                background: viewMode === 'cards' ? '#ffffff' : 'transparent',
-                                color: viewMode === 'cards' ? '#4f46e5' : '#6b7280',
-                                boxShadow: viewMode === 'cards' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                                transition: 'all 0.15s ease'
+                                background: warehouseTab === 'details' ? '#ffffff' : 'transparent',
+                                color: warehouseTab === 'details' ? '#4f46e5' : '#6b7280',
+                                boxShadow: warehouseTab === 'details' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                                transition: 'all 0.15s ease',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6
                             }}
                         >
-                            Card View
+                            <BsTable size={13} style={{ color: warehouseTab === 'details' ? '#4f46e5' : '#9ca3af' }} />
+                            Warehouse Details
                         </button>
                     </div>
                     <button
@@ -1722,7 +1842,477 @@ export const WarehousesPage = () => {
                 </div>
             )}
 
-            {/* Warehouse Search and Filter Controls */}
+            {/* Segmented Tab Navigation: Warehouse Status / Warehouse Details */}
+            <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12,
+                marginBottom: 14
+            }}>
+                <div
+                    className="warehouse-segmented-tabs"
+                    style={{
+                        display: 'inline-flex',
+                        borderRadius: 8,
+                        border: '1px solid #d1d5db',
+                        background: '#f3f4f6',
+                        padding: 3,
+                        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.03)'
+                    }}
+                >
+                    <button
+                        type="button"
+                        id="tab-warehouse-status"
+                        onClick={() => setWarehouseTab('status')}
+                        style={{
+                            padding: '7px 18px',
+                            borderRadius: 6,
+                            border: 'none',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            background: warehouseTab === 'status' ? '#ffffff' : 'transparent',
+                            color: warehouseTab === 'status' ? '#4f46e5' : '#6b7280',
+                            boxShadow: warehouseTab === 'status' ? '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)' : 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 7,
+                            transition: 'all 0.15s ease'
+                        }}
+                    >
+                        <BsActivity size={15} style={{ color: warehouseTab === 'status' ? '#4f46e5' : '#9ca3af' }} />
+                        <span>Warehouse Status</span>
+                    </button>
+                    <button
+                        type="button"
+                        id="tab-warehouse-details"
+                        onClick={() => setWarehouseTab('details')}
+                        style={{
+                            padding: '7px 18px',
+                            borderRadius: 6,
+                            border: 'none',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            background: warehouseTab === 'details' ? '#ffffff' : 'transparent',
+                            color: warehouseTab === 'details' ? '#4f46e5' : '#6b7280',
+                            boxShadow: warehouseTab === 'details' ? '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)' : 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 7,
+                            transition: 'all 0.15s ease'
+                        }}
+                    >
+                        <BsTable size={15} style={{ color: warehouseTab === 'details' ? '#4f46e5' : '#9ca3af' }} />
+                        <span>Warehouse Details</span>
+                    </button>
+                </div>
+            </div>
+
+            {/* TAB 1: WAREHOUSE STATUS VIEW */}
+            {warehouseTab === 'status' ? (
+                loading ? (
+                    <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280' }}>
+                        <div style={{
+                            display: 'inline-block',
+                            width: 32,
+                            height: 32,
+                            border: '3px solid #e5e7eb',
+                            borderTopColor: '#6366f1',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite',
+                            marginBottom: 12
+                        }} />
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>Loading warehouse status...</p>
+                    </div>
+                ) : error ? (
+                    <div style={{
+                        background: '#fef2f2',
+                        border: '1px solid #fee2e2',
+                        borderRadius: 12,
+                        padding: '20px 24px',
+                        color: '#dc2626',
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: 14
+                    }}>
+                        <BsExclamationTriangle size={22} style={{ marginTop: 2, flexShrink: 0 }} />
+                        <div style={{ flex: 1 }}>
+                            <strong style={{ display: 'block', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
+                                Unable to load warehouse status
+                            </strong>
+                            <p style={{ fontSize: 13, color: '#b91c1c', margin: '0 0 12px 0' }}>{error}</p>
+                            <button
+                                onClick={() => fetchWarehouses()}
+                                style={{
+                                    background: '#dc2626',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    padding: '6px 14px',
+                                    borderRadius: 6,
+                                    fontSize: 12.5,
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Try Again
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                <div className="warehouse-status-view">
+                    {/* Status KPI Summary Cards */}
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                        gap: 14,
+                        marginBottom: 16
+                    }}>
+                        {/* Active Warehouses Card */}
+                        <div style={{
+                            background: '#ffffff',
+                            border: '1px solid #e5e7eb',
+                            borderLeft: '4px solid #10b981',
+                            borderRadius: 10,
+                            padding: '16px 20px',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Active Stock Locations
+                                </span>
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: 12,
+                                    background: '#ecfdf5',
+                                    color: '#059669',
+                                    border: '1px solid #a7f3d0'
+                                }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
+                                    Active
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                                <span style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>
+                                    {rawWarehouses.filter(w => w.is_active === true || w.status === 'Active' || w.status === 'active').length}
+                                </span>
+                                <span style={{ fontSize: 13, color: '#6b7280' }}>
+                                    of {rawWarehouses.length} locations operational
+                                </span>
+                            </div>
+                            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
+                                Fully operational depots actively accepting purchase orders, inwards, and stock dispatches.
+                            </p>
+                        </div>
+
+                        {/* Inactive Warehouses Card */}
+                        <div style={{
+                            background: '#ffffff',
+                            border: '1px solid #e5e7eb',
+                            borderLeft: '4px solid ' + (rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#ef4444' : '#9ca3af'),
+                            borderRadius: 10,
+                            padding: '16px 20px',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <span style={{ fontSize: 11.5, fontWeight: 700, color: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#dc2626' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Inactive Stock Locations
+                                </span>
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: 12,
+                                    background: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#fef2f2' : '#f3f4f6',
+                                    color: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#dc2626' : '#6b7280',
+                                    border: '1px solid ' + (rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#fecaca' : '#e5e7eb')
+                                }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#ef4444' : '#9ca3af' }} />
+                                    {rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? 'Requires Attention' : 'All Operational'}
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                                <span style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>
+                                    {rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length}
+                                </span>
+                                <span style={{ fontSize: 13, color: '#6b7280' }}>
+                                    decommissioned or restricted
+                                </span>
+                            </div>
+                            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
+                                Stock locations with paused activities. Movements and transfers are disabled until reactivated.
+                            </p>
+                        </div>
+
+                        {/* Network Availability Rate Card */}
+                        <div style={{
+                            background: '#ffffff',
+                            border: '1px solid #e5e7eb',
+                            borderLeft: '4px solid #6366f1',
+                            borderRadius: 10,
+                            padding: '16px 20px',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                    Operational Availability
+                                </span>
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: 12,
+                                    background: '#eef2ff',
+                                    color: '#4f46e5',
+                                    border: '1px solid #c7d2fe'
+                                }}>
+                                    Live Network
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                                <span style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>
+                                    {rawWarehouses.length > 0
+                                        ? Math.round((rawWarehouses.filter(w => w.is_active === true || w.status === 'Active' || w.status === 'active').length / rawWarehouses.length) * 100)
+                                        : 100}%
+                                </span>
+                                <span style={{ fontSize: 13, color: '#6b7280' }}>
+                                    system readiness rate
+                                </span>
+                            </div>
+                            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
+                                Ratio of active stock locations available for immediate retail fulfillment and inventory distribution.
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Operational Status Table */}
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        border: '1px solid #e5e7eb',
+                        overflow: 'hidden',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                    }}>
+                        <div style={{
+                            padding: '14px 18px',
+                            background: '#f9fafb',
+                            borderBottom: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: 10
+                        }}>
+                            <div>
+                                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#111827' }}>
+                                    Warehouse Operational Status
+                                </h3>
+                                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>
+                                    Real-time active and inactive warehouse operational statuses fetched from registered warehouse data
+                                </p>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#059669',
+                                    background: '#ecfdf5',
+                                    padding: '3px 10px',
+                                    borderRadius: 12,
+                                    border: '1px solid #a7f3d0'
+                                }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
+                                    {rawWarehouses.filter(w => w.is_active === true || w.status === 'Active' || w.status === 'active').length} Active
+                                </span>
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#dc2626',
+                                    background: '#fef2f2',
+                                    padding: '3px 10px',
+                                    borderRadius: 12,
+                                    border: '1px solid #fecaca'
+                                }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }} />
+                                    {rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length} Inactive
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="warehouse-table-scroll custom-scrollbar" style={{ maxHeight: '480px', overflowY: 'auto', overflowX: 'auto' }}>
+                            <table className="warehouse-table" style={{ width: '100%', minWidth: '1150px', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: 13 }}>
+                                <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
+                                    <tr>
+                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Warehouse Code</th>
+                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Warehouse Name</th>
+                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Store</th>
+                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, minWidth: 240, whiteSpace: 'nowrap' }}>Address / Location</th>
+                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Operational Status</th>
+                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Readiness Note</th>
+                                        <th style={{
+                                            position: 'sticky',
+                                            top: 0,
+                                            right: 0,
+                                            zIndex: 25,
+                                            background: '#f9fafb',
+                                            padding: '11px 16px',
+                                            borderBottom: '1px solid #e5e7eb',
+                                            color: '#4b5563',
+                                            fontWeight: 600,
+                                            textAlign: 'center',
+                                            whiteSpace: 'nowrap',
+                                            boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
+                                        }}>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rawWarehouses.map((wh, idx) => {
+                                        const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
+                                        const code = (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "")
+                                            ? String(rawCode).trim()
+                                            : "—";
+                                        const name = wh.name || ('Warehouse #' + (wh.id || (idx + 1)));
+                                        const address = wh.address || wh.location || "Address not provided";
+                                        const storeId = wh.store_id ?? wh.storeId;
+                                        const storeName = wh.store_name || wh.storeName;
+                                        const isActive = wh.is_active === true || wh.status === "active" || wh.status === "Active";
+
+                                        return (
+                                            <tr
+                                                key={wh.id || idx}
+                                                style={{ borderBottom: '1px solid #f3f4f6', transition: 'background-color 0.15s ease' }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
+                                                <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
+                                                    {code !== "—" ? (
+                                                        <span style={{
+                                                            fontSize: 12,
+                                                            fontWeight: 700,
+                                                            color: '#4f46e5',
+                                                            background: '#eef2ff',
+                                                            padding: '3px 8px',
+                                                            borderRadius: 6,
+                                                            display: 'inline-block',
+                                                            letterSpacing: '0.02em'
+                                                        }}>
+                                                            {code}
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ color: '#9ca3af', fontSize: 13 }}>—</span>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
+                                                    <strong style={{ color: '#111827', fontWeight: 600, display: 'block' }}>{name}</strong>
+                                                    <span style={{ fontSize: 11.5, color: '#9ca3af' }}>ID: #{wh.id || (idx + 1)}</span>
+                                                </td>
+                                                <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
+                                                    {storeName ? (
+                                                        <div>
+                                                            <strong style={{ color: '#111827', fontWeight: 600, display: 'block' }}>{storeName}</strong>
+                                                            {storeId != null && <span style={{ fontSize: 11.5, color: '#6b7280' }}>Store #{storeId}</span>}
+                                                        </div>
+                                                    ) : storeId != null ? (
+                                                        <span style={{ fontWeight: 600, color: '#111827' }}>Store #{storeId}</span>
+                                                    ) : (
+                                                        <span style={{ color: '#9ca3af' }}>—</span>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '11px 16px', color: '#4b5563', minWidth: 240, whiteSpace: 'nowrap' }}>
+                                                    <span title={address}>{address}</span>
+                                                </td>
+                                                <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
+                                                    <span style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 6,
+                                                        padding: '4px 12px',
+                                                        borderRadius: 20,
+                                                        fontSize: 12,
+                                                        fontWeight: 700,
+                                                        background: isActive ? '#ecfdf5' : '#fef2f2',
+                                                        color: isActive ? '#059669' : '#dc2626',
+                                                        border: '1px solid ' + (isActive ? '#a7f3d0' : '#fecaca')
+                                                    }}>
+                                                        <span style={{
+                                                            width: 7,
+                                                            height: 7,
+                                                            borderRadius: '50%',
+                                                            background: isActive ? '#10b981' : '#ef4444',
+                                                            boxShadow: isActive ? '0 0 0 2px rgba(16, 185, 129, 0.25)' : '0 0 0 2px rgba(239, 68, 68, 0.25)'
+                                                        }} />
+                                                        {isActive ? 'Active' : 'Inactive'}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '11px 16px', fontSize: 12, color: isActive ? '#059669' : '#dc2626', whiteSpace: 'nowrap' }}>
+                                                    {isActive
+                                                        ? 'Ready for Inward & Dispatch'
+                                                        : 'Stock Inward Paused'}
+                                                </td>
+                                                <td style={{
+                                                    position: 'sticky',
+                                                    right: 0,
+                                                    zIndex: 10,
+                                                    background: '#ffffff',
+                                                    padding: '11px 16px',
+                                                    textAlign: 'center',
+                                                    whiteSpace: 'nowrap',
+                                                    boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
+                                                }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleViewWarehouse(wh.id)}
+                                                        title="View Warehouse Details"
+                                                        aria-label="View Warehouse Details"
+                                                        style={{
+                                                            background: '#eef2ff',
+                                                            color: '#4f46e5',
+                                                            border: '1px solid #c7d2fe',
+                                                            padding: '5px 12px',
+                                                            borderRadius: 6,
+                                                            fontSize: 12,
+                                                            fontWeight: 600,
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 5,
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        <BsEye size={13} /> View
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                )
+            ) : (
+                /* TAB 2: WAREHOUSE DETAILS VIEW */
+                <>
+{/* Warehouse Search and Filter Controls */}
             <form
                 onSubmit={handleSearchSubmit}
                 style={{
@@ -1978,28 +2568,58 @@ export const WarehousesPage = () => {
                         overflow: 'hidden',
                         boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
                     }}>
-                        <div style={{ overflowX: 'auto' }}>
-                            <table style={{
-                                width: '100%',
-                                borderCollapse: 'collapse',
-                                textAlign: 'left',
-                                fontSize: 13
-                            }}>
+                        <div
+                            className="warehouse-table-scroll custom-scrollbar"
+                            style={{
+                                maxHeight: '480px',
+                                overflowY: 'auto',
+                                overflowX: 'auto',
+                                scrollBehavior: 'smooth',
+                                position: 'relative'
+                            }}
+                        >
+                            <table
+                                className="warehouse-table"
+                                style={{
+                                    width: '100%',
+                                    minWidth: '1150px',
+                                    borderCollapse: 'separate',
+                                    borderSpacing: 0,
+                                    textAlign: 'left',
+                                    fontSize: 13
+                                }}
+                            >
                                 <thead style={{
+                                    position: 'sticky',
+                                    top: 0,
+                                    zIndex: 20,
                                     background: '#f9fafb',
-                                    borderBottom: '1px solid #e5e7eb',
-                                    color: '#4b5563',
-                                    fontWeight: 600
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
                                 }}>
                                     <tr>
-                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Warehouse Code</th>
-                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Warehouse Name</th>
-                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Store</th>
-                                        <th style={{ padding: '12px 18px', minWidth: 200 }}>Address / Location</th>
-                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Tenant ID</th>
-                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Created Date</th>
-                                        <th style={{ padding: '12px 18px', whiteSpace: 'nowrap' }}>Status</th>
-                                        <th style={{ padding: '12px 18px', textAlign: 'right', whiteSpace: 'nowrap' }}>Actions</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Warehouse Code</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Warehouse Name</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Store</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', minWidth: 240, whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Address / Location</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Tenant ID</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Created Date</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Status</th>
+                                        <th style={{
+                                            position: 'sticky',
+                                            top: 0,
+                                            right: 0,
+                                            zIndex: 25,
+                                            background: '#f9fafb',
+                                            padding: '11px 16px',
+                                            textAlign: 'center',
+                                            whiteSpace: 'nowrap',
+                                            borderBottom: '1px solid #e5e7eb',
+                                            color: '#4b5563',
+                                            fontWeight: 600,
+                                            boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
+                                        }}>
+                                            Actions
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2322,6 +2942,8 @@ export const WarehousesPage = () => {
                 )}
             </>
         )}
+                </>
+            )}
 
             {/* Warehouse Details Modal (GET /api/v1/warehouses/{id}) */}
             {selectedWarehouseId && (
@@ -3237,6 +3859,7 @@ export const WarehousesPage = () => {
                 </div>
             )}
         </ModuleContainer>
+        </div>
     );
 };
 
@@ -5298,10 +5921,68 @@ export const GRNPage = () => {
     };
 
     return (
-        <ModuleContainer
-            title="Goods Received Notes (GRN)"
-            subtitle="Inspect, inward physical shipments against purchase orders, and verify batch/expiry dates"
-            icon={<BsTruck />}
+        <div className="grn-page-root" style={{ width: '100%', minHeight: '100%' }}>
+            <style>{`
+                /* GRN Page Full-Width & External Whitespace Elimination */
+                .grn-page-root {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                }
+                .grn-page-root > div {
+                    max-width: 100% !important;
+                    width: 100% !important;
+                    margin: 0 !important;
+                    padding: 20px 24px !important;
+                    box-sizing: border-box !important;
+                }
+                @media (max-width: 768px) {
+                    .grn-page-root > div {
+                        padding: 14px 16px !important;
+                    }
+                }
+
+                /* Page-level and table custom scrollbars */
+                main:has(.grn-page-root)::-webkit-scrollbar,
+                .grn-page-root .grn-table-container::-webkit-scrollbar {
+                    width: 8px !important;
+                    height: 8px !important;
+                }
+                main:has(.grn-page-root)::-webkit-scrollbar-track,
+                .grn-page-root .grn-table-container::-webkit-scrollbar-track {
+                    background: #f1f5f9 !important;
+                    border-radius: 4px;
+                }
+                main:has(.grn-page-root)::-webkit-scrollbar-thumb,
+                .grn-page-root .grn-table-container::-webkit-scrollbar-thumb {
+                    background: #cbd5e1 !important;
+                    border-radius: 4px;
+                }
+                main:has(.grn-page-root)::-webkit-scrollbar-thumb:hover,
+                .grn-page-root .grn-table-container::-webkit-scrollbar-thumb:hover {
+                    background: #94a3b8 !important;
+                }
+
+                /* Responsive stat cards grid */
+                .grn-page-root .grn-stat-cards {
+                    display: grid !important;
+                    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)) !important;
+                    gap: 16px !important;
+                    margin-bottom: 24px !important;
+                }
+                @media (max-width: 640px) {
+                    .grn-page-root .grn-stat-cards {
+                        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important;
+                        gap: 12px !important;
+                    }
+                }
+            `}</style>
+            <ModuleContainer
+                title="Goods Received Notes (GRN)"
+                subtitle="Inspect, inward physical shipments against purchase orders, and verify batch/expiry dates"
+                icon={<BsTruck />}
             actionBtn={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <button
@@ -5496,7 +6177,7 @@ export const GRNPage = () => {
             )}
 
             {/* Stat Cards strictly mapped from GET /api/v1/grn/stats */}
-            <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
+            <div className="grn-stat-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 24 }}>
                 <StatCard
                     label="Total GRNs"
                     value={statsLoading ? '...' : String(stats?.total_grns ?? 0)}
@@ -5622,7 +6303,7 @@ export const GRNPage = () => {
                                 <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#4b5563' }}>No recent GRN records found</p>
                             </div>
                         ) : (
-                            <div style={{ overflowX: 'auto' }}>
+                            <div className="grn-table-container" style={{ overflowX: 'auto' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
                                     <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
                                         <tr>
@@ -6060,7 +6741,7 @@ export const GRNPage = () => {
                         )}
                     </div>
                 ) : (
-                    <div style={{ overflowX: 'auto' }}>
+                    <div className="grn-table-container" style={{ overflowX: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                             <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
                                 <tr>
@@ -8214,6 +8895,7 @@ export const GRNPage = () => {
             )}
 
         </ModuleContainer>
+        </div>
     );
 };
 
@@ -9256,6 +9938,135 @@ export const StoreTransfersPage = () => {
     }, [searchTerm, statusFilter, selectedStoreId]);
 
     return (
+        <div className="store-transfers-page-root" style={{ width: '100%', minHeight: '100%' }}>
+            <style>{`
+                /* Store Transfers Page Full-Width & External Whitespace Elimination */
+                .store-transfers-page-root {
+                    width: 100% !important;
+                    max-width: 100% !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                }
+                .store-transfers-page-root > div {
+                    max-width: 100% !important;
+                    width: 100% !important;
+                    margin: 0 !important;
+                    padding: 20px 24px !important;
+                    box-sizing: border-box !important;
+                }
+                @media (max-width: 768px) {
+                    .store-transfers-page-root > div {
+                        padding: 14px 16px !important;
+                    }
+                }
+
+                /* Page-level and table custom scrollbars */
+                main:has(.store-transfers-page-root)::-webkit-scrollbar,
+                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar {
+                    width: 8px !important;
+                    height: 8px !important;
+                }
+                main:has(.store-transfers-page-root)::-webkit-scrollbar-track,
+                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-track {
+                    background: #f1f5f9 !important;
+                    border-radius: 4px;
+                }
+                main:has(.store-transfers-page-root)::-webkit-scrollbar-thumb,
+                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-thumb {
+                    background: #cbd5e1 !important;
+                    border-radius: 4px;
+                }
+                main:has(.store-transfers-page-root)::-webkit-scrollbar-thumb:hover,
+                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-thumb:hover {
+                    background: #94a3b8 !important;
+                }
+                .store-transfers-page-root .store-transfers-table-container {
+                    scrollbar-width: thin !important;
+                    scrollbar-color: #cbd5e1 #f1f5f9 !important;
+                }
+
+                /* Clean, modern, properly spaced action pill buttons */
+                .store-transfers-page-root .store-transfer-action-btn {
+                    width: auto !important;
+                    height: 30px !important;
+                    min-width: unset !important;
+                    padding: 0 11px !important;
+                    gap: 6px !important;
+                    font-size: 12px !important;
+                    font-weight: 600 !important;
+                    border-radius: 6px !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    white-space: nowrap !important;
+                    cursor: pointer !important;
+                    transition: all 0.15s ease !important;
+                }
+                .store-transfers-page-root .store-transfer-action-btn svg {
+                    width: 13px !important;
+                    height: 13px !important;
+                    flex-shrink: 0 !important;
+                }
+                .store-transfers-page-root table tbody tr:hover td {
+                    background-color: #f8fafc;
+                }
+                .store-transfers-page-root table tbody tr:hover td.store-transfers-actions-cell {
+                    background-color: #f8fafc !important;
+                }
+
+                /* Store Transfers Pagination Grid & Exact Centering */
+                .store-transfers-pagination-footer {
+                    display: grid !important;
+                    grid-template-columns: 1fr auto 1fr !important;
+                    align-items: center !important;
+                    margin-top: 16px !important;
+                    padding: 8px 4px !important;
+                    width: 100% !important;
+                    box-sizing: border-box !important;
+                }
+                .store-transfers-pagination-left {
+                    display: flex;
+                    align-items: center;
+                    justify-self: start;
+                }
+                .store-transfers-pagination-center {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    justify-self: center;
+                    text-align: center;
+                }
+                .store-transfers-pagination-right {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    justify-self: end;
+                }
+                @media (max-width: 640px) {
+                    .store-transfers-pagination-footer {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        gap: 10px !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                    }
+                    .store-transfers-pagination-left {
+                        display: none !important;
+                    }
+                    .store-transfers-pagination-center {
+                        width: 100% !important;
+                        text-align: center !important;
+                        justify-content: center !important;
+                        order: 1 !important;
+                    }
+                    .store-transfers-pagination-right {
+                        width: 100% !important;
+                        justify-content: center !important;
+                        order: 2 !important;
+                    }
+                }
+            `}</style>
         <ModuleContainer
             title="Inter-Store Stock Transfers"
             subtitle="Transfer products between retail outlets, generate gate passes and track in-transit stock"
@@ -10107,7 +10918,7 @@ export const StoreTransfersPage = () => {
                                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 130 }}>Status</th>
                                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 150, whiteSpace: 'nowrap' }}>Created Date</th>
                                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 140 }}>Approved By</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 14px', textAlign: 'left', minWidth: 360, whiteSpace: 'nowrap' }}>Actions</th>
+                                <th style={{ position: 'sticky', top: 0, right: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', textAlign: 'center', minWidth: 260, whiteSpace: 'nowrap', boxShadow: '-3px 0 6px rgba(0,0,0,0.04)' }}>Actions</th>
                             </tr>
                         </thead>
                     <tbody>
@@ -10324,8 +11135,29 @@ export const StoreTransfersPage = () => {
                                             </td>
 
                                             {/* Transfer Actions */}
-                                            <td className="store-transfers-actions-cell" style={{ padding: '10px 14px', textAlign: 'left', minWidth: 360, whiteSpace: 'nowrap' }}>
-                                                <div className="store-transfers-actions-wrapper" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-start', gap: 5, flexWrap: 'nowrap' }}>
+                                            <td
+                                                className="store-transfers-actions-cell"
+                                                style={{
+                                                    position: 'sticky',
+                                                    right: 0,
+                                                    zIndex: 10,
+                                                    background: isExpanded ? '#fafafa' : '#ffffff',
+                                                    padding: '10px 16px',
+                                                    textAlign: 'center',
+                                                    whiteSpace: 'nowrap',
+                                                    boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
+                                                }}
+                                            >
+                                                <div
+                                                    className="store-transfers-actions-wrapper"
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: 6,
+                                                        flexWrap: 'nowrap'
+                                                    }}
+                                                >
                                                     {/* 1. View button - Logical primary inspection action across ALL statuses */}
                                                     <button
                                                         type="button"
@@ -10505,18 +11337,19 @@ export const StoreTransfersPage = () => {
 
             {/* Pagination Toolbar */}
             {totalPages > 1 && (
-                <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginTop: 16,
-                    padding: '8px 4px'
-                }}>
-                    <span style={{ fontSize: 13, color: '#6b7280' }}>
-                        Showing {Math.min(filteredTransfers.length, (page - 1) * pageSize + 1)} to {Math.min(filteredTransfers.length, page * pageSize)} of {filteredTransfers.length} records
-                    </span>
+                <div className="store-transfers-pagination-footer">
+                    {/* Left column placeholder */}
+                    <div className="store-transfers-pagination-left" />
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/* Centered Record Count */}
+                    <div className="store-transfers-pagination-center">
+                        <span style={{ fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>
+                            Showing {Math.min(filteredTransfers.length, (page - 1) * pageSize + 1)} to {Math.min(filteredTransfers.length, page * pageSize)} of {filteredTransfers.length} records
+                        </span>
+                    </div>
+
+                    {/* Right column pagination controls */}
+                    <div className="store-transfers-pagination-right">
                         <button
                             type="button"
                             disabled={page <= 1}
@@ -10535,7 +11368,7 @@ export const StoreTransfersPage = () => {
                             Previous
                         </button>
 
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
                             Page {page} of {totalPages}
                         </span>
 
@@ -12257,6 +13090,7 @@ export const StoreTransfersPage = () => {
                 </div>
             )}
         </ModuleContainer>
+        </div>
     );
 };
 

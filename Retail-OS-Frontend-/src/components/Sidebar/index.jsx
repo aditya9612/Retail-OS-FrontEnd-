@@ -78,7 +78,7 @@ export const menuGroups = [
         id: 'inventory',
         label: 'INVENTORY',
         items: [
-            { name: 'Stock', icon: <BsBoxes />, path: '/inventory' },
+            { name: 'Stock', icon: <BsBoxes />, path: '/inventory', aliasPaths: ['/inventory/dashboard', '/inventory/stock'] },
             { name: 'Warehouses', icon: <BsBuilding />, path: '/inventory/warehouses' },
             { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases' },
             { name: 'Suppliers', icon: <BsTruck />, path: '/suppliers' },
@@ -167,43 +167,6 @@ const Sidebar = ({ collapsed, onToggle }) => {
             ? currentPath.slice(0, -1)
             : currentPath;
 
-<<<<<<< HEAD
-    const isItemActive = (item) => {
-        const cleanPath = (currentPath.endsWith('/') && currentPath.length > 1)
-            ? currentPath.slice(0, -1)
-            : currentPath;
-
-        if (cleanPath === item.path) return true;
-        if (item.aliasPaths && item.aliasPaths.some(p => cleanPath === p || cleanPath.startsWith(p + '/'))) return true;
-
-        // Specific handling for exact-match root paths like /ecommerce or /dashboard
-        if (item.path === '/ecommerce') {
-            return cleanPath === '/ecommerce';
-        }
-        if (item.path === '/dashboard') {
-            return cleanPath === '/dashboard';
-        }
-
-        // If another item matches the current path exactly (or by alias),
-        // then this item is not the active one
-        const hasExactMatchElsewhere = allNavItems.some(
-            other => other.path === cleanPath || (other.aliasPaths && other.aliasPaths.includes(cleanPath))
-        );
-        if (hasExactMatchElsewhere) return false;
-
-        // For nested paths (e.g. deeper subroutes not explicitly in menu),
-        // activate the item with the most specific (longest) matching path prefix
-        if (item.path !== '/' && item.path !== '/dashboard' && item.path !== '/ecommerce' && cleanPath.startsWith(item.path + '/')) {
-            const hasMoreSpecificMatch = allNavItems.some(
-                other => other.path !== item.path &&
-                    other.path !== '/' &&
-                    other.path !== '/dashboard' &&
-                    other.path !== '/ecommerce' &&
-                    cleanPath.startsWith(other.path + '/') &&
-                    other.path.length > item.path.length
-            );
-            return !hasMoreSpecificMatch;
-=======
         // 1. Check for exact match (by path or aliasPaths)
         const exactMatch = allItems.find(item => {
             const itemNorm = item.path.length > 1 && item.path.endsWith('/') ? item.path.slice(0, -1) : item.path;
@@ -219,7 +182,6 @@ const Sidebar = ({ collapsed, onToggle }) => {
 
         if (exactMatch) {
             return exactMatch.path;
->>>>>>> a7b4a7c14077883c20296d6a86050fa70088b48b
         }
 
         // 2. If no exact match (e.g. detail sub-routes like /products/123 or /invoices/view/1),
@@ -434,13 +396,8 @@ const Sidebar = ({ collapsed, onToggle }) => {
                                                 >
                                                     <NavLink
                                                         to={item.path}
-<<<<<<< HEAD
                                                         end={Boolean(item.end || item.path === '/ecommerce' || item.path === '/dashboard' || item.path === '/')}
-                                                        className={({ isActive }) => `sidebar-item ${active ? 'sidebar-item--active' : ''}`}
-=======
-                                                        end
                                                         className={() => `sidebar-item ${active ? 'sidebar-item--active' : ''}`}
->>>>>>> a7b4a7c14077883c20296d6a86050fa70088b48b
                                                     >
                                                         <span className="sidebar-item-icon">{item.icon}</span>
 

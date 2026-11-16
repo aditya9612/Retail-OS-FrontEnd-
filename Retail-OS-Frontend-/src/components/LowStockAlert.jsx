@@ -173,45 +173,11 @@ const LowStockAlert = ({
           ) : (
             items.map((item, index) => {
               /* =========================
-                 AVAILABLE QUANTITY
+                 AVAILABLE QUANTITY & REORDER LEVEL
               ========================= */
 
-              const qty = Number(
-                item?.quantity ??
-                  item?.stock ??
-                  item?.available_quantity ??
-                  item?.current_stock ??
-                  0
-              );
-
-              /* =========================
-                 REORDER LEVEL
-              ========================= */
-
-              const reorderLevel = Number(
-                item?.low_stock_threshold ??
-                  item?.minimum_stock ??
-                  item?.reorderLevel ??
-                  item?.reorder_level ??
-                  item?.minStock ??
-                  item?.min_stock ??
-                  0
-              );
-
-              /* =========================
-                 STOCK STATUS
-              ========================= */
-
-              const isOutOfStock = qty <= 0;
-
-              const isCritical =
-                reorderLevel > 0 && qty > 0 && qty < reorderLevel;
-
-              const isLowStock =
-                reorderLevel > 0 && qty > 0 && qty === reorderLevel;
-
-              const isInStock =
-                qty > reorderLevel;
+              const qty = getItemStock(item);
+              const reorderLevel = getItemMinStock(item);
 
               /* =========================
                  CLEAN STORE NAME
@@ -239,66 +205,25 @@ const LowStockAlert = ({
                  STATUS
               ========================= */
 
-              const rawStatus =
-                item?.stock_status ||
-                (typeof stockStatus === "function"
-                  ? stockStatus(item)
-                  : null);
+              const statusObj =
+                typeof stockStatus === "function"
+                  ? (typeof stockStatus(item) === "object" && stockStatus(item) !== null
+                      ? stockStatus(item)
+                      : calculateStockStatus(qty, reorderLevel))
+                  : calculateStockStatus(qty, reorderLevel);
 
-              const resolvedStatus =
-                typeof rawStatus === "object" && rawStatus !== null
-                  ? (rawStatus.label || rawStatus.status || rawStatus.text || "")
-                  : (rawStatus ? String(rawStatus) : "");
-
-              let statusClass =
-                "low-stock-badge";
-
-              let statusText =
-                "Low Stock";
-
-              if (resolvedStatus) {
-                statusText = resolvedStatus;
-
-                if (resolvedStatus === "Out of Stock") {
-                  statusClass =
-                    "out-of-stock-badge";
-                } else if (resolvedStatus === "Critical") {
-                  statusClass =
-                    "critical-stock-badge";
-                } else if (resolvedStatus === "Low Stock") {
-                  statusClass =
-                    "low-stock-badge";
-                } else if (resolvedStatus === "In Stock") {
-                  statusClass =
-                    "in-stock-badge";
-                }
-              } else {
-                if (isOutOfStock) {
-                  statusClass =
-                    "out-of-stock-badge";
-
-                  statusText =
-                    "Out of Stock";
-                } else if (isCritical) {
-                  statusClass =
-                    "critical-stock-badge";
-
-                  statusText =
-                    "Critical";
-                } else if (isLowStock) {
-                  statusClass =
-                    "low-stock-badge";
-
-                  statusText =
-                    "Low Stock";
-                } else if (isInStock) {
-                  statusClass =
-                    "in-stock-badge";
-
-                  statusText =
-                    "In Stock";
-                }
-              }
+              const statusText = statusObj.label || statusObj.status || "In Stock";
+              const statusClass = statusObj.badgeClass || (
+                statusText === "Out of Stock"
+                  ? "out-of-stock-badge"
+                  : statusText === "At Reorder"
+                  ? "at-reorder-badge"
+                  : statusText === "Low Stock"
+                  ? "low-stock-badge"
+                  : statusText === "Critical"
+                  ? "critical-stock-badge"
+                  : "in-stock-badge"
+              );
 
               /* =========================
                  LAST UPDATED

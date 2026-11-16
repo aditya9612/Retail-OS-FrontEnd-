@@ -9,9 +9,9 @@ import {
   BsBoxSeam,
   BsBuildings,
 } from "react-icons/bs";
-import { listStores, listInventory, getProductMultiStoreStock } from "../services/inventoryService";
+import { listInventory, getProductMultiStoreStock } from "../services/inventoryService";
 import productService from "../services/product";
-import { createStoreTransfer } from "../services/storeTransferService";
+import { createStoreTransfer, getAvailableStoresForTransfers } from "../services/storeTransferService";
 
 /**
  * Helper: Safely extract error message from API response
@@ -107,7 +107,7 @@ export const TransferStockModal = ({
     setSuccessMsg("");
 
     Promise.all([
-      listStores().catch((err) => {
+      getAvailableStoresForTransfers().catch((err) => {
         console.error("Failed to load stores for transfer:", err);
         return [];
       }),
@@ -120,10 +120,10 @@ export const TransferStockModal = ({
         if (!isMounted) return;
 
         // Extract stores
-        const storesList = Array.isArray(storesRes?.data)
-          ? storesRes.data
-          : Array.isArray(storesRes)
+        const storesList = Array.isArray(storesRes)
           ? storesRes
+          : Array.isArray(storesRes?.data)
+          ? storesRes.data
           : [];
         setStores(storesList);
 
@@ -218,6 +218,40 @@ export const TransferStockModal = ({
       return true;
     });
   }, [stores]);
+
+  // Combine product catalog with current store inventory to ensure all items in branch are available
+  const availableProducts = useMemo(() => {
+    const map = new Map();
+
+    // 1. Add catalog products
+    products.forEach((p) => {
+      const id = Number(p.id);
+      if (id > 0) {
+        map.set(id, {
+          id,
+          name: p.name || p.product_name || `Product #${id}`,
+          sku: p.sku || "",
+          category: p.category_name || "",
+        });
+      }
+    });
+
+    // 2. Add or enrich with source store inventory products
+    sourceInventory.forEach((inv) => {
+      const id = Number(inv?.product_id ?? inv?.productId ?? inv?.product?.id);
+      if (id > 0) {
+        const existing = map.get(id);
+        map.set(id, {
+          id,
+          name: inv.product_name || inv.name || existing?.name || `Product #${id}`,
+          sku: inv.product_sku || inv.sku || existing?.sku || "",
+          category: inv.category_name || existing?.category || "",
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [products, sourceInventory]);
 
   // Map of product_id -> available stock in the selected source store
   const sourceStockMap = useMemo(() => {
@@ -362,9 +396,9 @@ export const TransferStockModal = ({
         return;
       }
 
-      // Check product exists in catalog
-      const prodExists = products.some((p) => Number(p.id) === pId);
-      if (!prodExists && products.length > 0) {
+      // Check product exists in catalog or store inventory
+      const prodExists = availableProducts.some((p) => Number(p.id) === pId);
+      if (!prodExists && availableProducts.length > 0) {
         setError(`Product #${pId} at row #${i + 1} was not found in the active product catalog.`);
         return;
       }
@@ -801,7 +835,7 @@ export const TransferStockModal = ({
                         }}
                       >
                         <option value="">-- Select Product --</option>
-                        {products.map((p) => {
+                        {availableProducts.map((p) => {
                           const pId = Number(p.id);
                           const isAlreadyAdded = otherSelectedIds.has(pId);
                           const storeStock = getAvailableStockForProduct(pId);

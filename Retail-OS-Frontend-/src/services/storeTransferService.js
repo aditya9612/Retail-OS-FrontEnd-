@@ -410,6 +410,88 @@ export const createStoreTransfer = async (payload) => {
   return response.data;
 };
 
+/**
+ * Get Available Stores for Store Transfers
+ * Attempts to load from /stores/. If unauthorized (403) or empty,
+ * extracts active stores dynamically from transfer summary, transfers list, and inventory.
+ */
+export const getAvailableStoresForTransfers = async () => {
+  const storeMap = new Map();
+
+  const addStore = (id, name, isActive = true) => {
+    const numId = Number(id);
+    if (Number.isSafeInteger(numId) && numId > 0 && !storeMap.has(numId)) {
+      storeMap.set(numId, {
+        id: numId,
+        name: name || `Store #${numId}`,
+        store_name: name || `Store #${numId}`,
+        is_active: isActive !== false,
+      });
+    }
+  };
+
+  // 1. Try standard /stores/ API
+  try {
+    const res = await apiClient.get("/stores/");
+    const list = Array.isArray(res?.data)
+      ? res.data
+      : Array.isArray(res?.data?.data)
+      ? res.data.data
+      : Array.isArray(res?.data?.stores)
+      ? res.data.stores
+      : Array.isArray(res?.data?.items)
+      ? res.data.items
+      : [];
+
+    if (list.length > 0) {
+      list.forEach((s) => {
+        addStore(s.id, s.name || s.store_name, s.is_active);
+      });
+      return Array.from(storeMap.values());
+    }
+  } catch (err) {
+    console.warn("Direct /stores/ API unavailable or forbidden (e.g. 403), using fallback sources:", err?.message || err);
+  }
+
+  // 2. Fallback: Aggregate stores from summary, transfers list, and inventory
+  try {
+    const [summaryRes, transfersRes, invRes] = await Promise.allSettled([
+      apiClient.get(`${STORE_TRANSFERS_API}/summary`),
+      apiClient.get(STORE_TRANSFERS_API, { params: { skip: 0, limit: 100 } }),
+      apiClient.get("/inventory"),
+    ]);
+
+    if (summaryRes.status === "fulfilled" && summaryRes.value?.data) {
+      const summaryData = summaryRes.value.data;
+      (summaryData.top_source_stores || []).forEach((s) => addStore(s.store_id, s.store_name));
+      (summaryData.top_destination_stores || []).forEach((s) => addStore(s.store_id, s.store_name));
+    }
+
+    if (transfersRes.status === "fulfilled" && transfersRes.value?.data) {
+      const transfers = extractTransfers(transfersRes.value.data);
+      transfers.forEach((t) => {
+        if (t.source_store_id) addStore(t.source_store_id, t.source_store_name);
+        if (t.destination_store_id) addStore(t.destination_store_id, t.destination_store_name);
+      });
+    }
+
+    if (invRes.status === "fulfilled" && invRes.value?.data) {
+      const invItems = Array.isArray(invRes.value.data)
+        ? invRes.value.data
+        : Array.isArray(invRes.value.data?.data)
+        ? invRes.value.data.data
+        : [];
+      invItems.forEach((i) => {
+        if (i.store_id) addStore(i.store_id, i.store_name);
+      });
+    }
+  } catch (fallbackErr) {
+    console.warn("Fallback store aggregation error:", fallbackErr);
+  }
+
+  return Array.from(storeMap.values());
+};
+
 export default {
   getStoreTransfers,
   getStoreTransferById,
@@ -420,5 +502,6 @@ export default {
   dispatchStoreTransfer,
   receiveStoreTransfer,
   receiveStoreTransferWithDiscrepancy,
+  getAvailableStoresForTransfers,
   extractTransfers,
 };

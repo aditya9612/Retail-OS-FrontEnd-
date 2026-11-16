@@ -43,6 +43,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     // 5. Product Master (/products) & Barcode (/products/barcode) - [from Punam]
     // 6. Category Management (/categories) - [from Punam]
     // 7. Store Management & Targets (/stores, /stores/targets, /ecommerce/store) - [from Punam]
+    // 8. Inventory, Warehouses, Purchases, Suppliers, GRN, Purchase Returns - [from shital-login-fix]
     const isCustomerModule = currentPath.startsWith('/customers');
     const isBillingGstModule = (
         currentPath.startsWith('/billing') ||
@@ -55,6 +56,12 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const isProductModule = currentPath.startsWith('/products');
     const isCategoryModule = currentPath.startsWith('/categories');
     const isStoreModule = currentPath.startsWith('/stores') || currentPath === '/ecommerce/store';
+    const isWarehouses = currentPath === '/inventory/warehouses' || currentPath.startsWith('/inventory/warehouses/') || currentPath === '/warehouses' || currentPath.startsWith('/warehouses/');
+    const isPurchases = currentPath === '/purchases' || currentPath.startsWith('/purchases/') || currentPath === '/inventory/purchases' || currentPath.startsWith('/inventory/purchases/');
+    const isSuppliers = currentPath === '/suppliers' || currentPath.startsWith('/suppliers/') || currentPath === '/inventory/suppliers' || currentPath.startsWith('/inventory/suppliers/');
+    const isGRN = currentPath === '/inventory/grn' || currentPath.startsWith('/inventory/grn/') || currentPath === '/grn' || currentPath.startsWith('/grn/');
+    const isPurchaseReturns = currentPath === '/inventory/purchase-returns' || currentPath.startsWith('/inventory/purchase-returns/') || currentPath === '/purchase-order-returns' || currentPath.startsWith('/purchase-order-returns/') || currentPath === '/returns' || currentPath.startsWith('/returns/');
+    const isInventoryStock = currentPath === '/inventory' || currentPath === '/inventory/' || currentPath === '/inventory/dashboard' || currentPath === '/inventory/stock' || currentPath === '/stock';
 
     const shouldHideSearchBar = (
         isCustomerModule ||
@@ -63,9 +70,16 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
         isStoreTransfers ||
         isProductModule ||
         isCategoryModule ||
-        isStoreModule
+        isStoreModule ||
+        isWarehouses ||
+        isPurchases ||
+        isSuppliers ||
+        isGRN ||
+        isPurchaseReturns ||
+        isInventoryStock
     );
     const isSearchHidden = shouldHideSearchBar;
+    const hideSearch = shouldHideSearchBar;
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);

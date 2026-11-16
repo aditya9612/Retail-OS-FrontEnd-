@@ -1,6 +1,6 @@
 import apiClient from "../api/axios";
 
-const PURCHASE_ORDER_RETURNS_API = "/api/v1/purchase-order-returns";
+const PURCHASE_ORDER_RETURNS_API = "/purchase-order-returns";
 
 // =====================================================
 // API #1 - Get Purchase Order Returns List
@@ -359,8 +359,17 @@ export const updatePurchaseOrderReturnStatus = async (returnId, status) => {
 // POST /api/v1/purchase-order-returns/{return_id}/approve
 // =====================================================
 export const approvePurchaseOrderReturn = async (returnId) => {
+    if (returnId === undefined || returnId === null || String(returnId).trim() === "") {
+        throw new Error("Return ID is required");
+    }
+
+    const id = Number(returnId);
+    if (!Number.isSafeInteger(id) || id <= 0) {
+        throw new Error("Invalid Return ID");
+    }
+
     const response = await apiClient.post(
-        `${PURCHASE_ORDER_RETURNS_API}/${returnId}/approve`
+        `${PURCHASE_ORDER_RETURNS_API}/${id}/approve`
     );
 
     return response.data;
@@ -384,7 +393,10 @@ export const rejectPurchaseOrderReturn = async (returnId, dataOrReason) => {
     if (typeof dataOrReason === "string" && dataOrReason.trim() !== "") {
         payload = { rejection_reason: dataOrReason.trim() };
     } else if (typeof dataOrReason === "object" && dataOrReason !== null) {
-        payload = dataOrReason;
+        payload = {
+            rejection_reason: dataOrReason.rejection_reason || dataOrReason.reason || "",
+            ...dataOrReason,
+        };
     }
 
     const response = await apiClient.post(
