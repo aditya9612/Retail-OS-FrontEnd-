@@ -74,6 +74,19 @@ export const getWarehouseById = async (warehouseId) => {
  * Delete Warehouse by ID
  * DELETE /api/v1/warehouses/{warehouse_id}
  */
+/**
+ * Create Warehouse
+ * POST /api/v1/warehouses
+ */
+export const createWarehouse = async (warehouseData) => {
+  if (!warehouseData || typeof warehouseData !== "object") {
+    throw new Error("warehouseData is required");
+  }
+
+  const response = await axiosInstance.post("/warehouses", warehouseData);
+  return response.data;
+};
+
 export const deleteWarehouse = async (warehouseId) => {
   if (!warehouseId) {
     throw new Error("warehouseId is required");
@@ -104,6 +117,7 @@ export default {
   listWarehouses,
   getWarehouseDashboard,
   getWarehouseById,
+  createWarehouse,
   deleteWarehouse,
   getWarehouseTransfers,
 };

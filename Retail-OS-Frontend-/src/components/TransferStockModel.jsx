@@ -613,7 +613,7 @@ export const TransferStockModal = ({
                   marginBottom: 6,
                 }}
               >
-                Source Store (From) *
+                Source Store *
               </label>
               <select
                 value={sourceStoreId}
@@ -634,7 +634,7 @@ export const TransferStockModal = ({
                   color: "#0f172a",
                 }}
               >
-                <option value="">Select Source Store (Active)</option>
+                <option value="">Select Source Store</option>
                 {activeStores.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name || s.store_name || `Store #${s.id}`} (ID: {s.id})
@@ -665,7 +665,7 @@ export const TransferStockModal = ({
                   marginBottom: 6,
                 }}
               >
-                Destination Store (To) *
+                Destination Store *
               </label>
               <select
                 value={destinationStoreId}
@@ -686,7 +686,7 @@ export const TransferStockModal = ({
                   color: "#0f172a",
                 }}
               >
-                <option value="">Select Destination Store (Active)</option>
+                <option value="">Select Destination Store</option>
                 {activeStores.map((s) => (
                   <option
                     key={s.id}
@@ -800,7 +800,7 @@ export const TransferStockModal = ({
                           background: "#fff",
                         }}
                       >
-                        <option value="">-- Choose Product (Real Catalog) --</option>
+                        <option value="">-- Select Product --</option>
                         {products.map((p) => {
                           const pId = Number(p.id);
                           const isAlreadyAdded = otherSelectedIds.has(pId);
@@ -837,10 +837,10 @@ export const TransferStockModal = ({
                         >
                           {stockAvail > 0 ? (
                             <>
-                              ✓ Available in source store: <strong>{stockAvail}</strong> units
+                              ✓ Available Stock in Source Store: <strong>{stockAvail}</strong> units
                             </>
                           ) : (
-                            <>⚠ 0 stock available in source store</>
+                            <>⚠ 0 available stock in source store</>
                           )}
                         </div>
                       )}
@@ -853,7 +853,7 @@ export const TransferStockModal = ({
                         min="1"
                         max={stockAvail > 0 ? stockAvail : 100000}
                         step="1"
-                        placeholder="Quantity"
+                        placeholder="Transfer Quantity"
                         value={item.quantity}
                         onChange={(e) => handleQuantityChange(index, e.target.value)}
                         disabled={submitting}

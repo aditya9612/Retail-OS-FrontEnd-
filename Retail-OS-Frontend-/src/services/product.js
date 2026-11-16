@@ -44,6 +44,11 @@ const productService = {
         return apiClient.post("/api/v1/products", data);
     },
 
+    bulkCreate: (products) => {
+        const payload = Array.isArray(products) ? { products } : products;
+        return apiClient.post("/api/v1/products/bulk", payload);
+    },
+
     update: (productId, data) => {
         return apiClient.patch(`/api/v1/products/${productId}`, data);
     },
@@ -54,6 +59,11 @@ const productService = {
 
     toggleStatus: (productId) => {
         return apiClient.patch(`/api/v1/products/${productId}/toggle-status`);
+    },
+
+    getSummary: (storeId = null) => {
+        const params = storeId ? { store_id: storeId } : {};
+        return apiClient.get("/api/v1/products/summary", { params });
     },
 
     getLowStock: (storeId, threshold = 10) => {
@@ -69,13 +79,24 @@ const productService = {
     },
 
     getBarcodeImage: (productId, mode = "download") => {
-        return apiClient.get(`/api/v1/products/${productId}/barcode?mode=${mode}`, {
+        return apiClient.get(`/api/v1/products/${productId}/barcode-label?mode=${mode}`, {
             responseType: "blob",
+        }).catch(() => {
+            return apiClient.get(`/api/v1/products/${productId}/barcode?mode=${mode}`, {
+                responseType: "blob",
+            });
         });
     },
 
     generateBarcode: (productId, overwrite = false) => {
         return apiClient.post(`/api/v1/products/${productId}/generate-barcode?overwrite=${overwrite}`);
+    },
+
+    getBarcodeLabel: (productId, mode = "json", storeId = null) => {
+        const storeParam = storeId ? `&store_id=${storeId}` : "";
+        return apiClient.get(`/api/v1/products/${productId}/barcode-label?mode=${mode}${storeParam}`, {
+            responseType: mode === "download" || mode === "preview" ? "blob" : "json",
+        });
     },
 
     generateMissingBarcodes: () => {
@@ -98,6 +119,35 @@ const productService = {
         return apiClient.post(`/api/v1/products/${productId}/images`, payload);
     },
 
+    uploadImages: (productId, files, isPrimary = false) => {
+        if (!files) return Promise.resolve({ data: [] });
+        const fileList = Array.isArray(files) ? files : [files];
+        if (fileList.length === 0) return Promise.resolve({ data: [] });
+
+        if (typeof FormData !== "undefined" && fileList.some(f => (typeof File !== "undefined" && f instanceof File) || (typeof Blob !== "undefined" && f instanceof Blob))) {
+            const formData = new FormData();
+            fileList.forEach(file => {
+                if ((typeof File !== "undefined" && file instanceof File) || (typeof Blob !== "undefined" && file instanceof Blob)) {
+                    formData.append("images", file);
+                }
+            });
+            formData.append("is_primary", Boolean(isPrimary));
+            return apiClient.post(`/api/v1/products/${productId}/images`, formData, {
+                headers: { "Content-Type": "multipart/form-data" }
+            });
+        }
+
+        const urls = fileList.filter(f => typeof f === "string");
+        if (urls.length > 0) {
+            return apiClient.post(`/api/v1/products/${productId}/images`, {
+                image_urls: urls,
+                is_primary: Boolean(isPrimary)
+            });
+        }
+
+        return Promise.resolve({ data: [] });
+    },
+
     deleteImage: (productId, imageId) => {
         return apiClient.delete(`/api/v1/products/${productId}/images/${imageId}`);
     },
@@ -112,7 +162,14 @@ const productService = {
         return apiClient.get("/api/v1/categories").catch(() => {
             return apiClient.get("/api/v1/products/categories/list");
         });
+    },
 
+    getVariants: (params = {}) => {
+        return apiClient.get("/api/v1/variants", { params });
+    },
+
+    getProductVariants: (productId, params = {}) => {
+        return apiClient.get(`/api/v1/products/${productId}/variants`, { params });
     },
 
     getVariantById: (variantId) => {
@@ -193,11 +250,14 @@ const productService = {
     getVariantBySku: (sku) => {
         return apiClient.get(`/api/v1/variants/by-sku/${encodeURIComponent(sku)}`);
     },
-    // Aliases for Barcode & Product operations
+
+    // Aliases for Barcode, Product & Variant operations
     getProductById: (productId) => productService.getById(productId),
     generateProductBarcode: (productId, overwrite = false) => productService.generateBarcode(productId, overwrite),
     getProductBarcodeLabel: (productId, mode = "json", storeId = null) => productService.getBarcodeLabel(productId, mode, storeId),
     getProducts: (page = 1, pageSize = 100, includeInactive = false) => productService.getAll(page, Math.min(Math.max(1, Number(pageSize) || 20), 100), includeInactive),
+    listVariants: (params = {}) => productService.getVariants(params),
+    matrixGenerate: (data) => productService.generateVariantMatrix(data),
 };
 
 export const product = productService;

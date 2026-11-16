@@ -26,12 +26,9 @@ import {
     BsCalculator,
     BsHash,
     BsDownload,
-    BsExclamationTriangleFill,
-    BsLockFill,
-    BsXCircleFill,
 } from 'react-icons/bs';
 
-const CATEGORIES = ['All'];
+const CATEGORIES = ['All', 'Apparel', 'Electronics', 'Accessories', 'Groceries'];
 
 const MAX_QTY = 50; // Maximum quantity allowed per item in cart
 
@@ -41,84 +38,158 @@ const PAYMENT_MODES = [
     { id: 'Card', label: 'Card', icon: <BsCreditCard2Front size={15} /> },
 ];
 
-const isProductOutOfStock = (product) => {
-    if (!product) return false;
-    if (product.isInStock === false && (product.stock <= 0)) return true;
-    if (product.status === 'Out of Stock') return true;
-    if (product.is_in_stock === false || product.in_stock === false) return true;
-    return false;
-};
-
-// ── Stock calculation helpers ───────────────────────────────────────────
-const extractProductStock = (p) => {
-    // 1. Direct stock or quantity properties
-    if (p.stock !== undefined && p.stock !== null && p.stock !== '') {
-        const val = Number(p.stock);
-        if (!isNaN(val)) return Math.max(0, val);
-    }
-    if (p.quantity !== undefined && p.quantity !== null && p.quantity !== '') {
-        const val = Number(p.quantity);
-        if (!isNaN(val)) return Math.max(0, val);
-    }
-    if (p.current_stock !== undefined && p.current_stock !== null && p.current_stock !== '') {
-        const val = Number(p.current_stock);
-        if (!isNaN(val)) return Math.max(0, val);
-    }
-    if (p.inventory_quantity !== undefined && p.inventory_quantity !== null && p.inventory_quantity !== '') {
-        const val = Number(p.inventory_quantity);
-        if (!isNaN(val)) return Math.max(0, val);
-    }
-    if (p.available_stock !== undefined && p.available_stock !== null && p.available_stock !== '') {
-        const val = Number(p.available_stock);
-        if (!isNaN(val)) return Math.max(0, val);
-    }
-    if (p.stock_quantity !== undefined && p.stock_quantity !== null && p.stock_quantity !== '') {
-        const val = Number(p.stock_quantity);
-        if (!isNaN(val)) return Math.max(0, val);
-    }
-    // 2. Inventory object or array
-    if (p.inventory && typeof p.inventory === 'object') {
-        if (Array.isArray(p.inventory)) {
-            const sum = p.inventory.reduce((tot, item) => {
-                const q = item.stock ?? item.quantity ?? item.current_stock ?? item.inventory_quantity ?? 0;
-                return tot + (Number(q) || 0);
-            }, 0);
-            if (sum > 0) return sum;
-        } else {
-            const q = p.inventory.stock ?? p.inventory.quantity ?? p.inventory.current_stock ?? p.inventory.inventory_quantity;
-            if (q !== undefined && q !== null && q !== '') {
-                const val = Number(q);
-                if (!isNaN(val)) return Math.max(0, val);
-            }
-        }
-    }
-    // 3. Status or boolean flag checks: active catalog items default to available in-stock
-    if (p.is_in_stock === true || p.in_stock === true || p.status === 'In Stock' || p.status === 'Active' || p.is_active === true) {
-        return 50;
-    }
-    // Only if explicitly declared out of stock or inactive with zero inventory
-    if (p.is_in_stock === false || p.in_stock === false || p.status === 'Out of Stock' || p.status === 'Inactive' || p.is_active === false) {
-        return 0;
-    }
-    // Default fallback for catalog products: in-stock with 50 units
-    return 50;
-};
-
-const isProductInStock = (p, stockCount) => {
-    // If explicitly marked as in-stock, trust it
-    if (p.is_in_stock === true || p.in_stock === true) return true;
-    // If explicitly marked as out of stock or inactive and stock is 0
-    if ((p.status === 'Out of Stock' || p.is_in_stock === false || p.in_stock === false) && stockCount <= 0) return false;
-    // Otherwise in-stock if stock > 0
-    return stockCount > 0;
-};
+const DEFAULT_PRODUCTS = [
+    {
+        id: 101,
+        name: 'Cotton Graphic T-Shirt',
+        price: 799,
+        hsn: '6109',
+        gstRate: 5,
+        category: 'Apparel',
+        barcode: '1001',
+        image: '/images/products/tshirt.jpg',
+        discount: 50,
+    },
+    {
+        id: 102,
+        name: 'Parle-G Glucose Biscuits 250g',
+        price: 30,
+        hsn: '1905',
+        gstRate: 18,
+        category: 'Groceries',
+        barcode: '1002',
+        image: '/images/products/parle-g.jpg',
+        discount: 0,
+    },
+    {
+        id: 103,
+        name: 'Genuine Leather Wallet',
+        price: 1299,
+        hsn: '4202',
+        gstRate: 18,
+        category: 'Accessories',
+        barcode: '1003',
+        image: '/images/products/wallet.jpg',
+        discount: 100,
+    },
+    {
+        id: 104,
+        name: 'Organic Green Tea (Pack of 25)',
+        price: 249,
+        hsn: '0902',
+        gstRate: 5,
+        category: 'Groceries',
+        barcode: '1004',
+        image: '/images/products/green-tea.jpg',
+        discount: 20,
+    },
+    {
+        id: 105,
+        name: 'Smart Fitness Tracker Band',
+        price: 2499,
+        hsn: '8517',
+        gstRate: 18,
+        category: 'Electronics',
+        barcode: '1005',
+        image: '/images/products/fitness-tracker.jpg',
+        discount: 200,
+    },
+    {
+        id: 106,
+        name: 'Slim Fit Denim Jeans',
+        price: 1899,
+        hsn: '6203',
+        gstRate: 12,
+        category: 'Apparel',
+        barcode: '1006',
+        image: '/images/products/jeans.jpg',
+        discount: 150,
+    },
+    {
+        id: 107,
+        name: 'Fast USB Type-C 65W Charger',
+        price: 899,
+        hsn: '8504',
+        gstRate: 18,
+        category: 'Electronics',
+        barcode: '1007',
+        image: '/images/products/usb-charger.jpg',
+        discount: 50,
+    },
+    {
+        id: 108,
+        name: 'Fresh Dairy Milk 1 Litre',
+        price: 68,
+        hsn: '0401',
+        gstRate: 0,
+        category: 'Groceries',
+        barcode: '1008',
+        image: '/images/products/milk-bottle.jpg',
+        discount: 0,
+    },
+    {
+        id: 109,
+        name: 'Marie Light Biscuits 300g',
+        price: 45,
+        hsn: '1905',
+        gstRate: 18,
+        category: 'Groceries',
+        barcode: '1009',
+        image: '/images/products/marie-biscuits.jpg',
+        discount: 5,
+    },
+    {
+        id: 110,
+        name: 'Oreo Choco Creme Cookies',
+        price: 50,
+        hsn: '1905',
+        gstRate: 18,
+        category: 'Groceries',
+        barcode: '1010',
+        image: '/images/products/oreo.jpg',
+        discount: 5,
+    },
+    {
+        id: 111,
+        name: 'Royal Butter Cookies Tin',
+        price: 349,
+        hsn: '1905',
+        gstRate: 18,
+        category: 'Groceries',
+        barcode: '1011',
+        image: '/images/products/butter-cookies.jpg',
+        discount: 30,
+    },
+    {
+        id: 112,
+        name: 'Insulated Stainless Steel Bottle 1L',
+        price: 649,
+        hsn: '7323',
+        gstRate: 18,
+        category: 'Accessories',
+        barcode: '1012',
+        image: '/images/products/steel-bottle.jpg',
+        discount: 50,
+    },
+];
 
 const Billing = () => {
     const [customer, setCustomer] = useState({ name: '', phone: '', gstin: '' });
     const [cart, setCart] = useState([]);
     const [serverCart, setServerCart] = useState(null); // last server cart response
     const [cartLoading, setCartLoading] = useState(false);  // initial fetch
-    const [offlineMode, setOfflineMode] = useState(false); // true = API unavailable, working locally
+    const [offlineMode, setOfflineMode] = useState(() => typeof navigator !== 'undefined' ? !navigator.onLine : false);
+
+    useEffect(() => {
+        const handleOnline = () => setOfflineMode(false);
+        const handleOffline = () => setOfflineMode(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [discountType, setDiscountType] = useState('percentage');
@@ -127,6 +198,7 @@ const Billing = () => {
     const [paymentMode, setPaymentMode] = useState('Cash');
     const [invoiceNo, setInvoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
     const [showPreview, setShowPreview] = useState(false);
+    const [isOrderPanelOpen, setIsOrderPanelOpen] = useState(false);
     const [scannerValue, setScannerValue] = useState('');
     const [addingItemId, setAddingItemId] = useState(null);
     const [apiError, setApiError] = useState('');
@@ -145,64 +217,46 @@ const Billing = () => {
     const [manualBarcodeInput, setManualBarcodeInput] = useState('');
     // ── Quantity limit warning ─────────────────────────────────────────────
     const [qtyLimitWarning, setQtyLimitWarning] = useState('');
-    // ── Out of stock warning ───────────────────────────────────────────────
-    const [stockWarning, setStockWarning] = useState('');
-    // ── Payment mode validation warning ────────────────────────────────────
-    const [paymentWarning, setPaymentWarning] = useState('');
-    // ── Current order closing notice ────────────────────────────────────────
-    const [orderClosedNotice, setOrderClosedNotice] = useState(null);
     // ─────────────────────────────────────────────────────────────────────
     const scanInputRef = useRef(null);
 
-    const showStockWarning = useCallback((productName) => {
-        setStockWarning(`"${productName}" is Out of Stock and cannot be added to cart.`);
-        setTimeout(() => setStockWarning(''), 3500);
-    }, []);
+    // Prevent background page scrolling while receipt modal is open
+    useEffect(() => {
+        if (showPreview) {
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => {
+                document.body.style.overflow = originalOverflow;
+            };
+        }
+    }, [showPreview]);
 
-    const showPaymentWarning = useCallback((msg = 'Cart must have at least 1 item to select a payment method.') => {
-        setPaymentWarning(msg);
-        setTimeout(() => setPaymentWarning(''), 3500);
-    }, []);
-
-    // Live product catalog fetched from backend
-    const [products, setProducts] = useState([]);
-    const [productsLoading, setProductsLoading] = useState(true);
+    // Live product catalog fetched from backend with DEFAULT_PRODUCTS fallback
+    const [products, setProducts] = useState(DEFAULT_PRODUCTS);
+    const [productsLoading, setProductsLoading] = useState(false);
 
     useEffect(() => {
-        document.title = 'POS Billing - Retail-OS';
         let isMounted = true;
         const loadProducts = async () => {
-            setProductsLoading(true);
             try {
                 const res = await productService.getAll();
                 const rawList = Array.isArray(res) ? res : (res?.data || res?.items || []);
                 if (isMounted && rawList && rawList.length > 0) {
-                    const mapped = rawList.map(p => {
-                        const stockVal = extractProductStock(p);
-                        const inStock = isProductInStock(p, stockVal);
-                        const finalStock = inStock ? Math.max(stockVal, 1) : stockVal;
-                        return {
-                            id: p.id,
-                            name: p.name || p.title || 'Product #' + p.id,
-                            price: Number(p.sale_price ?? p.price ?? p.unit_price ?? 0),
-                            hsn: p.hsn_code || p.hsn || '',
-                            gstRate: Number(p.gst_rate ?? p.tax_rate ?? 18),
-                            category: p.category_name || p.category?.name || p.category || 'General',
-                            barcode: String(p.barcode || p.sku || p.id),
-                            image: p.image_url || p.image || null,
-                            discount: Number(p.discount || 0),
-                            stock: finalStock,
-                            isInStock: inStock,
-                            status: inStock ? 'In Stock' : 'Out of Stock',
-                        };
-                    });
+                    const mapped = rawList.map(p => ({
+                        id: p.id,
+                        name: p.name || p.title || 'Product #' + p.id,
+                        price: Number(p.sale_price ?? p.price ?? p.unit_price ?? 0),
+                        hsn: p.hsn_code || p.hsn || '',
+                        gstRate: Number(p.gst_rate ?? p.tax_rate ?? 18),
+                        category: p.category_name || p.category?.name || p.category || 'General',
+                        barcode: String(p.barcode || p.sku || p.id),
+                        image: p.image_url || p.image || null,
+                        discount: Number(p.discount || 0),
+                    }));
                     setProducts(mapped);
-                } else if (isMounted) {
-                    setProducts([]);
                 }
             } catch (err) {
-                console.warn('[Billing] Live products API unavailable:', err?.message || err);
-                if (isMounted) setProducts([]);
+                console.warn('[Billing] Live products API unavailable, retaining default catalog:', err?.message || err);
             } finally {
                 if (isMounted) setProductsLoading(false);
             }
@@ -218,7 +272,7 @@ const Billing = () => {
 
     const dynamicCategories = useMemo(() => {
         const cats = new Set(products.map(p => p.category).filter(Boolean));
-        return ['All', ...Array.from(cats)];
+        return cats.size > 0 ? ['All', ...Array.from(cats)] : CATEGORIES;
     }, [products]);
 
     const handleScanner = (e) => {
@@ -231,12 +285,6 @@ const Billing = () => {
             String(p.id).toLowerCase() === trimmed
         );
         if (product) {
-            if (isProductOutOfStock(product)) {
-                showStockWarning(product.name);
-                setLastScanned({ barcode: product.barcode, name: product.name, error: `${product.name} is Out of Stock`, success: false });
-                setScannerValue('');
-                return;
-            }
             addToCart(product);
             setScannerValue('');
             setLastScanned({ barcode: product.barcode, name: product.name, success: true });
@@ -252,13 +300,6 @@ const Billing = () => {
             p.name.toLowerCase().includes(val)
         );
         if (product) {
-            if (isProductOutOfStock(product)) {
-                showStockWarning(product.name);
-                setLastScanned({ barcode: product.barcode, name: product.name, error: `${product.name} is Out of Stock`, success: false });
-                setScannerValue('');
-                setManualBarcodeInput('');
-                return;
-            }
             addToCart(product);
             setScannerValue('');
             setManualBarcodeInput('');
@@ -291,9 +332,14 @@ const Billing = () => {
                 }
             } catch (err) {
                 if (cancelled) return;
-                // API is down — switch to offline/local mode silently
-                console.warn('[Billing] getCart failed — switching to local mode:', err.message);
-                setOfflineMode(true);
+                console.warn('[Billing] getCart failed — retaining local cart:', err.message);
+                const isRealNetworkDrop = !err?.response && (
+                    (typeof navigator !== 'undefined' && !navigator.onLine) ||
+                    err?.message?.includes('Network Error') ||
+                    err?.message?.includes('Failed to fetch') ||
+                    err?.code === 'ERR_NETWORK'
+                );
+                setOfflineMode(Boolean(isRealNetworkDrop));
             } finally {
                 if (!cancelled) setCartLoading(false);
             }
@@ -325,8 +371,8 @@ const Billing = () => {
                     sgstAmount: parseFloat(serverItem.sgst_amount || 0),
                     igstAmount: parseFloat(serverItem.igst_amount || 0),
                     totalAmount: parseFloat(serverItem.total_amount || 0),
-                    image: existing?.image || null,
-                    category: existing?.category || 'General',
+                    image: existing?.image || '/images/products/parle-g.jpg',
+                    category: existing?.category || 'Groceries',
                 };
             });
         });
@@ -339,22 +385,11 @@ const Billing = () => {
     }, []);
 
     const addToCart = useCallback(async (product) => {
-        // ── Enforce Out of Stock check ───────────────────────────────────────
-        if (isProductOutOfStock(product)) {
-            showStockWarning(product.name);
-            return;
-        }
+        // Automatically open Current Order panel on the right
+        setIsOrderPanelOpen(true);
 
-        // ── Enforce available stock quantity limit ───────────────────────────
+        // ── Enforce per-item quantity limit ───────────────────────────────────
         const existingItem = cart.find(i => i.id === product.id);
-        const availableStock = product.stock !== undefined && product.stock !== null ? Number(product.stock) : MAX_QTY;
-        if (existingItem && existingItem.qty >= availableStock) {
-            setStockWarning(`Cannot add more. Only ${availableStock} units of "${product.name}" in stock.`);
-            setTimeout(() => setStockWarning(''), 3000);
-            return;
-        }
-
-        // ── Enforce per-item maximum quantity limit ───────────────────────────
         if (existingItem && existingItem.qty >= MAX_QTY) {
             showQtyLimitWarning(product.name);
             return; // Block add — already at limit
@@ -367,7 +402,6 @@ const Billing = () => {
             if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1, unsynced: true } : i);
             return [...prev, { ...product, qty: 1, discountPerItem: product.discount || 0, unsynced: true }];
         });
-        setPaymentWarning('');
 
         setAddingItemId(product.id);
 
@@ -393,12 +427,18 @@ const Billing = () => {
                 if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] cart API error:', err.message);
-            setOfflineMode(true); // mark offline only for banner display, cart already updated locally
+            console.warn('[Billing] cart API error:', err.message);
+            const isRealNetworkDrop = !err?.response && (
+                (typeof navigator !== 'undefined' && !navigator.onLine) ||
+                err?.message?.includes('Network Error') ||
+                err?.message?.includes('Failed to fetch') ||
+                err?.code === 'ERR_NETWORK'
+            );
+            if (isRealNetworkDrop) setOfflineMode(true);
         }
 
         setAddingItemId(null);
-    }, [cart, syncCartWithServer, showQtyLimitWarning, showStockWarning]);
+    }, [cart, syncCartWithServer, showQtyLimitWarning]);
 
     const removeFromCart = useCallback(async (id) => {
         // Optimistic local removal — instant UI feedback
@@ -413,8 +453,14 @@ const Billing = () => {
                 if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] removeCartItem API error:', err.message);
-            setOfflineMode(true);
+            console.warn('[Billing] removeCartItem API error:', err.message);
+            const isRealNetworkDrop = !err?.response && (
+                (typeof navigator !== 'undefined' && !navigator.onLine) ||
+                err?.message?.includes('Network Error') ||
+                err?.message?.includes('Failed to fetch') ||
+                err?.code === 'ERR_NETWORK'
+            );
+            if (isRealNetworkDrop) setOfflineMode(true);
         }
     }, [syncCartWithServer]);
 
@@ -424,15 +470,6 @@ const Billing = () => {
         const newQty = item.qty + delta;
         if (newQty <= 0) {
             return removeFromCart(id);
-        }
-
-        // ── Enforce available stock quantity limit on increment ──────────────
-        const prod = products.find(p => p.id === id);
-        const availableStock = prod?.stock !== undefined && prod?.stock !== null ? Number(prod.stock) : MAX_QTY;
-        if (delta > 0 && newQty > availableStock) {
-            setStockWarning(`Cannot increase. Only ${availableStock} units of "${item.name}" available in stock.`);
-            setTimeout(() => setStockWarning(''), 3000);
-            return;
         }
 
         // ── Enforce per-item quantity limit on increment ──────────────────────
@@ -461,8 +498,14 @@ const Billing = () => {
                 if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] updateCartItem API error:', err.message);
-            setOfflineMode(true);
+            console.warn('[Billing] updateCartItem API error:', err.message);
+            const isRealNetworkDrop = !err?.response && (
+                (typeof navigator !== 'undefined' && !navigator.onLine) ||
+                err?.message?.includes('Network Error') ||
+                err?.message?.includes('Failed to fetch') ||
+                err?.code === 'ERR_NETWORK'
+            );
+            if (isRealNetworkDrop) setOfflineMode(true);
         }
     }, [cart, removeFromCart, syncCartWithServer, showQtyLimitWarning]);
 
@@ -484,23 +527,12 @@ const Billing = () => {
 
         const discountedTaxable = Math.max(0, subtotal - discountAmount);
 
-        // GST rate is automatically determined by product statutory tax classification (manual selection disabled)
-        let calculatedGST = 0;
-        if (cart.length > 0) {
-            const discountRatio = subtotal > 0 ? (discountAmount / subtotal) : 0;
-            cart.forEach(item => {
-                const itemBase = (item.price - (item.discountPerItem || 0)) * item.qty;
-                const itemTaxable = itemBase * (1 - discountRatio);
-                const rate = item.gstRate != null ? Number(item.gstRate) : 18;
-                calculatedGST += (itemTaxable * rate) / 100;
-            });
-        }
+        // GST is counted on all bill based on the statutory bill GST rate
+        const effectiveRate = billGstRate != null
+            ? billGstRate
+            : (cart.length > 0 ? (cart[0].gstRate || 18) : 18);
 
-        const effectiveRate = cart.length > 0 && cart[0]?.gstRate != null
-            ? Number(cart[0].gstRate)
-            : 18;
-
-        const totalGST = Math.round(calculatedGST * 100) / 100;
+        const totalGST = Math.round(((discountedTaxable * effectiveRate) / 100) * 100) / 100;
         const cgstAmount = Math.round((totalGST / 2) * 100) / 100;
         const sgstAmount = Math.round((totalGST - cgstAmount) * 100) / 100;
 
@@ -515,7 +547,7 @@ const Billing = () => {
             gstRate: effectiveRate,
             grandTotal: Math.round((discountedTaxable + totalGST) * 100) / 100
         };
-    }, [cart, billDiscount, discountType]);
+    }, [cart, billDiscount, discountType, billGstRate]);
 
     // Change Due calculation when cash is tendered
     const changeDue = useMemo(() => {
@@ -556,9 +588,7 @@ const Billing = () => {
                     return s ? Number(s) : 0;
                 });
             } else if (val === 'ENTER') {
-                if (couponCode.trim() && cart.length > 0) {
-                    handleApplyDiscount();
-                }
+                handleApplyDiscount();
                 setShowNumpad(false);
             } else {
                 setBillDiscount(prev => {
@@ -570,10 +600,7 @@ const Billing = () => {
     };
 
     const handleFinishSale = () => {
-        if (cart.length === 0 || totals.grandTotal <= 0) {
-            showPaymentWarning('Cart must have at least 1 item to complete sale.');
-            return;
-        }
+        if (cart.length === 0) return;
 
         const newInvoice = {
             id: invoiceNo,
@@ -613,8 +640,24 @@ const Billing = () => {
                 invoicesList.unshift(newInvoice);
                 localStorage.setItem('gst_invoices', JSON.stringify(invoicesList));
             }
+
+            // Sync payment to Payments & Settlements register
+            const storedPayments = localStorage.getItem('retail_pos_payments');
+            const paymentsList = storedPayments ? JSON.parse(storedPayments) : [];
+            paymentsList.unshift({
+                id: Date.now(),
+                order_id: parseInt(newInvoice.id.replace(/\D/g, '').slice(-4), 10) || 1001,
+                invoice_number: newInvoice.id,
+                payment_method: paymentMode.toUpperCase(),
+                amount: totals.grandTotal,
+                status: 'completed',
+                transaction_id: `POS-${paymentMode.toUpperCase()}-${Date.now().toString().slice(-6)}`,
+                gateway_name: paymentMode === 'Card' ? 'Pine Labs EDC #01' : paymentMode === 'UPI' ? 'PhonePe Counter QR' : 'Counter Drawer 1',
+                created_at: new Date().toISOString(),
+            });
+            localStorage.setItem('retail_pos_payments', JSON.stringify(paymentsList));
         } catch (e) {
-            console.error('Error saving invoice to localStorage:', e);
+            console.error('Error saving invoice/payment to localStorage:', e);
         }
 
         setShowPreview(true);
@@ -632,17 +675,33 @@ const Billing = () => {
         setBillDiscount(0);
         setCouponCode('');
         setDiscountApplied(false);
-        setPaymentWarning('');
         setShowPreview(false);
+        setIsOrderPanelOpen(false);
         setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
     };
 
-    const handleCloseOrder = () => {
-        const closedId = invoiceNo;
-        handleReset();
-        setOrderClosedNotice(`Order ${closedId} closed. Fresh order point ready.`);
-        setTimeout(() => setOrderClosedNotice(null), 3500);
-    };
+    // ── Safe & Reliable Receipt Printing ──────────────────────────────────
+    const handlePrint = useCallback(() => {
+        const invoiceEl = document.getElementById('invoice');
+        if (!invoiceEl) {
+            console.warn('[Billing] Cannot print: #invoice element not found');
+            return;
+        }
+
+        document.body.classList.add('pos-printing-active');
+        const cleanup = () => {
+            document.body.classList.remove('pos-printing-active');
+            window.removeEventListener('afterprint', cleanup);
+        };
+        window.addEventListener('afterprint', cleanup);
+
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                window.print();
+                setTimeout(cleanup, 1000);
+            }, 60);
+        });
+    }, []);
 
     // ── Export GSTR-1 Report directly from POS Billing ─────────────────────
     const handleDownloadGstr1 = () => {
@@ -704,77 +763,60 @@ const Billing = () => {
     };
 
     const totalUnits = cart.reduce((s, i) => s + i.qty, 0);
-    const isCartEmpty = cart.length === 0 || totals.grandTotal <= 0;
 
     // ── Apply discount via API with resilient local fallback ──────────────
     const handleApplyDiscount = useCallback(async () => {
-        if (isCartEmpty || cart.length === 0) {
-            showPaymentWarning('Cart must have at least 1 item to apply a coupon code.');
-            setApiError('Add items to cart before applying a coupon.');
-            setTimeout(() => setApiError(''), 3500);
-            return;
-        }
-
         const trimmedCoupon = couponCode.trim().toUpperCase();
-        if (!trimmedCoupon) {
-            setApiError('Please enter a coupon code to apply.');
-            setTimeout(() => setApiError(''), 3500);
-            return;
-        }
-
         let discVal = Number(billDiscount);
         let discType = discountType;
 
         // Support demo discount coupons
-        if (trimmedCoupon === 'SAVE10') {
-            discVal = 10;
-            discType = 'percentage';
-            setDiscountType('percentage');
-            setBillDiscount(10);
-        } else if (trimmedCoupon === 'SAVE20') {
-            discVal = 20;
-            discType = 'percentage';
-            setDiscountType('percentage');
-            setBillDiscount(20);
-        } else if (trimmedCoupon === 'FLAT50') {
-            discVal = 50;
-            discType = 'fixed';
-            setDiscountType('fixed');
-            setBillDiscount(50);
-        } else if (trimmedCoupon === 'FLAT100') {
-            discVal = 100;
-            discType = 'fixed';
-            setDiscountType('fixed');
-            setBillDiscount(100);
-        } else if (trimmedCoupon === 'WELCOME15' || trimmedCoupon === 'WELCOME10') {
-            discVal = trimmedCoupon === 'WELCOME15' ? 15 : 10;
-            discType = 'percentage';
-            setDiscountType('percentage');
-            setBillDiscount(discVal);
-        } else if (trimmedCoupon === 'FESTIVE50') {
-            discVal = 50;
-            discType = 'fixed';
-            setDiscountType('fixed');
-            setBillDiscount(50);
-        } else if (trimmedCoupon === 'RETAIL10') {
-            discVal = 10;
-            discType = 'percentage';
-            setDiscountType('percentage');
-            setBillDiscount(10);
-        } else if (discVal <= 0) {
-            discVal = 10;
-            discType = 'percentage';
-            setDiscountType('percentage');
-            setBillDiscount(10);
+        if (trimmedCoupon) {
+            if (trimmedCoupon === 'SAVE10') {
+                discVal = 10;
+                discType = 'percentage';
+                setDiscountType('percentage');
+                setBillDiscount(10);
+            } else if (trimmedCoupon === 'SAVE20') {
+                discVal = 20;
+                discType = 'percentage';
+                setDiscountType('percentage');
+                setBillDiscount(20);
+            } else if (trimmedCoupon === 'FLAT50') {
+                discVal = 50;
+                discType = 'fixed';
+                setDiscountType('fixed');
+                setBillDiscount(50);
+            } else if (trimmedCoupon === 'FLAT100') {
+                discVal = 100;
+                discType = 'fixed';
+                setDiscountType('fixed');
+                setBillDiscount(100);
+            } else if (trimmedCoupon === 'WELCOME15') {
+                discVal = 15;
+                discType = 'percentage';
+                setDiscountType('percentage');
+                setBillDiscount(15);
+            } else if (discVal <= 0) {
+                discVal = 10;
+                discType = 'percentage';
+                setDiscountType('percentage');
+                setBillDiscount(10);
+            }
         }
 
+        if (discVal <= 0 && !trimmedCoupon) {
+            setApiError('Enter a discount value or coupon code to apply.');
+            setTimeout(() => setApiError(''), 3500);
+            return;
+        }
         setDiscountLoading(true);
         setApiError('');
         try {
             const payload = {
                 discount_type: discType,   // 'percentage' | 'fixed'
                 value: Number(discVal),
-                coupon_code: trimmedCoupon,
+                coupon_code: trimmedCoupon || null,
             };
             const response = await applyDiscount(payload);
             if (response) {
@@ -791,16 +833,7 @@ const Billing = () => {
         } finally {
             setDiscountLoading(false);
         }
-    }, [isCartEmpty, cart.length, billDiscount, couponCode, discountType, syncCartWithServer, showPaymentWarning]);
-
-    // Automatically remove discounts / coupon if cart becomes empty
-    useEffect(() => {
-        if (cart.length === 0 && (discountApplied || billDiscount > 0 || couponCode)) {
-            setDiscountApplied(false);
-            setBillDiscount(0);
-            setCouponCode('');
-        }
-    }, [cart.length, discountApplied, billDiscount, couponCode]);
+    }, [billDiscount, couponCode, discountType, syncCartWithServer]);
 
     const handleClearDiscount = useCallback(() => {
         setBillDiscount(0);
@@ -881,32 +914,36 @@ const Billing = () => {
                         </div>
                     </div>
                     <div className="pos-search-row" style={{ alignItems: 'center' }}>
-                        <div className="pos-search-wrap" style={{ position: 'relative' }}>
+                        {!isOrderPanelOpen && (
+                            <button
+                                type="button"
+                                className="pos-open-order-btn"
+                                onClick={() => setIsOrderPanelOpen(true)}
+                                title="Open Current Order Panel"
+                            >
+                                <BsReceiptCutoff size={15} />
+                                <span>Current Order</span>
+                                {cart.length > 0 && (
+                                    <span className="pos-open-order-badge">
+                                        {totalUnits}
+                                    </span>
+                                )}
+                            </button>
+                        )}
+                        <div className="pos-search-wrap">
                             <BsSearch className="pos-search-icon" size={13} />
                             <input
                                 type="text"
                                 className="pos-search-input"
-                                placeholder="Search by name or barcode…"
+                                placeholder="Search products by name or barcode…"
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                style={{ width: '320px', minWidth: '280px', paddingRight: searchQuery ? '32px' : '14px' }}
                             />
                             {searchQuery && (
                                 <button
                                     type="button"
                                     onClick={() => setSearchQuery('')}
-                                    style={{
-                                        position: 'absolute',
-                                        right: 10,
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        background: 'transparent',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        color: '#94a3b8',
-                                        display: 'flex',
-                                        padding: 0,
-                                    }}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', padding: 0 }}
                                     title="Clear search"
                                 >
                                     <BsX size={15} />
@@ -1072,52 +1109,15 @@ const Billing = () => {
                     ) : (
                         filteredProducts.map(product => {
                             const inCart = cart.find(i => i.id === product.id);
-                            const isOutOfStock = isProductOutOfStock(product);
                             return (
                                 <div
                                     key={product.id}
-                                    className={`pos-product-card${inCart ? ' pos-product-card--in-cart' : ''}${isOutOfStock ? ' pos-product-card--out-of-stock' : ''}`}
-                                    style={{
-                                        position: 'relative',
-                                        ...(isOutOfStock ? {
-                                            opacity: 0.72,
-                                            cursor: 'not-allowed',
-                                            borderColor: '#fca5a5',
-                                            background: '#fffaf9',
-                                        } : {}),
-                                    }}
-                                    onClick={() => {
-                                        if (isOutOfStock) {
-                                            showStockWarning(product.name);
-                                        } else {
-                                            addToCart(product);
-                                        }
-                                    }}
+                                    className={`pos-product-card${inCart ? ' pos-product-card--in-cart' : ''}`}
+                                    onClick={() => addToCart(product)}
                                 >
-                                    {isOutOfStock ? (
-                                        <div style={{
-                                            position: 'absolute',
-                                            top: 8,
-                                            left: 8,
-                                            background: '#ef4444',
-                                            color: '#ffffff',
-                                            fontSize: 10,
-                                            fontWeight: 800,
-                                            padding: '3px 8px',
-                                            borderRadius: 6,
-                                            textTransform: 'uppercase',
-                                            letterSpacing: '0.04em',
-                                            boxShadow: '0 2px 6px rgba(239, 68, 68, 0.35)',
-                                            zIndex: 3,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 4,
-                                        }}>
-                                            <BsExclamationTriangleFill size={10} /> Out of Stock
-                                        </div>
-                                    ) : inCart ? (
+                                    {inCart && (
                                         <div className="pos-product-qty-badge">{inCart.qty}</div>
-                                    ) : null}
+                                    )}
                                     <div className="pos-product-image">
                                         {product.image && (product.image.startsWith('/') || product.image.startsWith('http')) ? (
                                             <img
@@ -1155,38 +1155,6 @@ const Billing = () => {
                                             <BsUpcScan size={10} /> Barcode: {product.barcode}
                                         </span>
                                     </div>
-{/* ── Stock status badge on product card ── */}
-                                    <div
-                                        className={`pos-product-stock-badge ${product.isInStock !== false && (product.stock > 0 || product.isInStock) ? 'in-stock' : 'out-of-stock'}`}
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 5,
-                                            fontSize: 10,
-                                            fontWeight: 700,
-                                            color: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#059669' : '#dc2626',
-                                            background: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#ecfdf5' : '#fef2f2',
-                                            border: `1px solid ${(product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#a7f3d0' : '#fecaca'}`,
-                                            padding: '2px 7px',
-                                            borderRadius: 4,
-                                            width: 'fit-content',
-                                            marginTop: 2,
-                                            marginBottom: 2,
-                                        }}
-                                    >
-                                        <span style={{
-                                            width: 6,
-                                            height: 6,
-                                            borderRadius: '50%',
-                                            background: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#10b981' : '#ef4444',
-                                            display: 'inline-block',
-                                        }} />
-                                        <span>
-                                            {(product.isInStock !== false && (product.stock > 0 || product.isInStock))
-                                                ? `In Stock (${product.stock ?? 50} available)`
-                                                : 'Out of Stock'}
-                                        </span>
-                                    </div>
                                     {/* ── Discount badge on product card ── */}
                                     {product.discount > 0 && (
                                         <div style={{
@@ -1214,40 +1182,27 @@ const Billing = () => {
                                             ) : (
                                                 <span className="pos-product-price">₹{product.price.toLocaleString()}</span>
                                             )}
-                                            <span style={{ fontSize: 9, color: isOutOfStock ? '#ef4444' : '#9ca3af', fontWeight: isOutOfStock ? 700 : 500 }}>
-                                                {isOutOfStock ? 'Out of Stock' : 'excl. GST'}
-                                            </span>
+                                            <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 500 }}>excl. GST</span>
                                         </div>
                                         <button
                                             type="button"
                                             className="pos-product-add-btn"
-                                                                                        style={{
+                                            style={{
                                                 border: 'none',
                                                 outline: 'none',
-                                                cursor: isOutOfStock ? 'not-allowed' : 'pointer',
-                                                background: isOutOfStock ? '#fee2e2' : undefined,
-                                                color: isOutOfStock ? '#ef4444' : undefined,
-                                                ...(isOutOfStock ? { opacity: 0.5 } : {}),
+                                                cursor: 'pointer',
                                                 ...(addingItemId === product.id ? { opacity: 0.6 } : {})
                                             }}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                if (isOutOfStock) {
-                                                    showStockWarning(product.name);
-                                                } else {
-                                                    addToCart(product);
-                                                }
+                                                addToCart(product);
                                             }}
-                                            disabled={isOutOfStock}
-                                            title={isOutOfStock ? `${product.name} is Out of Stock` : `Add ${product.name} to cart`}
+                                            title={`Add ${product.name} to cart`}
                                         >
-                                            {isOutOfStock ? (
-                                                <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px' }}>OOS</span>
-                                            ) : addingItemId === product.id ? (
-                                                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0 }}>…</span>
-                                            ) : (
-                                                <BsPlus size={18} />
-                                            )}
+                                            {addingItemId === product.id
+                                                ? <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0 }}>…</span>
+                                                : <BsPlus size={18} />
+                                            }
                                         </button>
                                     </div>
                                     <span className="pos-product-gst-tag">GST {product.gstRate}% excl.</span>
@@ -1259,701 +1214,551 @@ const Billing = () => {
             </div>
 
             {/* ── RIGHT: Cart & Payment ── */}
-            <div className="pos-right">
+            {isOrderPanelOpen && (
+                <div className="pos-right">
 
-                {/* Order header */}
-                <div className="pos-right-header">
-                    <div className="pos-right-header-top">
-                        <div className="pos-right-title-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <BsReceiptCutoff size={16} color="#6366f1" />
-                                <h3 className="pos-right-title">Current Order</h3>
-                            </div>
-                            <span style={{
-                                background: '#eef2ff',
-                                color: '#4338ca',
-                                padding: '2px 8px',
-                                borderRadius: 6,
-                                fontSize: 11,
-                                fontWeight: 800,
-                                fontFamily: 'monospace',
-                                border: '1px solid #c7d2fe',
-                                letterSpacing: '0.03em',
-                            }}>
-                                Bill #{invoiceNo}
-                            </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span className="pos-units-badge">
-                                {cart.length} {cart.length === 1 ? 'item' : 'items'} • {totalUnits} {totalUnits === 1 ? 'unit' : 'units'}
-                            </span>
-                            <button
-                                type="button"
-                                id="pos-close-order-btn"
-                                className="pos-close-order-btn"
-                                onClick={handleCloseOrder}
-                                title="Close current order and reset"
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    background: '#fef2f2',
-                                    color: '#b91c1c',
-                                    border: '1.5px solid #fecaca',
-                                    borderRadius: 7,
-                                    padding: '4px 10px',
+                    {/* Order header */}
+                    <div className="pos-right-header">
+                        <div className="pos-right-header-top">
+                            <div className="pos-right-title-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <BsReceiptCutoff size={16} color="#6366f1" />
+                                    <h3 className="pos-right-title">Current Order</h3>
+                                </div>
+                                <span style={{
+                                    background: '#eef2ff',
+                                    color: '#4338ca',
+                                    padding: '2px 8px',
+                                    borderRadius: 6,
                                     fontSize: 11,
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    transition: 'all .15s ease',
-                                }}
-                            >
-                                <BsXCircleFill size={13} color="#dc2626" />
-                                <span>Close Order</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Order Closed Feedback Notification */}
-                    {orderClosedNotice && (
-                        <div style={{
-                            background: '#ecfdf5',
-                            border: '1px solid #a7f3d0',
-                            color: '#065f46',
-                            borderRadius: 6,
-                            padding: '6px 10px',
-                            fontSize: 11,
-                            fontWeight: 600,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            marginBottom: 8,
-                        }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <BsCheckCircleFill size={12} color="#10b981" />
-                                {orderClosedNotice}
-                            </span>
-                            <button onClick={() => setOrderClosedNotice(null)} style={{ background: 'none', border: 'none', color: '#065f46', cursor: 'pointer', padding: 0 }}>
-                                <BsX size={14} />
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Customer fields */}
-                    <div className="pos-customer-row">
-                        <div className="pos-cust-field-wrap" title="Customer Name">
-                            <BsPersonFill size={12} className="pos-cust-icon" />
-                            <input
-                                type="text"
-                                className="pos-cust-input"
-                                placeholder="Customer Name"
-                                value={customer.name}
-                                onChange={e => setCustomer({ ...customer, name: e.target.value })}
-                            />
-                        </div>
-                        <div className="pos-cust-field-wrap" title="Customer Phone Number">
-                            <BsTelephoneFill size={11} className="pos-cust-icon" color="#64748b" />
-                            <input
-                                type="tel"
-                                className="pos-cust-input"
-                                placeholder="Phone No. (e.g. 9876543210)"
-                                value={customer.phone}
-                                onChange={e => setCustomer({ ...customer, phone: e.target.value })}
-                            />
-                        </div>
-                        <div className="pos-cust-field-wrap" title="GSTIN (Optional)">
-                            <BsHash size={13} className="pos-cust-icon" color="#94a3b8" />
-                            <input
-                                type="text"
-                                className="pos-cust-input"
-                                placeholder="GSTIN (optional)"
-                                value={customer.gstin || ''}
-                                onChange={e => setCustomer({ ...customer, gstin: e.target.value })}
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── Quantity Limit Warning Toast ── */}
-                {qtyLimitWarning && (
-                    <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        background: '#fef3c7', border: '1px solid #fcd34d',
-                        borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
-                        fontSize: 12, fontWeight: 600, color: '#92400e',
-                        animation: 'slideUp .18s ease',
-                    }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 14 }}>⚠️</span>
-                            {qtyLimitWarning}
-                        </span>
-                        <button
-                            onClick={() => setQtyLimitWarning('')}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', display: 'flex', padding: 0, marginLeft: 8 }}
-                        >
-                            <BsX size={16} />
-                        </button>
-                    </div>
-                )}
-
-                {/* ── Out of Stock Warning Toast ── */}
-                {stockWarning && (
-                    <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        background: '#fef2f2', border: '1px solid #fecaca',
-                        borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
-                        fontSize: 12, fontWeight: 600, color: '#991b1b',
-                        animation: 'slideUp .18s ease',
-                    }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 14 }}>🚫</span>
-                            {stockWarning}
-                        </span>
-                        <button
-                            onClick={() => setStockWarning('')}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', display: 'flex', padding: 0, marginLeft: 8 }}
-                        >
-                            <BsX size={16} />
-                        </button>
-                    </div>
-                )}
-
-                {/* ── Payment Validation Warning Toast ── */}
-                {paymentWarning && (
-                    <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        background: '#fef2f2', border: '1px solid #fecaca',
-                        borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
-                        fontSize: 12, fontWeight: 600, color: '#991b1b',
-                        animation: 'slideUp .18s ease',
-                    }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <BsExclamationTriangleFill size={14} color="#dc2626" />
-                            {paymentWarning}
-                        </span>
-                        <button
-                            onClick={() => setPaymentWarning('')}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', display: 'flex', padding: 0, marginLeft: 8 }}
-                        >
-                            <BsX size={16} />
-                        </button>
-                    </div>
-                )}
-
-                {/* Cart items */}
-                <div className="pos-cart-list custom-scrollbar">
-                    {(() => {
-                        if (cartLoading) {
-                            return (
-                                <div className="pos-cart-empty" style={{ gap: 8, fontSize: 13, color: '#9ca3af' }}>
-                                    <span style={{ fontSize: 28 }}>⏳</span>
-                                    <p>Loading cart…</p>
-                                </div>
-                            );
-                        }
-                        if (cart.length === 0) {
-                            return (
-                                <div className="pos-cart-empty">
-                                    <BsCart3 size={48} />
-                                    <p>Cart is empty</p>
-                                    <span>Click a product to add it</span>
-                                </div>
-                            );
-                        }
-                        return cart.map((item, index) => (
-                            <div key={item.id} className="pos-cart-item" style={{ height: 'auto', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                                {/* Serial Number Badge */}
-                                <span
-                                    title={`Line item #${index + 1}`}
-                                    style={{
-                                        width: 22, height: 22, borderRadius: 6,
-                                        background: '#f1f5f9', color: '#475569',
-                                        fontSize: 10, fontWeight: 800,
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                        flexShrink: 0, border: '1px solid #e2e8f0',
-                                    }}
-                                >
-                                    #{index + 1}
+                                    fontWeight: 800,
+                                    fontFamily: 'monospace',
+                                    border: '1px solid #c7d2fe',
+                                    letterSpacing: '0.03em',
+                                }}>
+                                    Bill #{invoiceNo}
                                 </span>
-                                <div className="pos-cart-item-emoji">
-                                    {item.image && (item.image.startsWith('/') || item.image.startsWith('http')) ? (
-                                        <img
-                                            src={item.image}
-                                            alt={item.name}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
-                                            onError={(e) => { e.target.style.display = 'none'; }}
-                                        />
-                                    ) : (
-                                        <span>{item.image}</span>
-                                    )}
-                                </div>
-                                <div className="pos-cart-item-info" style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
-                                    <h4 className="pos-cart-item-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
-                                        {item.unsynced && (
-                                            <span style={{ fontSize: 9, color: '#d97706', background: '#fef3c7', padding: '2px 5px', borderRadius: 4 }}>Offline</span>
-                                        )}
-                                    </h4>
-                                    <span className="pos-cart-item-price" style={{ fontSize: 11, color: '#6b7280' }}>
-                                        ₹{item.price.toLocaleString()} × {item.qty}
-                                        {item.discountPerItem > 0 && (
-                                            <span style={{ color: '#ef4444', fontWeight: 600, marginLeft: 6 }}>
-                                                (-₹{item.discountPerItem}/item)
-                                            </span>
-                                        )}
-                                    </span>
-                                    <div style={{ fontSize: '10px', color: '#64748b', display: 'flex', gap: '6px', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
-                                        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#4f46e5' }}>ID #{item.id}</span>
-                                        <span>•</span>
-                                        {item.barcode && (
-                                            <>
-                                                <span style={{ fontFamily: 'monospace' }}>Barcode: {item.barcode}</span>
-                                                <span>•</span>
-                                            </>
-                                        )}
-                                        {item.hsn && (
-                                            <>
-                                                <span>HSN: {item.hsn}</span>
-                                                <span>•</span>
-                                            </>
-                                        )}
-                                        <span>GST {item.gstRate || totals.gstRate}% (excl.)</span>
-                                    </div>
-                                </div>
-                                <div className="pos-qty-ctrl">
-                                    <button className="pos-qty-btn" onClick={() => updateQty(item.id, -1)} title="Decrease quantity">
-                                        <BsDash size={12} />
-                                    </button>
-                                    <span
-                                        className="pos-qty-val"
-                                        title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units` : ''}
-                                        style={item.qty >= MAX_QTY ? { color: '#d97706', fontWeight: 800 } : {}}
-                                    >
-                                        {item.qty}{item.qty >= MAX_QTY && <span style={{ fontSize: 8, marginLeft: 2, verticalAlign: 'super', color: '#d97706' }}>MAX</span>}
-                                    </span>
-                                    <button
-                                        className="pos-qty-btn"
-                                        onClick={() => updateQty(item.id, 1)}
-                                        disabled={item.qty >= MAX_QTY}
-                                        title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units per item` : 'Increase quantity'}
-                                        style={item.qty >= MAX_QTY ? { opacity: 0.35, cursor: 'not-allowed' } : {}}
-                                    >
-                                        <BsPlus size={12} />
-                                    </button>
-                                </div>
-                                <span className="pos-cart-item-total" style={{ fontWeight: 700, minWidth: 65, textAlign: 'right' }}>
-                                    ₹{((item.price - (item.discountPerItem || 0)) * item.qty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                                <button className="pos-cart-item-del" onClick={() => removeFromCart(item.id)} title="Remove item from order">
-                                    <BsTrash size={13} />
-                                </button>
                             </div>
-                        ));
-                    })()}
-                </div>
-
-                {/* Totals & payment */}
-                <div className="pos-right-footer">
-
-                    {/* Discount + Coupon section */}
-                    <div style={{ marginBottom: 10 }}>
-
-                        {/* Applied discount badge */}
-                        {discountApplied && (
-                            <div style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                background: '#ecfdf5', border: '1px solid #6ee7b7',
-                                borderRadius: 8, padding: '6px 10px', marginBottom: 8,
-                            }}>
-                                <span style={{ fontSize: 12, color: '#065f46', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <BsTagFill size={12} color="#10b981" />
-                                    {couponCode.trim()
-                                        ? `Coupon "${couponCode.trim()}" applied`
-                                        : `Discount applied: ${discountType === 'percentage' ? `${billDiscount}%` : `₹${billDiscount} flat`}`
-                                    }
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span className="pos-units-badge">
+                                    {cart.length} {cart.length === 1 ? 'item' : 'items'} • {totalUnits} {totalUnits === 1 ? 'unit' : 'units'}
                                 </span>
                                 <button
-                                    onClick={handleClearDiscount}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', display: 'flex' }}
-                                    title="Remove discount"
+                                    type="button"
+                                    className="pos-order-panel-close-btn"
+                                    onClick={() => setIsOrderPanelOpen(false)}
+                                    title="Close Current Order"
+                                    aria-label="Close Current Order"
+                                >
+                                    <BsX size={20} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Customer fields */}
+                        <div className="pos-customer-row">
+                            <div className="pos-cust-field-wrap" title="Customer Name">
+                                <BsPersonFill size={11} className="pos-cust-icon" />
+                                <input
+                                    type="text"
+                                    className="pos-cust-input"
+                                    placeholder="Customer Name"
+                                    value={customer.name}
+                                    onChange={e => setCustomer({ ...customer, name: e.target.value })}
+                                />
+                            </div>
+                            <div className="pos-cust-field-wrap" title="Customer Phone Number">
+                                <BsTelephoneFill size={10} className="pos-cust-icon" color="#64748b" />
+                                <input
+                                    type="tel"
+                                    className="pos-cust-input"
+                                    placeholder="Phone Number"
+                                    value={customer.phone}
+                                    onChange={e => setCustomer({ ...customer, phone: e.target.value })}
+                                />
+                            </div>
+                            <div className="pos-cust-field-wrap pos-cust-field-wrap--full" title="GSTIN (Optional)">
+                                <BsHash size={12} className="pos-cust-icon" color="#94a3b8" />
+                                <input
+                                    type="text"
+                                    className="pos-cust-input"
+                                    placeholder="GSTIN (optional)"
+                                    value={customer.gstin || ''}
+                                    onChange={e => setCustomer({ ...customer, gstin: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* ── Scrollable middle body: Cart + Discounts + Breakdown + Payment ── */}
+                    <div className="pos-right-content custom-scrollbar">
+
+                        {/* ── Quantity Limit Warning Toast ── */}
+                        {qtyLimitWarning && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                background: '#fef3c7', border: '1px solid #fcd34d',
+                                borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
+                                fontSize: 12, fontWeight: 600, color: '#92400e',
+                                animation: 'slideUp .18s ease',
+                            }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 14 }}>⚠️</span>
+                                    {qtyLimitWarning}
+                                </span>
+                                <button
+                                    onClick={() => setQtyLimitWarning('')}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', display: 'flex', padding: 0, marginLeft: 8 }}
                                 >
                                     <BsX size={16} />
                                 </button>
                             </div>
                         )}
 
-                        {/* Discount type + value row */}
-                        {!discountApplied && (
-                            <div className="pos-discount-row" style={{ marginBottom: 6, opacity: isCartEmpty ? 0.6 : 1 }}>
-                                <div className="pos-discount-type-btns">
-                                    <button
-                                        type="button"
-                                        disabled={isCartEmpty}
-                                        className={`pos-disc-type-btn${discountType === 'percentage' ? ' pos-disc-type-btn--active' : ''}`}
-                                        onClick={() => !isCartEmpty && setDiscountType('percentage')}
-                                        style={isCartEmpty ? { cursor: 'not-allowed' } : {}}
-                                        title={isCartEmpty ? 'Cart is empty' : 'Percentage discount'}
-                                    >
-                                        %
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={isCartEmpty}
-                                        className={`pos-disc-type-btn${discountType === 'fixed' ? ' pos-disc-type-btn--active' : ''}`}
-                                        onClick={() => !isCartEmpty && setDiscountType('fixed')}
-                                        style={isCartEmpty ? { cursor: 'not-allowed' } : {}}
-                                        title={isCartEmpty ? 'Cart is empty' : 'Flat ₹ discount'}
-                                    >
-                                        ₹ Flat
-                                    </button>
-                                </div>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    disabled={isCartEmpty}
-                                    className="pos-discount-input"
-                                    placeholder={isCartEmpty ? 'Cart empty' : (discountType === 'percentage' ? '% off' : '₹ off')}
-                                    value={billDiscount || ''}
-                                    onChange={e => !isCartEmpty && setBillDiscount(Number(e.target.value))}
-                                    style={isCartEmpty ? { cursor: 'not-allowed', background: '#f8fafc' } : {}}
-                                />
-                            </div>
-                        )}
-
-                        {/* Coupon code + Apply button */}
-                        {!discountApplied && (
-                            <div style={{ display: 'flex', gap: 6 }}>
-                                <div style={{
-                                    flex: 1, display: 'flex', alignItems: 'center', gap: 6,
-                                    background: isCartEmpty ? '#f1f5f9' : '#f8fafc',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: 8, padding: '0 10px',
-                                    opacity: isCartEmpty ? 0.6 : 1,
-                                    cursor: isCartEmpty ? 'not-allowed' : 'default',
-                                }}>
-                                    <BsTagFill size={11} color={isCartEmpty ? '#cbd5e1' : '#9ca3af'} />
-                                    <input
-                                        type="text"
-                                        placeholder={isCartEmpty ? 'Add items to cart to apply coupon' : 'Enter coupon code'}
-                                        value={couponCode}
-                                        disabled={isCartEmpty}
-                                        onChange={e => setCouponCode(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && !isCartEmpty && couponCode.trim() && handleApplyDiscount()}
-                                        style={{
-                                            flex: 1, border: 'none', background: 'transparent',
-                                            fontSize: 12, outline: 'none', color: isCartEmpty ? '#94a3b8' : '#374151',
-                                            padding: '7px 0',
-                                            cursor: isCartEmpty ? 'not-allowed' : 'text',
-                                        }}
-                                    />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={isCartEmpty ? () => showPaymentWarning('Cart must have at least 1 item to apply a coupon code.') : handleApplyDiscount}
-                                    disabled={isCartEmpty || discountLoading || !couponCode.trim()}
-                                    style={{
-                                        background: (isCartEmpty || discountLoading || !couponCode.trim()) ? '#e2e8f0' : '#6366f1',
-                                        color: (isCartEmpty || discountLoading || !couponCode.trim()) ? '#94a3b8' : '#fff',
-                                        border: 'none', borderRadius: 8,
-                                        padding: '0 14px',
-                                        cursor: (isCartEmpty || discountLoading || !couponCode.trim()) ? 'not-allowed' : 'pointer',
-                                        fontWeight: 600, fontSize: 12, display: 'flex',
-                                        alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
-                                        opacity: isCartEmpty ? 0.6 : 1,
-                                        transition: 'background .2s, color .2s, opacity .2s',
-                                    }}
-                                    title={
-                                        isCartEmpty
-                                            ? 'Cart is empty. Add at least 1 item to apply a coupon code.'
-                                            : !couponCode.trim()
-                                            ? 'Enter a coupon code to apply'
-                                            : 'Apply coupon code'
-                                    }
-                                >
-                                    {discountLoading
-                                        ? <span style={{ fontSize: 11 }}>…</span>
-                                        : <><BsCheckLg size={11} /> Apply</>}
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Summary */}
-                    <div className="pos-summary">
-                        <div className="pos-summary-row">
-                            <span>Subtotal</span>
-                            <span>₹{totals.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                        {totals.discountAmount > 0 && (
-                            <div className="pos-summary-row pos-summary-row--discount">
-                                <span>Discount</span>
-                                <span>−₹{totals.discountAmount.toFixed(2)}</span>
-                            </div>
-                        )}
-                        <div className="pos-summary-row">
-                            <span>Taxable Value</span>
-                            <span>₹{totals.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="pos-summary-row" style={{ alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                    GST ({totals.gstRate}%)
-                                    <span
-                                        style={{
-                                            fontSize: 9,
-                                            fontWeight: 700,
-                                            color: '#64748b',
-                                            background: '#f1f5f9',
-                                            border: '1px solid #cbd5e1',
-                                            padding: '1px 5px',
-                                            borderRadius: 4,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 3,
-                                            userSelect: 'none',
-                                        }}
-                                        title="GST rate is statutory and auto-applied based on items in cart. Manual selection is disabled."
-                                    >
-                                        <BsLockFill size={8} /> Disabled
-                                    </span>
-                                </span>
-                                <div
-                                    style={{
-                                        display: 'inline-flex',
-                                        gap: 3,
-                                        background: '#f8fafc',
-                                        border: '1px solid #e2e8f0',
-                                        padding: '2px 4px',
-                                        borderRadius: 6,
-                                        cursor: 'not-allowed',
-                                        userSelect: 'none',
-                                    }}
-                                    title="Manual GST selection is disabled. GST is auto-applied based on statutory tax rates."
-                                >
-                                    {[0, 5, 12, 18, 28].map(r => (
-                                        <button
-                                            key={r}
-                                            type="button"
-                                            disabled={true}
-                                            aria-disabled="true"
-                                            tabIndex={-1}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                            }}
+                        {/* Cart items */}
+                        <div className="pos-cart-list custom-scrollbar">
+                            {(() => {
+                                if (cartLoading) {
+                                    return (
+                                        <div className="pos-cart-empty" style={{ gap: 8, fontSize: 13, color: '#9ca3af' }}>
+                                            <span style={{ fontSize: 28 }}>⏳</span>
+                                            <p>Loading cart…</p>
+                                        </div>
+                                    );
+                                }
+                                if (cart.length === 0) {
+                                    return (
+                                        <div className="pos-cart-empty">
+                                            <BsCart3 size={48} />
+                                            <p>Cart is empty</p>
+                                            <span>Click a product to add it</span>
+                                        </div>
+                                    );
+                                }
+                                return cart.map((item, index) => (
+                                    <div key={item.id} className="pos-cart-item" style={{ height: 'auto', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        {/* Serial Number Badge */}
+                                        <span
+                                            title={`Line item #${index + 1}`}
                                             style={{
-                                                border: 'none',
-                                                background: totals.gstRate === r ? '#cbd5e1' : 'transparent',
-                                                color: totals.gstRate === r ? '#1e293b' : '#94a3b8',
-                                                borderRadius: 4,
-                                                padding: '1px 5px',
-                                                fontSize: 10,
-                                                fontWeight: 700,
-                                                cursor: 'not-allowed',
-                                                opacity: totals.gstRate === r ? 1 : 0.45,
-                                                pointerEvents: 'none',
-                                                transition: 'all .15s',
+                                                width: 22, height: 22, borderRadius: 6,
+                                                background: '#f1f5f9', color: '#475569',
+                                                fontSize: 10, fontWeight: 800,
+                                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                flexShrink: 0, border: '1px solid #e2e8f0',
                                             }}
-                                            title={`Statutory GST slab: ${r}% (Manual selection is disabled)`}
                                         >
-                                            {r}%
+                                            #{index + 1}
+                                        </span>
+                                        <div className="pos-cart-item-emoji">
+                                            {item.image && (item.image.startsWith('/') || item.image.startsWith('http')) ? (
+                                                <img
+                                                    src={item.image}
+                                                    alt={item.name}
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
+                                                    onError={(e) => { e.target.style.display = 'none'; }}
+                                                />
+                                            ) : (
+                                                <span>{item.image}</span>
+                                            )}
+                                        </div>
+                                        <div className="pos-cart-item-info" style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
+                                            <h4 className="pos-cart-item-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                                                {item.unsynced && (
+                                                    <span style={{ fontSize: 9, color: '#d97706', background: '#fef3c7', padding: '2px 5px', borderRadius: 4 }}>Offline</span>
+                                                )}
+                                            </h4>
+                                            <span className="pos-cart-item-price" style={{ fontSize: 11, color: '#6b7280' }}>
+                                                ₹{item.price.toLocaleString()} × {item.qty}
+                                                {item.discountPerItem > 0 && (
+                                                    <span style={{ color: '#ef4444', fontWeight: 600, marginLeft: 6 }}>
+                                                        (-₹{item.discountPerItem}/item)
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <div style={{ fontSize: '10px', color: '#64748b', display: 'flex', gap: '6px', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
+                                                <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#4f46e5' }}>ID #{item.id}</span>
+                                                <span>•</span>
+                                                {item.barcode && (
+                                                    <>
+                                                        <span style={{ fontFamily: 'monospace' }}>Barcode: {item.barcode}</span>
+                                                        <span>•</span>
+                                                    </>
+                                                )}
+                                                {item.hsn && (
+                                                    <>
+                                                        <span>HSN: {item.hsn}</span>
+                                                        <span>•</span>
+                                                    </>
+                                                )}
+                                                <span>GST {item.gstRate || totals.gstRate}% (excl.)</span>
+                                            </div>
+                                        </div>
+                                        <div className="pos-qty-ctrl">
+                                            <button className="pos-qty-btn" onClick={() => updateQty(item.id, -1)} title="Decrease quantity">
+                                                <BsDash size={12} />
+                                            </button>
+                                            <span
+                                                className="pos-qty-val"
+                                                title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units` : ''}
+                                                style={item.qty >= MAX_QTY ? { color: '#d97706', fontWeight: 800 } : {}}
+                                            >
+                                                {item.qty}{item.qty >= MAX_QTY && <span style={{ fontSize: 8, marginLeft: 2, verticalAlign: 'super', color: '#d97706' }}>MAX</span>}
+                                            </span>
+                                            <button
+                                                className="pos-qty-btn"
+                                                onClick={() => updateQty(item.id, 1)}
+                                                disabled={item.qty >= MAX_QTY}
+                                                title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units per item` : 'Increase quantity'}
+                                                style={item.qty >= MAX_QTY ? { opacity: 0.35, cursor: 'not-allowed' } : {}}
+                                            >
+                                                <BsPlus size={12} />
+                                            </button>
+                                        </div>
+                                        <span className="pos-cart-item-total" style={{ fontWeight: 700, minWidth: 65, textAlign: 'right' }}>
+                                            ₹{((item.price - (item.discountPerItem || 0)) * item.qty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+                                        <button className="pos-cart-item-del" onClick={() => removeFromCart(item.id)} title="Remove item from order">
+                                            <BsTrash size={13} />
                                         </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <span>₹{totals.totalGST.toFixed(2)}</span>
+                                    </div>
+                                ));
+                            })()}
                         </div>
-                        {totals.totalGST > 0 && (
-                            <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', justifyContent: 'space-between', paddingLeft: 8, paddingRight: 4, marginBottom: 6 }}>
-                                <span>CGST ({totals.gstRate / 2}%): ₹{totals.cgstAmount?.toFixed(2)} | SGST ({totals.gstRate / 2}%): ₹{totals.sgstAmount?.toFixed(2)}</span>
-                                {totals.igstAmount > 0 && <span>IGST: ₹{totals.igstAmount.toFixed(2)}</span>}
-                            </div>
-                        )}
-                        <div className="pos-summary-divider" />
-                        <div className="pos-summary-total">
-                            <span>Grand Total</span>
-                            <span className="pos-grand-amount">₹{totals.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                    </div>
 
-                    {/* Payment mode */}
-                    <div
-                        className="pos-payment-modes"
-                        onClick={isCartEmpty ? () => {
-                            showPaymentWarning('Cart must have at least 1 item to select a payment method.');
-                        } : undefined}
-                    >
-                        {PAYMENT_MODES.map(m => (
-                            <button
-                                key={m.id}
-                                type="button"
-                                disabled={isCartEmpty}
-                                onClick={(e) => {
-                                    if (isCartEmpty) {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        showPaymentWarning('Cart must have at least 1 item to select a payment method.');
-                                        return;
-                                    }
-                                    setPaymentMode(m.id);
-                                }}
-                                className={`pos-pay-btn${!isCartEmpty && paymentMode === m.id ? ' pos-pay-btn--active' : ''}`}
-                                style={isCartEmpty ? {
-                                    opacity: 0.5,
-                                    cursor: 'not-allowed',
-                                    background: '#f8fafc',
-                                    color: '#94a3b8',
-                                    borderColor: '#e2e8f0',
-                                } : undefined}
-                                title={isCartEmpty ? 'Cart must have at least 1 item to select a payment method' : `Pay with ${m.label}`}
-                            >
-                                {m.icon}
-                                {m.label}
-                            </button>
-                        ))}
-                    </div>
+                        {/* Totals & payment */}
+                        <div className="pos-right-options">
 
-                    {/* Empty cart validation error alert */}
-                    {isCartEmpty && (
-                        <div style={{
-                            fontSize: 11,
-                            color: '#dc2626',
-                            background: '#fef2f2',
-                            border: '1px solid #fecaca',
-                            borderRadius: 6,
-                            padding: '6px 10px',
-                            marginTop: 8,
-                            marginBottom: 4,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            fontWeight: 600,
-                        }}>
-                            <BsExclamationTriangleFill size={12} color="#dc2626" />
-                            <span>Cart must have at least 1 item to select a payment method</span>
-                        </div>
-                    )}
+                            {/* Discount + Coupon section */}
+                            <div style={{ marginBottom: 10 }}>
 
-                    {/* Cash Tender & Change Due Section */}
-                    {!isCartEmpty && paymentMode === 'Cash' && (
-                        <div style={{
-                            background: '#f8fafc',
-                            border: '1.5px solid #e2e8f0',
-                            borderRadius: 10,
-                            padding: '10px 12px',
-                            marginTop: 8,
-                            marginBottom: 8,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
-                                    Cash Tendered:
-                                </span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '2px 8px', maxWidth: 140 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>₹</span>
-                                    <input
-                                        type="number"
-                                        placeholder={Math.round(totals.grandTotal).toString()}
-                                        value={cashTendered}
-                                        onChange={e => setCashTendered(e.target.value)}
-                                        style={{ width: '100%', border: 'none', outline: 'none', fontSize: 13, fontWeight: 800, color: '#0f172a' }}
-                                    />
-                                </div>
-                            </div>
+                                {/* Applied discount badge */}
+                                {discountApplied && (
+                                    <div style={{
+                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                        background: '#ecfdf5', border: '1px solid #6ee7b7',
+                                        borderRadius: 8, padding: '6px 10px', marginBottom: 8,
+                                    }}>
+                                        <span style={{ fontSize: 12, color: '#065f46', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <BsTagFill size={12} color="#10b981" />
+                                            {couponCode.trim()
+                                                ? `Coupon "${couponCode.trim()}" applied`
+                                                : `Discount applied: ${discountType === 'percentage' ? `${billDiscount}%` : `₹${billDiscount} flat`}`
+                                            }
+                                        </span>
+                                        <button
+                                            onClick={handleClearDiscount}
+                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', display: 'flex' }}
+                                            title="Remove discount"
+                                        >
+                                            <BsX size={16} />
+                                        </button>
+                                    </div>
+                                )}
 
-                            {/* Quick Cash Number Pills */}
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setCashTendered(Math.round(totals.grandTotal).toString())}
-                                    style={{
-                                        border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca',
-                                        borderRadius: 5, padding: '3px 7px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
-                                    }}
-                                    title="Tender Exact Total Amount"
-                                >
-                                    Exact (₹{Math.round(totals.grandTotal)})
-                                </button>
-                                {[100, 200, 500, 1000, 2000].map(amt => (
-                                    <button
-                                        key={amt}
-                                        type="button"
-                                        onClick={() => setCashTendered(amt.toString())}
-                                        style={{
-                                            border: '1px solid #e2e8f0', background: '#fff', color: '#334155',
-                                            borderRadius: 5, padding: '3px 7px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
-                                        }}
-                                        title={`Tender ₹${amt}`}
-                                    >
-                                        ₹{amt}
-                                    </button>
-                                ))}
-                                {cashTendered && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setCashTendered('')}
-                                        style={{ border: 'none', background: 'transparent', color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                                    >
-                                        Clear
-                                    </button>
+                                {/* Discount type + value row */}
+                                {!discountApplied && (
+                                    <div className="pos-discount-row" style={{ marginBottom: 6 }}>
+                                        <div className="pos-discount-type-btns">
+                                            <button
+                                                className={`pos-disc-type-btn${discountType === 'percentage' ? ' pos-disc-type-btn--active' : ''}`}
+                                                onClick={() => setDiscountType('percentage')}
+                                            >
+                                                %
+                                            </button>
+                                            <button
+                                                className={`pos-disc-type-btn${discountType === 'fixed' ? ' pos-disc-type-btn--active' : ''}`}
+                                                onClick={() => setDiscountType('fixed')}
+                                            >
+                                                ₹ Flat
+                                            </button>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            className="pos-discount-input"
+                                            placeholder={discountType === 'percentage' ? '% off' : '₹ off'}
+                                            value={billDiscount || ''}
+                                            onChange={e => setBillDiscount(Number(e.target.value))}
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Coupon code + Apply button */}
+                                {!discountApplied && (
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                        <div style={{
+                                            flex: 1, display: 'flex', alignItems: 'center', gap: 6,
+                                            background: '#f8fafc', border: '1px solid #e2e8f0',
+                                            borderRadius: 8, padding: '0 10px',
+                                        }}>
+                                            <BsTagFill size={11} color="#9ca3af" />
+                                            <input
+                                                type="text"
+                                                placeholder="Coupon code (optional)"
+                                                value={couponCode}
+                                                onChange={e => setCouponCode(e.target.value)}
+                                                onKeyDown={e => e.key === 'Enter' && handleApplyDiscount()}
+                                                style={{
+                                                    flex: 1, border: 'none', background: 'transparent',
+                                                    fontSize: 12, outline: 'none', color: '#374151',
+                                                    padding: '7px 0',
+                                                }}
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={handleApplyDiscount}
+                                            disabled={discountLoading}
+                                            style={{
+                                                background: discountLoading ? '#a5b4fc' : '#6366f1',
+                                                color: '#fff', border: 'none', borderRadius: 8,
+                                                padding: '0 14px', cursor: discountLoading ? 'not-allowed' : 'pointer',
+                                                fontWeight: 600, fontSize: 12, display: 'flex',
+                                                alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
+                                                transition: 'background .2s',
+                                            }}
+                                            title="Apply discount to cart"
+                                        >
+                                            {discountLoading
+                                                ? <span style={{ fontSize: 11 }}>…</span>
+                                                : <><BsCheckLg size={11} /> Apply</>}
+                                        </button>
+                                    </div>
                                 )}
                             </div>
 
-                            {/* Change Due Display */}
-                            {Number(cashTendered) > 0 && (
+                            {/* Summary */}
+                            <div className="pos-summary">
+                                <div className="pos-summary-row">
+                                    <span>Subtotal</span>
+                                    <span>₹{totals.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                {totals.discountAmount > 0 && (
+                                    <div className="pos-summary-row pos-summary-row--discount">
+                                        <span>Discount</span>
+                                        <span>−₹{totals.discountAmount.toFixed(2)}</span>
+                                    </div>
+                                )}
+                                <div className="pos-summary-row">
+                                    <span>Taxable Value</span>
+                                    <span>₹{totals.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="pos-summary-row" style={{ alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        <span>GST ({totals.gstRate}%)</span>
+                                        <div style={{ display: 'inline-flex', gap: 3, background: '#f1f5f9', padding: '2px 4px', borderRadius: 6 }}>
+                                            {[0, 5, 12, 18, 28].map(r => (
+                                                <button
+                                                    key={r}
+                                                    type="button"
+                                                    onClick={() => setBillGstRate(r)}
+                                                    style={{
+                                                        border: 'none',
+                                                        background: billGstRate === r ? '#4f46e5' : 'transparent',
+                                                        color: billGstRate === r ? '#fff' : '#64748b',
+                                                        borderRadius: 4,
+                                                        padding: '1px 5px',
+                                                        fontSize: 10,
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                        transition: 'all .15s',
+                                                    }}
+                                                    title={`Set Bill GST to ${r}%`}
+                                                >
+                                                    {r}%
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <span>₹{totals.totalGST.toFixed(2)}</span>
+                                </div>
+                                {totals.totalGST > 0 && (
+                                    <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', justifyContent: 'space-between', paddingLeft: 8, paddingRight: 4, marginBottom: 6 }}>
+                                        <span>CGST ({totals.gstRate / 2}%): ₹{totals.cgstAmount?.toFixed(2)} | SGST ({totals.gstRate / 2}%): ₹{totals.sgstAmount?.toFixed(2)}</span>
+                                        {totals.igstAmount > 0 && <span>IGST: ₹{totals.igstAmount.toFixed(2)}</span>}
+                                    </div>
+                                )}
+                                <div className="pos-summary-divider" />
+                                <div className="pos-summary-total">
+                                    <span>Grand Total</span>
+                                    <span className="pos-grand-amount">₹{totals.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                            </div>
+
+                            {/* Payment mode */}
+                            <div className="pos-payment-modes">
+                                {PAYMENT_MODES.map(m => (
+                                    <button
+                                        key={m.id}
+                                        onClick={() => setPaymentMode(m.id)}
+                                        className={`pos-pay-btn${paymentMode === m.id ? ' pos-pay-btn--active' : ''}`}
+                                    >
+                                        {m.icon}
+                                        {m.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Cash Tender & Change Due Section */}
+                            {paymentMode === 'Cash' && (
                                 <div style={{
+                                    background: '#f8fafc',
+                                    border: '1.5px solid #e2e8f0',
+                                    borderRadius: 10,
+                                    padding: '10px 12px',
+                                    marginTop: 8,
+                                    marginBottom: 8,
                                     display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    background: changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#ecfdf5' : '#fef2f2',
-                                    border: `1px solid ${changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#a7f3d0' : '#fecaca'}`,
-                                    borderRadius: 6,
-                                    padding: '5px 10px',
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    color: changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#065f46' : '#991b1b',
+                                    flexDirection: 'column',
+                                    gap: 8,
                                 }}>
-                                    <span>
-                                        {Number(cashTendered) >= totals.grandTotal ? 'Change to Return:' : 'Remaining Balance:'}
-                                    </span>
-                                    <span style={{ fontSize: 13, fontWeight: 800 }}>
-                                        ₹{Number(cashTendered) >= totals.grandTotal ? changeDue.toFixed(2) : (totals.grandTotal - Number(cashTendered)).toFixed(2)}
-                                    </span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
+                                            Cash Tendered:
+                                        </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '2px 8px', maxWidth: 140 }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>₹</span>
+                                            <input
+                                                type="number"
+                                                placeholder={Math.round(totals.grandTotal).toString()}
+                                                value={cashTendered}
+                                                onChange={e => setCashTendered(e.target.value)}
+                                                style={{ width: '100%', border: 'none', outline: 'none', fontSize: 13, fontWeight: 800, color: '#0f172a' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Quick Cash Number Pills */}
+                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCashTendered(Math.round(totals.grandTotal).toString())}
+                                            style={{
+                                                border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca',
+                                                borderRadius: 5, padding: '3px 7px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                                            }}
+                                            title="Tender Exact Total Amount"
+                                        >
+                                            Exact (₹{Math.round(totals.grandTotal)})
+                                        </button>
+                                        {[100, 200, 500, 1000, 2000].map(amt => (
+                                            <button
+                                                key={amt}
+                                                type="button"
+                                                onClick={() => setCashTendered(amt.toString())}
+                                                style={{
+                                                    border: '1px solid #e2e8f0', background: '#fff', color: '#334155',
+                                                    borderRadius: 5, padding: '3px 7px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                                                }}
+                                                title={`Tender ₹${amt}`}
+                                            >
+                                                ₹{amt}
+                                            </button>
+                                        ))}
+                                        {cashTendered && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setCashTendered('')}
+                                                style={{ border: 'none', background: 'transparent', color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Change Due Display */}
+                                    {Number(cashTendered) > 0 && (
+                                        <div style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            background: changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#ecfdf5' : '#fef2f2',
+                                            border: `1px solid ${changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#a7f3d0' : '#fecaca'}`,
+                                            borderRadius: 6,
+                                            padding: '5px 10px',
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            color: changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#065f46' : '#991b1b',
+                                        }}>
+                                            <span>
+                                                {Number(cashTendered) >= totals.grandTotal ? 'Change to Return:' : 'Remaining Balance:'}
+                                            </span>
+                                            <span style={{ fontSize: 13, fontWeight: 800 }}>
+                                                ₹{Number(cashTendered) >= totals.grandTotal ? changeDue.toFixed(2) : (totals.grandTotal - Number(cashTendered)).toFixed(2)}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
-                        </div>
-                    )}
 
-                    {/* API error notice — only for discount errors which are user-actionable */}
-                    {apiError && (
-                        <div style={{
-                            background: '#fef3c7', color: '#92400e',
-                            borderRadius: 8, padding: '8px 12px',
-                            fontSize: 12, marginBottom: 8,
-                            border: '1px solid #fcd34d',
-                        }}>
-                            ⚠️ {apiError}
-                        </div>
-                    )}
+                            {/* UPI QR Display Section */}
+                            {paymentMode === 'UPI' && (
+                                <div style={{
+                                    background: '#eef2ff',
+                                    border: '1.5px solid #c7d2fe',
+                                    borderRadius: 10,
+                                    padding: '10px 14px',
+                                    marginTop: 8,
+                                    marginBottom: 8,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        <BsQrCode size={20} color="#4f46e5" />
+                                        <div>
+                                            <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#312e81' }}>UPI Dynamic QR Stand Ready</p>
+                                            <p style={{ margin: 0, fontSize: 11, color: '#6366f1' }}>Customer scans on counter screen to pay</p>
+                                        </div>
+                                    </div>
+                                    <span style={{ fontSize: 13, fontWeight: 800, color: '#4f46e5' }}>₹{totals.grandTotal.toFixed(2)}</span>
+                                </div>
+                            )}
 
-                    {/* Actions */}
-                    <div className="pos-action-row">
-                        <button className="pos-btn-reset" onClick={handleCloseOrder} title="Close / clear current order">
-                            <BsArrowCounterclockwise size={15} />
-                        </button>
-                        <button
-                            className="pos-btn-checkout"
-                            disabled={isCartEmpty}
-                            onClick={handleFinishSale}
-                        >
-                            <BsCheckCircleFill size={16} />
-                            Complete Sale
-                        </button>
+                            {/* End pos-right-options and pos-right-content */}
+                        </div>
+                    </div>
+
+                    {/* ── Pinned Checkout Action Bar at Bottom of Panel ── */}
+                    <div className="pos-right-checkout-bar">
+                        <div className="pos-checkout-total-row">
+                            <div>
+                                <span className="pos-checkout-total-label">Total to Pay</span>
+                                <span className="pos-checkout-items-count">({cart.length} {cart.length === 1 ? 'item' : 'items'})</span>
+                            </div>
+                            <div className="pos-checkout-grand-total">
+                                ₹{totals.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                        </div>
+
+                        {apiError && (
+                            <div style={{
+                                background: '#fef3c7', color: '#92400e',
+                                borderRadius: 8, padding: '6px 10px',
+                                fontSize: 11,
+                                border: '1px solid #fcd34d',
+                            }}>
+                                ⚠️ {apiError}
+                            </div>
+                        )}
+
+                        <div className="pos-action-row">
+                            <button className="pos-btn-reset" onClick={handleReset} title="Clear cart">
+                                <BsArrowCounterclockwise size={15} />
+                            </button>
+                            <button
+                                className="pos-btn-checkout"
+                                disabled={cart.length === 0}
+                                onClick={handleFinishSale}
+                            >
+                                <BsCheckCircleFill size={16} />
+                                Complete Sale
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* ── Receipt Modal ── */}
             {showPreview && (
@@ -2087,18 +1892,10 @@ const Billing = () => {
 
                         {/* Buttons */}
                         <div className="pos-receipt-actions no-print">
-                            <button className="pos-receipt-btn-print" onClick={() => window.print()}>
+                            <button type="button" className="pos-receipt-btn-print" onClick={handlePrint}>
                                 <BsPrinter size={15} /> Print Receipt
                             </button>
-                            <button
-                                className="pos-receipt-btn-print"
-                                onClick={handleDownloadGstr1}
-                                style={{ background: '#059669', borderColor: '#047857', color: '#fff' }}
-                                title="Download GSTR-1 Report"
-                            >
-                                <BsDownload size={14} /> Download GSTR-1
-                            </button>
-                            <button className="pos-receipt-btn-new" onClick={handleReset}>
+                            <button type="button" className="pos-receipt-btn-new" onClick={handleReset}>
                                 <BsArrowCounterclockwise size={15} /> New Sale
                             </button>
                         </div>
@@ -2231,33 +2028,6 @@ const Billing = () => {
                                                     <div style={{ fontSize: 11, color: '#64748b' }}>
                                                         ₹{p.price.toLocaleString()} • {p.category}
                                                     </div>
-                                                    <div style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: 4,
-                                                        fontSize: 10,
-                                                        fontWeight: 700,
-                                                        color: (p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#059669' : '#dc2626',
-                                                        background: (p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#ecfdf5' : '#fef2f2',
-                                                        border: `1px solid ${(p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#a7f3d0' : '#fecaca'}`,
-                                                        padding: '1px 6px',
-                                                        borderRadius: 4,
-                                                        width: 'fit-content',
-                                                        marginTop: 3,
-                                                    }}>
-                                                        <span style={{
-                                                            width: 5,
-                                                            height: 5,
-                                                            borderRadius: '50%',
-                                                            background: (p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#10b981' : '#ef4444',
-                                                            display: 'inline-block',
-                                                        }} />
-                                                        <span>
-                                                            {(p.isInStock !== false && (p.stock > 0 || p.isInStock))
-                                                                ? `In Stock (${p.stock ?? 50})`
-                                                                : 'Out of Stock'}
-                                                        </span>
-                                                    </div>
                                                 </div>
                                             </div>
 
@@ -2292,38 +2062,27 @@ const Billing = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => {
-                                                    if (isProductOutOfStock(p)) {
-                                                        showStockWarning(p.name);
-                                                        return;
-                                                    }
                                                     addToCart(p);
                                                     setLastScanned({ barcode: p.barcode, name: p.name, success: true });
                                                 }}
-                                                disabled={isProductOutOfStock(p)}
                                                 style={{
                                                     width: '100%',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     gap: 6,
-                                                    background: isProductOutOfStock(p) ? '#fee2e2' : '#eef2ff',
-                                                    color: isProductOutOfStock(p) ? '#ef4444' : '#4f46e5',
-                                                    border: `1px solid ${isProductOutOfStock(p) ? '#fecaca' : '#c7d2fe'}`,
+                                                    background: '#eef2ff',
+                                                    color: '#4f46e5',
+                                                    border: '1px solid #c7d2fe',
                                                     borderRadius: 8,
                                                     padding: '6px 0',
                                                     fontSize: 12,
                                                     fontWeight: 700,
-                                                    cursor: isProductOutOfStock(p) ? 'not-allowed' : 'pointer',
+                                                    cursor: 'pointer',
                                                     transition: 'background .15s',
                                                 }}
                                             >
-                                                {isProductOutOfStock(p) ? (
-                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                                        <BsExclamationTriangleFill size={11} /> Out of Stock
-                                                    </span>
-                                                ) : (
-                                                    <><BsPlus size={15} /> Scan to Cart</>
-                                                )}
+                                                <BsPlus size={15} /> Scan to Cart
                                             </button>
                                         </div>
                                     ))}

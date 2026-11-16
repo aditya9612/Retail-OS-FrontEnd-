@@ -83,7 +83,7 @@ export const menuGroups = [
             { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases' },
             { name: 'Suppliers', icon: <BsTruck />, path: '/suppliers' },
             { name: 'GRN', icon: <BsClipboardCheck />, path: '/inventory/grn' },
-            { name: 'Purchase Returns', icon: <BsArrowCounterclockwise />, path: '/inventory/purchase-returns', aliasPaths: ['/returns', '/purchase-order-returns'] },
+            { name: 'Purchase Returns', icon: <BsArrowCounterclockwise />, path: '/inventory/purchase-returns' },
             { name: 'Store Transfers', icon: <BsArrowLeftRight />, path: '/inventory/store-transfers' },
         ],
     },
@@ -160,9 +160,14 @@ const Sidebar = ({ collapsed, onToggle }) => {
     const [collapsedGroups, setCollapsedGroups] = useState({});
     const [hoveredItem, setHoveredItem] = useState(null);
 
-    // Flat list of all navigation items for route matching
-    const allNavItems = useMemo(() => menuGroups.flatMap(group => group.items), []);
+    // Compute the single active item based on current route
+    const activeItemPath = useMemo(() => {
+        const allItems = menuGroups.flatMap(g => g.items);
+        const normalizedCurrent = currentPath.length > 1 && currentPath.endsWith('/')
+            ? currentPath.slice(0, -1)
+            : currentPath;
 
+<<<<<<< HEAD
     const isItemActive = (item) => {
         const cleanPath = (currentPath.endsWith('/') && currentPath.length > 1)
             ? currentPath.slice(0, -1)
@@ -198,19 +203,58 @@ const Sidebar = ({ collapsed, onToggle }) => {
                     other.path.length > item.path.length
             );
             return !hasMoreSpecificMatch;
+=======
+        // 1. Check for exact match (by path or aliasPaths)
+        const exactMatch = allItems.find(item => {
+            const itemNorm = item.path.length > 1 && item.path.endsWith('/') ? item.path.slice(0, -1) : item.path;
+            if (itemNorm === normalizedCurrent) return true;
+            if (item.aliasPaths && item.aliasPaths.some(alias => {
+                const aliasNorm = alias.length > 1 && alias.endsWith('/') ? alias.slice(0, -1) : alias;
+                return aliasNorm === normalizedCurrent;
+            })) {
+                return true;
+            }
+            return false;
+        });
+
+        if (exactMatch) {
+            return exactMatch.path;
+>>>>>>> a7b4a7c14077883c20296d6a86050fa70088b48b
         }
-        return false;
-    };
+
+        // 2. If no exact match (e.g. detail sub-routes like /products/123 or /invoices/view/1),
+        // pick the item with the longest matching prefix
+        const prefixMatches = allItems.filter(item => {
+            if (item.path === '/' || item.path === '/dashboard') return false;
+            const itemNorm = item.path.length > 1 && item.path.endsWith('/') ? item.path.slice(0, -1) : item.path;
+            if (normalizedCurrent.startsWith(itemNorm + '/')) return true;
+            if (item.aliasPaths && item.aliasPaths.some(alias => {
+                const aliasNorm = alias.length > 1 && alias.endsWith('/') ? alias.slice(0, -1) : alias;
+                return normalizedCurrent.startsWith(aliasNorm + '/');
+            })) {
+                return true;
+            }
+            return false;
+        });
+
+        if (prefixMatches.length > 0) {
+            prefixMatches.sort((a, b) => b.path.length - a.path.length);
+            return prefixMatches[0].path;
+        }
+
+        return null;
+    }, [currentPath]);
 
     // Auto-open group when active path matches
     useEffect(() => {
+        if (!activeItemPath) return;
         menuGroups.forEach(group => {
-            const hasActiveItem = group.items.some(item => isItemActive(item));
+            const hasActiveItem = group.items.some(item => item.path === activeItemPath);
             if (hasActiveItem && collapsedGroups[group.id]) {
                 setCollapsedGroups(prev => ({ ...prev, [group.id]: false }));
             }
         });
-    }, [currentPath]);
+    }, [activeItemPath]);
 
     const toggleGroup = (groupId) => {
         setCollapsedGroups(prev => ({
@@ -238,18 +282,51 @@ const Sidebar = ({ collapsed, onToggle }) => {
             .filter(group => group.items.length > 0);
     }, [searchQuery]);
 
+    // Flatten all items across menu groups for exact path checking
+    const allMenuItems = useMemo(() => {
+        return menuGroups.flatMap(group => group.items);
+    }, []);
+
+    const isItemActive = (item) => {
+        // 1. Single active item resolution [from t1]
+        if (activeItemPath) {
+            return activeItemPath === item.path;
+        }
+
+        // 2. Direct path or alias match fallback [from Punam]
+        if (currentPath === item.path) return true;
+        if (item.aliasPaths && item.aliasPaths.includes(currentPath)) return true;
+
+        // If another item in the sidebar matches currentPath exactly or via alias,
+        // do not mark this broader parent item as active
+        const hasExactMatchElsewhere = allMenuItems.some(
+            other => other.path !== item.path &&
+                (other.path === currentPath || (other.aliasPaths && other.aliasPaths.includes(currentPath)))
+        );
+        if (hasExactMatchElsewhere) {
+            return false;
+        }
+
+        // Avoid marking root or broad paths as active for everything
+        if (item.path !== '/' && item.path !== '/dashboard' && currentPath.startsWith(item.path + '/')) {
+            // Ensure no other menu item has a longer/more specific matching prefix
+            const hasMoreSpecificItem = allMenuItems.some(
+                other => other.path !== item.path &&
+                    other.path.length > item.path.length &&
+                    currentPath.startsWith(other.path)
+            );
+            return !hasMoreSpecificItem;
+        }
+        return false;
+    };
+
     return (
         <aside
             className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}
             style={{ width: collapsed ? '68px' : '242px' }}
         >
             {/* Sidebar Brand Header */}
-            <div
-                className="sidebar-logo"
-                style={{ cursor: collapsed ? 'pointer' : 'default' }}
-                onClick={collapsed ? onToggle : undefined}
-                title={collapsed ? 'Expand sidebar rail' : undefined}
-            >
+            <div className="sidebar-logo">
                 <div className="sidebar-logo-icon">
                     <BsShop size={18} />
                 </div>
@@ -357,8 +434,13 @@ const Sidebar = ({ collapsed, onToggle }) => {
                                                 >
                                                     <NavLink
                                                         to={item.path}
+<<<<<<< HEAD
                                                         end={Boolean(item.end || item.path === '/ecommerce' || item.path === '/dashboard' || item.path === '/')}
                                                         className={({ isActive }) => `sidebar-item ${active ? 'sidebar-item--active' : ''}`}
+=======
+                                                        end
+                                                        className={() => `sidebar-item ${active ? 'sidebar-item--active' : ''}`}
+>>>>>>> a7b4a7c14077883c20296d6a86050fa70088b48b
                                                     >
                                                         <span className="sidebar-item-icon">{item.icon}</span>
 
@@ -426,6 +508,23 @@ const Sidebar = ({ collapsed, onToggle }) => {
                             Register Online
                         </span>
                     </div>
+                    <button
+                        type="button"
+                        onClick={onToggle}
+                        style={{
+                            background: '#f1f5f9',
+                            border: 'none',
+                            color: '#64748b',
+                            borderRadius: 6,
+                            padding: '4px 6px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                        }}
+                        title="Collapse sidebar rail"
+                    >
+                        <BsLayoutSidebarInset size={14} />
+                    </button>
                 </div>
             ) : (
                 <div style={{ padding: '12px 0', display: 'flex', justifyContent: 'center', borderTop: '1px solid var(--color-border)', background: '#fafafa' }}>

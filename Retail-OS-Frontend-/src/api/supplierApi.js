@@ -36,10 +36,86 @@ export const getSupplierPurchaseHistory = async (supplierId, params = {}) => {
   if (params.page_size && Number(params.page_size) >= 1) {
     cleanParams.page_size = Math.min(100, Number(params.page_size));
   }
-  const response = await axiosInstance.get(`/suppliers/${id}/purchase-history`, {
-    params: cleanParams,
-  });
-  return response.data;
+
+  try {
+    const response = await axiosInstance.get(`/suppliers/${id}/purchase-history`, {
+      params: cleanParams,
+    });
+    const data = response?.data;
+    const historyList = Array.isArray(data?.purchase_history)
+      ? data.purchase_history
+      : Array.isArray(data?.data?.purchase_history)
+      ? data.data.purchase_history
+      : [];
+
+    if (historyList.length > 0) {
+      return data;
+    }
+
+    try {
+      const poParams = {
+        supplier_id: id,
+        page: cleanParams.page || 1,
+        page_size: cleanParams.page_size || 100,
+      };
+      if (cleanParams.status) poParams.status = cleanParams.status;
+      const poResponse = await axiosInstance.get("/purchase-orders", { params: poParams });
+      const poData = poResponse?.data;
+      const poList = Array.isArray(poData)
+        ? poData
+        : Array.isArray(poData?.items)
+        ? poData.items
+        : Array.isArray(poData?.data)
+        ? poData.data
+        : [];
+
+      const matchingOrders = poList.filter((o) => Number(o?.supplier_id) === id);
+      if (matchingOrders.length > 0) {
+        const totalSpent = matchingOrders.reduce(
+          (sum, o) => sum + (Number(o?.total_amount) || 0),
+          0
+        );
+        return {
+          supplier_id: id,
+          supplier_name: matchingOrders[0]?.supplier_name || data?.supplier_name || "",
+          total_purchases: matchingOrders.length,
+          total_amount_spent: totalSpent.toFixed(2),
+          purchase_history: matchingOrders,
+          message: "Supplier purchase history retrieved successfully",
+        };
+      }
+    } catch (_) {}
+
+    return data;
+  } catch (err) {
+    try {
+      const poParams = {
+        supplier_id: id,
+        page: cleanParams.page || 1,
+        page_size: cleanParams.page_size || 100,
+      };
+      if (cleanParams.status) poParams.status = cleanParams.status;
+      const poResponse = await axiosInstance.get("/purchase-orders", { params: poParams });
+      const poData = poResponse?.data;
+      const poList = Array.isArray(poData) ? poData : Array.isArray(poData?.data) ? poData.data : [];
+      const matchingOrders = poList.filter((o) => Number(o?.supplier_id) === id);
+      if (matchingOrders.length > 0) {
+        const totalSpent = matchingOrders.reduce(
+          (sum, o) => sum + (Number(o?.total_amount) || 0),
+          0
+        );
+        return {
+          supplier_id: id,
+          supplier_name: matchingOrders[0]?.supplier_name || "",
+          total_purchases: matchingOrders.length,
+          total_amount_spent: totalSpent.toFixed(2),
+          purchase_history: matchingOrders,
+          message: "Supplier purchase history retrieved successfully",
+        };
+      }
+    } catch (_) {}
+    throw err;
+  }
 };
 
 export const getSupplier = async (id) => {
@@ -77,4 +153,4 @@ export const deleteSupplier = async (id) => {
     `/suppliers/${sId}`
   );
   return response.data;
-};
+};

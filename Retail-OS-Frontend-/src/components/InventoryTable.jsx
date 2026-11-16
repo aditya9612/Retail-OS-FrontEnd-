@@ -301,11 +301,29 @@ const InventoryTable = ({
 
             const qty =
               item.quantity !== undefined &&
-              item.quantity !== null
+              item.quantity !== null &&
+              item.quantity !== ""
                 ? Number(item.quantity)
                 : item.stock !== undefined &&
-                  item.stock !== null
+                  item.stock !== null &&
+                  item.stock !== ""
                 ? Number(item.stock)
+                : item.available_quantity !== undefined &&
+                  item.available_quantity !== null &&
+                  item.available_quantity !== ""
+                ? Number(item.available_quantity)
+                : item.available_stock !== undefined &&
+                  item.available_stock !== null &&
+                  item.available_stock !== ""
+                ? Number(item.available_stock)
+                : item.current_stock !== undefined &&
+                  item.current_stock !== null &&
+                  item.current_stock !== ""
+                ? Number(item.current_stock)
+                : item.qty !== undefined &&
+                  item.qty !== null &&
+                  item.qty !== ""
+                ? Number(item.qty)
                 : 0;
 
             /* =====================================================
@@ -325,6 +343,14 @@ const InventoryTable = ({
                 ? Number(item.reorder_level)
                 : Number(item.reorderLevel) > 0
                 ? Number(item.reorderLevel)
+                : Number(item.product?.low_stock_threshold) > 0
+                ? Number(item.product.low_stock_threshold)
+                : Number(item.product?.minimum_stock) > 0
+                ? Number(item.product.minimum_stock)
+                : Number(item.product?.min_stock) > 0
+                ? Number(item.product.min_stock)
+                : Number(item.product?.reorder_level) > 0
+                ? Number(item.product.reorder_level)
                 : 0;
 
             /* =====================================================
@@ -462,39 +488,25 @@ const isMissingRequiredExpiry =
               getExpiryStatus(expiryDate);
 
             /* =====================================================
-               PRICE = 0 LOGIC
-
-               If selling price is 0, product MUST show
-               Out of Stock even if quantity is greater than 0.
-            ===================================================== */
-
-            const isZeroPrice =
-              sellingPrice <= 0;
-
-            /* =====================================================
                STOCK STATUS
-
-               Priority:
-               1. Price = 0      => Out of Stock
-               2. Quantity = 0   => Out of Stock
-               3. Below minimum => Low Stock
-               4. Otherwise     => In Stock
+               Stock status is strictly determined by available quantity
+               and minimum stock threshold, independent of price.
             ===================================================== */
 
             let st;
             if (typeof stockStatus === "function") {
               st = stockStatus(item);
+            } else if (qty <= 0) {
+              st = {
+                label: "Out of Stock",
+                color: "#dc2626",
+                bg: "#fef2f2",
+              };
             } else if (item?.is_low_stock || (minStock > 0 && qty <= minStock)) {
               st = {
                 label: "Low Stock",
                 color: "#d97706",
                 bg: "#fffbeb",
-              };
-            } else if (isZeroPrice || qty <= 0) {
-              st = {
-                label: "Out of Stock",
-                color: "#dc2626",
-                bg: "#fef2f2",
               };
             } else {
               st = {
@@ -658,6 +670,7 @@ const isMissingRequiredExpiry =
                     </div>
 
                     {qty > 0 &&
+                      minStock > 0 &&
                       qty <= minStock && (
                         <div
                           style={{
@@ -668,19 +681,6 @@ const isMissingRequiredExpiry =
                           Below Min
                         </div>
                       )}
-
-                    {isZeroPrice && (
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: "#dc2626",
-                          fontWeight: 600,
-                          marginTop: 2,
-                        }}
-                      >
-                        Price unavailable
-                      </div>
-                    )}
                   </div>
                 </td>
 

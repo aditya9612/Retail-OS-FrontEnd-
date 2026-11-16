@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import storeService from '../../services/storeService';
 import storeTargetService from '../../services/storeTargetService';
+import '../../components/Categories/CategoryCards.css';
 import {
     BsBullseye,
     BsPlus,
@@ -700,6 +701,21 @@ const Stores = () => {
 
     return (
         <div style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto', fontFamily: 'inherit' }}>
+            <style>{`
+                .store-targets-cards {
+                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                }
+                @media (max-width: 900px) {
+                    .store-targets-cards {
+                        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                    }
+                }
+                @media (max-width: 600px) {
+                    .store-targets-cards {
+                        grid-template-columns: 1fr !important;
+                    }
+                }
+            `}</style>
             {/* Top Navigation Tabs: Stores vs Store Targets */}
             <div style={{
                 display: 'flex',
@@ -864,74 +880,37 @@ const Stores = () => {
                     </div>
 
                     {/* Stores KPI Overview Cards */}
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                        gap: 16,
-                        marginBottom: 24
-                    }}>
-                        <div style={{
-                            background: '#fff', borderRadius: 14, padding: '18px 20px',
-                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Total Stores</span>
-                                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4f46e5' }}>
-                                    <BsShop size={16} />
-                                </div>
-                            </div>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginTop: 8 }}>
-                                {stores.length}
-                            </div>
-                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>Registered branches</span>
+                    <div className="category-cards">
+                        <div className="category-card" title="Total Stores">
+                            <h3>Total Stores</h3>
+                            <h2>{stores.length}</h2>
+                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 4 }}>
+                                Registered branches
+                            </span>
                         </div>
 
-                        <div style={{
-                            background: '#fff', borderRadius: 14, padding: '18px 20px',
-                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Active Branches</span>
-                                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
-                                    <BsShieldCheck size={16} />
-                                </div>
-                            </div>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginTop: 8 }}>
-                                {stores.filter(s => s.is_active).length}
-                            </div>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Operational outlets</span>
+                        <div className="category-card" title="Active Branches">
+                            <h3>Active Branches</h3>
+                            <h2>{stores.filter(s => s.is_active).length}</h2>
+                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
+                                Operational outlets
+                            </span>
                         </div>
 
-                        <div style={{
-                            background: '#fff', borderRadius: 14, padding: '18px 20px',
-                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Warehouses</span>
-                                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}>
-                                    <BsBoxes size={16} />
-                                </div>
-                            </div>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginTop: 8 }}>
-                                {stores.filter(s => s.is_warehouse).length}
-                            </div>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Fulfillment & storage depots</span>
+                        <div className="category-card" title="Warehouses">
+                            <h3>Warehouses</h3>
+                            <h2>{stores.filter(s => s.is_warehouse).length}</h2>
+                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
+                                Fulfillment & storage depots
+                            </span>
                         </div>
 
-                        <div style={{
-                            background: '#fff', borderRadius: 14, padding: '18px 20px',
-                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Primary Main Store</span>
-                                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706' }}>
-                                    <BsStarFill size={16} />
-                                </div>
-                            </div>
-                            <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', marginTop: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div className="category-card" title="Primary Main Store">
+                            <h3>Primary Main Store</h3>
+                            <h2 style={{ fontSize: 20, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {stores.find(s => s.is_main)?.name || 'None Set'}
-                            </div>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
+                            </h2>
+                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
                                 {stores.find(s => s.is_main) ? `Store ID #${stores.find(s => s.is_main)?.id}` : 'Designate a main store'}
                             </span>
                         </div>
@@ -1201,62 +1180,31 @@ const Stores = () => {
                     </div>
 
                     {/* Stats Overview */}
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                        gap: 16,
-                        marginBottom: 24
-                    }}>
-                        <div style={{
-                            background: '#fff', borderRadius: 14, padding: '18px 20px',
-                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Active Targets</span>
-                                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#eef2ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#4f46e5' }}>
-                                    <BsBullseye size={16} />
-                                </div>
-                            </div>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginTop: 8 }}>
-                                {targets.filter(t => t.status === 'active').length}
-                            </div>
-                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>
+                    <div className="category-cards store-targets-cards">
+                        <div className="category-card" title="Active Targets">
+                            <h3>Active Targets</h3>
+                            <h2>{targets.filter(t => t.status === 'active').length}</h2>
+                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 4 }}>
                                 {targetsSummary?.achieved_targets_count ? `${targetsSummary.achieved_targets_count} achieved` : 'Active store milestones'}
                             </span>
                         </div>
 
-                        <div style={{
-                            background: '#fff', borderRadius: 14, padding: '18px 20px',
-                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Total Target Value</span>
-                                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
-                                    <BsCashStack size={16} />
-                                </div>
-                            </div>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginTop: 8 }}>
+                        <div className="category-card" title="Total Target Value">
+                            <h3>Total Target Value</h3>
+                            <h2 style={{ fontSize: 22, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 ₹{displayTotalRevenueTarget.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </div>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>
+                            </h2>
+                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
                                 {targetsSummary?.overall_achievement_percentage ? `${targetsSummary.overall_achievement_percentage}% overall reached` : 'Sum of store goals'}
                             </span>
                         </div>
 
-                        <div style={{
-                            background: '#fff', borderRadius: 14, padding: '18px 20px',
-                            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>Stores Monitored</span>
-                                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}>
-                                    <BsShop size={16} />
-                                </div>
-                            </div>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginTop: 8 }}>
-                                {targetsSummary?.total_stores_with_targets || new Set(targets.map(t => t.store_id)).size}
-                            </div>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500 }}>Configured branch stores</span>
+                        <div className="category-card" title="Stores Monitored">
+                            <h3>Stores Monitored</h3>
+                            <h2>{targetsSummary?.total_stores_with_targets || new Set(targets.map(t => t.store_id)).size}</h2>
+                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
+                                Configured branch stores
+                            </span>
                         </div>
                     </div>
 
