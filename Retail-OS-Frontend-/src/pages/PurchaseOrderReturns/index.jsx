@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import {
   getPurchaseOrderReturns,
   getPurchaseOrderReturnById,
@@ -20,6 +20,18 @@ import {
 import { getWarehouses } from "../../api/warehouseApi";
 import { listStores } from "../../services/inventoryService";
 import apiClient from "../../api/axios";
+import {
+  BsEye,
+  BsFileEarmarkPdf,
+  BsPencilFill,
+  BsCheckCircle,
+  BsXCircle,
+  BsCheck2All,
+  BsTrash,
+  BsArrowRepeat,
+  BsChevronLeft,
+  BsChevronRight,
+} from "react-icons/bs";
 
 import "./PurchaseOrderReturns.css";
 
@@ -104,8 +116,9 @@ const PurchaseOrderReturns = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  const PAGE_SIZE = 8;
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
 
   // Search & Filter State
   const [searchTerm, setSearchTerm] = useState("");
@@ -135,17 +148,28 @@ const PurchaseOrderReturns = () => {
   const [deletingId, setDeletingId] = useState(null);
   const [downloadingPdfId, setDownloadingPdfId] = useState(null);
 
-  // Banner Alerts
-  const [actionError, setActionError] = useState("");
-  const [actionSuccess, setActionSuccess] = useState("");
-
   // Edit Return State
   const [editingReturn, setEditingReturn] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [editForm, setEditForm] = useState({
     reason: "",
-    remarks: "",
+    debit_note_number: "",
   });
+
+  // Global processing lock
+  const isAnyProcessing = Boolean(
+    approvingId ||
+    rejectingId ||
+    completingId ||
+    deletingId ||
+    downloadingPdfId ||
+    updating
+  );
+  const isProcessing = isAnyProcessing;
+
+  // Banner Alerts
+  const [actionError, setActionError] = useState("");
+  const [actionSuccess, setActionSuccess] = useState("");
 
   // Metadata dropdown state
   const [purchaseOrders, setPurchaseOrders] = useState([]);
@@ -153,6 +177,19 @@ const PurchaseOrderReturns = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [metadataLoading, setMetadataLoading] = useState(false);
   const [metadataError, setMetadataError] = useState("");
+
+  // Lifecycle hook for page-level vertical scrolling
+  useEffect(() => {
+    const mainEl = document.querySelector("main");
+    if (mainEl) {
+      mainEl.classList.add("por-main-scroll");
+    }
+    return () => {
+      if (mainEl) {
+        mainEl.classList.remove("por-main-scroll");
+      }
+    };
+  }, []);
 
   // Create Return Form State
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -187,7 +224,7 @@ const PurchaseOrderReturns = () => {
 
       const queryParams = {
         page: Math.max(1, parseInt(page, 10) || 1),
-        page_size: Math.max(1, parseInt(pageSize, 10) || 10),
+        page_size: PAGE_SIZE,
       };
 
       if (searchTerm && searchTerm.trim() !== "") {
@@ -291,6 +328,56 @@ const PurchaseOrderReturns = () => {
 
   // Alias for fetchPurchaseOrderReturns
   const fetchReturns = fetchPurchaseOrderReturns;
+
+  // Handle client-side slicing if backend returns full array (> pageSize)
+  const isClientPaginated = returns.length > pageSize;
+  const effectiveTotal =
+    totalRecords > 0
+      ? totalRecords
+      : isClientPaginated
+      ? returns.length
+      : totalPages > 1
+      ? totalPages * pageSize
+      : returns.length;
+
+  const effectiveTotalPages = Math.max(
+    1,
+    isClientPaginated
+      ? Math.ceil(returns.length / pageSize)
+      : Math.max(totalPages, Math.ceil(effectiveTotal / pageSize))
+  );
+
+  const displayedReturns = useMemo(() => {
+    if (!Array.isArray(returns)) return [];
+    if (returns.length > pageSize) {
+      const startIndex = (page - 1) * pageSize;
+      return returns.slice(startIndex, startIndex + pageSize);
+    }
+    return returns;
+  }, [returns, page, pageSize]);
+
+  useEffect(() => {
+    if (page > effectiveTotalPages && effectiveTotalPages > 0) {
+      setPage(effectiveTotalPages);
+    }
+  }, [page, effectiveTotalPages]);
+
+  const rangeStart = effectiveTotal === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = effectiveTotal === 0 ? 0 : Math.min(effectiveTotal, page * pageSize);
+
+  const getPageNumbers = () => {
+    const total = effectiveTotalPages;
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (page <= 4) {
+      return [1, 2, 3, 4, 5, "...", total];
+    }
+    if (page >= total - 3) {
+      return [1, "...", total - 4, total - 3, total - 2, total - 1, total];
+    }
+    return [1, "...", page - 1, page, page + 1, "...", total];
+  };
 
   // =====================================================
   // API #3: Fetch Purchase Order Returns Stats
@@ -813,7 +900,7 @@ const PurchaseOrderReturns = () => {
 
     setEditForm({
       reason: item?.reason || "",
-      remarks: item?.remarks || "",
+      debit_note_number: item?.debit_note_number || "",
     });
 
     setActionError("");
@@ -832,12 +919,14 @@ const PurchaseOrderReturns = () => {
     setEditingReturn(null);
     setEditForm({
       reason: "",
-      remarks: "",
+      debit_note_number: "",
     });
   };
 
   // =====================================================
   // Update Purchase Order Return
+  // PATCH /api/v1/purchase-order-returns/{return_id}
+  // Accepts: reason (3-100 chars), debit_note_number
   // =====================================================
   const handleUpdateReturn = async (event) => {
     event.preventDefault();
@@ -852,8 +941,9 @@ const PurchaseOrderReturns = () => {
       return;
     }
 
-    if (!editForm.reason.trim() || !editForm.remarks.trim()) {
-      setActionError("Reason and remarks are required.");
+    const trimmedReason = (editForm.reason || "").trim();
+    if (!trimmedReason || trimmedReason.length < 3) {
+      setActionError("Return reason is required (minimum 3 characters, max 100).");
       return;
     }
 
@@ -863,9 +953,12 @@ const PurchaseOrderReturns = () => {
       setActionSuccess("");
 
       const payload = {
-        reason: editForm.reason.trim(),
-        remarks: editForm.remarks.trim(),
+        reason: trimmedReason.slice(0, 100),
       };
+
+      if (editForm.debit_note_number && editForm.debit_note_number.trim()) {
+        payload.debit_note_number = editForm.debit_note_number.trim().slice(0, 100);
+      }
 
       const data = await updatePurchaseOrderReturn(editingReturn.id, payload);
       console.log("Purchase Order Return Updated:", data);
@@ -876,7 +969,7 @@ const PurchaseOrderReturns = () => {
 
       setEditForm({
         reason: "",
-        remarks: "",
+        debit_note_number: "",
       });
 
       await fetchPurchaseOrderReturns();
@@ -900,8 +993,8 @@ const PurchaseOrderReturns = () => {
 
   // =====================================================
   // Approve Purchase Order Return
-  // PATCH /api/v1/purchase-order-returns/{return_id}/status
-  // Request payload: { "status": "approved" }
+  // POST /api/v1/purchase-order-returns/{return_id}/approve
+  // (with fallback to PATCH /api/v1/purchase-order-returns/{return_id}/status)
   // =====================================================
   const handleApprove = async (returnId) => {
     if (!returnId) return;
@@ -911,7 +1004,7 @@ const PurchaseOrderReturns = () => {
       return;
     }
 
-    if (approvingId === id) return; // Prevent duplicate clicks or concurrent updates
+    if (approvingId === id || isProcessing) return; // Prevent duplicate clicks or concurrent updates
 
     const confirmed = window.confirm(
       `Are you sure you want to approve Purchase Order Return #${id}?`
@@ -924,8 +1017,16 @@ const PurchaseOrderReturns = () => {
       setActionError("");
       setActionSuccess("");
 
-      // Verified PATCH /purchase-order-returns/{return_id}/status endpoint
-      const data = await updatePurchaseOrderReturnStatus(id, "approved");
+      let data;
+      try {
+        data = await approvePurchaseOrderReturn(id);
+      } catch (postErr) {
+        if (postErr?.response?.status === 404 || postErr?.response?.status === 405) {
+          data = await updatePurchaseOrderReturnStatus(id, "approved");
+        } else {
+          throw postErr;
+        }
+      }
       console.log("Purchase Order Return Status Updated to approved:", data);
 
       const actualReturn = data?.data ?? data;
@@ -1188,7 +1289,11 @@ const PurchaseOrderReturns = () => {
       if (selectedReturn?.id === returnId) {
         setSelectedReturn(null);
       }
-      await fetchPurchaseOrderReturns();
+      if (page > 1 && (displayedReturns.length === 1 || returns.length === 1)) {
+        setPage((p) => Math.max(1, p - 1));
+      } else {
+        await fetchPurchaseOrderReturns();
+      }
       await fetchReturnsStats();
     } catch (err) {
       console.error("Failed to delete purchase order return:", err);
@@ -2157,7 +2262,7 @@ const PurchaseOrderReturns = () => {
       <div className="purchase-order-returns-table-wrapper">
         {loading ? (
           <div className="purchase-order-returns-message">Loading purchase order returns...</div>
-        ) : returns.length === 0 ? (
+        ) : displayedReturns.length === 0 ? (
           <div className="purchase-order-returns-message">No purchase order returns found.</div>
         ) : (
           <table className="purchase-order-returns-table">
@@ -2178,15 +2283,16 @@ const PurchaseOrderReturns = () => {
             </thead>
 
             <tbody>
-              {returns.map((item) => {
+              {displayedReturns.map((item) => {
                 const itemStatus = String(item.status || "").toLowerCase();
-                const isProcessing =
+                const itemIsProcessing =
                   approvingId === item.id ||
                   rejectingId === item.id ||
                   completingId === item.id ||
                   deletingId === item.id ||
                   downloadingPdfId === item.id ||
                   (updating && editingReturn?.id === item.id);
+                const isRowProcessing = itemIsProcessing || isProcessing;
 
                 const returnNum =
                   item.return_number || item.return_no || (item.id ? `POR-${item.id}` : "-");
@@ -2236,71 +2342,117 @@ const PurchaseOrderReturns = () => {
 
                     <td>
                       <div className="purchase-order-return-actions">
+                        {/* 1. View Details */}
                         <button
                           type="button"
+                          className="por-action-btn por-btn-view"
                           onClick={() => handleViewDetails(item.id)}
-                          disabled={(detailsLoading && detailsReturnId === item.id) || isProcessing}
-                          title="View return details via GET /api/v1/purchase-order-returns/{id}"
+                          disabled={(detailsLoading && detailsReturnId === item.id) || isRowProcessing}
+                          title={detailsLoading && detailsReturnId === item.id ? "Loading..." : "View Details"}
+                          aria-label={detailsLoading && detailsReturnId === item.id ? "Loading..." : "View Details"}
                         >
-                          {detailsLoading && detailsReturnId === item.id ? "Loading..." : "👁 View"}
+                          {detailsLoading && detailsReturnId === item.id ? (
+                            <BsArrowRepeat className="animate-spin" size={14} />
+                          ) : (
+                            <BsEye size={14} />
+                          )}
                         </button>
 
+                        {/* 2. Download PDF */}
                         <button
                           type="button"
+                          className="por-action-btn por-btn-pdf"
                           onClick={() => handleDownloadPdf(item.id, item)}
-                          disabled={downloadingPdfId === item.id || isProcessing}
-                          title="Download Debit Note PDF via GET /api/v1/purchase-order-returns/{id}/pdf"
+                          disabled={downloadingPdfId === item.id || isRowProcessing}
+                          title={downloadingPdfId === item.id ? "Downloading..." : "Download PDF"}
+                          aria-label={downloadingPdfId === item.id ? "Downloading..." : "Download PDF"}
                         >
-                          {downloadingPdfId === item.id ? "Downloading..." : "Download PDF"}
+                          {downloadingPdfId === item.id ? (
+                            <BsArrowRepeat className="animate-spin" size={14} />
+                          ) : (
+                            <BsFileEarmarkPdf size={14} />
+                          )}
                         </button>
 
+                        {/* 3, 4, 5. Edit, Approve, Reject (when requested) */}
                         {itemStatus === "requested" && (
                           <>
                             <button
                               type="button"
+                              className="por-action-btn por-btn-edit"
                               onClick={() => handleEditReturn(item)}
-                              disabled={isProcessing}
+                              disabled={isRowProcessing}
+                              title="Edit Return"
+                              aria-label="Edit Return"
                             >
-                              Edit
+                              <BsPencilFill size={13} />
                             </button>
 
                             <button
                               type="button"
+                              className="por-action-btn por-btn-approve"
                               onClick={() => handleApprove(item.id)}
-                              disabled={isProcessing}
+                              disabled={isRowProcessing}
+                              title={approvingId === item.id ? "Approving..." : "Approve Return"}
+                              aria-label={approvingId === item.id ? "Approving..." : "Approve Return"}
                             >
-                              {approvingId === item.id ? "Approving..." : "Approve"}
+                              {approvingId === item.id ? (
+                                <BsArrowRepeat className="animate-spin" size={14} />
+                              ) : (
+                                <BsCheckCircle size={14} />
+                              )}
                             </button>
 
                             <button
                               type="button"
+                              className="por-action-btn por-btn-reject"
                               onClick={() => handleReject(item.id, item.status)}
-                              disabled={rejectingId === item.id || isProcessing}
+                              disabled={rejectingId === item.id || isRowProcessing}
+                              title={rejectingId === item.id ? "Rejecting..." : "Reject Return"}
+                              aria-label={rejectingId === item.id ? "Rejecting..." : "Reject Return"}
                             >
-                              {rejectingId === item.id ? "Rejecting..." : "Reject"}
+                              {rejectingId === item.id ? (
+                                <BsArrowRepeat className="animate-spin" size={14} />
+                              ) : (
+                                <BsXCircle size={14} />
+                              )}
                             </button>
                           </>
                         )}
 
+                        {/* 6. Complete (when approved) */}
                         {itemStatus === "approved" && (
                           <button
                             type="button"
+                            className="por-action-btn por-btn-complete"
                             onClick={() => handleComplete(item.id, item.status)}
-                            disabled={completingId === item.id || isProcessing}
-                            title="Complete Return via POST /api/v1/purchase-order-returns/{id}/complete"
+                            disabled={completingId === item.id || isRowProcessing}
+                            title={completingId === item.id ? "Completing..." : "Complete Return"}
+                            aria-label={completingId === item.id ? "Completing..." : "Complete Return"}
                           >
-                            {completingId === item.id ? "Completing..." : "Complete"}
+                            {completingId === item.id ? (
+                              <BsArrowRepeat className="animate-spin" size={14} />
+                            ) : (
+                              <BsCheck2All size={15} />
+                            )}
                           </button>
                         )}
 
+                        {/* 7. Delete (when requested or rejected) */}
                         {(itemStatus === "requested" || itemStatus === "rejected") && (
                           <button
                             type="button"
+                            className="por-action-btn por-btn-delete"
                             onClick={() => handleDelete(item.id)}
-                            disabled={isProcessing}
-                            style={{ color: "#dc2626" }}
+                            disabled={isRowProcessing}
+                            title={deletingId === item.id ? "Deleting..." : "Delete Return"}
+                            aria-label={deletingId === item.id ? "Deleting..." : "Delete Return"}
                           >
-                            {deletingId === item.id ? "Deleting..." : "Delete"}
+                            {deletingId === item.id ? (
+                              <BsArrowRepeat className="animate-spin" size={14} />
+                            ) : (
+                              <BsTrash size={14} />
+                            )}
                           </button>
                         )}
                       </div>
@@ -2325,25 +2477,28 @@ const PurchaseOrderReturns = () => {
 
           <div className="purchase-order-return-details-text">
             <label>
-              Reason
+              Reason * (3-100 characters)
               <input
                 type="text"
                 name="reason"
                 value={editForm.reason}
                 onChange={handleEditInputChange}
-                placeholder="Enter return reason"
+                placeholder="Enter return reason (3-100 characters)"
+                minLength={3}
+                maxLength={100}
                 required
               />
             </label>
 
             <label>
-              Remarks
-              <textarea
-                name="remarks"
-                value={editForm.remarks}
+              Debit Note Number (Optional)
+              <input
+                type="text"
+                name="debit_note_number"
+                value={editForm.debit_note_number || ""}
                 onChange={handleEditInputChange}
-                placeholder="Enter return remarks"
-                required
+                placeholder="e.g. DN-20261105-001"
+                maxLength={100}
               />
             </label>
           </div>
@@ -2356,26 +2511,91 @@ const PurchaseOrderReturns = () => {
 
       {/* PAGINATION */}
       <div className="purchase-order-returns-pagination">
-        <button
-          type="button"
-          disabled={page <= 1 || loading}
-          onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
-        >
-          Previous
-        </button>
+        <div className="por-pagination-left">
+          <div className="por-page-size-wrap">
+            <label htmlFor="por-page-size" className="por-page-size-label">
+              Rows per page:
+            </label>
+            <select
+              id="por-page-size"
+              className="por-page-size-select"
+              value={pageSize}
+              onChange={(e) => {
+                const newSize = Number(e.target.value);
+                setPageSize(newSize);
+                setPage(1);
+              }}
+              disabled={loading}
+              aria-label="Select rows per page"
+            >
+              <option value={8}>8</option>
+              <option value={15}>15</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+            </select>
+          </div>
+        </div>
 
-        <span>
-          Page {page} {totalPages > 0 ? `of ${totalPages}` : ""}
-          {totalRecords > 0 ? ` (${totalRecords} ${totalRecords === 1 ? "record" : "records"})` : ""}
-        </span>
+        <div className="por-pagination-info">
+          Showing{" "}
+          <strong className="por-pagination-highlight">
+            {effectiveTotal === 0 ? "0" : `${rangeStart}–${rangeEnd}`}
+          </strong>{" "}
+          of{" "}
+          <strong className="por-pagination-highlight">
+            {effectiveTotal}
+          </strong>{" "}
+          {effectiveTotal === 1 ? "record" : "records"}
+          {effectiveTotalPages > 1 && (
+            <span className="por-pagination-page-indicator">
+              (Page {page} of {effectiveTotalPages})
+            </span>
+          )}
+        </div>
 
-        <button
-          type="button"
-          disabled={loading || (totalPages > 0 ? page >= totalPages : returns.length < pageSize)}
-          onClick={() => setPage((currentPage) => currentPage + 1)}
-        >
-          Next
-        </button>
+        <div className="por-pagination-controls">
+          <button
+            type="button"
+            className="por-pagination-btn"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+            aria-label="Previous Page"
+          >
+            <BsChevronLeft size={12} />
+            Previous
+          </button>
+
+          {getPageNumbers().map((item, index) =>
+            item === "..." ? (
+              <span key={`ellipsis-${index}`} className="por-pagination-ellipsis">
+                &hellip;
+              </span>
+            ) : (
+              <button
+                key={item}
+                type="button"
+                className={`por-pagination-num ${page === item ? "active" : ""}`}
+                disabled={loading}
+                onClick={() => setPage(item)}
+                aria-label={`Page ${item}`}
+                aria-current={page === item ? "page" : undefined}
+              >
+                {item}
+              </button>
+            )
+          )}
+
+          <button
+            type="button"
+            className="por-pagination-btn"
+            disabled={page >= effectiveTotalPages || loading || effectiveTotal === 0}
+            onClick={() => setPage((currentPage) => Math.min(effectiveTotalPages, currentPage + 1))}
+            aria-label="Next Page"
+          >
+            Next
+            <BsChevronRight size={12} />
+          </button>
+        </div>
       </div>
 
       {/* PURCHASE ORDER RETURN DETAILS MODAL / CARD */}

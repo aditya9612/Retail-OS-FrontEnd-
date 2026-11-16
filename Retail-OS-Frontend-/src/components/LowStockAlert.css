@@ -381,6 +381,7 @@
 .low-stock-badge,
 .critical-stock-badge,
 .out-of-stock-badge,
+.at-reorder-badge,
 .in-stock-badge {
   min-width: 70px;
   min-height: 22px;
@@ -437,6 +438,17 @@
   color: #dc2626;
 
   border-color: #fecaca;
+}
+
+/* =========================================================
+   AT REORDER
+========================================================= */
+
+.at-reorder-badge {
+  background: #eff6ff;
+  color: #1d4ed8;
+
+  border-color: #bfdbfe;
 }
 
 
@@ -662,6 +674,7 @@
   .low-stock-badge,
   .critical-stock-badge,
   .out-of-stock-badge,
+  .at-reorder-badge,
   .in-stock-badge {
     min-width: 66px;
     min-height: 21px;

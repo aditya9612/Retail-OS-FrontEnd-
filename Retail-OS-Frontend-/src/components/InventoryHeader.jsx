@@ -1,12 +1,4 @@
 import React from "react";
-
-import {
-    BsBoxArrowInDown,
-    BsBoxArrowUp,
-    BsArrowLeftRight,
-    BsPlus,
-} from "react-icons/bs";
-
 import "./InventoryHeader.css";
 
 const InventoryHeader = ({
@@ -19,25 +11,6 @@ const InventoryHeader = ({
     onAddProduct,
     onAddInventory,
 }) => {
-    const handleAddProduct = () => {
-        if (typeof onAddInventory === "function") {
-            onAddInventory();
-        } else if (typeof onAddProduct === "function") {
-            onAddProduct();
-        } else if (typeof setStockModal === "function") {
-            setStockModal({
-                name: "Add Inventory",
-                quantity: 0,
-                unit: "Pcs",
-                action: "add",
-            });
-        } else {
-            console.error(
-                "InventoryHeader: onAddProduct function is not provided."
-            );
-        }
-    };
-
     return (
         <div className="inventory-header">
 
@@ -53,92 +26,6 @@ const InventoryHeader = ({
                     </h1>
                 </div>
 
-                {/* RIGHT */}
-                <div className="inventory-header-right">
-
-                    {/* =========================
-                        ADD INVENTORY
-                    ========================= */}
-                    <button
-                        type="button"
-                        className="header-btn add-product-btn"
-                        title="Add Inventory"
-                        aria-label="Add Inventory"
-                        onClick={handleAddProduct}
-                    >
-                        <BsPlus
-                            className="add-product-icon"
-                            size={18}
-                            aria-hidden="true"
-                        />
-                    </button>
-
-                    {/* =========================
-                        STOCK IN
-                    ========================= */}
-                   <button
-    type="button"
-    className="header-btn stock-in-btn"
-    title="Stock In"
-    aria-label="Stock In"
-    onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        console.log("STOCK IN CLICK WORKING");
-
-        setStockModal({
-            name: "Stock In",
-            quantity: 0,
-            unit: "Pcs",
-            action: "add",
-        });
-    }}
->
-    <BsBoxArrowInDown />
-</button>
-
-                    {/* =========================
-                        STOCK OUT
-                    ========================= */}
-                    <button
-                        type="button"
-                        className="header-btn stock-out-btn"
-                        title="Stock Out"
-                        aria-label="Stock Out"
-                        onClick={() =>
-                            setStockModal({
-                                name: "Stock Out",
-                                quantity: 0,
-                                unit: "Pcs",
-                                action: "remove",
-                            })
-                        }
-                    >
-                        <BsBoxArrowUp />
-                    </button>
-
-                    {/* =========================
-                        TRANSFER
-                    ========================= */}
-                    <button
-                        type="button"
-                        className="header-btn transfer-btn"
-                        title="Transfer"
-                        aria-label="Transfer"
-                        onClick={() =>
-                            setStockModal({
-                                name: "Transfer",
-                                quantity: 0,
-                                unit: "Pcs",
-                                action: "transfer",
-                            })
-                        }
-                    >
-                        <BsArrowLeftRight />
-                    </button>
-
-                </div>
             </div>
 
             {/* =========================
@@ -164,48 +51,6 @@ const InventoryHeader = ({
 
                     <span className="tab-count">
                         {totalItems}
-                    </span>
-                </button>
-
-                {/* LOW STOCK */}
-                <button
-                    type="button"
-                    className={
-                        activeTab === "Low Stock"
-                            ? "active-tab"
-                            : ""
-                    }
-                    onClick={() =>
-                        setActiveTab("Low Stock")
-                    }
-                >
-                    <span>
-                        Low Stock
-                    </span>
-
-                    <span className="tab-count low">
-                        {lowStockCount}
-                    </span>
-                </button>
-
-                {/* OUT OF STOCK */}
-                <button
-                    type="button"
-                    className={
-                        activeTab === "Out of Stock"
-                            ? "active-tab"
-                            : ""
-                    }
-                    onClick={() =>
-                        setActiveTab("Out of Stock")
-                    }
-                >
-                    <span>
-                        Out of Stock
-                    </span>
-
-                    <span className="tab-count out">
-                        {outOfStockCount}
                     </span>
                 </button>
 

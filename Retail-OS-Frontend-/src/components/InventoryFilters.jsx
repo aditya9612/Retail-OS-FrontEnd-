@@ -2,8 +2,6 @@ import React from "react";
 import "./InventoryFilters.css";
 import {
   FiRotateCcw,
-  FiSearch,
-  FiDownload,
 } from "react-icons/fi";
 
 const InventoryFilters = ({
@@ -77,7 +75,9 @@ const InventoryFilters = ({
   ===================================================== */
 
   const handleReset = () => {
-    setSearch("");
+    if (typeof setSearch === "function") {
+      setSearch("");
+    }
     setFilterWarehouse("All Warehouses");
     setFilterCat("All Categories");
     setFilterSupplier("All Suppliers");
@@ -89,67 +89,11 @@ const InventoryFilters = ({
     }
   };
 
-  /* =====================================================
-     SEARCH
-  ===================================================== */
-
-  const handleSearch = () => {
-    if (typeof onSearch === "function") {
-      onSearch();
-    }
-  };
-
   return (
     <div className="inventory-filters">
       {/* =================================================
-          FIRST ROW
-          Search Product + Created Date
-      ================================================= */}
-
-      <div className="filters-row filters-row-top">
-        {/* Search Product */}
-
-        <div className="filter-group search-product-group">
-          <label htmlFor="inventory-search">
-            Search Product
-          </label>
-
-          <div className="inventory-search-input-wrap">
-            <FiSearch className="inventory-search-icon" size={15} />
-            <input
-              id="inventory-search"
-              type="text"
-              className="inventory-search-input"
-              placeholder="Search by Product Name / SKU / Barcode"
-              value={search}
-              onChange={(e) =>
-                setSearch(e.target.value)
-              }
-            />
-          </div>
-        </div>
-
-        {/* Created Date */}
-
-        <div className="filter-group created-date-group">
-          <label htmlFor="inventory-created-date">
-            Created Date
-          </label>
-
-          <input
-            id="inventory-created-date"
-            type="date"
-            value={filterDate}
-            onChange={(e) =>
-              setFilterDate(e.target.value)
-            }
-          />
-        </div>
-      </div>
-
-      {/* =================================================
-          SECOND ROW
-          Warehouse + Category + Supplier + Stock Status
+          FILTERS ROW
+          Warehouse + Category + Supplier + Stock Status + Created Date
       ================================================= */}
 
       <div className="filters-row filters-row-middle">
@@ -299,53 +243,53 @@ const InventoryFilters = ({
               Low Stock
             </option>
 
+            <option value="At Reorder">
+              At Reorder
+            </option>
+
             <option value="Out of Stock">
               Out of Stock
             </option>
           </select>
         </div>
-      </div>
 
-      {/* =================================================
-          THIRD ROW
-          ACTION BUTTONS
-      ================================================= */}
+        {/* =====================
+            Created Date
+        ===================== */}
 
-      <div className="filter-actions">
-        {/* Reset */}
+        <div className="filter-group created-date-group">
+          <label htmlFor="inventory-created-date">
+            Created Date
+          </label>
 
-        <button
-          type="button"
-          className="reset-btn"
-          onClick={handleReset}
-          title="Reset Filters"
-          aria-label="Reset Filters"
-        >
-          <FiRotateCcw size={18} />
-        </button>
+          <input
+            id="inventory-created-date"
+            type="date"
+            value={filterDate}
+            onChange={(e) =>
+              setFilterDate(e.target.value)
+            }
+          />
+        </div>
 
-        {/* Search */}
-
-        <button
-          type="button"
-          className="search-btn"
-          onClick={handleSearch}
-          title="Search"
-          aria-label="Search"
-        >
-          <FiSearch size={18} />
-        </button>
-
-        {/* Export */}
-
-        <button
-          type="button"
-          className="export-btn"
-          title="Export"
-          aria-label="Export"
-        >
-          <FiDownload size={18} />
-        </button>
+        {/* =====================
+            Reset Action
+        ===================== */}
+        <div className="filter-group filter-action-group">
+          <label className="filter-action-label" aria-hidden="true">
+            &nbsp;
+          </label>
+          <button
+            type="button"
+            className="reset-btn"
+            onClick={handleReset}
+            title="Reset Filters"
+            aria-label="Reset Filters"
+          >
+            <FiRotateCcw size={14} />
+            <span>Reset</span>
+          </button>
+        </div>
       </div>
     </div>
   );

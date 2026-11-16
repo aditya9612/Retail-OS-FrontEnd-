@@ -1,4 +1,20 @@
-import { createGRN, getGRNs, getGRNById, getGRNByNumber, getGRNStats, exportGRNs, deleteGRN, qualityCheckGRN, receiveGRN, rejectGRN, getGRNHistory, downloadGRNPdf, getGRNPrintSlip } from "../api/grnApi";
+import {
+  createGRN,
+  getGRNs,
+  getGRNById,
+  getGRNByNumber,
+  getGRNStats,
+  exportGRNs,
+  deleteGRN,
+  qualityCheckGRN,
+  receiveGRN,
+  rejectGRN,
+  printGRN,
+  getPurchaseOrderGRNs,
+  getGRNHistory,
+  downloadGRNPdf,
+  getGRNPrintSlip,
+} from "../api/grnApi";
 
 export const grnService = {
   createGRN,
@@ -24,6 +40,10 @@ export const grnService = {
   receive: receiveGRN,
   rejectGRN,
   reject: rejectGRN,
+  printGRN,
+  printGrnDoc: printGRN,
+  getPurchaseOrderGRNs,
+  getPoGrns: getPurchaseOrderGRNs,
   getGRNHistory,
   getHistory: getGRNHistory,
   history: getGRNHistory,
@@ -36,6 +56,22 @@ export const grnService = {
   printSlip: getGRNPrintSlip,
 };
 
-export { createGRN, getGRNs, getGRNById, getGRNByNumber, getGRNStats, exportGRNs, deleteGRN, qualityCheckGRN, receiveGRN, rejectGRN, getGRNHistory, downloadGRNPdf, getGRNPrintSlip };
-export default grnService;
+export {
+  createGRN,
+  getGRNs,
+  getGRNById,
+  getGRNByNumber,
+  getGRNStats,
+  exportGRNs,
+  deleteGRN,
+  qualityCheckGRN,
+  receiveGRN,
+  rejectGRN,
+  printGRN,
+  getPurchaseOrderGRNs,
+  getGRNHistory,
+  downloadGRNPdf,
+  getGRNPrintSlip,
+};
 
+export default grnService;
