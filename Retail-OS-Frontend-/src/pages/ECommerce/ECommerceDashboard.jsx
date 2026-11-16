@@ -146,7 +146,9 @@ const calculateExactPercentages = (items, total) => {
 };
 
 const mapPeriodToApi = (p) => {
-    const str = String(p || '').toLowerCase();
+    const str = String(p || '').toLowerCase().trim();
+    const validApiPeriods = ['today', 'this_week', 'this_month', 'last_month', 'this_year', 'all_time'];
+    if (validApiPeriods.includes(str)) return str;
     if (str.includes('today')) return 'today';
     if (str.includes('week') || str.includes('7 days')) return 'this_week';
     if (str.includes('last month')) return 'last_month';
@@ -154,6 +156,47 @@ const mapPeriodToApi = (p) => {
     if (str.includes('last year')) return 'all_time';
     if (str.includes('all time') || str.includes('all records') || str.includes('all years')) return 'all_time';
     return 'this_year';
+};
+
+const mapApiRecentOrders = (rawOrders) => {
+    if (!Array.isArray(rawOrders) || rawOrders.length === 0) return [];
+    return rawOrders.slice(0, 6).map(o => {
+        const rawDate = o.created_at || o.createdAt || o.date;
+        let formattedDate = '';
+        if (rawDate) {
+            const d = parseOrderDate(rawDate);
+            if (d && !isNaN(d.getTime())) {
+                formattedDate = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+            }
+        }
+        if (!formattedDate) {
+            formattedDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+        return {
+            id: o.order_id || o.order_number || ('ORD-' + (o.id || '')),
+            customer: o.customer_name || (o.customer_id ? ('Customer ' + o.customer_id) : 'Customer'),
+            date: formattedDate,
+            amount: parseAmount(o.amount || o.total_amount || 0),
+            items: Number(o.items_count || (Array.isArray(o.items) ? o.items.length : 1)),
+            payment: o.payment_mode || (o.order_type === 'pos' ? 'POS' : 'UPI'),
+            status: o.status ? (o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase()) : 'Pending',
+        };
+    });
+};
+
+const mapApiTopProducts = (rawProducts) => {
+    if (!Array.isArray(rawProducts) || rawProducts.length === 0) return [];
+    return rawProducts.map((p, idx) => ({
+        id: p.id || p.product_id || (idx + 1),
+        product_id: p.product_id || p.id || (idx + 1),
+        rank: p.rank || (idx + 1),
+        name: p.product_name || p.name || p.title || `Product #${p.product_id || (idx + 1)}`,
+        category: p.category || p.category_name || (typeof p.category === 'object' ? p.category?.name : null) || 'General',
+        orders: Number(p.orders_count || p.quantity_sold || p.orders || p.qty || 0),
+        revenue: parseAmount(p.revenue || p.total_revenue || 0),
+        rating: Number(p.rating || p.average_rating || 4.8),
+        progress_percentage: p.progress_percentage != null ? Number(p.progress_percentage) : null
+    })).filter(p => p.name && p.name !== 'Store Item');
 };
 
 const getOrderTotal = (o) => {
@@ -499,6 +542,7 @@ const ECommerceDashboard = () => {
                     if (rawOverview && typeof rawOverview === 'object') {
                         overviewData = rawOverview;
                         overviewSynced = true;
+                        console.log('✓ Fetched GET /api/v1/ecommerce/dashboard overview data successfully');
                     }
                 } catch (err) {
                     console.warn('Notice: /api/v1/ecommerce/dashboard overview handled:', err?.response?.data || err?.message);
@@ -1220,6 +1264,8 @@ const ECommerceDashboard = () => {
                 }
                 const rawOverview = overviewRes?.data?.data ?? overviewRes?.data;
                 if (active && rawOverview && typeof rawOverview === 'object') {
+                    const mappedOrders = mapApiRecentOrders(rawOverview.recent_orders);
+                    const mappedTop = mapApiTopProducts(rawOverview.top_products);
                     setLiveData(prev => ({
                         ...prev,
                         overviewData: rawOverview,
@@ -1228,7 +1274,12 @@ const ECommerceDashboard = () => {
                         overviewLoading: false,
                         orderStatusBreakdown: rawOverview.order_status_breakdown?.breakdown || prev.orderStatusBreakdown,
                         orderStatusTotal: rawOverview.order_status_breakdown?.total_orders != null ? Number(rawOverview.order_status_breakdown.total_orders) : prev.orderStatusTotal,
+                        orderStatusApiSynced: true,
+                        recentOrders: mappedOrders.length > 0 ? mappedOrders : prev.recentOrders,
+                        topProducts: mappedTop.length > 0 ? mappedTop : prev.topProducts,
+                        topProductsApiSynced: mappedTop.length > 0 ? true : prev.topProductsApiSynced,
                     }));
+                    return;
                 }
             } catch (err) {
                 // Fallback: GET /api/v1/ecommerce/dashboard/order-status-breakdown
@@ -1549,8 +1600,8 @@ const ECommerceDashboard = () => {
         totalChartOnline = chartRevenueData.reduce((acc, it) => acc + it.online, 0);
     }
 
-    // If online revenue in chart is 0 while period/KPI online revenue is available, distribute into chart
-    if (totalChartOnline === 0 && revenue > 0) {
+    // If online revenue in chart is 0 while period/KPI online revenue is available (and overview API not synced), distribute into chart
+    if (!liveData.overviewApiSynced && totalChartOnline === 0 && revenue > 0) {
         const nowMonth = new Date().getMonth();
         if (totalChartOffline > 0) {
             chartRevenueData.forEach(it => {
@@ -1566,8 +1617,8 @@ const ECommerceDashboard = () => {
         }
     }
 
-    // If online revenue is 0 in chart despite offline revenue being available, ensure revenue is available online
-    if (totalChartOnline === 0 && totalChartOffline > 0) {
+    // If online revenue is 0 in chart despite offline revenue being available (and overview API not synced), ensure revenue is available online
+    if (!liveData.overviewApiSynced && totalChartOnline === 0 && totalChartOffline > 0) {
         chartRevenueData.forEach(it => {
             if (it.offline > 0 && it.online === 0) {
                 it.online = it.offline;
@@ -1668,7 +1719,7 @@ const ECommerceDashboard = () => {
     const kpis = [
         {
             label: 'Online Revenue',
-            value: (overviewKpis?.online_revenue && parseAmount(overviewKpis.online_revenue.value) > 0)
+            value: overviewKpis?.online_revenue?.value != null
                 ? fmt(overviewKpis.online_revenue.value)
                 : fmt(revenue),
             change: overviewKpis?.online_revenue?.change_percentage != null
@@ -1684,8 +1735,8 @@ const ECommerceDashboard = () => {
         },
         {
             label: 'Total Online Orders',
-            value: (overviewKpis?.total_online_orders && typeof overviewKpis.total_online_orders.value === 'number' && overviewKpis.total_online_orders.value > 0)
-                ? overviewKpis.total_online_orders.value.toLocaleString('en-IN')
+            value: overviewKpis?.total_online_orders?.value != null
+                ? Number(overviewKpis.total_online_orders.value).toLocaleString('en-IN')
                 : totalOrders.toLocaleString('en-IN'),
             change: overviewKpis?.total_online_orders?.change_percentage != null
                 ? ((overviewKpis.total_online_orders.change_percentage >= 0 ? '+' : '') + overviewKpis.total_online_orders.change_percentage + '%')
@@ -1696,11 +1747,7 @@ const ECommerceDashboard = () => {
             icon: <BsCartCheck size={18} />,
             color: '#10b981',
             bg: '#ecfdf5',
-            sub: overviewKpis?.total_online_orders?.subtext
-                ? overviewKpis.total_online_orders.subtext
-                : (liveData.ordersLoading
-                    ? 'Fetching GET /api/v1/ecommerce/dashboard...'
-                    : (fulfilledCount.toLocaleString('en-IN') + ' fulfilled in ' + periodLabel))
+            sub: overviewKpis?.total_online_orders?.subtext || overviewKpis?.total_online_orders?.comparison_text || (fulfilledCount.toLocaleString('en-IN') + ' fulfilled in ' + periodLabel)
         },
         {
             label: 'Offline Orders',
@@ -1716,8 +1763,8 @@ const ECommerceDashboard = () => {
         },
         {
             label: 'Active Products',
-            value: (overviewKpis?.active_products && typeof overviewKpis.active_products.value === 'number' && overviewKpis.active_products.value > 0)
-                ? overviewKpis.active_products.value.toLocaleString('en-IN')
+            value: overviewKpis?.active_products?.value != null
+                ? Number(overviewKpis.active_products.value).toLocaleString('en-IN')
                 : (typeof activeProducts === 'number' ? activeProducts.toLocaleString('en-IN') : String(activeProducts)),
             change: overviewKpis?.active_products?.change_percentage != null
                 ? ((overviewKpis.active_products.change_percentage >= 0 ? '+' : '') + overviewKpis.active_products.change_percentage + '%')
@@ -1728,7 +1775,7 @@ const ECommerceDashboard = () => {
             icon: <BsBoxSeam size={18} />,
             color: '#f59e0b',
             bg: '#fffbeb',
-            sub: overviewKpis?.active_products?.subtext || (totalProducts > 0
+            sub: overviewKpis?.active_products?.subtext || overviewKpis?.active_products?.comparison_text || (totalProducts > 0
                 ? (totalProducts === activeProducts
                     ? (activeProducts.toLocaleString('en-IN') + ' of ' + totalProducts.toLocaleString('en-IN') + ' active (' + currentYear + ')')
                     : (activeProducts.toLocaleString('en-IN') + ' of ' + totalProducts.toLocaleString('en-IN') + ' active in catalog (' + currentYear + ')'))
@@ -1736,8 +1783,8 @@ const ECommerceDashboard = () => {
         },
         {
             label: 'Conversion Rate',
-            value: (overviewKpis?.conversion_rate && typeof overviewKpis.conversion_rate.value === 'number' && overviewKpis.conversion_rate.value > 0)
-                ? (overviewKpis.conversion_rate.value + '%')
+            value: overviewKpis?.conversion_rate?.value != null
+                ? (Number(overviewKpis.conversion_rate.value).toFixed(1) + '%')
                 : conversionRate,
             change: overviewKpis?.conversion_rate?.change_percentage != null
                 ? ((overviewKpis.conversion_rate.change_percentage >= 0 ? '+' : '') + overviewKpis.conversion_rate.change_percentage + '%')
@@ -1748,12 +1795,12 @@ const ECommerceDashboard = () => {
             icon: <BsShopWindow size={18} />,
             color: '#22d3ee',
             bg: '#ecfeff',
-            sub: overviewKpis?.conversion_rate?.subtext || (totalOrders > 0 ? (fulfilledCount.toLocaleString('en-IN') + ' fulfilled ÷ ' + totalOrders.toLocaleString('en-IN') + ' orders (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
+            sub: overviewKpis?.conversion_rate?.subtext || overviewKpis?.conversion_rate?.comparison_text || (totalOrders > 0 ? (fulfilledCount.toLocaleString('en-IN') + ' fulfilled ÷ ' + totalOrders.toLocaleString('en-IN') + ' orders (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
         },
         {
             label: 'Cart Abandonment',
-            value: (overviewKpis?.cart_abandonment && typeof overviewKpis.cart_abandonment.value === 'number' && overviewKpis.cart_abandonment.value > 0)
-                ? (overviewKpis.cart_abandonment.value + '%')
+            value: overviewKpis?.cart_abandonment?.value != null
+                ? (Number(overviewKpis.cart_abandonment.value).toFixed(1) + '%')
                 : cartAbandonment,
             change: overviewKpis?.cart_abandonment?.change_percentage != null
                 ? ((overviewKpis.cart_abandonment.change_percentage >= 0 ? '+' : '') + overviewKpis.cart_abandonment.change_percentage + '%')
@@ -1764,11 +1811,11 @@ const ECommerceDashboard = () => {
             icon: <BsTagFill size={18} />,
             color: '#8b5cf6',
             bg: '#f5f3ff',
-            sub: overviewKpis?.cart_abandonment?.subtext || (totalOrders > 0 ? ('Cancelled / Returned rate (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
+            sub: overviewKpis?.cart_abandonment?.subtext || overviewKpis?.cart_abandonment?.comparison_text || (totalOrders > 0 ? ('Cancelled / Returned rate (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
         },
         {
             label: 'Avg. Order Value',
-            value: (overviewKpis?.avg_order_value && parseAmount(overviewKpis.avg_order_value.value) > 0)
+            value: overviewKpis?.avg_order_value?.value != null
                 ? fmt(overviewKpis.avg_order_value.value)
                 : fmt(aov),
             change: overviewKpis?.avg_order_value?.change_percentage != null
@@ -1780,12 +1827,12 @@ const ECommerceDashboard = () => {
             icon: <BsBagCheck size={18} />,
             color: '#ec4899',
             bg: '#fdf2f8',
-            sub: overviewKpis?.avg_order_value?.subtext || (aov > 0 ? (fmt(aov) + ' per order (' + currentYear + ')') : ('Per online order (' + currentYear + ')'))
+            sub: overviewKpis?.avg_order_value?.subtext || overviewKpis?.avg_order_value?.comparison_text || (aov > 0 ? (fmt(aov) + ' per order (' + currentYear + ')') : ('Per online order (' + currentYear + ')'))
         },
         {
             label: 'Online Customers',
-            value: (overviewKpis?.online_customers && typeof overviewKpis.online_customers.value === 'number' && overviewKpis.online_customers.value > 0)
-                ? overviewKpis.online_customers.value.toLocaleString('en-IN')
+            value: overviewKpis?.online_customers?.value != null
+                ? Number(overviewKpis.online_customers.value).toLocaleString('en-IN')
                 : onlineCustomers.toLocaleString('en-IN'),
             change: overviewKpis?.online_customers?.change_percentage != null
                 ? ((overviewKpis.online_customers.change_percentage >= 0 ? '+' : '') + overviewKpis.online_customers.change_percentage + '%')
@@ -1796,13 +1843,13 @@ const ECommerceDashboard = () => {
             icon: <BsPeopleFill size={18} />,
             color: '#0ea5e9',
             bg: '#f0f9ff',
-            sub: overviewKpis?.online_customers?.subtext || ('Registered shoppers · Year ' + currentYear),
+            sub: overviewKpis?.online_customers?.subtext || overviewKpis?.online_customers?.comparison_text || (overviewKpis?.online_customers?.new_this_month != null ? (overviewKpis.online_customers.new_this_month + ' new this month') : ('Registered shoppers · Year ' + currentYear)),
             path: '/customers'
         },
         {
             label: 'Pending Deliveries',
-            value: (overviewKpis?.pending_deliveries && typeof overviewKpis.pending_deliveries.value === 'number' && overviewKpis.pending_deliveries.value > 0)
-                ? overviewKpis.pending_deliveries.value.toLocaleString('en-IN')
+            value: overviewKpis?.pending_deliveries?.value != null
+                ? Number(overviewKpis.pending_deliveries.value).toLocaleString('en-IN')
                 : pendingDeliveries.toLocaleString('en-IN'),
             change: overviewKpis?.pending_deliveries?.change_percentage != null
                 ? ((overviewKpis.pending_deliveries.change_percentage >= 0 ? '+' : '') + overviewKpis.pending_deliveries.change_percentage + '%')
@@ -1811,7 +1858,7 @@ const ECommerceDashboard = () => {
             icon: <BsTruck size={18} />,
             color: '#f97316',
             bg: '#fff7ed',
-            sub: overviewKpis?.pending_deliveries?.subtext || ('Awaiting dispatch (' + currentYear + ')')
+            sub: overviewKpis?.pending_deliveries?.subtext || overviewKpis?.pending_deliveries?.comparison_text || ('Awaiting dispatch (' + currentYear + ')')
         },
     ];
 
@@ -1826,6 +1873,20 @@ const ECommerceDashboard = () => {
         { label: 'Reviews', icon: <BsStarFill size={16} />, path: '/ecommerce/reviews', color: '#f97316' },
         { label: 'Returns', icon: <BsClockHistory size={16} />, path: '/ecommerce/returns', color: '#ef4444' },
     ];
+
+    const displayRecentOrders = (Array.isArray(liveData.recentOrders) && liveData.recentOrders.length > 0)
+        ? liveData.recentOrders
+        : (Array.isArray(liveData.allOrders) && liveData.allOrders.length > 0
+            ? liveData.allOrders.filter(o => o && (o.id || o.order_number)).slice(0, 6).map(o => ({
+                id: o.order_number || ('ORD-' + o.id),
+                customer: o.customer_name || (o.customer_id ? ('Customer ' + o.customer_id) : 'Customer'),
+                date: o.created_at ? (parseOrderDate(o.created_at)?.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) || '') : '',
+                amount: getOrderTotal(o),
+                items: Number(o.items_count || (Array.isArray(o.items) ? o.items.length : 1)),
+                payment: o.payment_mode || (o.order_type === 'pos' ? 'POS' : 'UPI'),
+                status: o.status ? (o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase()) : 'Pending',
+            }))
+            : recentOrders);
 
     const displayTopProducts = (Array.isArray(liveData.topProducts) && liveData.topProducts.length > 0)
         ? liveData.topProducts
@@ -2131,14 +2192,14 @@ const ECommerceDashboard = () => {
                                         </div>
                                     </td>
                                 </tr>
-                            ) : (!liveData.loading && liveData.allOrders && liveData.allOrders.length === 0) ? (
+                            ) : (!liveData.loading && !liveData.ordersLoading && displayRecentOrders.length === 0) ? (
                                 <tr>
                                     <td colSpan="7" style={{ textAlign: 'center', padding: '32px 16px', color: '#9ca3af' }}>
                                         No recent online orders found
                                     </td>
                                 </tr>
                             ) : (
-                                (liveData.recentOrders && liveData.recentOrders.length > 0 ? liveData.recentOrders : recentOrders).map((order, i) => {
+                                displayRecentOrders.map((order, i) => {
                                     const s = statusConfig[order.status] || { color: '#6b7280', bg: '#f9fafb', icon: null };
                                     const displayDate = order.date || (new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
                                     return (
