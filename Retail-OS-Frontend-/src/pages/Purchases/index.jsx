@@ -569,7 +569,7 @@ const PurchaseFormModal = ({
                 <option value="">-- Select Store --</option>
                 {stores.map((s) => (
                   <option key={s.id} value={String(s.id)}>
-                    {s.name || s.store_name || `Store #${s.id}`} (Store ID: {s.id})
+                    {s.name || s.store_name || `Store #${s.id}`}
                   </option>
                 ))}
               </select>
@@ -581,7 +581,7 @@ const PurchaseFormModal = ({
                 onChange={(e) =>
                   set("storeId", e.target.value)
                 }
-                placeholder="Enter Store ID"
+                placeholder="Enter Store"
               />
             )}
           </div>
@@ -852,7 +852,7 @@ const PurchaseFormModal = ({
             {isNew ? (
               <>
                 <BsPlus size={16} />
-                Create Purchase
+                Save Purchase
               </>
             ) : (
               <>
