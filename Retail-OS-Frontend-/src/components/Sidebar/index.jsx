@@ -78,7 +78,7 @@ export const menuGroups = [
         id: 'inventory',
         label: 'INVENTORY',
         items: [
-            { name: 'Stock', icon: <BsBoxes />, path: '/inventory' },
+            { name: 'Stock', icon: <BsBoxes />, path: '/inventory', aliasPaths: ['/inventory/dashboard', '/inventory/stock'] },
             { name: 'Warehouses', icon: <BsBuilding />, path: '/inventory/warehouses' },
             { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases' },
             { name: 'Suppliers', icon: <BsTruck />, path: '/suppliers' },

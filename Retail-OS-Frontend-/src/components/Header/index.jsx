@@ -33,7 +33,13 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const location = useLocation();
     const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
     const isStoreTransfers = location.pathname === '/inventory/store-transfers' || location.pathname.startsWith('/inventory/store-transfers/');
-    const hideSearch = isDashboard || isStoreTransfers;
+    const isWarehouses = location.pathname === '/inventory/warehouses' || location.pathname.startsWith('/inventory/warehouses/') || location.pathname === '/warehouses' || location.pathname.startsWith('/warehouses/');
+    const isPurchases = location.pathname === '/purchases' || location.pathname.startsWith('/purchases/') || location.pathname === '/inventory/purchases' || location.pathname.startsWith('/inventory/purchases/');
+    const isSuppliers = location.pathname === '/suppliers' || location.pathname.startsWith('/suppliers/') || location.pathname === '/inventory/suppliers' || location.pathname.startsWith('/inventory/suppliers/');
+    const isGRN = location.pathname === '/inventory/grn' || location.pathname.startsWith('/inventory/grn/') || location.pathname === '/grn' || location.pathname.startsWith('/grn/');
+    const isPurchaseReturns = location.pathname === '/inventory/purchase-returns' || location.pathname.startsWith('/inventory/purchase-returns/') || location.pathname === '/purchase-order-returns' || location.pathname.startsWith('/purchase-order-returns/') || location.pathname === '/returns' || location.pathname.startsWith('/returns/');
+    const isInventoryStock = location.pathname === '/inventory' || location.pathname === '/inventory/' || location.pathname === '/inventory/dashboard' || location.pathname === '/inventory/stock' || location.pathname === '/stock';
+    const hideSearch = isDashboard || isStoreTransfers || isWarehouses || isPurchases || isSuppliers || isGRN || isPurchaseReturns || isInventoryStock;
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);

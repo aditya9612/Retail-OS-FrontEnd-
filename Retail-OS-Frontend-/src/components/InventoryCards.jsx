@@ -56,7 +56,20 @@ const InventoryCards = ({
                 >
                     <div className="inventory-card-content">
                         <h3>{card.title}</h3>
-                        <h2>{card.value}</h2>
+                        <h2
+                            style={
+                                card.type === "value"
+                                    ? {
+                                          fontSize:
+                                              String(card.value || "").length >= 14
+                                                  ? "clamp(12px, 0.95vw + 1px, 15px)"
+                                                  : "clamp(13px, 1.05vw + 1px, 18px)",
+                                      }
+                                    : undefined
+                            }
+                        >
+                            {card.value}
+                        </h2>
                     </div>
                 </div>
             ))}

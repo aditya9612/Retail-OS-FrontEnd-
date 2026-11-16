@@ -34,6 +34,7 @@
 ========================================================= */
 
 .inventory-table-container::-webkit-scrollbar {
+  width: 8px;
   height: 10px;
 }
 
@@ -312,8 +313,300 @@
 
 .inventory-table th:nth-child(14),
 .inventory-table td:nth-child(14) {
-  min-width: 160px;
-  width: 160px;
+  min-width: 175px;
+  width: 175px;
+  text-align: center;
+}
+
+/* =========================================================
+   ACTION BUTTONS & TOOLTIPS
+   Stock In / Stock Out / Transfer / Adjust Stock
+========================================================= */
+
+.inventory-actions-cell {
+  padding: 8px 10px !important;
+  vertical-align: middle;
+  text-align: center;
+  position: relative;
+  overflow: visible !important;
+}
+
+.inventory-action-buttons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  position: relative;
+  overflow: visible !important;
+}
+
+.inventory-action-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  cursor: pointer;
+  box-sizing: border-box;
+  visibility: visible;
+  opacity: 1;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.15s ease;
+}
+
+.inventory-action-btn svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+  flex-shrink: 0;
+  pointer-events: none;
+  stroke-width: 2;
+}
+
+/* Specific Action Button Colors & Hover Highlights */
+
+/* 1. Add Inventory - Indigo / Purple */
+.inventory-action-add {
+  color: #4f46e5;
+  border-color: #c7d2fe;
+  background: #ffffff;
+}
+
+.inventory-action-add:hover {
+  color: #4338ca;
+  background: #eef2ff;
+  border-color: #a5b4fc;
+  box-shadow: 0 3px 8px rgba(79, 70, 229, 0.15);
+  transform: translateY(-1px);
+}
+
+/* 2. Stock In - Emerald / Green */
+.inventory-action-stock-in {
+  color: #059669;
+  border-color: #d1fae5;
+  background: #ffffff;
+}
+
+.inventory-action-stock-in:hover {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  box-shadow: 0 3px 8px rgba(16, 185, 129, 0.15);
+  transform: translateY(-1px);
+}
+
+/* 3. Stock Out - Red */
+.inventory-action-stock-out {
+  color: #dc2626;
+  border-color: #fee2e2;
+  background: #ffffff;
+}
+
+.inventory-action-stock-out:hover {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fca5a5;
+  box-shadow: 0 3px 8px rgba(220, 38, 38, 0.15);
+  transform: translateY(-1px);
+}
+
+/* 4. Transfer - Cyan / Sky */
+.inventory-action-transfer {
+  color: #0284c7;
+  border-color: #bae6fd;
+  background: #ffffff;
+}
+
+.inventory-action-transfer:hover {
+  color: #0369a1;
+  background: #f0f9ff;
+  border-color: #7dd3fc;
+  box-shadow: 0 3px 8px rgba(2, 132, 199, 0.15);
+  transform: translateY(-1px);
+}
+
+/* View & History secondary buttons if present */
+.inventory-action-view,
+.inventory-action-history {
+  color: #64748b;
+  border-color: #e2e8f0;
+  background: #ffffff;
+}
+
+.inventory-action-view:hover,
+.inventory-action-history:hover {
+  color: #0f172a;
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.inventory-action-btn:active {
+  transform: translateY(0);
+}
+
+.inventory-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+/* =========================================================
+   TOOLTIPS - GUARANTEED VISIBILITY & NO CLIPPING
+========================================================= */
+
+.inventory-action-btn:hover,
+.inventory-action-btn:focus-visible {
+  z-index: 60;
+}
+
+.inventory-table tbody tr:hover {
+  position: relative;
+  z-index: 30;
+}
+
+/* Tooltip bubble (default: opens upwards) */
+.inventory-action-btn[aria-label]::after {
+  content: attr(aria-label);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  transform: translateX(-50%) translateY(3px);
+  padding: 5px 8px;
+  background: #0f172a;
+  color: #ffffff;
+  border-radius: 6px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 99999;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
+  transition:
+    opacity 0.15s ease,
+    visibility 0.15s ease,
+    transform 0.15s ease;
+}
+
+/* Tooltip caret / arrow */
+.inventory-action-btn[aria-label]::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 2px);
+  transform: translateX(-50%);
+  border-width: 5px 5px 0 5px;
+  border-style: solid;
+  border-color: #0f172a transparent transparent transparent;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 99999;
+  transition:
+    opacity 0.15s ease,
+    visibility 0.15s ease;
+}
+
+/* Show tooltip on hover or keyboard focus */
+.inventory-action-btn[aria-label]:hover::after,
+.inventory-action-btn[aria-label]:hover::before,
+.inventory-action-btn[aria-label]:focus-visible::after,
+.inventory-action-btn[aria-label]:focus-visible::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+.inventory-action-btn[aria-label]:hover::after,
+.inventory-action-btn[aria-label]:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+/* First 2 rows: open downward to avoid clipping by sticky table headers */
+.inventory-table tbody tr:nth-child(-n+2) .inventory-action-btn[aria-label]::after {
+  bottom: auto;
+  top: calc(100% + 7px);
+  transform: translateX(-50%) translateY(-3px);
+}
+
+.inventory-table tbody tr:nth-child(-n+2) .inventory-action-btn[aria-label]:hover::after,
+.inventory-table tbody tr:nth-child(-n+2) .inventory-action-btn[aria-label]:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+.inventory-table tbody tr:nth-child(-n+2) .inventory-action-btn[aria-label]::before {
+  bottom: auto;
+  top: calc(100% + 2px);
+  border-width: 0 5px 5px 5px;
+  border-color: transparent transparent #0f172a transparent;
+}
+
+/* Last button in action group: align tooltip to right to avoid horizontal overflow */
+.inventory-action-buttons .inventory-action-btn:last-child[aria-label]::after {
+  left: auto;
+  right: 0;
+  transform: translateY(3px);
+}
+
+.inventory-action-buttons .inventory-action-btn:last-child[aria-label]:hover::after,
+.inventory-action-buttons .inventory-action-btn:last-child[aria-label]:focus-visible::after {
+  transform: translateY(0);
+}
+
+.inventory-action-buttons .inventory-action-btn:last-child[aria-label]::before {
+  left: auto;
+  right: 10px;
+  transform: none;
+}
+
+.inventory-table tbody tr:nth-child(-n+2) .inventory-action-buttons .inventory-action-btn:last-child[aria-label]::after {
+  transform: translateY(-3px);
+}
+
+.inventory-table tbody tr:nth-child(-n+2) .inventory-action-buttons .inventory-action-btn:last-child[aria-label]:hover::after,
+.inventory-table tbody tr:nth-child(-n+2) .inventory-action-buttons .inventory-action-btn:last-child[aria-label]:focus-visible::after {
+  transform: translateY(0);
+}
+
+/* First button in action group: align tooltip to left */
+.inventory-action-buttons .inventory-action-btn:first-child[aria-label]::after {
+  left: 0;
+  transform: translateY(3px);
+}
+
+.inventory-action-buttons .inventory-action-btn:first-child[aria-label]:hover::after,
+.inventory-action-buttons .inventory-action-btn:first-child[aria-label]:focus-visible::after {
+  transform: translateY(0);
+}
+
+.inventory-action-buttons .inventory-action-btn:first-child[aria-label]::before {
+  left: 10px;
+  transform: none;
+}
+
+.inventory-table tbody tr:nth-child(-n+2) .inventory-action-buttons .inventory-action-btn:first-child[aria-label]::after {
+  transform: translateY(-3px);
+}
+
+.inventory-table tbody tr:nth-child(-n+2) .inventory-action-buttons .inventory-action-btn:first-child[aria-label]:hover::after,
+.inventory-table tbody tr:nth-child(-n+2) .inventory-action-buttons .inventory-action-btn:first-child[aria-label]:focus-visible::after {
+  transform: translateY(0);
 }
 
 

@@ -2,11 +2,15 @@ import React from "react";
 import "./InventoryTable.css";
 
 import {
+  PackagePlus,
+  PackageMinus,
+  ArrowLeftRight,
+} from "lucide-react";
+
+import {
   BsBoxSeam,
   BsEye,
   BsClockHistory,
-  BsSliders,
-  BsPencil,
 } from "react-icons/bs";
 
 const MRP_FIELD_NAMES = [
@@ -496,24 +500,8 @@ const isMissingRequiredExpiry =
             let st;
             if (typeof stockStatus === "function") {
               st = stockStatus(item);
-            } else if (qty <= 0) {
-              st = {
-                label: "Out of Stock",
-                color: "#dc2626",
-                bg: "#fef2f2",
-              };
-            } else if (item?.is_low_stock || (minStock > 0 && qty <= minStock)) {
-              st = {
-                label: "Low Stock",
-                color: "#d97706",
-                bg: "#fffbeb",
-              };
             } else {
-              st = {
-                label: "In Stock",
-                color: "#059669",
-                bg: "#ecfdf5",
-              };
+              st = calculateStockStatus(item);
             }
 
             /* =====================================================
@@ -671,7 +659,7 @@ const isMissingRequiredExpiry =
 
                     {qty > 0 &&
                       minStock > 0 &&
-                      qty <= minStock && (
+                      qty < minStock && (
                         <div
                           style={{
                             fontSize: 11,
@@ -679,6 +667,18 @@ const isMissingRequiredExpiry =
                           }}
                         >
                           Below Min
+                        </div>
+                      )}
+                    {qty > 0 &&
+                      minStock > 0 &&
+                      qty === minStock && (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "#2563eb",
+                          }}
+                        >
+                          At Reorder
                         </div>
                       )}
                   </div>
@@ -796,53 +796,81 @@ const isMissingRequiredExpiry =
                 ================================================= */}
                 <td className="inventory-actions-cell">
                   <div className="inventory-action-buttons">
+                    {/* 1. Add Inventory */}
                     <button
                       type="button"
-                      className="inventory-action-btn inventory-action-update"
-                      title="Update Stock"
-                      aria-label="Update Stock"
+                      className="inventory-action-btn inventory-action-add"
+                      title="Add Inventory"
+                      aria-label="Add Inventory"
                       onClick={() => {
                         if (typeof setStockModal === "function") {
-                          setStockModal(item);
+                          setStockModal({
+                            ...item,
+                            name: "Add Inventory",
+                            action: "add",
+                          });
                         }
                       }}
                     >
-                      <BsPencil size={12} />
-                      <span>Update</span>
+                      <PackagePlus size={15} />
                     </button>
-                    {onView && (
-                      <button
-                        type="button"
-                        className="inventory-action-btn inventory-action-view"
-                        title="View Details"
-                        aria-label="View Details"
-                        onClick={() => onView(item)}
-                      >
-                        <BsEye size={12} />
-                      </button>
-                    )}
-                    {onHistory && (
-                      <button
-                        type="button"
-                        className="inventory-action-btn inventory-action-history"
-                        title="Movement History"
-                        aria-label="Movement History"
-                        onClick={() => onHistory(item)}
-                      >
-                        <BsClockHistory size={12} />
-                      </button>
-                    )}
-                    {onAdjust && (
-                      <button
-                        type="button"
-                        className="inventory-action-btn inventory-action-adjust"
-                        title="Adjust Inventory"
-                        aria-label="Adjust Inventory"
-                        onClick={() => onAdjust(item)}
-                      >
-                        <BsSliders size={12} />
-                      </button>
-                    )}
+
+                    {/* 2. Stock In */}
+                    <button
+                      type="button"
+                      className="inventory-action-btn inventory-action-stock-in"
+                      title="Stock In"
+                      aria-label="Stock In"
+                      onClick={() => {
+                        if (typeof setStockModal === "function") {
+                          setStockModal({
+                            ...item,
+                            name: "Stock In",
+                            action: "add",
+                          });
+                        }
+                      }}
+                    >
+                      <PackagePlus size={15} />
+                    </button>
+
+                    {/* 3. Stock Out */}
+                    <button
+                      type="button"
+                      className="inventory-action-btn inventory-action-stock-out"
+                      title="Stock Out"
+                      aria-label="Stock Out"
+                      onClick={() => {
+                        if (typeof setStockModal === "function") {
+                          setStockModal({
+                            ...item,
+                            name: "Stock Out",
+                            action: "remove",
+                          });
+                        }
+                      }}
+                    >
+                      <PackageMinus size={15} />
+                    </button>
+
+                    {/* 4. Transfer */}
+                    <button
+                      type="button"
+                      className="inventory-action-btn inventory-action-transfer"
+                      title="Transfer"
+                      aria-label="Transfer"
+                      onClick={() => {
+                        if (typeof setStockModal === "function") {
+                          setStockModal({
+                            ...item,
+                            name: "Transfer",
+                            action: "transfer",
+                          });
+                        }
+                      }}
+                    >
+                      <ArrowLeftRight size={15} />
+                    </button>
                   </div>
                 </td>
                

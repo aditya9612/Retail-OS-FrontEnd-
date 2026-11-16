@@ -10,7 +10,7 @@
 .inv-page {
     width: 100%;
     min-height: 100vh;
-    padding: 24px 28px 48px;
+    padding: 16px 20px 24px;
     background: #f8fafc;
     color: #0f172a;
     box-sizing: border-box;
@@ -23,8 +23,8 @@
 
 .inv-container {
     width: 100%;
-    max-width: 1560px;
-    margin: 0 auto;
+    max-width: 100%;
+    margin: 0;
     box-sizing: border-box;
 }
 
@@ -36,42 +36,22 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 22px;
+    gap: 12px;
+    margin-bottom: 12px;
     flex-wrap: wrap;
 }
 
 .inv-topbar-info {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-}
-
-.inv-eyebrow {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #6366f1;
-    margin-bottom: 3px;
-}
-
-.inv-eyebrow-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    gap: 4px;
 }
 
 .inv-title {
     margin: 0;
-    font-size: 22px;
+    font-size: 17.5px;
     font-weight: 800;
-    color: #111827;
+    color: #111827ce;
     letter-spacing: -0.02em;
     display: flex;
     align-items: center;
@@ -134,27 +114,32 @@
    ========================================================= */
 .inv-kpi-grid {
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: 16px;
-    margin: 0 0 24px 0;
+    gap: 12px;
+    margin: 0 0 14px 0;
     box-sizing: border-box;
 }
 
 .inv-kpi-card {
     background: #ffffff;
     border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 18px 18px;
+    border-radius: 10px;
+    padding: 12px 14px;
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-height: 116px;
+    min-height: 96px;
     position: relative;
     overflow: hidden;
     box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
 }
 
 .inv-kpi-card:hover {
@@ -167,29 +152,34 @@
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 12px;
+    gap: 8px;
+    margin-bottom: 8px;
     width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .inv-kpi-label {
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 700;
     color: #64748b;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     margin: 0;
     line-height: 1.35;
+    min-width: 0;
+    max-width: 100%;
+    word-break: break-word;
 }
 
 .inv-kpi-icon-wrap {
-    width: 38px;
-    height: 38px;
+    width: 36px;
+    height: 36px;
     border-radius: 9px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 19px;
+    font-size: 18px;
     flex-shrink: 0;
     transition: transform 0.2s ease;
 }
@@ -199,15 +189,31 @@
 }
 
 .inv-kpi-value {
-    font-size: 24px;
+    font-size: clamp(16px, 1.4vw, 22px);
     font-weight: 800;
     color: #0f172a;
     margin: 0;
     letter-spacing: -0.02em;
     white-space: nowrap;
+    line-height: 1.25;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Specific responsive rules for Inventory Valuation / Value box */
+.inv-kpi-value.inv-kpi-value-currency,
+.inv-kpi-card-valuation .inv-kpi-value,
+.inv-kpi-card-inventory-valuation .inv-kpi-value,
+.inv-kpi-card-inventory-value .inv-kpi-value {
+    font-size: clamp(13px, 1.15vw + 1px, 20px);
+    letter-spacing: -0.025em;
+    white-space: nowrap;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.2;
 }
 
 /* =========================================================
@@ -215,10 +221,10 @@
    ========================================================= */
 .inv-card {
     width: 100%;
-    margin-bottom: 22px;
+    margin-bottom: 14px;
     background: #ffffff;
     border: 1px solid #e2e8f0;
-    border-radius: 12px;
+    border-radius: 10px;
     box-sizing: border-box;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
     overflow: hidden;
@@ -229,7 +235,7 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
-    padding: 16px 20px 14px;
+    padding: 12px 16px;
     border-bottom: 1px solid #f1f5f9;
 }
 
@@ -251,188 +257,218 @@
 }
 
 /* =========================================================
-   5. SEARCH & FILTER SECTION
+   5. SEARCH & FILTER SECTION (NO OUTER CONTAINER BOX)
    ========================================================= */
-.inv-filter-card {
+.inv-page .inv-filter-card {
     overflow: visible;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    margin-bottom: 14px;
 }
 
-.inv-filter-inner {
+.inv-page .inv-filter-card .inv-filter-inner {
     width: 100%;
+    padding: 0;
+}
+
+.inv-page .inv-filter-card .inv-card-heading {
+    padding: 0 0 8px 0;
+    border-bottom: none;
+    background: transparent;
+}
+
+.inv-page .inv-filter-card .inv-section-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.inv-page .inv-filter-card .inv-section-description {
+    margin: 2px 0 0;
+    font-size: 12px;
+    color: #64748b;
 }
 
 .inv-page .inv-filter-card .inventory-filters {
-    margin: 0 !important;
-    padding: 18px 20px !important;
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 16px !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    background: transparent !important;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
 }
 
 .inv-page .inv-filter-card .inventory-filters > .filters-header {
-    display: none !important;
+    display: none;
 }
 
 .inv-page .inv-filter-card .filters-row {
-    display: flex !important;
-    gap: 14px !important;
-    flex-wrap: wrap !important;
-    width: 100% !important;
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    width: 100%;
 }
 
 .inv-page .inv-filter-card .filter-group {
-    flex: 1 !important;
-    min-width: 180px !important;
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 6px !important;
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    box-sizing: border-box;
 }
 
-.inv-page .inv-filter-card .filter-group.search-product-group {
-    flex: 2 !important;
-    min-width: 260px !important;
+.inv-page .inv-filter-card .filter-group.filter-action-group {
+    flex: 0 0 auto;
+    min-width: auto;
 }
 
-.inv-page .inv-filter-card .filter-group label {
-    margin: 0 !important;
-    font-size: 11px !important;
-    line-height: 16px !important;
-    font-weight: 700 !important;
-    color: #475569 !important;
-    text-transform: uppercase !important;
-    letter-spacing: 0.04em !important;
+.inv-page .inv-filter-card .filter-group label,
+.inv-page .inv-filter-card .filter-group .filter-action-label {
+    display: block;
+    margin: 0;
+    font-size: 11px;
+    line-height: 16px;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.inv-page .inv-filter-card .filter-group .filter-action-label {
+    visibility: hidden;
+    user-select: none;
 }
 
 .inv-page .inv-filter-card .filter-group input,
 .inv-page .inv-filter-card .filter-group select {
-    height: 40px !important;
-    padding: 0 12px !important;
-    border: 1px solid #cbd5e1 !important;
-    border-radius: 8px !important;
-    background: #f8fafc !important;
-    color: #0f172a !important;
-    font-size: 13px !important;
-    font-weight: 500 !important;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02) !important;
-    outline: none !important;
-    transition: all 0.15s ease !important;
+    width: 100%;
+    height: 38px;
+    padding: 0 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #1e293b;
+    font-size: 12.5px;
+    font-weight: 500;
+    outline: none;
+    box-sizing: border-box;
+    box-shadow: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.inv-page .inv-filter-card .inventory-search-input-wrap {
-    position: relative !important;
-    width: 100% !important;
-    display: flex !important;
-    align-items: center !important;
+.inv-page .inv-filter-card .filter-group select {
+    cursor: pointer;
+    padding-right: 28px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 14px 14px;
 }
 
-.inv-page .inv-filter-card .inventory-search-icon {
-    position: absolute !important;
-    left: 12px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    color: #94a3b8 !important;
-    pointer-events: none !important;
-    z-index: 2 !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 16px !important;
-    height: 16px !important;
-}
-
-.inv-page .inv-filter-card .filter-group .inventory-search-input-wrap input,
-.inv-page .inv-filter-card .filter-group input#inventory-search,
-.inv-page .inv-filter-card .filter-group input.inventory-search-input {
-    padding-left: 38px !important;
+.inv-page .inv-filter-card .filter-group input[type="date"] {
+    cursor: pointer;
 }
 
 .inv-page .inv-filter-card .filter-group input:hover,
 .inv-page .inv-filter-card .filter-group select:hover {
-    border-color: #94a3b8 !important;
+    border-color: #94a3b8;
 }
 
 .inv-page .inv-filter-card .filter-group input:focus,
 .inv-page .inv-filter-card .filter-group select:focus,
 .inv-page .inv-filter-card .filter-group input:focus-visible,
 .inv-page .inv-filter-card .filter-group select:focus-visible {
-    outline: none !important;
-    border-color: #6366f1 !important;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12) !important;
-    background: #ffffff !important;
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+    background: #ffffff;
 }
 
-.inv-page .inv-filter-card .filter-actions {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
-    gap: 10px !important;
-    padding-top: 14px !important;
-    border-top: 1px solid #f1f5f9 !important;
-}
-
-.inv-page .inv-filter-card .reset-btn,
-.inv-page .inv-filter-card .search-btn,
-.inv-page .inv-filter-card .export-btn {
-    position: relative !important;
-    width: 38px !important;
-    height: 38px !important;
-    flex: 0 0 38px !important;
-    border-radius: 8px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    cursor: pointer !important;
-    transition: all 0.18s ease !important;
-}
-
+/* Reset Button */
 .inv-page .inv-filter-card .reset-btn {
-    background: #f8fafc !important;
-    border: 1px solid #cbd5e1 !important;
-    color: #475569 !important;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #475569;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    box-sizing: border-box;
+    transition: all 0.15s ease;
 }
 
 .inv-page .inv-filter-card .reset-btn:hover:not(:disabled) {
-    background: #f1f5f9 !important;
-    border-color: #94a3b8 !important;
-    color: #0f172a !important;
-    transform: translateY(-1px) !important;
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #0f172a;
 }
 
-.inv-page .inv-filter-card .search-btn {
-    background: #4f46e5 !important;
-    border: 1px solid #4338ca !important;
-    color: #ffffff !important;
-    box-shadow: 0 1px 3px rgba(79, 70, 229, 0.3) !important;
+.inv-page .inv-filter-card .reset-btn:focus-visible {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
 }
 
-.inv-page .inv-filter-card .search-btn:hover:not(:disabled) {
-    background: #4338ca !important;
-    box-shadow: 0 3px 8px rgba(79, 70, 229, 0.35) !important;
-    transform: translateY(-1px) !important;
+/* Optional Search Product (if present) */
+.inv-page .inv-filter-card .filter-group.search-product-group {
+    flex: 1.5 1 0;
+    min-width: 180px;
 }
 
-.inv-page .inv-filter-card .export-btn {
-    background: #10b981 !important;
-    border: 1px solid #059669 !important;
-    color: #ffffff !important;
-    box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3) !important;
+.inv-page .inv-filter-card .inventory-search-input-wrap {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
 }
 
-.inv-page .inv-filter-card .export-btn:hover:not(:disabled) {
-    background: #059669 !important;
-    box-shadow: 0 3px 8px rgba(16, 185, 129, 0.35) !important;
-    transform: translateY(-1px) !important;
+.inv-page .inv-filter-card .inventory-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    pointer-events: none;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 15px;
+    height: 15px;
+}
+
+.inv-page .inv-filter-card .filter-group .inventory-search-input-wrap input,
+.inv-page .inv-filter-card .filter-group input#inventory-search,
+.inv-page .inv-filter-card .filter-group input.inventory-search-input {
+    padding-left: 32px;
 }
 
 /* =========================================================
    6. INVENTORY HEADER & TABS
    ========================================================= */
 .inv-page .inventory-header {
-    padding: 18px 20px 0 !important;
+    padding: 12px 16px 0 !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
@@ -443,9 +479,9 @@
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
-    margin-bottom: 16px !important;
+    margin-bottom: 10px !important;
     flex-wrap: wrap !important;
-    gap: 12px !important;
+    gap: 10px !important;
     padding-bottom: 0 !important;
 }
 
@@ -530,9 +566,9 @@
 /* Tabs */
 .inv-page .inventory-tabs {
     display: flex !important;
-    gap: 8px !important;
+    gap: 6px !important;
     border-bottom: 1px solid #f1f5f9 !important;
-    padding: 12px 0 !important;
+    padding: 8px 0 !important;
     margin-bottom: 0 !important;
     border-top: none !important;
 }
@@ -581,18 +617,6 @@
     border: 1px solid #c7d2fe !important;
 }
 
-.inv-page .tab-count.low {
-    color: #d97706 !important;
-    background: #fffbeb !important;
-    border-color: #fde68a !important;
-}
-
-.inv-page .tab-count.out {
-    color: #dc2626 !important;
-    background: #fef2f2 !important;
-    border-color: #fecaca !important;
-}
-
 /* =========================================================
    7. STOCK TABLE STYLING
    ========================================================= */
@@ -601,12 +625,15 @@
     max-width: 100%;
     min-width: 0;
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 560px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
     scrollbar-color: #cbd5e1 #f8fafc;
 }
 
 .inv-table-wrap::-webkit-scrollbar {
+    width: 8px;
     height: 8px;
 }
 
@@ -645,7 +672,7 @@
     font-weight: 700 !important;
     text-transform: uppercase !important;
     letter-spacing: 0.06em !important;
-    padding: 14px 16px !important;
+    padding: 10px 14px !important;
     border-bottom: 1px solid #e2e8f0 !important;
     border-top: none !important;
     vertical-align: middle !important;
@@ -670,7 +697,7 @@
 }
 
 .inv-page .inventory-table td {
-    padding: 13px 16px !important;
+    padding: 10px 14px !important;
     vertical-align: middle !important;
     font-size: 13px !important;
     color: #0f172a !important;
@@ -764,11 +791,51 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 20px;
+    padding: 10px 16px;
     border-top: 1px solid #f1f5f9;
     background: #ffffff;
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 10px;
+}
+
+.inv-pagination-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.inv-page-size-select-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #475569;
+}
+
+.inv-page-size-label {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 500;
+    margin: 0;
+}
+
+.inv-page-size-select {
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.inv-page-size-select:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
 .inv-pagination-info {
@@ -878,10 +945,7 @@
     transform: translateX(-50%) translateY(0) !important;
 }
 
-/* Tooltip for Filter & Page Buttons */
-.inv-page .inv-filter-card .reset-btn[aria-label]::after,
-.inv-page .inv-filter-card .search-btn[aria-label]::after,
-.inv-page .inv-filter-card .export-btn[aria-label]::after,
+/* Tooltip for Page Buttons */
 .inv-page .inv-page-btn[aria-label]::after {
     content: attr(aria-label) !important;
     position: absolute !important;
@@ -904,9 +968,6 @@
     transition: all 0.15s ease !important;
 }
 
-.inv-page .inv-filter-card .reset-btn[aria-label]:hover::after,
-.inv-page .inv-filter-card .search-btn[aria-label]:hover::after,
-.inv-page .inv-filter-card .export-btn[aria-label]:hover::after,
 .inv-page .inv-page-btn[aria-label]:hover::after {
     opacity: 1 !important;
     visibility: visible !important;
@@ -917,7 +978,7 @@
    9. RECENT STOCK MOVEMENTS SECTION
    ========================================================= */
 .inv-movements-section {
-    margin-top: 24px;
+    margin-top: 0;
 }
 
 .inv-refresh-btn {
@@ -999,10 +1060,33 @@
 .inv-movements-table-wrapper {
     width: 100%;
     overflow-x: auto;
+    overflow-y: auto;
+    max-height: 480px;
     border: 1px solid #e2e8f0;
     border-radius: 10px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f8fafc;
+}
+
+.inv-movements-table-wrapper::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.inv-movements-table-wrapper::-webkit-scrollbar-track {
+    background: #f8fafc;
+    border-radius: 4px;
+}
+
+.inv-movements-table-wrapper::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+.inv-movements-table-wrapper::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
 .inv-movements-table {
@@ -1018,13 +1102,18 @@
 }
 
 .inv-movements-table th {
-    padding: 12px 14px;
-    font-size: 11.5px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #f8fafc;
+    padding: 10px 12px;
+    font-size: 11px;
     font-weight: 700;
     color: #475569;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     white-space: nowrap;
+    border-bottom: 1px solid #e2e8f0;
 }
 
 .inv-movements-table tbody tr {
@@ -1037,8 +1126,8 @@
 }
 
 .inv-movements-table td {
-    padding: 12px 14px;
-    font-size: 13px;
+    padding: 10px 12px;
+    font-size: 12.5px;
     color: #334155;
     vertical-align: middle;
 }
@@ -1138,40 +1227,96 @@
 /* =========================================================
    10. RESPONSIVE BREAKPOINTS
    ========================================================= */
-@media (max-width: 1400px) {
+@media (max-width: 1536px) {
     .inv-kpi-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
     }
 }
 
 @media (max-width: 900px) {
     .inv-kpi-grid {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+}
+
+@media (max-width: 1024px) {
+    .inv-page .inv-filter-card .filters-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .inv-page .inv-filter-card .filter-group {
+        width: 100%;
+        min-width: 0;
+    }
+    .inv-page .inv-filter-card .filter-group.filter-action-group {
+        width: 100%;
+    }
+    .inv-page .inv-filter-card .reset-btn {
+        width: 100%;
     }
 }
 
 @media (max-width: 768px) {
     .inv-page {
-        padding: 16px;
+        padding: 14px 12px 20px;
     }
     .inv-topbar {
         flex-direction: column;
         align-items: flex-start;
-        gap: 12px;
+        gap: 10px;
+        margin-bottom: 10px;
     }
     .inv-page .inv-filter-card .filters-row {
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .inv-page .inv-filter-card .filter-group.filter-action-group {
+        grid-column: span 2;
+        width: 100%;
+    }
+    .inv-page .inv-filter-card .reset-btn {
+        width: 100%;
     }
     .inv-page .inventory-header-top {
         flex-direction: column;
         align-items: flex-start;
-        gap: 12px;
+        gap: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .inv-page {
+        padding: 12px 10px 18px;
+    }
+    .inv-page .inv-filter-card .filters-row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    .inv-page .inv-filter-card .filter-group.filter-action-group {
+        grid-column: span 1;
     }
 }
 
 @media (max-width: 520px) {
     .inv-kpi-grid {
         grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .inv-kpi-card {
+        padding: 12px 10px;
+    }
+    .inv-kpi-value.inv-kpi-value-currency,
+    .inv-kpi-card-valuation .inv-kpi-value,
+    .inv-kpi-card-inventory-valuation .inv-kpi-value,
+    .inv-kpi-card-inventory-value .inv-kpi-value {
+        font-size: clamp(11px, 3.2vw, 15px);
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .inv-page .inv-filter-card .filter-group .inventory-search-input-wrap input,
     .inv-page .inv-filter-card .filter-group input#inventory-search,

@@ -9,14 +9,14 @@ export const createGRN = async (payload) => {
     throw new Error("Payload is required for creating a GRN");
   }
 
-  const response = await axiosInstance.post("/grn", payload);
+  const response = await axiosInstance.post("/api/v1/grn", payload);
   return response.data;
 };
 
 /**
  * Fetch Goods Receipt Notes (GRN) list
  * STRICT ENDPOINT: GET /api/v1/grn
- * Supported query parameters: purchase_order_id, warehouse_id, store_id, supplier_id, status, search
+ * Supported query parameters: purchase_order_id, warehouse_id, store_id, supplier_id, status, search, from_date, to_date, page, page_size, skip, limit
  */
 export const getGRNs = async (params = {}) => {
   const cleanParams = {};
@@ -28,6 +28,12 @@ export const getGRNs = async (params = {}) => {
       "supplier_id",
       "status",
       "search",
+      "from_date",
+      "to_date",
+      "page",
+      "page_size",
+      "skip",
+      "limit",
     ];
 
     supportedKeys.forEach((key) => {
@@ -205,10 +211,61 @@ export const rejectGRN = async (grnId, reason) => {
 
   const response = await axiosInstance.post(
     `/api/v1/grn/${id}/reject`,
-    null,
+    { reason: cleanReason },
     {
       params: { reason: cleanReason },
     }
+  );
+  return response.data;
+};
+
+/**
+ * Print or download Goods Receipt Note (GRN) PDF
+ * STRICT ENDPOINT: GET /api/v1/grn/{grn_id}/print?mode=download
+ */
+export const printGRN = async (grnId, mode = "download") => {
+  if (grnId === undefined || grnId === null || String(grnId).trim() === "") {
+    throw new Error("GRN ID is required");
+  }
+
+  const id = Number(grnId);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error("Invalid GRN ID");
+  }
+
+  const cleanMode = mode === "preview" ? "preview" : "download";
+  const response = await axiosInstance.get(`/api/v1/grn/${id}/print`, {
+    params: {
+      mode: cleanMode,
+    },
+    responseType: "blob",
+    headers: {
+      Accept: "application/pdf",
+    },
+  });
+  return response;
+};
+
+/**
+ * Fetch linked Goods Receipt Notes (GRN) for a Purchase Order
+ * STRICT ENDPOINT: GET /api/v1/purchase-orders/{purchase_order_id}/grns
+ */
+export const getPurchaseOrderGRNs = async (purchaseOrderId) => {
+  if (
+    purchaseOrderId === undefined ||
+    purchaseOrderId === null ||
+    String(purchaseOrderId).trim() === ""
+  ) {
+    throw new Error("Purchase Order ID is required");
+  }
+
+  const id = Number(purchaseOrderId);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error("Invalid Purchase Order ID");
+  }
+
+  const response = await axiosInstance.get(
+    `/api/v1/purchase-orders/${id}/grns`
   );
   return response.data;
 };
@@ -293,6 +350,8 @@ export default {
   qualityCheckGRN,
   receiveGRN,
   rejectGRN,
+  printGRN,
+  getPurchaseOrderGRNs,
   getGRNHistory,
   downloadGRNPdf,
   getGRNPrintSlip,

@@ -14,7 +14,7 @@
   gap: 12px;
 
   margin: 0;
-  padding: 12px 14px 14px;
+  padding: 0;
 
   background: transparent;
 
@@ -59,32 +59,39 @@
 
 /* =========================================================
    SECOND ROW
-   Warehouse + Category + Supplier + Stock Status
+   Warehouse + Category + Supplier + Stock Status + Created Date + Reset
 ========================================================= */
 
 .inventory-filters .filters-row-middle {
-  grid-template-columns: repeat(4, minmax(150px, 1fr));
-
-  align-items: end;
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  width: 100%;
 }
 
-
-/* =========================================================
-   FILTER GROUP
-========================================================= */
-
 .inventory-filters .filter-group {
-  width: 100%;
+  flex: 1 1 0;
   min-width: 0;
-
   display: flex;
   flex-direction: column;
-
   gap: 5px;
-
   margin: 0;
-
   box-sizing: border-box;
+}
+
+.inventory-filters .filter-group.filter-action-group {
+  flex: 0 0 auto;
+  min-width: auto;
+}
+
+.inventory-filters .filter-group .filter-action-label {
+  display: block;
+  margin: 0;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  visibility: hidden;
+  user-select: none;
 }
 
 
@@ -311,35 +318,42 @@
    COMMON ACTION BUTTON
 ========================================================= */
 
-.inventory-filters .reset-btn,
-.inventory-filters .search-btn,
-.inventory-filters .export-btn {
-  position: relative;
-  width: 34px;
-  height: 34px;
-
-  flex: 0 0 34px;
-
+.inventory-filters .reset-btn {
+  height: 38px;
+  min-height: 38px;
+  padding: 0 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-
-  padding: 0;
-
-  border-radius: 7px;
-
+  gap: 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #475569;
   font-family: inherit;
-
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
-
+  white-space: nowrap;
   box-sizing: border-box;
+  transition: all 0.15s ease;
+}
 
-  transition:
-    color 0.18s ease,
-    background-color 0.18s ease,
-    border-color 0.18s ease,
-    box-shadow 0.18s ease,
-    transform 0.15s ease;
+.inventory-filters .search-btn,
+.inventory-filters .export-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 6px;
+  font-family: inherit;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
 }
 
 
@@ -581,7 +595,7 @@
 
   .inventory-filters .filters-row-middle {
     grid-template-columns:
-      repeat(4, minmax(130px, 1fr));
+      repeat(3, minmax(130px, 1fr));
   }
 }
 

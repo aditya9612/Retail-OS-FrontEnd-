@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { calculateStockStatus, getItemStock, getItemMinStock } from "../../utils/stockStatus";
 
 import InventoryHeader from "../../components/InventoryHeader";
 import InventoryFilters from "../../components/InventoryFilters";
@@ -409,63 +410,7 @@ expiry_date:
     };
 };
 
-/* =========================================================
-   STOCK HELPERS
-========================================================= */
-
-const getItemStock = (item) => {
-    const candidates = [
-        item?.quantity,
-        item?.stock,
-        item?.available_stock,
-        item?.available_quantity,
-        item?.availableQuantity,
-        item?.current_stock,
-        item?.currentStock,
-        item?.qty,
-    ];
-
-    for (const val of candidates) {
-        if (val !== undefined && val !== null && val !== "") {
-            const num = Number(val);
-            if (Number.isFinite(num)) {
-                return num;
-            }
-        }
-    }
-
-    return 0;
-};
-
-const getItemMinStock = (item) => {
-    const candidates = [
-        item?.low_stock_threshold,
-        item?.minimum_stock,
-        item?.min_stock,
-        item?.minStock,
-        item?.reorder_level,
-        item?.reorderLevel,
-        item?.threshold,
-        item?.alert_threshold,
-        item?.product?.low_stock_threshold,
-        item?.product?.minimum_stock,
-        item?.product?.min_stock,
-        item?.product?.minStock,
-        item?.product?.reorder_level,
-        item?.product?.reorderLevel,
-    ];
-
-    for (const val of candidates) {
-        if (val !== undefined && val !== null && val !== "") {
-            const num = Number(val);
-            if (Number.isFinite(num) && num > 0) {
-                return num;
-            }
-        }
-    }
-
-    return 0;
-};
+// Stock helpers imported from ../../utils/stockStatus
 
 /* =========================================================
    GET SELLING PRICE
@@ -486,48 +431,16 @@ const getItemSellingPrice = (item) => {
 };
 
 /* =========================================================
-   STOCK STATUS
+   STOCK STATUS (Standardized via calculateStockStatus)
    Strictly determined by available quantity and minimum stock /
-   reorder threshold. Selling/purchase price does NOT determine status.
+   reorder threshold:
+   - Out of Stock: stock <= 0
+   - Low Stock: 0 < stock < minStock
+   - At Reorder: stock === minStock
+   - In Stock: stock > minStock (or minStock is 0)
 ========================================================= */
 
-const stockStatus = (item) => {
-    const stock = getItemStock(item);
-    const minStock = getItemMinStock(item);
-
-    // 1. Available Quantity <= 0 -> Out of Stock
-    if (stock <= 0) {
-        return {
-            label: "Out of Stock",
-            color: "#dc2626",
-            bg: "#fef2f2",
-        };
-    }
-
-    // 2. Available Quantity > 0 and below or equal to Minimum Stock -> Low Stock
-    const isLow =
-        item?.is_low_stock === true ||
-        item?.stock_status === "Low Stock" ||
-        item?.stock_status === "Critical" ||
-        item?.status === "Low Stock" ||
-        item?.status === "Critical" ||
-        (minStock > 0 && stock <= minStock);
-
-    if (isLow) {
-        return {
-            label: "Low Stock",
-            color: "#d97706",
-            bg: "#fffbeb",
-        };
-    }
-
-    // 3. Available Quantity greater than Minimum Stock (or minStock === 0) -> In Stock
-    return {
-        label: "In Stock",
-        color: "#059669",
-        bg: "#ecfdf5",
-    };
-};
+const stockStatus = (item) => calculateStockStatus(item);
 
 /* =========================================================
    STOCK UPDATE MODAL
@@ -1442,6 +1355,8 @@ const Inventory = () => {
 
     const [page, setPage] =
         useState(1);
+    const [pageSize, setPageSize] =
+        useState(8);
 
     const [stockModal, setStockModal] =
         useState(null);
@@ -1695,6 +1610,8 @@ const Inventory = () => {
     ===================================================== */
 
     const fetchInventory = async (overrideStores = null, overrideWarehouses = null, fromCache = false, overrideProducts = null) => {
+        let rawData = [];
+        let rawLowStockData = [];
         try {
             setLoading(true);
             setError("");
@@ -1719,8 +1636,8 @@ const Inventory = () => {
                 return;
             }
 
-            let rawData = [];
-            let rawLowStockData = [];
+            rawData = [];
+            rawLowStockData = [];
 
             if (fromCache && rawInventoryRef.current) {
                 rawData = rawInventoryRef.current.rawData || [];
@@ -2122,12 +2039,10 @@ const Inventory = () => {
                                 lowStockThreshold,
 
                             is_low_stock:
-                                isLowStock,
+                                calculateStockStatus(item, lowStockThreshold).label === "Low Stock",
 
                             stock_status:
-                                isLowStock
-                                    ? "Low Stock"
-                                    : (item?.stock_status || item?.status || undefined),
+                                calculateStockStatus(item, lowStockThreshold).label,
 
                             price:
                                 Number.isFinite(
@@ -2202,169 +2117,7 @@ const Inventory = () => {
                     })
                     .filter(Boolean);
 
-            const unmatchedLowStockItems = [];
-            lowStockData.forEach((ls) => {
-                if (matchedLowStockAlerts.has(ls)) return;
-                const { pid, sid, invId, sku, nested } = getLowStockKeys(ls);
-                const activeProductMap =
-                    Array.isArray(overrideProducts) && overrideProducts.length > 0
-                        ? buildProductMap(overrideProducts)
-                        : productMap;
-
-                const product =
-                    (pid !== null ? activeProductMap.get(pid) : null) ||
-                    (sku ? activeProductMap.get(`sku:${sku.toLowerCase()}`) : null) ||
-                    null;
-                const store =
-                    currentStores.find((s) => Number(s?.id) === sid) ||
-                    currentWarehouses.find(
-                        (w) =>
-                            Number(w?.id) === sid ||
-                            Number(w?.store_id) === sid
-                    );
-
-                const categoryId =
-                    product?.category_id ??
-                    product?.categoryId ??
-                    ls?.category_id ??
-                    ls?.categoryId ??
-                    (typeof product?.category === "number" ? product.category : null) ??
-                    (typeof ls?.category === "number" ? ls.category : null) ??
-                    null;
-
-                const categoryObj = categories.find(
-                    (c) =>
-                        (categoryId !== null && Number(c?.id) === Number(categoryId)) ||
-                        (product?.category && String(c?.name).trim().toLowerCase() === String(product.category).trim().toLowerCase()) ||
-                        (ls?.category && String(c?.name).trim().toLowerCase() === String(ls.category).trim().toLowerCase())
-                );
-
-                const resolvedCategory =
-                    categoryObj?.name ||
-                    categoryObj?.category_name ||
-                    (typeof product?.category === "string" ? product.category : null) ||
-                    product?.category?.name ||
-                    product?.category_name ||
-                    (typeof ls?.category === "string" ? ls.category : null) ||
-                    ls?.category?.name ||
-                    ls?.category_name ||
-                    (categoryId ? `Category #${categoryId}` : "");
-
-                const supplierId =
-                    (ls?.supplier_id && Number(ls.supplier_id) > 0 ? Number(ls.supplier_id) : null) ??
-                    (ls?.supplierId && Number(ls.supplierId) > 0 ? Number(ls.supplierId) : null) ??
-                    (product?.supplier_id && Number(product.supplier_id) > 0 ? Number(product.supplier_id) : null) ??
-                    (product?.supplierId && Number(product.supplierId) > 0 ? Number(product.supplierId) : null) ??
-                    (Number.isFinite(pid) && poSupplierMap.get(pid) ? Number(poSupplierMap.get(pid)) : null) ??
-                    (typeof ls?.supplier === "number" && ls.supplier > 0 ? ls.supplier : null) ??
-                    (typeof product?.supplier === "number" && product.supplier > 0 ? product.supplier : null) ??
-                    (typeof ls?.supplier === "object" && Number(ls?.supplier?.id) > 0 ? Number(ls.supplier.id) : null) ??
-                    (typeof product?.supplier === "object" && Number(product?.supplier?.id) > 0 ? Number(product.supplier.id) : null) ??
-                    null;
-
-                const supplierObj = suppliers.find(
-                    (s) =>
-                        (supplierId !== null && Number(s?.id) === Number(supplierId)) ||
-                        (ls?.supplier_name && String(s?.name).trim().toLowerCase() === String(ls.supplier_name).trim().toLowerCase()) ||
-                        (product?.supplier_name && String(s?.name).trim().toLowerCase() === String(product.supplier_name).trim().toLowerCase())
-                );
-
-                const resolvedSupplier =
-                    supplierObj?.name ||
-                    supplierObj?.supplier_name ||
-                    (Number.isFinite(pid) && poSupplierNameMap ? poSupplierNameMap.get(pid) : null) ||
-                    (typeof product?.supplier === "string" && product.supplier.trim() ? product.supplier.trim() : null) ||
-                    product?.supplier?.name ||
-                    product?.supplier?.supplier_name ||
-                    (typeof product?.supplier_name === "string" && product.supplier_name.trim() ? product.supplier_name.trim() : null) ||
-                    (typeof product?.supplierName === "string" && product.supplierName.trim() ? product.supplierName.trim() : null) ||
-                    (typeof ls?.supplier === "string" && ls.supplier.trim() ? ls.supplier.trim() : null) ||
-                    ls?.supplier?.name ||
-                    ls?.supplier?.supplier_name ||
-                    (typeof ls?.supplier_name === "string" && ls.supplier_name.trim() ? ls.supplier_name.trim() : null) ||
-                    (typeof ls?.supplierName === "string" && ls.supplierName.trim() ? ls.supplierName.trim() : null) ||
-                    "";
-
-                const prodName =
-                    String(
-                        product?.name ||
-                        product?.product_name ||
-                        ls?.product_name ||
-                        ls?.name ||
-                        nested?.name ||
-                        nested?.product_name ||
-                        (pid ? `Product #${pid}` : "Low Stock Product")
-                    ).trim();
-
-                const prodSku =
-                    String(
-                        product?.sku ||
-                        product?.product_sku ||
-                        ls?.sku ||
-                        ls?.product_sku ||
-                        nested?.sku ||
-                        (pid ? `PRODUCT-${pid}` : "-")
-                    ).trim();
-
-                const qty = Number(
-                    ls?.quantity ??
-                    ls?.available_quantity ??
-                    ls?.stock ??
-                    ls?.current_stock ??
-                    0
-                );
-
-                const threshold = Number(
-                    ls?.low_stock_threshold ??
-                    ls?.minimum_stock ??
-                    ls?.reorder_level ??
-                    ls?.min_stock ??
-                    product?.low_stock_threshold ??
-                    (qty > 0 ? qty : 10)
-                );
-
-                unmatchedLowStockItems.push({
-                    ...ls,
-                    id: invId ?? ls?.id ?? `ls-${pid ?? Math.random()}`,
-                    product_id: pid,
-                    store_id: sid ?? (validStoreId > 0 ? validStoreId : null),
-                    name: prodName,
-                    product_name: prodName,
-                    sku: prodSku,
-                    quantity: qty,
-                    stock: qty,
-                    low_stock_threshold: threshold,
-                    is_low_stock: true,
-                    stock_status: "Low Stock",
-                    price: Number(product?.selling_price ?? product?.sellingPrice ?? product?.price ?? ls?.selling_price ?? ls?.price ?? 0),
-                    selling_price: Number(product?.selling_price ?? product?.sellingPrice ?? product?.price ?? ls?.selling_price ?? ls?.price ?? 0),
-                    costPrice: Number(product?.cost_price ?? product?.purchase_price ?? ls?.cost_price ?? ls?.unit_cost ?? 0),
-                    cost_price: Number(product?.cost_price ?? product?.purchase_price ?? ls?.cost_price ?? ls?.unit_cost ?? 0),
-                    mrp: resolveMrpValue(
-                        extractProductMrp(product),
-                        extractProductMrp(ls?.product),
-                        extractMrpFromObject(ls),
-                        extractMrpFromObject(ls?.variants),
-                        extractProductMrp(nested)
-                    ),
-                    mrp_price: resolveMrpValue(
-                        extractProductMrp(product),
-                        extractProductMrp(ls?.product),
-                        extractMrpFromObject(ls),
-                        extractMrpFromObject(ls?.variants),
-                        extractProductMrp(nested)
-                    ),
-                    barcode: product?.barcode || ls?.barcode || "",
-                    category: resolvedCategory,
-                    category_id: categoryObj?.id ?? categoryId,
-                    brand: product?.brand || ls?.brand || "",
-                    supplier_name: resolvedSupplier,
-                    supplier_id: supplierObj?.id ?? supplierId,
-                    store_name: store?.name || store?.store_name || ls?.store_name || (sid ? `Store #${sid}` : "-"),
-                });
-            });
-
-            let finalInventory = [...mergedInventory, ...unmatchedLowStockItems];
+            let finalInventory = mergedInventory;
 
             const hasMarkedLowStock = finalInventory.some(
                 (item) => item.is_low_stock === true || stockStatus(item).label === "Low Stock"
@@ -2645,19 +2398,20 @@ const fetchValuation = async () => {
             setLowStockLoading(true);
             setLowStockError("");
 
+            const currentStores =
+                Array.isArray(overrideStores) && overrideStores.length > 0
+                    ? overrideStores
+                    : stores;
+            const currentWarehouses =
+                Array.isArray(overrideWarehouses) && overrideWarehouses.length > 0
+                    ? overrideWarehouses
+                    : warehouses;
+
             let data = [];
 
             if (Array.isArray(preloadedData)) {
                 data = preloadedData;
             } else {
-                const currentStores =
-                    Array.isArray(overrideStores) && overrideStores.length > 0
-                        ? overrideStores
-                        : stores;
-                const currentWarehouses =
-                    Array.isArray(overrideWarehouses) && overrideWarehouses.length > 0
-                        ? overrideWarehouses
-                        : warehouses;
 
                 const storeInfo = getSelectedStoreInfo(filterWarehouse, currentStores, currentWarehouses);
 
@@ -3212,33 +2966,8 @@ const fetchValuation = async () => {
                     ? activeTab
                     : "All";
 
-            const stock = getItemStock(item);
-            const minStock = getItemMinStock(item);
-
-            const isLowMatch =
-                effectiveStatusFilter === "Low Stock" &&
-                stock > 0 &&
-                (st.label === "Low Stock" ||
-                    st.label === "Critical" ||
-                    item?.is_low_stock === true ||
-                    item?.stock_status === "Low Stock" ||
-                    item?.stock_status === "Critical" ||
-                    (minStock > 0 && stock <= minStock));
-
-            const isOutMatch =
-                effectiveStatusFilter === "Out of Stock" &&
-                (st.label === "Out of Stock" || stock <= 0);
-
-            const isInStockMatch =
-                effectiveStatusFilter === "In Stock" &&
-                st.label === "In Stock" &&
-                stock > 0;
-
             const matchStatus =
                 effectiveStatusFilter === "All" ||
-                isLowMatch ||
-                isOutMatch ||
-                isInStockMatch ||
                 st.label === effectiveStatusFilter;
 
             return (
@@ -3258,14 +2987,14 @@ const fetchValuation = async () => {
     const totalPages =
         Math.ceil(
             filtered.length /
-                PAGE_SIZE
+                pageSize
         ) || 1;
 
     const paginated =
         filtered.slice(
             (page - 1) *
-                PAGE_SIZE,
-            page * PAGE_SIZE
+                pageSize,
+            page * pageSize
         );
 
     /* =====================================================
@@ -3528,24 +3257,17 @@ if (action === "transfer") {
 
     const lowStockCount =
         inventory.filter((item) => {
-            const stock = getItemStock(item);
-            if (stock <= 0) return false;
-            const minStock = getItemMinStock(item);
-            return (
-                stockStatus(item).label === "Low Stock" ||
-                item?.is_low_stock === true ||
-                item?.stock_status === "Low Stock" ||
-                (minStock > 0 && stock <= minStock)
-            );
+            return stockStatus(item).label === "Low Stock";
+        }).length;
+
+    const atReorderCount =
+        inventory.filter((item) => {
+            return stockStatus(item).label === "At Reorder";
         }).length;
 
     const outOfStockCount =
         inventory.filter((item) => {
-            const stock = getItemStock(item);
-            return (
-                stock <= 0 ||
-                stockStatus(item).label === "Out of Stock"
-            );
+            return stockStatus(item).label === "Out of Stock";
         }).length;
 
     /* =====================================================
@@ -3683,6 +3405,7 @@ if (action === "transfer") {
             icon: <BsCurrencyRupee />,
             color: "#059669",
             bg: "#ecfdf5",
+            isCurrency: true,
         },
         {
             label: "Available Stock",
@@ -3693,14 +3416,14 @@ if (action === "transfer") {
         },
         {
             label: "Low Stock",
-            value: (dashboardLowStock ?? lowStockCount).toLocaleString("en-IN"),
+            value: lowStockCount.toLocaleString("en-IN"),
             icon: <BsExclamationTriangle />,
             color: "#d97706",
             bg: "#fffbeb",
         },
         {
             label: "Out of Stock",
-            value: (dashboardOutOfStock ?? outOfStockCount).toLocaleString("en-IN"),
+            value: outOfStockCount.toLocaleString("en-IN"),
             icon: <BsXCircle />,
             color: "#dc2626",
             bg: "#fef2f2",
@@ -3726,11 +3449,6 @@ if (action === "transfer") {
 
                 <div className="inv-topbar">
                     <div className="inv-topbar-info">
-                        <div className="inv-eyebrow">
-                            <span className="inv-eyebrow-dot" />
-                            Stock & Inventory Directory
-                        </div>
-
                         <h1 className="inv-title">
                             📦 Stock Management
                         </h1>
@@ -3760,35 +3478,62 @@ if (action === "transfer") {
                 {/* KPI */}
 
                 <div className="inv-kpi-grid">
-                    {kpis.map((item) => (
-                        <div key={item.label} className="inv-kpi-card">
-                            <div className="inv-kpi-top">
-                                <span className="inv-kpi-label">{item.label}</span>
+                    {kpis.map((item) => {
+                        const cardModifier = item.isCurrency
+                            ? "inv-kpi-card-valuation"
+                            : `inv-kpi-card-${item.label.toLowerCase().replace(/\s+/g, "-")}`;
+
+                        const valueStr = String(item.value ?? "");
+                        const isCurrency = item.isCurrency || valueStr.includes("₹");
+
+                        let dynamicFontSize = undefined;
+                        if (isCurrency) {
+                            const len = valueStr.length;
+                            if (len >= 16) {
+                                dynamicFontSize = "clamp(11px, 0.95vw + 2px, 15px)";
+                            } else if (len >= 13) {
+                                dynamicFontSize = "clamp(12px, 1.05vw + 2px, 17px)";
+                            } else if (len >= 10) {
+                                dynamicFontSize = "clamp(13px, 1.2vw + 2px, 19px)";
+                            } else {
+                                dynamicFontSize = "clamp(15px, 1.35vw + 2px, 22px)";
+                            }
+                        }
+
+                        return (
+                            <div
+                                key={item.label}
+                                className={`inv-kpi-card ${cardModifier}`}
+                            >
+                                <div className="inv-kpi-top">
+                                    <span className="inv-kpi-label">{item.label}</span>
+                                    <div
+                                        className="inv-kpi-icon-wrap"
+                                        style={{ color: item.color, background: item.bg }}
+                                    >
+                                        {item.icon}
+                                    </div>
+                                </div>
+
                                 <div
-                                    className="inv-kpi-icon-wrap"
-                                    style={{ color: item.color, background: item.bg }}
+                                    className={`inv-kpi-value ${isCurrency ? "inv-kpi-value-currency" : ""}`}
+                                    style={dynamicFontSize ? { fontSize: dynamicFontSize } : undefined}
+                                    title={
+                                        typeof item.value === "string" || typeof item.value === "number"
+                                            ? String(item.value)
+                                            : undefined
+                                    }
                                 >
-                                    {item.icon}
+                                    {item.value}
                                 </div>
                             </div>
-
-                            <div
-                                className="inv-kpi-value"
-                                title={
-                                    typeof item.value === "string" || typeof item.value === "number"
-                                        ? String(item.value)
-                                        : undefined
-                                }
-                            >
-                                {item.value}
-                            </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 {/* FILTERS */}
 
-                <section className="inv-card inv-filter-card">
+                <section className="inv-filter-card">
                     <div className="inv-filter-inner">
                         <div className="inv-card-heading">
                             <div>
@@ -3925,107 +3670,6 @@ if (action === "transfer") {
                             }
                         />
                     </div>
-
-                    {/* PAGINATION */}
-
-                    {totalPages >
-                        1 && (
-                        <div className="inv-pagination">
-                            <span className="inv-pagination-info">
-                                Showing{" "}
-                                <strong>
-                                    {(page -
-                                        1) *
-                                        PAGE_SIZE +
-                                        1}
-                                    –
-                                    {Math.min(
-                                        page *
-                                            PAGE_SIZE,
-                                        filtered.length
-                                    )}
-                                </strong>{" "}
-                                of{" "}
-                                <strong>
-                                    {
-                                        filtered.length
-                                    }
-                                </strong>{" "}
-                                items
-                            </span>
-
-                            <div className="inv-page-buttons">
-                                <button
-                                    type="button"
-                                    className="inv-page-btn"
-                                    disabled={
-                                        page ===
-                                        1
-                                    }
-                                    onClick={() =>
-                                        setPage(
-                                            page -
-                                                1
-                                        )
-                                    }
-                                    aria-label="Previous page"
-                                >
-                                    <BsChevronLeft />
-                                </button>
-
-                                {Array.from(
-                                    {
-                                        length:
-                                            totalPages,
-                                    },
-                                    (_, i) =>
-                                        i + 1
-                                ).map(
-                                    (p) => (
-                                        <button
-                                            type="button"
-                                            key={
-                                                p
-                                            }
-                                            className={`inv-page-btn ${
-                                                p ===
-                                                page
-                                                    ? "active"
-                                                    : ""
-                                            }`}
-                                            onClick={() =>
-                                                setPage(
-                                                    p
-                                                )
-                                            }
-                                        >
-                                            {
-                                                p
-                                            }
-                                        </button>
-                                    )
-                                )}
-
-                                <button
-                                    type="button"
-                                    className="inv-page-btn"
-                                    disabled={
-                                        page ===
-                                        totalPages
-                                    }
-                                    onClick={() =>
-                                        setPage(
-                                            page +
-                                                1
-                                        )
-                                    }
-                                    aria-label="Next page"
-                                >
-                                    <BsChevronRight />
-                                </button>
-                            </div>
-                        </div>
-                    )}
                 </section>
 
                 {/* RECENT STOCK MOVEMENTS */}
@@ -4162,6 +3806,74 @@ if (action === "transfer") {
                             </table>
                         </div>
                     )}
+
+                    {/* PAGINATION */}
+                    <div className="inv-pagination">
+                        <div className="inv-pagination-left">
+                            <span className="inv-pagination-info">
+                                Showing{" "}
+                                <strong>
+                                    {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1}
+                                    {" – "}
+                                    {Math.min(page * pageSize, filtered.length)}
+                                </strong>{" "}
+                                of <strong>{filtered.length}</strong> items
+                            </span>
+
+                            <div className="inv-page-size-select-wrap">
+                                <label htmlFor="inv-page-size" className="inv-page-size-label">Rows per page:</label>
+                                <select
+                                    id="inv-page-size"
+                                    className="inv-page-size-select"
+                                    value={pageSize}
+                                    onChange={(e) => {
+                                        setPageSize(Number(e.target.value));
+                                        setPage(1);
+                                    }}
+                                >
+                                    <option value={8}>8</option>
+                                    <option value={15}>15</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {totalPages > 1 && (
+                            <div className="inv-page-buttons">
+                                <button
+                                    type="button"
+                                    className="inv-page-btn"
+                                    disabled={page === 1}
+                                    onClick={() => setPage(page - 1)}
+                                    aria-label="Previous page"
+                                >
+                                    <BsChevronLeft />
+                                </button>
+
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                                    <button
+                                        type="button"
+                                        key={p}
+                                        className={`inv-page-btn ${p === page ? "active" : ""}`}
+                                        onClick={() => setPage(p)}
+                                    >
+                                        {p}
+                                    </button>
+                                ))}
+
+                                <button
+                                    type="button"
+                                    className="inv-page-btn"
+                                    disabled={page === totalPages}
+                                    onClick={() => setPage(page + 1)}
+                                    aria-label="Next page"
+                                >
+                                    <BsChevronRight />
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 </section>
 
                 {/* STOCK MODAL */}

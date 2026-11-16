@@ -41,8 +41,9 @@ const extractSuppliers = (data) => {
 
 
 import {
-  BsSearch,
   BsPlus,
+  BsSearch,
+  BsX,
   BsEye,
   BsPencilFill,
   BsChevronLeft,
@@ -53,7 +54,6 @@ import {
   BsCart3,
   BsTrash,
   BsArrowRepeat,
-  BsX,
   BsCheckLg,
   BsSlashCircle,
   BsFileEarmarkPdf,
@@ -2679,9 +2679,7 @@ const Purchases = () => {
 
   const filtered =
     purchases.filter((purchase) => {
-      const q =
-        search.toLowerCase().trim();
-
+      const q = search.toLowerCase().trim();
       const matchSearch =
         !q ||
         purchase.id?.toLowerCase().includes(q) ||
@@ -2834,7 +2832,7 @@ const Purchases = () => {
   ===================================================== */
 
   return (
-    <div className="dash-page">
+    <div className="dash-page purchase-page-wrapper">
       <div className="purchase-page-content">
 
         {/* HEADER */}
@@ -2859,25 +2857,7 @@ const Purchases = () => {
             </p>
           </div>
 
-          <div className="adm-header-actions" style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="adm-btn-secondary"
-              onClick={() => fetchPurchases()}
-              disabled={loading}
-              title="Refresh Purchases"
-              aria-label="Refresh Purchases"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "8px 14px",
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
-            >
-              <BsArrowRepeat size={15} />
-              <span>Refresh</span>
-            </button>
+          <div className="adm-header-actions">
             <button
               type="button"
               className="adm-btn-primary"
@@ -2901,7 +2881,7 @@ const Purchases = () => {
               color: "#dc2626",
               padding: 12,
               borderRadius: 8,
-              marginBottom: 12,
+              margin: 0,
             }}
           >
             {error}
@@ -2930,7 +2910,7 @@ const Purchases = () => {
             display: "grid",
             gridTemplateColumns:
               "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: 14,
+            gap: 12,
           }}
         >
           {kpis.map((k, i) => {
@@ -2945,7 +2925,8 @@ const Purchases = () => {
                   isClickable ? "adm-kpi-card--clickable" : ""
                 } ${isSelected ? "adm-kpi-card--selected" : ""}`}
                 style={{
-                  padding: "14px 18px",
+                  padding: "12px 16px",
+                  borderRadius: 10,
                   cursor: isClickable ? "pointer" : "default",
                 }}
                 onClick={() => {
@@ -3067,7 +3048,7 @@ const Purchases = () => {
               <input
                 id="purchase-search-input"
                 className="ec-input purchase-search-input"
-                placeholder="Search purchase order number, supplier, or invoice..."
+                placeholder="Search PO number, supplier, or invoice..."
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value);
@@ -3212,7 +3193,7 @@ const Purchases = () => {
                         textAlign:
                           heading === "Actions" ? "right" : "left",
                         minWidth:
-                          heading === "Actions" ? "250px" : undefined,
+                          heading === "Actions" ? "310px" : undefined,
                         fontSize: 11,
                         fontWeight: 700,
                         color:
@@ -3497,7 +3478,7 @@ const Purchases = () => {
                         style={{
                           padding:
                             "12px 14px",
-                          minWidth: "250px",
+                          minWidth: "310px",
                           textAlign: "right",
                         }}
                       >
