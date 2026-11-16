@@ -99,14 +99,14 @@ export const menuGroups = [
         id: 'ecommerce',
         label: 'E-COMMERCE',
         items: [
-            { name: 'EC Dashboard', icon: <BsCart3 />, path: '/ecommerce' },
-            { name: 'Storefront Settings', icon: <BsShopWindow />, path: '/ecommerce/store' },
-            { name: 'Online Catalog', icon: <BsCollection />, path: '/ecommerce/products' },
-            { name: 'Online Orders', icon: <BsBagCheckFill />, path: '/ecommerce/orders', badge: 'Live', badgeType: 'live' },
-            { name: 'Coupons', icon: <BsTicketPerforated />, path: '/ecommerce/coupons' },
-            { name: 'Delivery', icon: <BsTruckFlatbed />, path: '/ecommerce/delivery' },
-            { name: 'Reviews', icon: <BsStarHalf />, path: '/ecommerce/reviews' },
-            { name: 'Order Returns', icon: <BsArrowReturnRight />, path: '/ecommerce/returns' },
+            { name: 'EC Dashboard', icon: <BsCart3 />, path: '/ecommerce', end: true },
+            { name: 'Storefront Settings', icon: <BsShopWindow />, path: '/ecommerce/store', end: true, aliasPaths: ['/ecommerce/store', '/ecommerce/storefront'] },
+            { name: 'Online Catalog', icon: <BsCollection />, path: '/ecommerce/products', end: true, aliasPaths: ['/ecommerce/products', '/ecommerce/catalog', '/ecommerce/product-catalog'] },
+            { name: 'Online Orders', icon: <BsBagCheckFill />, path: '/ecommerce/orders', end: true, badge: 'Live', badgeType: 'live', aliasPaths: ['/ecommerce/orders'] },
+            { name: 'Coupons', icon: <BsTicketPerforated />, path: '/ecommerce/coupons', end: true, aliasPaths: ['/ecommerce/coupons'] },
+            { name: 'Delivery', icon: <BsTruckFlatbed />, path: '/ecommerce/delivery', end: true, aliasPaths: ['/ecommerce/delivery'] },
+            { name: 'Reviews', icon: <BsStarHalf />, path: '/ecommerce/reviews', end: true, aliasPaths: ['/ecommerce/reviews'] },
+            { name: 'Order Returns', icon: <BsArrowReturnRight />, path: '/ecommerce/returns', end: true, aliasPaths: ['/ecommerce/returns'] },
         ],
     },
     {
@@ -164,24 +164,37 @@ const Sidebar = ({ collapsed, onToggle }) => {
     const allNavItems = useMemo(() => menuGroups.flatMap(group => group.items), []);
 
     const isItemActive = (item) => {
-        if (currentPath === item.path) return true;
-        if (item.aliasPaths && item.aliasPaths.includes(currentPath)) return true;
+        const cleanPath = (currentPath.endsWith('/') && currentPath.length > 1)
+            ? currentPath.slice(0, -1)
+            : currentPath;
+
+        if (cleanPath === item.path) return true;
+        if (item.aliasPaths && item.aliasPaths.some(p => cleanPath === p || cleanPath.startsWith(p + '/'))) return true;
+
+        // Specific handling for exact-match root paths like /ecommerce or /dashboard
+        if (item.path === '/ecommerce') {
+            return cleanPath === '/ecommerce';
+        }
+        if (item.path === '/dashboard') {
+            return cleanPath === '/dashboard';
+        }
 
         // If another item matches the current path exactly (or by alias),
         // then this item is not the active one
         const hasExactMatchElsewhere = allNavItems.some(
-            other => other.path === currentPath || (other.aliasPaths && other.aliasPaths.includes(currentPath))
+            other => other.path === cleanPath || (other.aliasPaths && other.aliasPaths.includes(cleanPath))
         );
         if (hasExactMatchElsewhere) return false;
 
         // For nested paths (e.g. deeper subroutes not explicitly in menu),
         // activate the item with the most specific (longest) matching path prefix
-        if (item.path !== '/' && item.path !== '/dashboard' && currentPath.startsWith(item.path + '/')) {
+        if (item.path !== '/' && item.path !== '/dashboard' && item.path !== '/ecommerce' && cleanPath.startsWith(item.path + '/')) {
             const hasMoreSpecificMatch = allNavItems.some(
                 other => other.path !== item.path &&
                     other.path !== '/' &&
                     other.path !== '/dashboard' &&
-                    currentPath.startsWith(other.path + '/') &&
+                    other.path !== '/ecommerce' &&
+                    cleanPath.startsWith(other.path + '/') &&
                     other.path.length > item.path.length
             );
             return !hasMoreSpecificMatch;
@@ -344,7 +357,8 @@ const Sidebar = ({ collapsed, onToggle }) => {
                                                 >
                                                     <NavLink
                                                         to={item.path}
-                                                        className={`sidebar-item ${active ? 'sidebar-item--active' : ''}`}
+                                                        end={Boolean(item.end || item.path === '/ecommerce' || item.path === '/dashboard' || item.path === '/')}
+                                                        className={({ isActive }) => `sidebar-item ${active ? 'sidebar-item--active' : ''}`}
                                                     >
                                                         <span className="sidebar-item-icon">{item.icon}</span>
 

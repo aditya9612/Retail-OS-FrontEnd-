@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     BsShopWindow, BsPalette, BsGlobe, BsPhone, BsEnvelope,
     BsImage, BsCheckCircleFill, BsInfoCircle, BsPencilFill,
@@ -9,6 +9,10 @@ const tabs = ['Branding', 'SEO & Domain', 'Store Pages', 'Contact & Social', 'Ad
 
 const StoreManagement = () => {
     const [activeTab, setActiveTab] = useState('Branding');
+
+    useEffect(() => {
+        document.title = 'Storefront Settings - Retail-OS';
+    }, []);
     const [storeActive, setStoreActive] = useState(true);
     const [saved, setSaved] = useState(false);
 
@@ -81,7 +85,7 @@ const StoreManagement = () => {
             {/* Header */}
             <div className="adm-page-header">
                 <div>
-                    <h1 className="adm-page-title">🏪 Store Management</h1>
+                    <h1 className="adm-page-title">🏪 Storefront Settings</h1>
                     <p className="adm-page-sub">Configure branding, SEO, pages, and store settings</p>
                 </div>
                 <div className="adm-header-actions">
