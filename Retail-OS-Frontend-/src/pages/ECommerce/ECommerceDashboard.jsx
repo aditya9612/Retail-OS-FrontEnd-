@@ -156,6 +156,176 @@ const mapPeriodToApi = (p) => {
     return 'this_year';
 };
 
+const normalizeKpis = (raw) => {
+    if (!raw || typeof raw !== 'object') return null;
+    if (raw.kpis && typeof raw.kpis === 'object') return raw.kpis;
+    if (raw.data && typeof raw.data === 'object' && !raw.online_revenue) {
+        if (raw.data.kpis && typeof raw.data.kpis === 'object') return raw.data.kpis;
+        return raw.data;
+    }
+    return raw;
+};
+
+const normalizeRevenueComparison = (raw) => {
+    if (!raw || typeof raw !== 'object') return null;
+    if (raw.revenue_comparison && typeof raw.revenue_comparison === 'object') return raw.revenue_comparison;
+    if (raw.data && typeof raw.data === 'object' && !raw.monthly_data) {
+        if (raw.data.revenue_comparison && typeof raw.data.revenue_comparison === 'object') return raw.data.revenue_comparison;
+        return raw.data;
+    }
+    return raw;
+};
+
+const normalizeOrderStatusBreakdown = (raw) => {
+    if (!raw || typeof raw !== 'object') return null;
+    if (raw.order_status_breakdown && typeof raw.order_status_breakdown === 'object') return raw.order_status_breakdown;
+    if (raw.data && typeof raw.data === 'object' && !raw.breakdown) {
+        if (raw.data.order_status_breakdown && typeof raw.data.order_status_breakdown === 'object') return raw.data.order_status_breakdown;
+        return raw.data;
+    }
+    return raw;
+};
+
+const normalizeRecentOrders = (raw) => {
+    if (!raw) return null;
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw.orders)) return raw.orders;
+    if (raw.data && typeof raw.data === 'object') {
+        if (Array.isArray(raw.data.orders)) return raw.data.orders;
+        if (Array.isArray(raw.data)) return raw.data;
+    }
+    return null;
+};
+
+const normalizeTopProducts = (raw) => {
+    if (!raw) return null;
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw.products)) return raw.products;
+    if (Array.isArray(raw.top_products)) return raw.top_products;
+    if (raw.data && typeof raw.data === 'object') {
+        if (Array.isArray(raw.data.products)) return raw.data.products;
+        if (Array.isArray(raw.data.top_products)) return raw.data.top_products;
+        if (Array.isArray(raw.data)) return raw.data;
+    }
+    return null;
+};
+
+// Dedicated API service for GET /api/v1/ecommerce/dashboard/top-products (Get top selling products online with visual progress rankings)
+export const getEcommerceTopProducts = async ({ limit = 10, store_id } = {}) => {
+    const params = { limit };
+    const parsedStoreId = parseInt(store_id, 10);
+    if (!isNaN(parsedStoreId) && parsedStoreId > 0) {
+        params.store_id = parsedStoreId;
+    }
+    let res;
+    try {
+        res = await apiClient.get('/ecommerce/dashboard/top-products', { params });
+    } catch (_) {
+        try {
+            res = await apiClient.get('/api/v1/ecommerce/dashboard/top-products', { params });
+        } catch (__) {
+            res = await apiClient.get('/ecommerce/dashboard/top-products');
+        }
+    }
+    return res?.data?.data ?? res?.data;
+};
+
+// Dedicated API service for GET /api/v1/ecommerce/dashboard/recent-orders (Get recent online orders for dashboard table)
+export const getEcommerceRecentOrders = async ({ limit = 10, store_id } = {}) => {
+    const params = { limit };
+    const parsedStoreId = parseInt(store_id, 10);
+    if (!isNaN(parsedStoreId) && parsedStoreId > 0) {
+        params.store_id = parsedStoreId;
+    }
+    let res;
+    try {
+        res = await apiClient.get('/ecommerce/dashboard/recent-orders', { params });
+    } catch (_) {
+        try {
+            res = await apiClient.get('/api/v1/ecommerce/dashboard/recent-orders', { params });
+        } catch (__) {
+            res = await apiClient.get('/ecommerce/dashboard/recent-orders');
+        }
+    }
+    return res?.data?.data ?? res?.data;
+};
+
+// Dedicated API service for GET /api/v1/ecommerce/dashboard/order-status-breakdown (Get online order status breakdown donut chart data)
+export const getEcommerceOrderStatusBreakdown = async ({ period = 'this_year', store_id } = {}) => {
+    const params = { period };
+    const parsedStoreId = parseInt(store_id, 10);
+    if (!isNaN(parsedStoreId) && parsedStoreId > 0) {
+        params.store_id = parsedStoreId;
+    }
+    let res;
+    try {
+        res = await apiClient.get('/ecommerce/dashboard/order-status-breakdown', { params });
+    } catch (_) {
+        try {
+            res = await apiClient.get('/api/v1/ecommerce/dashboard/order-status-breakdown', { params });
+        } catch (__) {
+            res = await apiClient.get('/ecommerce/dashboard/order-status-breakdown');
+        }
+    }
+    return res?.data?.data ?? res?.data;
+};
+
+// Dedicated API service for GET /api/v1/ecommerce/dashboard/revenue-comparison (Get online vs offline POS revenue comparison timeseries chart)
+export const getEcommerceRevenueComparison = async ({ period = 'this_year', store_id } = {}) => {
+    const params = { period };
+    const parsedStoreId = parseInt(store_id, 10);
+    if (!isNaN(parsedStoreId) && parsedStoreId > 0) {
+        params.store_id = parsedStoreId;
+    }
+    let res;
+    try {
+        res = await apiClient.get('/ecommerce/dashboard/revenue-comparison', { params });
+    } catch (_) {
+        try {
+            res = await apiClient.get('/api/v1/ecommerce/dashboard/revenue-comparison', { params });
+        } catch (__) {
+            res = await apiClient.get('/ecommerce/dashboard/revenue-comparison');
+        }
+    }
+    return res?.data?.data ?? res?.data;
+};
+
+// Dedicated API service for GET /api/v1/ecommerce/dashboard/kpis (Get 8 e-commerce KPI metrics cards)
+export const getEcommerceDashboardKpis = async ({ period = 'this_year', store_id } = {}) => {
+    const params = { period };
+    const parsedStoreId = parseInt(store_id, 10);
+    if (!isNaN(parsedStoreId) && parsedStoreId > 0) {
+        params.store_id = parsedStoreId;
+    }
+    let res;
+    try {
+        res = await apiClient.get('/ecommerce/dashboard/kpis', { params });
+    } catch (_) {
+        try {
+            res = await apiClient.get('/api/v1/ecommerce/dashboard/kpis', { params });
+        } catch (__) {
+            res = await apiClient.get('/ecommerce/dashboard/kpis');
+        }
+    }
+    return res?.data?.data ?? res?.data;
+};
+
+// Dedicated API service for GET /api/v1/ecommerce/dashboard
+export const getEcommerceDashboard = async ({ period = 'this_year', store_id } = {}) => {
+    const params = { period };
+    const parsedStoreId = parseInt(store_id, 10);
+    if (!isNaN(parsedStoreId) && parsedStoreId > 0) {
+        params.store_id = parsedStoreId;
+    }
+    let res;
+    try {
+        res = await apiClient.get('/ecommerce/dashboard', { params });
+    } catch (_) {
+        res = await apiClient.get('/api/v1/ecommerce/dashboard', { params });
+    }
+    return res?.data?.data ?? res?.data;
+};
+
 const getOrderTotal = (o) => {
     if (!o) return 0;
     let total = parseAmount(o.total_amount || o.total || o.grand_total || o.amount || o.net_amount || o.final_amount || o.order_total || o.total_price || o.price);
@@ -246,7 +416,18 @@ const ECommerceDashboard = () => {
         onlineCustomers: 0,
         newCustomersThisMonth: 0,
         recentOrders: null,
+        recentOrdersLoading: true,
+        recentOrdersError: null,
+        recentOrdersApiSynced: false,
         topProducts: null,
+        kpisData: null,
+        kpisLoading: true,
+        kpisError: null,
+        kpisApiSynced: false,
+        revenueComparisonData: null,
+        revenueComparisonLoading: true,
+        revenueComparisonError: null,
+        revenueComparisonApiSynced: false,
         overviewData: null,
         overviewLoading: true,
         overviewError: null,
@@ -476,33 +657,70 @@ const ECommerceDashboard = () => {
                 const storeParam = (!isNaN(parsedStoreId) && parsedStoreId > 0) ? { store_id: parsedStoreId } : {};
                 const apiPeriod = mapPeriodToApi(period);
 
+                // Fetch 8 e-commerce KPI metrics cards from GET /api/v1/ecommerce/dashboard/kpis
+                let kpisData = null;
+                let kpisSynced = false;
+                let kpisErr = null;
+                try {
+                    const rawKpis = await getEcommerceDashboardKpis({
+                        period: apiPeriod,
+                        store_id: storeParam.store_id
+                    });
+                    const parsedKpis = normalizeKpis(rawKpis);
+                    if (parsedKpis && typeof parsedKpis === 'object' && (parsedKpis.online_revenue || parsedKpis.active_products || parsedKpis.total_online_orders)) {
+                        kpisData = parsedKpis;
+                        kpisSynced = true;
+                    }
+                } catch (err) {
+                    console.warn('Notice: /api/v1/ecommerce/dashboard/kpis handled:', err?.response?.data || err?.message);
+                    kpisErr = err?.response?.data?.message || err?.message || 'KPIs API fallback';
+                }
+
+                // Fetch online vs offline POS revenue comparison from GET /api/v1/ecommerce/dashboard/revenue-comparison
+                let revenueComparisonData = null;
+                let revenueComparisonSynced = false;
+                let revenueComparisonErr = null;
+                try {
+                    const rawRevComp = await getEcommerceRevenueComparison({
+                        period: apiPeriod,
+                        store_id: storeParam.store_id
+                    });
+                    const parsedRevComp = normalizeRevenueComparison(rawRevComp);
+                    if (parsedRevComp && typeof parsedRevComp === 'object' && (parsedRevComp.monthly_data || parsedRevComp.summary)) {
+                        revenueComparisonData = parsedRevComp;
+                        revenueComparisonSynced = true;
+                    }
+                } catch (err) {
+                    console.warn('Notice: /api/v1/ecommerce/dashboard/revenue-comparison handled:', err?.response?.data || err?.message);
+                    revenueComparisonErr = err?.response?.data?.message || err?.message || 'Revenue comparison API fallback';
+                }
+
                 // Fetch full E-Commerce Dashboard overview from GET /api/v1/ecommerce/dashboard
                 let overviewData = null;
                 let overviewSynced = false;
                 let overviewErr = null;
                 try {
-                    let overviewRes;
-                    try {
-                        overviewRes = await apiClient.get('/ecommerce/dashboard', {
-                            params: { ...storeParam, period: apiPeriod }
-                        });
-                    } catch (_) {
-                        try {
-                            overviewRes = await apiClient.get('/api/v1/ecommerce/dashboard', {
-                                params: { ...storeParam, period: apiPeriod }
-                            });
-                        } catch (__) {
-                            overviewRes = await apiClient.get('/ecommerce/dashboard');
-                        }
-                    }
-                    const rawOverview = overviewRes?.data?.data ?? overviewRes?.data;
-                    if (rawOverview && typeof rawOverview === 'object') {
+                    const rawOverview = await getEcommerceDashboard({
+                        period: apiPeriod,
+                        store_id: storeParam.store_id
+                    });
+                    if (rawOverview && typeof rawOverview === 'object' && (rawOverview.kpis || rawOverview.revenue_comparison || rawOverview.order_status_breakdown)) {
                         overviewData = rawOverview;
                         overviewSynced = true;
                     }
                 } catch (err) {
                     console.warn('Notice: /api/v1/ecommerce/dashboard overview handled:', err?.response?.data || err?.message);
                     overviewErr = err?.response?.data?.message || err?.message || 'Overview API fallback';
+                }
+
+                if (!kpisData && overviewData?.kpis) {
+                    kpisData = overviewData.kpis;
+                    kpisSynced = true;
+                }
+
+                if (!revenueComparisonData && overviewData?.revenue_comparison) {
+                    revenueComparisonData = overviewData.revenue_comparison;
+                    revenueComparisonSynced = true;
                 }
 
                 // Fetch orders with store fallback
@@ -880,24 +1098,48 @@ const ECommerceDashboard = () => {
                     newCustomersThisMonth = onlineCustomers > 0 ? Math.max(1, Math.round(onlineCustomers * 0.25) || 1) : 0;
                 }
 
-                // Map recent orders from GET /api/v1/ecommerce/dashboard if available, else live orders
-                let dynamicRecentOrders = [];
-                if (overviewData && Array.isArray(overviewData.recent_orders) && overviewData.recent_orders.length > 0) {
-                    dynamicRecentOrders = overviewData.recent_orders.slice(0, 6).map(o => {
+                // Fetch recent orders from GET /api/v1/ecommerce/dashboard/recent-orders
+                let apiRecentOrders = null;
+                let recentOrdersSynced = false;
+                let recentOrdersErr = null;
+                try {
+                    const rawRecent = await getEcommerceRecentOrders({
+                        limit: 10,
+                        store_id: storeParam.store_id
+                    });
+                    const parsedOrders = normalizeRecentOrders(rawRecent);
+                    if (Array.isArray(parsedOrders)) {
+                        recentOrdersSynced = true;
+                        if (parsedOrders.length > 0) {
+                            apiRecentOrders = parsedOrders.map((o, idx) => {
+                                const rawDate = o.created_at || o.createdAt || o.date;
+                                const d = parseOrderDate(rawDate);
+                                const formattedDate = d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                                return {
+                                    id: o.order_id || o.order_number || ('ORD-' + (o.id || (idx + 1))),
+                                    customer: o.customer_name || (typeof o.customer === 'object' ? o.customer?.name : o.customer) || (o.customer_id ? ('Customer ' + o.customer_id) : 'Customer'),
+                                    date: formattedDate,
+                                    amount: parseAmount(o.amount || o.total_amount || o.total || 0),
+                                    items: Number(o.items_count || (Array.isArray(o.items) ? o.items.length : 1)),
+                                    payment: o.payment_mode || (o.order_type === 'pos' ? 'POS' : 'UPI'),
+                                    status: o.status ? (o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase()) : 'Pending',
+                                };
+                            });
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Notice: /api/v1/ecommerce/dashboard/recent-orders handled:', err?.response?.data || err?.message);
+                    recentOrdersErr = err?.response?.data?.message || err?.message || 'Recent orders API fallback';
+                }
+
+                if (!apiRecentOrders && overviewData && Array.isArray(overviewData.recent_orders) && overviewData.recent_orders.length > 0) {
+                    apiRecentOrders = overviewData.recent_orders.slice(0, 10).map((o, idx) => {
                         const rawDate = o.created_at || o.createdAt || o.date;
-                        let formattedDate = '';
-                        if (rawDate) {
-                            const d = parseOrderDate(rawDate);
-                            if (d && !isNaN(d.getTime())) {
-                                formattedDate = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                            }
-                        }
-                        if (!formattedDate) {
-                            formattedDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                        }
+                        const d = parseOrderDate(rawDate);
+                        const formattedDate = d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                         return {
-                            id: o.order_id || o.order_number || ('ORD-' + (o.id || '')),
-                            customer: o.customer_name || (o.customer_id ? ('Customer ' + o.customer_id) : 'Customer'),
+                            id: o.order_id || o.order_number || ('ORD-' + (o.id || (idx + 1))),
+                            customer: o.customer_name || (typeof o.customer === 'object' ? o.customer?.name : o.customer) || (o.customer_id ? ('Customer ' + o.customer_id) : 'Customer'),
                             date: formattedDate,
                             amount: parseAmount(o.amount || o.total_amount || 0),
                             items: Number(o.items_count || (Array.isArray(o.items) ? o.items.length : 1)),
@@ -905,19 +1147,13 @@ const ECommerceDashboard = () => {
                             status: o.status ? (o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase()) : 'Pending',
                         };
                     });
-                } else {
-                    dynamicRecentOrders = orders.filter(o => o && (o.id || o.order_number)).slice(0, 6).map(o => {
+                    recentOrdersSynced = true;
+                }
+
+                const fallbackOrdersMapped = orders.filter(o => o && (o.id || o.order_number)).slice(0, 6).map(o => {
                     const rawDate = o.created_at || o.createdAt || o.date || o.order_date || o.invoice_date;
-                    let formattedDate = '';
-                    if (rawDate) {
-                        const d = new Date(rawDate);
-                        if (!isNaN(d.getTime())) {
-                            formattedDate = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                        }
-                    }
-                    if (!formattedDate) {
-                        formattedDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-                    }
+                    const d = parseOrderDate(rawDate);
+                    const formattedDate = d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
                     return {
                         id: o.order_number || ('ORD-' + o.id),
                         customer: o.customer_name || (o.customer_id ? ('Customer ' + o.customer_id) : 'Customer'),
@@ -928,7 +1164,10 @@ const ECommerceDashboard = () => {
                         status: o.status ? o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase() : 'Pending',
                     };
                 });
-                }
+
+                const dynamicRecentOrders = (apiRecentOrders && apiRecentOrders.length > 0)
+                    ? apiRecentOrders
+                    : fallbackOrdersMapped;
 
                 const dynamicStatusData = totalCount > 0 ? [
                     { name: 'Delivered', value: Math.round((statusCounts.Delivered / totalCount) * 100), color: '#10b981' },
@@ -945,85 +1184,61 @@ const ECommerceDashboard = () => {
                 let orderStatusSynced = false;
                 let orderStatusErr = null;
                 try {
-                    const parsedStoreId = parseInt(storeId, 10);
-                    const storeParam = (!isNaN(parsedStoreId) && parsedStoreId > 0) ? { store_id: parsedStoreId } : {};
-                    const apiPeriod = mapPeriodToApi(period);
-                    let osRes;
-                    try {
-                        osRes = await apiClient.get('/ecommerce/dashboard/order-status-breakdown', {
-                            params: { ...storeParam, period: apiPeriod }
-                        });
-                    } catch (_) {
-                        try {
-                            osRes = await apiClient.get('/api/v1/ecommerce/dashboard/order-status-breakdown', {
-                                params: { ...storeParam, period: apiPeriod }
-                            });
-                        } catch (__) {
-                            osRes = await apiClient.get('/ecommerce/dashboard/order-status-breakdown');
-                        }
-                    }
-                    const osRaw = osRes?.data?.data ?? osRes?.data;
-                    if (osRaw && Array.isArray(osRaw.breakdown) && osRaw.breakdown.length > 0) {
-                        apiStatusBreakdown = osRaw.breakdown;
-                        apiStatusTotal = osRaw.total_orders != null ? Number(osRaw.total_orders) : null;
+                    const rawStatus = await getEcommerceOrderStatusBreakdown({
+                        period: apiPeriod,
+                        store_id: storeParam.store_id
+                    });
+                    const parsedStatus = normalizeOrderStatusBreakdown(rawStatus);
+                    if (parsedStatus && Array.isArray(parsedStatus.breakdown) && parsedStatus.breakdown.length > 0) {
+                        apiStatusBreakdown = parsedStatus.breakdown;
+                        apiStatusTotal = parsedStatus.total_orders != null ? Number(parsedStatus.total_orders) : null;
                         orderStatusSynced = true;
                     }
                 } catch (err) {
-                    orderStatusErr = err?.message || 'Order status breakdown fallback';
+                    console.warn('Notice: /api/v1/ecommerce/dashboard/order-status-breakdown handled:', err?.response?.data || err?.message);
+                    orderStatusErr = err?.response?.data?.message || err?.message || 'Order status breakdown fallback';
                 }
 
-                // If overviewData provided order_status_breakdown, prioritize it
-                if (overviewData?.order_status_breakdown && Array.isArray(overviewData.order_status_breakdown.breakdown) && overviewData.order_status_breakdown.breakdown.length > 0) {
+                // If overviewData provided order_status_breakdown and direct fetch didn't return breakdown, fallback to overview
+                if (!apiStatusBreakdown && overviewData?.order_status_breakdown && Array.isArray(overviewData.order_status_breakdown.breakdown) && overviewData.order_status_breakdown.breakdown.length > 0) {
                     apiStatusBreakdown = overviewData.order_status_breakdown.breakdown;
                     apiStatusTotal = overviewData.order_status_breakdown.total_orders != null ? Number(overviewData.order_status_breakdown.total_orders) : apiStatusTotal;
                     orderStatusSynced = true;
                 }
 
-                // Fetch Top Selling Products from GET /api/v1/ecommerce/dashboard/top-products or fallback endpoints
+                // Fetch Top Selling Products from GET /api/v1/ecommerce/dashboard/top-products
                 let apiTopProducts = null;
                 let topProductsErr = null;
                 let topProductsSynced = false;
                 try {
-                    const parsedStoreId = parseInt(storeId, 10);
-                    const storeParam = (!isNaN(parsedStoreId) && parsedStoreId > 0) ? { store_id: parsedStoreId, limit: 10 } : { limit: 10 };
-                    let tpRes;
-                    try {
-                        tpRes = await apiClient.get('/ecommerce/dashboard/top-products', { params: storeParam });
-                    } catch (_) {
-                        try {
-                            tpRes = await apiClient.get('/api/v1/ecommerce/dashboard/top-products', { params: storeParam });
-                        } catch (__) {
-                            try {
-                                tpRes = await apiClient.get('/dashboard/top-products', { params: storeParam });
-                            } catch (___) {
-                                tpRes = await apiClient.get('/api/v1/dashboard/top-products', { params: storeParam });
-                            }
-                        }
-                    }
-                    const tpRaw = tpRes?.data?.data ?? tpRes?.data;
-                    const rawList = Array.isArray(tpRaw) ? tpRaw : (tpRaw?.products || tpRaw?.top_products || tpRaw?.items || []);
-                    if (Array.isArray(rawList) && rawList.length > 0) {
-                        apiTopProducts = rawList.map((p, idx) => ({
-                            id: p.id || p.product_id || (idx + 1),
-                            product_id: p.product_id || p.id || (idx + 1),
-                            rank: p.rank || (idx + 1),
-                            name: p.product_name || p.name || p.title || `Product #${p.product_id || (idx + 1)}`,
-                            category: p.category || p.category_name || (typeof p.category === 'object' ? p.category?.name : null) || 'General',
-                            orders: Number(p.orders_count || p.quantity_sold || p.orders || p.qty || 1),
-                            revenue: parseAmount(p.revenue || p.total_revenue || 0),
-                            rating: Number(p.rating || p.average_rating || 4.8),
-                            progress_percentage: p.progress_percentage != null ? Number(p.progress_percentage) : null
-                        })).filter(p => p.name && p.name !== 'Store Item');
-                        if (apiTopProducts.length > 0) {
-                            topProductsSynced = true;
+                    const rawTop = await getEcommerceTopProducts({
+                        limit: 10,
+                        store_id: storeParam.store_id
+                    });
+                    const rawList = normalizeTopProducts(rawTop);
+                    if (Array.isArray(rawList)) {
+                        topProductsSynced = true;
+                        if (rawList.length > 0) {
+                            apiTopProducts = rawList.map((p, idx) => ({
+                                id: p.id || p.product_id || (idx + 1),
+                                product_id: p.product_id || p.id || (idx + 1),
+                                rank: p.rank || (idx + 1),
+                                name: p.product_name || p.name || p.title || `Product #${p.product_id || (idx + 1)}`,
+                                category: p.category || p.category_name || (typeof p.category === 'object' ? p.category?.name : null) || 'General',
+                                orders: Number(p.orders_count || p.quantity_sold || p.orders || p.qty || 1),
+                                revenue: parseAmount(p.revenue || p.total_revenue || 0),
+                                rating: Number(p.rating || p.average_rating || 4.8),
+                                progress_percentage: p.progress_percentage != null ? Number(p.progress_percentage) : null
+                            })).filter(p => p.name && p.name !== 'Store Item');
                         }
                     }
                 } catch (err) {
-                    topProductsErr = err?.message || 'Top products API fallback';
+                    console.warn('Notice: /api/v1/ecommerce/dashboard/top-products handled:', err?.response?.data || err?.message);
+                    topProductsErr = err?.response?.data?.message || err?.message || 'Top products API fallback';
                 }
 
-                // If overviewData provided top_products, prioritize it
-                if (overviewData && Array.isArray(overviewData.top_products) && overviewData.top_products.length > 0) {
+                // If overviewData provided top_products and direct fetch didn't return list, fallback to overview
+                if ((!apiTopProducts || apiTopProducts.length === 0) && overviewData && Array.isArray(overviewData.top_products) && overviewData.top_products.length > 0) {
                     const ovTop = overviewData.top_products.map((p, idx) => ({
                         id: p.id || p.product_id || (idx + 1),
                         product_id: p.product_id || p.id || (idx + 1),
@@ -1145,6 +1360,17 @@ const ECommerceDashboard = () => {
                         onlineCustomers,
                         newCustomersThisMonth,
                         recentOrders: dynamicRecentOrders,
+                        recentOrdersLoading: false,
+                        recentOrdersError: recentOrdersErr,
+                        recentOrdersApiSynced: recentOrdersSynced,
+                        kpisData,
+                        kpisLoading: false,
+                        kpisError: kpisErr,
+                        kpisApiSynced: kpisSynced,
+                        revenueComparisonData,
+                        revenueComparisonLoading: false,
+                        revenueComparisonError: revenueComparisonErr,
+                        revenueComparisonApiSynced: revenueComparisonSynced,
                         overviewData,
                         overviewLoading: false,
                         overviewError: overviewErr,
@@ -1176,6 +1402,12 @@ const ECommerceDashboard = () => {
                         ordersLoading: false,
                         ordersError: err?.message || 'Error loading orders',
                         loading: false,
+                        kpisLoading: false,
+                        kpisError: err?.message || 'Error loading KPIs',
+                        kpisApiSynced: false,
+                        revenueComparisonLoading: false,
+                        revenueComparisonError: err?.message || 'Error loading revenue comparison',
+                        revenueComparisonApiSynced: false,
                         topProducts: topProducts,
                         topProductsLoading: false,
                         topProductsError: err?.message || 'Error loading top products',
@@ -1183,6 +1415,9 @@ const ECommerceDashboard = () => {
                         orderStatusLoading: false,
                         orderStatusError: err?.message || 'Error loading status breakdown',
                         orderStatusApiSynced: false,
+                        recentOrdersLoading: false,
+                        recentOrdersError: err?.message || 'Error loading recent orders',
+                        recentOrdersApiSynced: false,
                         storefrontPagesLoading: false,
                         storefrontContactSocialLoading: false,
                     }));
@@ -1193,83 +1428,251 @@ const ECommerceDashboard = () => {
         return () => { active = false; };
     }, []);
 
-    // Sync full E-Commerce Dashboard overview (KPIs, Charts, Orders, Top Products) when period changes
+    // Sync 8 e-commerce KPI metrics cards, revenue comparison timeseries, order status breakdown, recent orders, and full overview when period changes
     useEffect(() => {
         let active = true;
-        const updateDashboardOverview = async () => {
+        const updateDashboardPeriodData = async () => {
             let savedUser = {};
             try {
                 savedUser = JSON.parse(localStorage.getItem('user') || '{}') || {};
             } catch (_) {}
             const storeId = savedUser?.store_id || savedUser?.storeId || 1;
             const parsedStoreId = parseInt(storeId, 10);
-            const storeParam = (!isNaN(parsedStoreId) && parsedStoreId > 0) ? { store_id: parsedStoreId } : {};
             const apiPeriod = mapPeriodToApi(period);
 
+            setLiveData(prev => ({ ...prev, kpisLoading: true, revenueComparisonLoading: true, orderStatusLoading: true, recentOrdersLoading: true, topProductsLoading: true, overviewLoading: true }));
+
             try {
-                // 1. Primary: GET /api/v1/ecommerce/dashboard?period=...
-                let overviewRes;
-                try {
-                    overviewRes = await apiClient.get('/ecommerce/dashboard', {
-                        params: { ...storeParam, period: apiPeriod }
-                    });
-                } catch (_) {
-                    overviewRes = await apiClient.get('/api/v1/ecommerce/dashboard', {
-                        params: { ...storeParam, period: apiPeriod }
-                    });
+                const [rawKpisResult, rawRevCompResult, rawOrderStatusResult, rawRecentOrdersResult, rawTopProductsResult, rawOverviewResult] = await Promise.allSettled([
+                    getEcommerceDashboardKpis({
+                        period: apiPeriod,
+                        store_id: parsedStoreId > 0 ? parsedStoreId : undefined
+                    }),
+                    getEcommerceRevenueComparison({
+                        period: apiPeriod,
+                        store_id: parsedStoreId > 0 ? parsedStoreId : undefined
+                    }),
+                    getEcommerceOrderStatusBreakdown({
+                        period: apiPeriod,
+                        store_id: parsedStoreId > 0 ? parsedStoreId : undefined
+                    }),
+                    getEcommerceRecentOrders({
+                        limit: 10,
+                        store_id: parsedStoreId > 0 ? parsedStoreId : undefined
+                    }),
+                    getEcommerceTopProducts({
+                        limit: 10,
+                        store_id: parsedStoreId > 0 ? parsedStoreId : undefined
+                    }),
+                    getEcommerceDashboard({
+                        period: apiPeriod,
+                        store_id: parsedStoreId > 0 ? parsedStoreId : undefined
+                    })
+                ]);
+
+                let newKpis = null;
+                let kpisSynced = false;
+                let kpisErr = null;
+                if (rawKpisResult.status === 'fulfilled') {
+                    const parsed = normalizeKpis(rawKpisResult.value);
+                    if (parsed && typeof parsed === 'object' && (parsed.online_revenue || parsed.active_products || parsed.total_online_orders)) {
+                        newKpis = parsed;
+                        kpisSynced = true;
+                    }
+                } else {
+                    kpisErr = rawKpisResult.reason?.message || 'Failed to fetch /kpis';
                 }
-                const rawOverview = overviewRes?.data?.data ?? overviewRes?.data;
-                if (active && rawOverview && typeof rawOverview === 'object') {
+
+                let newRevComp = null;
+                let revCompSynced = false;
+                let revCompErr = null;
+                if (rawRevCompResult.status === 'fulfilled') {
+                    const parsed = normalizeRevenueComparison(rawRevCompResult.value);
+                    if (parsed && typeof parsed === 'object' && (parsed.monthly_data || parsed.summary)) {
+                        newRevComp = parsed;
+                        revCompSynced = true;
+                    }
+                } else {
+                    revCompErr = rawRevCompResult.reason?.message || 'Failed to fetch /revenue-comparison';
+                }
+
+                let newStatusBreakdown = null;
+                let newStatusTotal = null;
+                let statusSynced = false;
+                let statusErr = null;
+                if (rawOrderStatusResult.status === 'fulfilled') {
+                    const parsed = normalizeOrderStatusBreakdown(rawOrderStatusResult.value);
+                    if (parsed && Array.isArray(parsed.breakdown) && parsed.breakdown.length > 0) {
+                        newStatusBreakdown = parsed.breakdown;
+                        newStatusTotal = parsed.total_orders != null ? Number(parsed.total_orders) : null;
+                        statusSynced = true;
+                    }
+                } else {
+                    statusErr = rawOrderStatusResult.reason?.message || 'Failed to fetch /order-status-breakdown';
+                }
+
+                let rawOverview = null;
+                let overviewSynced = false;
+                let overviewErr = null;
+                if (rawOverviewResult.status === 'fulfilled' && rawOverviewResult.value && typeof rawOverviewResult.value === 'object') {
+                    rawOverview = rawOverviewResult.value;
+                    overviewSynced = true;
+                    if (!newKpis && rawOverview.kpis) {
+                        newKpis = rawOverview.kpis;
+                        kpisSynced = true;
+                    }
+                    if (!newRevComp && rawOverview.revenue_comparison) {
+                        newRevComp = rawOverview.revenue_comparison;
+                        revCompSynced = true;
+                    }
+                    if (!newStatusBreakdown && rawOverview.order_status_breakdown?.breakdown && Array.isArray(rawOverview.order_status_breakdown.breakdown)) {
+                        newStatusBreakdown = rawOverview.order_status_breakdown.breakdown;
+                        newStatusTotal = rawOverview.order_status_breakdown.total_orders != null ? Number(rawOverview.order_status_breakdown.total_orders) : newStatusTotal;
+                        statusSynced = true;
+                    }
+                } else if (rawOverviewResult.status === 'rejected') {
+                    overviewErr = rawOverviewResult.reason?.message || 'Failed to fetch overview';
+                }
+
+                let newRecent = null;
+                let recentOrdersSynced = false;
+                let recentOrdersErr = null;
+                if (rawRecentOrdersResult.status === 'fulfilled') {
+                    const parsedOrders = normalizeRecentOrders(rawRecentOrdersResult.value);
+                    if (Array.isArray(parsedOrders)) {
+                        recentOrdersSynced = true;
+                        if (parsedOrders.length > 0) {
+                            newRecent = parsedOrders.map((o, idx) => {
+                                const rawDate = o.created_at || o.createdAt || o.date;
+                                const d = parseOrderDate(rawDate);
+                                const formattedDate = d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                                return {
+                                    id: o.order_id || o.order_number || ('ORD-' + (o.id || (idx + 1))),
+                                    customer: o.customer_name || (typeof o.customer === 'object' ? o.customer?.name : o.customer) || (o.customer_id ? ('Customer ' + o.customer_id) : 'Customer'),
+                                    date: formattedDate,
+                                    amount: parseAmount(o.amount || o.total_amount || o.total || 0),
+                                    items: Number(o.items_count || (Array.isArray(o.items) ? o.items.length : 1)),
+                                    payment: o.payment_mode || (o.order_type === 'pos' ? 'POS' : 'UPI'),
+                                    status: o.status ? (o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase()) : 'Pending',
+                                };
+                            });
+                        }
+                    }
+                } else {
+                    recentOrdersErr = rawRecentOrdersResult.reason?.message || 'Failed to fetch /recent-orders';
+                }
+
+                if (!newRecent && rawOverview && Array.isArray(rawOverview.recent_orders) && rawOverview.recent_orders.length > 0) {
+                    newRecent = rawOverview.recent_orders.slice(0, 10).map((o, idx) => {
+                        const rawDate = o.created_at || o.createdAt || o.date;
+                        const d = parseOrderDate(rawDate);
+                        const formattedDate = d ? d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+                        return {
+                            id: o.order_id || o.order_number || ('ORD-' + (o.id || (idx + 1))),
+                            customer: o.customer_name || (typeof o.customer === 'object' ? o.customer?.name : o.customer) || (o.customer_id ? ('Customer ' + o.customer_id) : 'Customer'),
+                            date: formattedDate,
+                            amount: parseAmount(o.amount || o.total_amount || 0),
+                            items: Number(o.items_count || (Array.isArray(o.items) ? o.items.length : 1)),
+                            payment: o.payment_mode || (o.order_type === 'pos' ? 'POS' : 'UPI'),
+                            status: o.status ? (o.status.charAt(0).toUpperCase() + o.status.slice(1).toLowerCase()) : 'Pending',
+                        };
+                    });
+                    recentOrdersSynced = true;
+                }
+
+                if (active) {
+
+                    let newTop = null;
+                    let topSynced = false;
+                    let topErr = null;
+                    if (rawTopProductsResult.status === 'fulfilled') {
+                        const rawList = normalizeTopProducts(rawTopProductsResult.value);
+                        if (Array.isArray(rawList)) {
+                            topSynced = true;
+                            if (rawList.length > 0) {
+                                newTop = rawList.map((p, idx) => ({
+                                    id: p.id || p.product_id || (idx + 1),
+                                    product_id: p.product_id || p.id || (idx + 1),
+                                    rank: p.rank || (idx + 1),
+                                    name: p.product_name || p.name || p.title || `Product #${p.product_id || (idx + 1)}`,
+                                    category: p.category || p.category_name || (typeof p.category === 'object' ? p.category?.name : null) || 'General',
+                                    orders: Number(p.orders_count || p.quantity_sold || p.orders || p.qty || 1),
+                                    revenue: parseAmount(p.revenue || p.total_revenue || 0),
+                                    rating: Number(p.rating || p.average_rating || 4.8),
+                                    progress_percentage: p.progress_percentage != null ? Number(p.progress_percentage) : null
+                                })).filter(p => p.name && p.name !== 'Store Item');
+                            }
+                        }
+                    } else {
+                        topErr = rawTopProductsResult.reason?.message || 'Failed to fetch /top-products';
+                    }
+
+                    if ((!newTop || newTop.length === 0) && rawOverview && Array.isArray(rawOverview.top_products) && rawOverview.top_products.length > 0) {
+                        newTop = rawOverview.top_products.map((p, idx) => ({
+                            id: p.id || p.product_id || (idx + 1),
+                            product_id: p.product_id || p.id || (idx + 1),
+                            rank: p.rank || (idx + 1),
+                            name: p.product_name || p.name || p.title || `Product #${p.product_id || (idx + 1)}`,
+                            category: p.category || p.category_name || (typeof p.category === 'object' ? p.category?.name : null) || 'General',
+                            orders: Number(p.orders_count || p.quantity_sold || p.orders || p.qty || 1),
+                            revenue: parseAmount(p.revenue || p.total_revenue || 0),
+                            rating: Number(p.rating || p.average_rating || 4.8),
+                            progress_percentage: p.progress_percentage != null ? Number(p.progress_percentage) : null
+                        })).filter(p => p.name && p.name !== 'Store Item');
+                        topSynced = true;
+                    }
+
                     setLiveData(prev => ({
                         ...prev,
-                        overviewData: rawOverview,
-                        overviewApiSynced: true,
-                        overviewError: null,
+                        kpisData: newKpis || prev.kpisData,
+                        kpisApiSynced: kpisSynced || prev.kpisApiSynced,
+                        kpisError: kpisErr,
+                        kpisLoading: false,
+                        revenueComparisonData: newRevComp || prev.revenueComparisonData,
+                        revenueComparisonApiSynced: revCompSynced || prev.revenueComparisonApiSynced,
+                        revenueComparisonError: revCompErr,
+                        revenueComparisonLoading: false,
+                        orderStatusBreakdown: newStatusBreakdown || prev.orderStatusBreakdown,
+                        orderStatusTotal: newStatusTotal != null ? newStatusTotal : prev.orderStatusTotal,
+                        orderStatusApiSynced: statusSynced || prev.orderStatusApiSynced,
+                        orderStatusLoading: false,
+                        orderStatusError: statusErr,
+                        overviewData: rawOverview || prev.overviewData,
+                        overviewApiSynced: overviewSynced || prev.overviewApiSynced,
+                        overviewError: overviewErr,
                         overviewLoading: false,
-                        orderStatusBreakdown: rawOverview.order_status_breakdown?.breakdown || prev.orderStatusBreakdown,
-                        orderStatusTotal: rawOverview.order_status_breakdown?.total_orders != null ? Number(rawOverview.order_status_breakdown.total_orders) : prev.orderStatusTotal,
+                        recentOrders: newRecent || prev.recentOrders,
+                        recentOrdersLoading: false,
+                        recentOrdersError: recentOrdersErr,
+                        recentOrdersApiSynced: recentOrdersSynced || prev.recentOrdersApiSynced,
+                        topProducts: newTop || prev.topProducts,
+                        topProductsLoading: false,
+                        topProductsError: topErr,
+                        topProductsApiSynced: topSynced || prev.topProductsApiSynced
                     }));
                 }
             } catch (err) {
-                // Fallback: GET /api/v1/ecommerce/dashboard/order-status-breakdown
-                try {
-                    let osRes;
-                    try {
-                        osRes = await apiClient.get('/ecommerce/dashboard/order-status-breakdown', {
-                            params: { ...storeParam, period: apiPeriod }
-                        });
-                    } catch (_) {
-                        osRes = await apiClient.get('/api/v1/ecommerce/dashboard/order-status-breakdown', {
-                            params: { ...storeParam, period: apiPeriod }
-                        });
-                    }
-                    const osRaw = osRes?.data?.data ?? osRes?.data;
-                    if (active && osRaw && Array.isArray(osRaw.breakdown)) {
-                        setLiveData(prev => ({
-                            ...prev,
-                            orderStatusBreakdown: osRaw.breakdown,
-                            orderStatusTotal: osRaw.total_orders != null ? Number(osRaw.total_orders) : prev.orderStatusTotal,
-                            orderStatusApiSynced: true,
-                            orderStatusError: null,
-                            orderStatusLoading: false
-                        }));
-                    }
-                } catch (_) {
-                    if (active) {
-                        setLiveData(prev => ({
-                            ...prev,
-                            overviewLoading: false,
-                            overviewError: err?.message || 'Overview fallback',
-                            overviewApiSynced: false
-                        }));
-                    }
+                if (active) {
+                    setLiveData(prev => ({
+                        ...prev,
+                        kpisLoading: false,
+                        revenueComparisonLoading: false,
+                        orderStatusLoading: false,
+                        overviewLoading: false,
+                        overviewError: err?.message || 'Overview fallback',
+                        kpisError: err?.message || 'KPIs fallback',
+                        revenueComparisonError: err?.message || 'Revenue comparison fallback',
+                        orderStatusError: err?.message || 'Order status breakdown fallback',
+                        recentOrdersLoading: false,
+                        recentOrdersError: err?.message || 'Recent orders fallback'
+                    }));
                 }
             }
         };
 
-        updateDashboardOverview();
+        updateDashboardPeriodData();
         return () => { active = false; };
-    }, [period]);
+    }, [period, chartYear]);
 
     // Filter orders by active period
     const currentOrders = filterOrdersByPeriod(liveData.allOrders || [], period);
@@ -1390,39 +1793,27 @@ const ECommerceDashboard = () => {
             ? Number(liveData.orderStatusTotal)
             : apiBreakdown.reduce((sum, item) => sum + Number(item.count || 0), 0);
 
-        statusBreakdownData = standardStatusDefs.map(def => {
-            const found = apiBreakdown.find(b => {
-                const s = String(b.status || b.label || b.name || '').toLowerCase();
-                return s === def.key || s === def.name.toLowerCase();
-            });
-            const count = found ? Number(found.count || 0) : 0;
+        statusBreakdownData = apiBreakdown.map(b => {
+            const bLabel = b.label || (b.status ? (b.status.charAt(0).toUpperCase() + b.status.slice(1).toLowerCase()) : 'Status');
+            const count = Number(b.count || 0);
+            const color = b.color || '#6366f1';
+            const percentage = b.percentage != null ? Number(b.percentage) : 0;
             return {
-                name: def.name,
+                name: bLabel,
+                status: b.status,
                 count,
-                amount: parseAmount(found?.amount || 0),
-                color: found?.color || def.color,
-                bg: def.bg,
+                amount: parseAmount(b.amount || 0),
+                color,
+                bg: b.bg || `${color}18`,
+                percentage,
+                value: percentage
             };
-        });
-
-        apiBreakdown.forEach(b => {
-            const bName = b.label || (b.status ? (b.status.charAt(0).toUpperCase() + b.status.slice(1)) : 'Status');
-            const exists = statusBreakdownData.some(s => s.name.toLowerCase() === bName.toLowerCase());
-            if (!exists) {
-                statusBreakdownData.push({
-                    name: bName,
-                    count: Number(b.count || 0),
-                    amount: parseAmount(b.amount || 0),
-                    color: b.color || '#6366f1',
-                    bg: '#f1f5f9',
-                });
-            }
         });
 
         if (effectiveTotalOrders > 0) {
             statusBreakdownData = calculateExactPercentages(statusBreakdownData, effectiveTotalOrders);
         } else {
-            statusBreakdownData = statusBreakdownData.map(it => ({ ...it, value: 0, percentage: 0 }));
+            statusBreakdownData = statusBreakdownData.map(it => ({ ...it, value: it.percentage || 0, percentage: it.percentage || 0 }));
         }
     } else {
         // Fallback: accurately compute from live currentOrders
@@ -1509,15 +1900,16 @@ const ECommerceDashboard = () => {
         }
     });
 
-    // If overview API supplied monthly revenue comparison data, incorporate it
-    const overviewMonthly = liveData.overviewData?.revenue_comparison?.monthly_data;
-    if (targetChartYear === currentYear && Array.isArray(overviewMonthly) && overviewMonthly.length > 0) {
-        overviewMonthly.forEach(pt => {
+    // Incorporate timeseries from GET /api/v1/ecommerce/dashboard/revenue-comparison
+    const effectiveRevenueComparison = liveData.revenueComparisonData || liveData.overviewData?.revenue_comparison;
+    const revCompMonthly = effectiveRevenueComparison?.monthly_data;
+    if (targetChartYear === currentYear && Array.isArray(revCompMonthly) && revCompMonthly.length > 0) {
+        revCompMonthly.forEach(pt => {
             const mStr = String(pt.month || '').toLowerCase();
             const target = chartRevenueData.find(item => item.month.toLowerCase() === mStr);
             if (target) {
-                if (pt.online != null && parseAmount(pt.online) > 0) target.online = parseAmount(pt.online);
-                if (pt.offline != null && parseAmount(pt.offline) > 0) target.offline = parseAmount(pt.offline);
+                target.online = parseAmount(pt.online);
+                target.offline = parseAmount(pt.offline);
             }
         });
     }
@@ -1525,13 +1917,13 @@ const ECommerceDashboard = () => {
     let totalChartOnline = chartRevenueData.reduce((acc, it) => acc + it.online, 0);
     let totalChartOffline = chartRevenueData.reduce((acc, it) => acc + it.offline, 0);
 
-    const overviewSummary = liveData.overviewData?.revenue_comparison?.summary;
-    if (overviewSummary && targetChartYear === currentYear) {
-        if (totalChartOnline === 0 && parseAmount(overviewSummary.total_online) > 0) {
-            totalChartOnline = parseAmount(overviewSummary.total_online);
+    const revCompSummary = effectiveRevenueComparison?.summary;
+    if (revCompSummary && targetChartYear === currentYear) {
+        if (revCompSummary.total_online != null) {
+            totalChartOnline = parseAmount(revCompSummary.total_online);
         }
-        if (totalChartOffline === 0 && parseAmount(overviewSummary.total_offline) > 0) {
-            totalChartOffline = parseAmount(overviewSummary.total_offline);
+        if (revCompSummary.total_offline != null) {
+            totalChartOffline = parseAmount(revCompSummary.total_offline);
         }
     }
 
@@ -1566,8 +1958,8 @@ const ECommerceDashboard = () => {
         }
     }
 
-    // If online revenue is 0 in chart despite offline revenue being available, ensure revenue is available online
-    if (totalChartOnline === 0 && totalChartOffline > 0) {
+    // If online revenue is 0 in chart despite offline revenue being available and not API synced, ensure revenue is available online
+    if (!liveData.overviewApiSynced && !liveData.revenueComparisonApiSynced && totalChartOnline === 0 && totalChartOffline > 0) {
         chartRevenueData.forEach(it => {
             if (it.offline > 0 && it.online === 0) {
                 it.online = it.offline;
@@ -1600,26 +1992,7 @@ const ECommerceDashboard = () => {
         }
     }
 
-    // If both are still 0 but offlineRevenue KPI has value, distribute to active month
-    if (totalChartOnline === 0 && totalChartOffline === 0 && offlineRevenue > 0) {
-        const nowMonth = new Date().getMonth();
-        chartRevenueData[nowMonth].online = offlineRevenue;
-        chartRevenueData[nowMonth].offline = offlineRevenue;
-        totalChartOnline = offlineRevenue;
-        totalChartOffline = offlineRevenue;
-    }
-
-    const onlineCustomers = liveData.onlineCustomers || 0;
-    const newCustomersThisMonth = (liveData.newCustomersThisMonth > 0)
-        ? liveData.newCustomersThisMonth
-        : (onlineCustomers > 0 ? Math.max(1, Math.min(onlineCustomers, Math.round(onlineCustomers * 0.25) || 1)) : 0);
-    const activeProducts = liveData.activeProducts || 0;
-    const totalProducts = liveData.totalProducts || activeProducts || 0;
-    const activePct = totalProducts > 0
-        ? Math.min(100, Math.round((activeProducts / totalProducts) * 1000) / 10).toFixed(1)
-        : (activeProducts > 0 ? '100.0' : '0.0');
-
-    // Calculate Offline Orders & Revenue from invoices and POS records
+        // Calculate Offline Orders & Revenue from invoices and POS records
     const periodInvoices = filterOrdersByPeriod(liveData.allInvoices || [], period);
     const validPeriodInvoices = periodInvoices.filter(inv => {
         const st = String(inv.status || '').toLowerCase().trim();
@@ -1663,155 +2036,167 @@ const ECommerceDashboard = () => {
         }
     }
 
-    const overviewKpis = liveData.overviewData?.kpis;
+    // If both are still 0 but offlineRevenue has value, distribute to active month
+    if (totalChartOnline === 0 && totalChartOffline === 0 && offlineRevenue > 0) {
+        const nowMonth = new Date().getMonth();
+        chartRevenueData[nowMonth].online = offlineRevenue;
+        chartRevenueData[nowMonth].offline = offlineRevenue;
+        totalChartOnline = offlineRevenue;
+        totalChartOffline = offlineRevenue;
+    }
+
+    const onlineCustomers = liveData.onlineCustomers || 0;
+    const newCustomersThisMonth = (liveData.newCustomersThisMonth > 0)
+        ? liveData.newCustomersThisMonth
+        : (onlineCustomers > 0 ? Math.max(1, Math.min(onlineCustomers, Math.round(onlineCustomers * 0.25) || 1)) : 0);
+    const activeProducts = liveData.activeProducts || 0;
+    const totalProducts = liveData.totalProducts || activeProducts || 0;
+    const activePct = totalProducts > 0
+        ? Math.min(100, Math.round((activeProducts / totalProducts) * 1000) / 10).toFixed(1)
+        : (activeProducts > 0 ? '100.0' : '0.0');
+
+    // 8 e-commerce KPI metrics cards from GET /api/v1/ecommerce/dashboard/kpis
+    const effectiveKpis = liveData.kpisData || liveData.overviewData?.kpis;
 
     const kpis = [
         {
             label: 'Online Revenue',
-            value: (overviewKpis?.online_revenue && parseAmount(overviewKpis.online_revenue.value) > 0)
-                ? fmt(overviewKpis.online_revenue.value)
+            value: (effectiveKpis?.online_revenue && effectiveKpis.online_revenue.value != null)
+                ? fmt(effectiveKpis.online_revenue.value)
                 : fmt(revenue),
-            change: overviewKpis?.online_revenue?.change_percentage != null
-                ? ((overviewKpis.online_revenue.change_percentage >= 0 ? '+' : '') + overviewKpis.online_revenue.change_percentage + '%')
+            change: effectiveKpis?.online_revenue?.change_percentage != null
+                ? ((effectiveKpis.online_revenue.change_percentage >= 0 ? '+' : '') + effectiveKpis.online_revenue.change_percentage + '%')
                 : (revenue > 0 ? '+24.3%' : '0.0%'),
-            up: overviewKpis?.online_revenue?.change_percentage != null
-                ? overviewKpis.online_revenue.change_percentage >= 0
+            up: effectiveKpis?.online_revenue?.change_percentage != null
+                ? effectiveKpis.online_revenue.change_percentage >= 0
                 : revenue > 0,
             icon: <BsCurrencyRupee size={18} />,
             color: '#6366f1',
             bg: '#eef2ff',
-            sub: overviewKpis?.online_revenue?.comparison_text || overviewKpis?.online_revenue?.subtext || ((period === 'This Year' || (typeof period === 'string' && period.startsWith('This Year'))) ? ('vs ' + lastYear) : ('in ' + periodLabel))
+            sub: effectiveKpis?.online_revenue?.comparison_text || effectiveKpis?.online_revenue?.subtext || ((period === 'This Year' || (typeof period === 'string' && period.startsWith('This Year'))) ? ('vs ' + lastYear) : ('in ' + periodLabel))
         },
         {
             label: 'Total Online Orders',
-            value: (overviewKpis?.total_online_orders && typeof overviewKpis.total_online_orders.value === 'number' && overviewKpis.total_online_orders.value > 0)
-                ? overviewKpis.total_online_orders.value.toLocaleString('en-IN')
+            value: (effectiveKpis?.total_online_orders && effectiveKpis.total_online_orders.value != null)
+                ? Number(effectiveKpis.total_online_orders.value).toLocaleString('en-IN')
                 : totalOrders.toLocaleString('en-IN'),
-            change: overviewKpis?.total_online_orders?.change_percentage != null
-                ? ((overviewKpis.total_online_orders.change_percentage >= 0 ? '+' : '') + overviewKpis.total_online_orders.change_percentage + '%')
+            change: effectiveKpis?.total_online_orders?.change_percentage != null
+                ? ((effectiveKpis.total_online_orders.change_percentage >= 0 ? '+' : '') + effectiveKpis.total_online_orders.change_percentage + '%')
                 : (totalOrders > 0 ? '+19.8%' : '0.0%'),
-            up: overviewKpis?.total_online_orders?.change_percentage != null
-                ? overviewKpis.total_online_orders.change_percentage >= 0
+            up: effectiveKpis?.total_online_orders?.change_percentage != null
+                ? effectiveKpis.total_online_orders.change_percentage >= 0
                 : totalOrders > 0,
             icon: <BsCartCheck size={18} />,
             color: '#10b981',
             bg: '#ecfdf5',
-            sub: overviewKpis?.total_online_orders?.subtext
-                ? overviewKpis.total_online_orders.subtext
-                : (liveData.ordersLoading
-                    ? 'Fetching GET /api/v1/ecommerce/dashboard...'
-                    : (fulfilledCount.toLocaleString('en-IN') + ' fulfilled in ' + periodLabel))
-        },
-        {
-            label: 'Offline Orders',
-            value: offlineOrdersCount.toLocaleString('en-IN'),
-            change: offlineOrdersCount > 0 ? '+14.2%' : '0.0%',
-            up: offlineOrdersCount > 0,
-            icon: <BsShop size={18} />,
-            color: '#0d9488',
-            bg: '#f0fdfa',
-            sub: offlineRevenue > 0
-                ? (fmt(offlineRevenue) + ' store sales (' + periodLabel + ')')
-                : ('In-store / POS orders (' + periodLabel + ')')
+            sub: effectiveKpis?.total_online_orders?.today_count != null
+                ? (effectiveKpis.total_online_orders.today_count + ' today (' + periodLabel + ')')
+                : (effectiveKpis?.total_online_orders?.subtext || (liveData.ordersLoading
+                    ? 'Fetching GET /api/v1/ecommerce/dashboard/kpis...'
+                    : (fulfilledCount.toLocaleString('en-IN') + ' fulfilled in ' + periodLabel)))
         },
         {
             label: 'Active Products',
-            value: (overviewKpis?.active_products && typeof overviewKpis.active_products.value === 'number' && overviewKpis.active_products.value > 0)
-                ? overviewKpis.active_products.value.toLocaleString('en-IN')
+            value: (effectiveKpis?.active_products && effectiveKpis.active_products.value != null)
+                ? Number(effectiveKpis.active_products.value).toLocaleString('en-IN')
                 : (typeof activeProducts === 'number' ? activeProducts.toLocaleString('en-IN') : String(activeProducts)),
-            change: overviewKpis?.active_products?.change_percentage != null
-                ? ((overviewKpis.active_products.change_percentage >= 0 ? '+' : '') + overviewKpis.active_products.change_percentage + '%')
+            change: effectiveKpis?.active_products?.change_percentage != null
+                ? ((effectiveKpis.active_products.change_percentage >= 0 ? '+' : '') + effectiveKpis.active_products.change_percentage + '%')
                 : (activeProducts > 0 ? ('+' + activePct + '%') : '0.0%'),
-            up: overviewKpis?.active_products?.change_percentage != null
-                ? overviewKpis.active_products.change_percentage >= 0
+            up: effectiveKpis?.active_products?.change_percentage != null
+                ? effectiveKpis.active_products.change_percentage >= 0
                 : activeProducts > 0,
             icon: <BsBoxSeam size={18} />,
             color: '#f59e0b',
             bg: '#fffbeb',
-            sub: overviewKpis?.active_products?.subtext || (totalProducts > 0
+            sub: effectiveKpis?.active_products?.subtext || (totalProducts > 0
                 ? (totalProducts === activeProducts
                     ? (activeProducts.toLocaleString('en-IN') + ' of ' + totalProducts.toLocaleString('en-IN') + ' active (' + currentYear + ')')
                     : (activeProducts.toLocaleString('en-IN') + ' of ' + totalProducts.toLocaleString('en-IN') + ' active in catalog (' + currentYear + ')'))
-                : ('In product catalog (' + currentYear + ')'))
+                : ('In product catalog (' + currentYear + ')')),
+            path: '/ecommerce/products'
         },
         {
             label: 'Conversion Rate',
-            value: (overviewKpis?.conversion_rate && typeof overviewKpis.conversion_rate.value === 'number' && overviewKpis.conversion_rate.value > 0)
-                ? (overviewKpis.conversion_rate.value + '%')
+            value: (effectiveKpis?.conversion_rate && effectiveKpis.conversion_rate.value != null)
+                ? (effectiveKpis.conversion_rate.value + '%')
                 : conversionRate,
-            change: overviewKpis?.conversion_rate?.change_percentage != null
-                ? ((overviewKpis.conversion_rate.change_percentage >= 0 ? '+' : '') + overviewKpis.conversion_rate.change_percentage + '%')
+            change: effectiveKpis?.conversion_rate?.change_percentage != null
+                ? ((effectiveKpis.conversion_rate.change_percentage >= 0 ? '+' : '') + effectiveKpis.conversion_rate.change_percentage + '%')
                 : (parseFloat(conversionRate) > 0 ? '+0.4%' : '0.0%'),
-            up: overviewKpis?.conversion_rate?.change_percentage != null
-                ? overviewKpis.conversion_rate.change_percentage >= 0
+            up: effectiveKpis?.conversion_rate?.change_percentage != null
+                ? effectiveKpis.conversion_rate.change_percentage >= 0
                 : parseFloat(conversionRate) > 0,
             icon: <BsShopWindow size={18} />,
             color: '#22d3ee',
             bg: '#ecfeff',
-            sub: overviewKpis?.conversion_rate?.subtext || (totalOrders > 0 ? (fulfilledCount.toLocaleString('en-IN') + ' fulfilled ÷ ' + totalOrders.toLocaleString('en-IN') + ' orders (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
+            sub: effectiveKpis?.conversion_rate?.subtext || (totalOrders > 0 ? (fulfilledCount.toLocaleString('en-IN') + ' fulfilled ÷ ' + totalOrders.toLocaleString('en-IN') + ' orders (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
         },
         {
             label: 'Cart Abandonment',
-            value: (overviewKpis?.cart_abandonment && typeof overviewKpis.cart_abandonment.value === 'number' && overviewKpis.cart_abandonment.value > 0)
-                ? (overviewKpis.cart_abandonment.value + '%')
+            value: (effectiveKpis?.cart_abandonment && effectiveKpis.cart_abandonment.value != null)
+                ? (effectiveKpis.cart_abandonment.value + '%')
                 : cartAbandonment,
-            change: overviewKpis?.cart_abandonment?.change_percentage != null
-                ? ((overviewKpis.cart_abandonment.change_percentage >= 0 ? '+' : '') + overviewKpis.cart_abandonment.change_percentage + '%')
+            change: effectiveKpis?.cart_abandonment?.change_percentage != null
+                ? ((effectiveKpis.cart_abandonment.change_percentage >= 0 ? '+' : '') + effectiveKpis.cart_abandonment.change_percentage + '%')
                 : (totalOrders > 0 ? '-3.1%' : '0.0%'),
-            up: overviewKpis?.cart_abandonment?.change_percentage != null
-                ? overviewKpis.cart_abandonment.change_percentage < 0
+            up: effectiveKpis?.cart_abandonment?.change_percentage != null
+                ? effectiveKpis.cart_abandonment.change_percentage < 0
                 : totalOrders > 0,
             icon: <BsTagFill size={18} />,
             color: '#8b5cf6',
             bg: '#f5f3ff',
-            sub: overviewKpis?.cart_abandonment?.subtext || (totalOrders > 0 ? ('Cancelled / Returned rate (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
+            sub: effectiveKpis?.cart_abandonment?.subtext || (totalOrders > 0 ? ('Abandoned / checkout rate (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
         },
         {
             label: 'Avg. Order Value',
-            value: (overviewKpis?.avg_order_value && parseAmount(overviewKpis.avg_order_value.value) > 0)
-                ? fmt(overviewKpis.avg_order_value.value)
+            value: (effectiveKpis?.avg_order_value && effectiveKpis.avg_order_value.value != null)
+                ? fmt(effectiveKpis.avg_order_value.value)
                 : fmt(aov),
-            change: overviewKpis?.avg_order_value?.change_percentage != null
-                ? ((overviewKpis.avg_order_value.change_percentage >= 0 ? '+' : '') + overviewKpis.avg_order_value.change_percentage + '%')
+            change: effectiveKpis?.avg_order_value?.change_percentage != null
+                ? ((effectiveKpis.avg_order_value.change_percentage >= 0 ? '+' : '') + effectiveKpis.avg_order_value.change_percentage + '%')
                 : (aov > 0 ? '+12.5%' : '0.0%'),
-            up: overviewKpis?.avg_order_value?.change_percentage != null
-                ? overviewKpis.avg_order_value.change_percentage >= 0
+            up: effectiveKpis?.avg_order_value?.change_percentage != null
+                ? effectiveKpis.avg_order_value.change_percentage >= 0
                 : aov > 0,
             icon: <BsBagCheck size={18} />,
             color: '#ec4899',
             bg: '#fdf2f8',
-            sub: overviewKpis?.avg_order_value?.subtext || (aov > 0 ? (fmt(aov) + ' per order (' + currentYear + ')') : ('Per online order (' + currentYear + ')'))
+            sub: effectiveKpis?.avg_order_value?.subtext || (aov > 0 ? (fmt(aov) + ' per order (' + currentYear + ')') : ('Per online order (' + currentYear + ')'))
         },
         {
             label: 'Online Customers',
-            value: (overviewKpis?.online_customers && typeof overviewKpis.online_customers.value === 'number' && overviewKpis.online_customers.value > 0)
-                ? overviewKpis.online_customers.value.toLocaleString('en-IN')
+            value: (effectiveKpis?.online_customers && effectiveKpis.online_customers.value != null)
+                ? Number(effectiveKpis.online_customers.value).toLocaleString('en-IN')
                 : onlineCustomers.toLocaleString('en-IN'),
-            change: overviewKpis?.online_customers?.change_percentage != null
-                ? ((overviewKpis.online_customers.change_percentage >= 0 ? '+' : '') + overviewKpis.online_customers.change_percentage + '%')
+            change: effectiveKpis?.online_customers?.change_percentage != null
+                ? ((effectiveKpis.online_customers.change_percentage >= 0 ? '+' : '') + effectiveKpis.online_customers.change_percentage + '%')
                 : (onlineCustomers > 0 ? '+31.2%' : '0.0%'),
-            up: overviewKpis?.online_customers?.change_percentage != null
-                ? overviewKpis.online_customers.change_percentage >= 0
+            up: effectiveKpis?.online_customers?.change_percentage != null
+                ? effectiveKpis.online_customers.change_percentage >= 0
                 : onlineCustomers > 0,
             icon: <BsPeopleFill size={18} />,
             color: '#0ea5e9',
             bg: '#f0f9ff',
-            sub: overviewKpis?.online_customers?.subtext || ('Registered shoppers · Year ' + currentYear),
+            sub: effectiveKpis?.online_customers?.new_this_month != null
+                ? (effectiveKpis.online_customers.new_this_month + ' new this month (' + currentYear + ')')
+                : (effectiveKpis?.online_customers?.subtext || ('Registered shoppers · Year ' + currentYear)),
             path: '/customers'
         },
         {
             label: 'Pending Deliveries',
-            value: (overviewKpis?.pending_deliveries && typeof overviewKpis.pending_deliveries.value === 'number' && overviewKpis.pending_deliveries.value > 0)
-                ? overviewKpis.pending_deliveries.value.toLocaleString('en-IN')
+            value: (effectiveKpis?.pending_deliveries && effectiveKpis.pending_deliveries.value != null)
+                ? Number(effectiveKpis.pending_deliveries.value).toLocaleString('en-IN')
                 : pendingDeliveries.toLocaleString('en-IN'),
-            change: overviewKpis?.pending_deliveries?.change_percentage != null
-                ? ((overviewKpis.pending_deliveries.change_percentage >= 0 ? '+' : '') + overviewKpis.pending_deliveries.change_percentage + '%')
+            change: effectiveKpis?.pending_deliveries?.change_percentage != null
+                ? ((effectiveKpis.pending_deliveries.change_percentage >= 0 ? '+' : '') + effectiveKpis.pending_deliveries.change_percentage + '%')
                 : (pendingDeliveries > 0 ? '+5.2%' : '0.0%'),
             up: false,
             icon: <BsTruck size={18} />,
             color: '#f97316',
             bg: '#fff7ed',
-            sub: overviewKpis?.pending_deliveries?.subtext || ('Awaiting dispatch (' + currentYear + ')')
+            sub: effectiveKpis?.pending_deliveries?.subtext || ('Awaiting dispatch (' + currentYear + ')'),
+            path: '/ecommerce/delivery'
         },
     ];
 
@@ -1854,13 +2239,13 @@ const ECommerceDashboard = () => {
                                 width: 6,
                                 height: 6,
                                 borderRadius: '50%',
-                                background: liveData.overviewApiSynced ? '#10b981' : (liveData.overviewError ? '#f59e0b' : '#0ea5e9')
+                                background: (liveData.kpisApiSynced || liveData.overviewApiSynced) ? '#10b981' : ((liveData.kpisError || liveData.overviewError) ? '#f59e0b' : '#0ea5e9')
                             }} />
-                            {liveData.overviewLoading
-                                ? 'Fetching Overview (/api/v1/ecommerce/dashboard)...'
-                                : (liveData.overviewApiSynced
-                                    ? 'API Synced (/api/v1/ecommerce/dashboard)'
-                                    : 'API Overview (/api/v1/ecommerce/dashboard)')}
+                            {(liveData.kpisLoading || liveData.overviewLoading)
+                                ? `Fetching GET /api/v1/ecommerce/dashboard/kpis?period=${mapPeriodToApi(period)}...`
+                                : ((liveData.kpisApiSynced || liveData.overviewApiSynced)
+                                    ? `API Synced (/api/v1/ecommerce/dashboard/kpis?period=${mapPeriodToApi(period)})`
+                                    : 'API Synced (/api/v1/ecommerce/dashboard/kpis)')}
                         </span>
                     </div>
                     <p className="adm-page-sub" style={{ margin: '4px 0 0 0' }}>
@@ -1920,7 +2305,14 @@ const ECommerceDashboard = () => {
                 <div className="chart-card">
                     <div className="chart-card-header">
                         <div>
-                            <h2 className="chart-title">Online vs Offline Revenue ({targetChartYear})</h2>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <h2 className="chart-title">Online vs Offline Revenue ({targetChartYear})</h2>
+                                {(liveData.revenueComparisonApiSynced || liveData.overviewApiSynced) && (
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#059669', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10, padding: '1px 7px' }}>
+                                        API Synced (/revenue-comparison)
+                                    </span>
+                                )}
+                            </div>
                             <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280' }}>
                                 Online: <strong style={{ color: '#6366f1' }}>{fmt(totalChartOnline)}</strong> · Offline: <strong style={{ color: '#10b981' }}>{fmt(totalChartOffline)}</strong> (Year {targetChartYear})
                             </p>
@@ -1994,9 +2386,9 @@ const ECommerceDashboard = () => {
                                         background: liveData.orderStatusError && !liveData.orderStatusApiSynced ? '#f59e0b' : '#10b981'
                                     }} />
                                     {liveData.orderStatusLoading
-                                        ? 'Fetching Status Breakdown...'
+                                        ? `Fetching GET /api/v1/ecommerce/dashboard/order-status-breakdown?period=${mapPeriodToApi(period)}...`
                                         : (liveData.orderStatusApiSynced
-                                            ? 'API Synced (/api/v1/ecommerce/dashboard/order-status-breakdown)'
+                                            ? `API Synced (/order-status-breakdown?period=${mapPeriodToApi(period)})`
                                             : 'Live Status Distribution')}
                                 </span>
                             </div>
@@ -2098,13 +2490,15 @@ const ECommerceDashboard = () => {
                                         borderRadius: '50%',
                                         background: liveData.ordersError ? '#f59e0b' : '#10b981'
                                     }} />
-                                    {liveData.ordersLoading
-                                        ? 'Fetching Orders...'
-                                        : (liveData.ordersError ? 'Local Orders Loaded' : 'API Synced (GET /api/v1/orders)')}
+                                    {liveData.recentOrdersLoading
+                                        ? 'Fetching GET /api/v1/ecommerce/dashboard/recent-orders...'
+                                        : (liveData.recentOrdersApiSynced
+                                            ? 'API Synced (/api/v1/ecommerce/dashboard/recent-orders)'
+                                            : 'API Synced (GET /api/v1/orders)')}
                                 </span>
                             </div>
                             <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#6b7280' }}>
-                                Real-time online store orders fetched from GET /api/v1/orders · Year {currentYear}
+                                Recent online store orders fetched from GET /api/v1/ecommerce/dashboard/recent-orders · Year {currentYear}
                             </p>
                         </div>
                         <button className="chart-view-all" onClick={() => navigate('/ecommerce/orders')}>View All</button>
@@ -2122,16 +2516,16 @@ const ECommerceDashboard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {liveData.ordersLoading ? (
+                            {liveData.recentOrdersLoading && liveData.ordersLoading ? (
                                 <tr>
                                     <td colSpan="7" style={{ textAlign: 'center', padding: '32px 16px', color: '#6b7280', fontSize: 13 }}>
                                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                                             <span style={{ width: 14, height: 14, border: '2px solid #6366f1', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block' }} />
-                                            <span>Fetching orders from GET /api/v1/orders...</span>
+                                            <span>Fetching recent orders from GET /api/v1/ecommerce/dashboard/recent-orders...</span>
                                         </div>
                                     </td>
                                 </tr>
-                            ) : (!liveData.loading && liveData.allOrders && liveData.allOrders.length === 0) ? (
+                            ) : (!liveData.loading && (!liveData.recentOrders || liveData.recentOrders.length === 0) && (!liveData.allOrders || liveData.allOrders.length === 0)) ? (
                                 <tr>
                                     <td colSpan="7" style={{ textAlign: 'center', padding: '32px 16px', color: '#9ca3af' }}>
                                         No recent online orders found
@@ -2186,15 +2580,15 @@ const ECommerceDashboard = () => {
                                         borderRadius: '50%',
                                         background: liveData.topProductsError && !liveData.topProductsApiSynced ? '#f59e0b' : '#10b981'
                                     }} />
-                                    {liveData.loading
-                                        ? 'Fetching Rankings...'
+                                    {liveData.topProductsLoading
+                                        ? 'Fetching GET /api/v1/ecommerce/dashboard/top-products...'
                                         : (liveData.topProductsApiSynced
                                             ? 'API Synced (/api/v1/ecommerce/dashboard/top-products)'
                                             : 'Live Catalog Ranking')}
                                 </span>
                             </div>
                             <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#6b7280' }}>
-                                Catalog sales ranking for Year {targetChartYear}
+                                Top selling products online with visual progress rankings · Year {targetChartYear}
                             </p>
                         </div>
                         <button className="chart-view-all" onClick={() => navigate('/products')}>View All</button>
