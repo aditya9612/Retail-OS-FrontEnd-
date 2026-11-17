@@ -42,7 +42,8 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
         currentPath.startsWith('/billing-management') ||
         currentPath.startsWith('/gst-management')
     );
-    const shouldHideSearchBar = isCustomerModule || isBillingGstModule;
+    const isProfileModule = currentPath.startsWith('/profile');
+    const shouldHideSearchBar = isCustomerModule || isBillingGstModule || isProfileModule;
 
     const [showProfileMenu, setShowProfileMenu] = useState(false);
     const [showLogoutModal, setShowLogoutModal] = useState(false);
