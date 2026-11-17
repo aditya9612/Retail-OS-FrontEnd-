@@ -72,52 +72,23 @@ export const resolveUserInfo = (user = {}, fallbackIdentifier = '') => {
         user?.user_name ||
         user?.admin_name;
 
-    // Discard old hardcoded dummy values
-    if (rawName === 'Akshay Chavan' || rawName === 'Super User') {
-        rawName = null;
-    }
-
-    const credentialsName = id && id !== 'akshay.chavan@shekruweb.com'
+    const credentialsName = id
         ? formatNameFromIdentifier(id, 'Admin')
         : 'Admin';
 
     let name;
-    if (user?.is_custom_name && rawName) {
-        // User explicitly updated and saved their name in Profile
-        name = rawName;
-    } else if (id && id.includes('@')) {
-        // Name should reflect login credentials.
-        // If rawName is missing, or if rawName contradicts the credentials email
-        // (e.g. 'Amit Sharma' when the credentials are 'rahul.patil@example.com'),
-        // strictly enforce the credentials name.
-        if (!rawName) {
-            name = credentialsName;
-        } else {
-            const emailUser = id.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
-            const rawClean = rawName.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const rawWords = rawName.toLowerCase().split(/\s+/).filter(Boolean);
-            const matchesCredentials =
-                rawWords.some((w) => w.length > 2 && emailUser.includes(w)) ||
-                emailUser.includes(rawClean);
-
-            if (matchesCredentials) {
-                name = rawName;
-            } else {
-                // Name does not match credentials (e.g. 'Amit Sharma' for 'rahul.patil@example.com')
-                name = credentialsName;
-            }
-        }
+    if (user?.is_custom_name && rawName && rawName.trim()) {
+        name = rawName.trim();
+    } else if (rawName && rawName.trim()) {
+        name = rawName.trim();
     } else {
-        name = rawName || credentialsName;
+        name = credentialsName;
     }
 
     // 2. Resolve Email
     let email = user?.email;
-    if (email === 'akshay.chavan@shekruweb.com') {
-        email = null;
-    }
     if (!email) {
-        if (user?.identifier && user.identifier.includes('@') && user.identifier !== 'akshay.chavan@shekruweb.com') {
+        if (user?.identifier && user.identifier.includes('@')) {
             email = user.identifier;
         } else if (fallbackIdentifier && fallbackIdentifier.includes('@')) {
             email = fallbackIdentifier;

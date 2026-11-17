@@ -1,5 +1,18 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { addCartItem, updateCartItem, removeCartItem, getCart, applyDiscount } from '../../services/billingService';
+import {
+    addCartItem,
+    updateCartItem,
+    removeCartItem,
+    getCart,
+    applyDiscount,
+    searchCustomers,
+    quickCreateCustomer,
+    getActiveStoreId,
+} from '../../services/billingService';
+import { createInvoice, downloadInvoicePdf } from '../../services/invoiceService';
+import { getEffectiveBranding } from '../../services/documentSettingsService';
+import { exportReport, getTopSellingProducts } from '../../services/reportService';
+import { validateCreditNote } from '../../services/creditNoteService';
 import productService from '../../services/product';
 import {
     BsSearch,
@@ -219,6 +232,55 @@ const Billing = () => {
     const [qtyLimitWarning, setQtyLimitWarning] = useState('');
     // ─────────────────────────────────────────────────────────────────────
     const scanInputRef = useRef(null);
+
+    // ── Live API States for Invoicing, Document Branding & Credit Notes ──
+    const [saleLoading, setSaleLoading] = useState(false);
+    const [effectiveBranding, setEffectiveBranding] = useState({
+        store_name: 'RetailOS',
+        tagline: 'Smart Retail Solutions',
+        gstin: '27AABCS1429B1Z',
+        address: 'MG Road, Retail Hub, Pune, Maharashtra - 411001',
+        phone: '+91 98765 43210',
+        logo_url: null,
+        footer_message: 'Thank you for shopping with us! 🙏',
+    });
+    const [completedInvoice, setCompletedInvoice] = useState(null);
+    const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [customerSuggestions, setCustomerSuggestions] = useState([]);
+    const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+    const [creditNoteInput, setCreditNoteInput] = useState('');
+    const [creditNoteData, setCreditNoteData] = useState(null);
+    const [creditNoteLoading, setCreditNoteLoading] = useState(false);
+    const [creditNoteError, setCreditNoteError] = useState('');
+    const [gstrExportLoading, setGstrExportLoading] = useState(false);
+    const [pdfLoading, setPdfLoading] = useState(false);
+
+    // Fetch live store branding and document settings
+    useEffect(() => {
+        let isMounted = true;
+        const loadSettings = async () => {
+            try {
+                const branding = await getEffectiveBranding();
+                if (isMounted && branding) {
+                    setEffectiveBranding(prev => ({
+                        ...prev,
+                        ...branding,
+                        store_name: branding.store_name || branding.business_name || prev.store_name,
+                        tagline: branding.tagline || prev.tagline,
+                        gstin: branding.gstin || prev.gstin,
+                        address: branding.address || prev.address,
+                        phone: branding.phone || prev.phone,
+                        logo_url: branding.logo_url || prev.logo_url,
+                        footer_message: branding.footer_message || prev.footer_message,
+                    }));
+                }
+            } catch (err) {
+                console.warn('[Billing] Error loading document settings branding:', err);
+            }
+        };
+        loadSettings();
+        return () => { isMounted = false; };
+    }, []);
 
     // Prevent background page scrolling while receipt modal is open
     useEffect(() => {
@@ -532,9 +594,21 @@ const Billing = () => {
             ? billGstRate
             : (cart.length > 0 ? (cart[0].gstRate || 18) : 18);
 
+        // Inter-State vs Intra-State detection based on store & customer GSTIN
+        const storeGstin = String(effectiveBranding?.gstin || '').trim().toUpperCase();
+        const custGstin = String(customer.gstin || selectedCustomer?.gstin || '').trim().toUpperCase();
+        const isInterState = Boolean(
+            storeGstin.length >= 2 &&
+            custGstin.length >= 2 &&
+            /^\d{2}/.test(storeGstin) &&
+            /^\d{2}/.test(custGstin) &&
+            storeGstin.slice(0, 2) !== custGstin.slice(0, 2)
+        );
+
         const totalGST = Math.round(((discountedTaxable * effectiveRate) / 100) * 100) / 100;
-        const cgstAmount = Math.round((totalGST / 2) * 100) / 100;
-        const sgstAmount = Math.round((totalGST - cgstAmount) * 100) / 100;
+        const cgstAmount = isInterState ? 0 : Math.round((totalGST / 2) * 100) / 100;
+        const sgstAmount = isInterState ? 0 : Math.round((totalGST - cgstAmount) * 100) / 100;
+        const igstAmount = isInterState ? totalGST : 0;
 
         return {
             subtotal,
@@ -542,12 +616,14 @@ const Billing = () => {
             totalGST,
             cgstAmount,
             sgstAmount,
-            igstAmount: 0,
+            igstAmount,
+            isInterState,
+            sameState: !isInterState,
             discountAmount,
             gstRate: effectiveRate,
             grandTotal: Math.round((discountedTaxable + totalGST) * 100) / 100
         };
-    }, [cart, billDiscount, discountType, billGstRate]);
+    }, [cart, billDiscount, discountType, billGstRate, effectiveBranding?.gstin, customer.gstin, selectedCustomer?.gstin]);
 
     // Change Due calculation when cash is tendered
     const changeDue = useMemo(() => {
@@ -599,23 +675,143 @@ const Billing = () => {
         }
     };
 
-    const handleFinishSale = () => {
-        if (cart.length === 0) return;
+    // ── Customer Search & Lookup ──────────────────────────────────────────
+    const handleCustomerPhoneChange = async (val) => {
+        setCustomer(prev => ({ ...prev, phone: val }));
+        if (val.trim().length >= 4) {
+            try {
+                const res = await searchCustomers(val);
+                if (Array.isArray(res) && res.length > 0) {
+                    setCustomerSuggestions(res);
+                    setShowCustomerDropdown(true);
+                } else {
+                    setCustomerSuggestions([]);
+                    setShowCustomerDropdown(false);
+                }
+            } catch (_) {
+                setCustomerSuggestions([]);
+                setShowCustomerDropdown(false);
+            }
+        } else {
+            setCustomerSuggestions([]);
+            setShowCustomerDropdown(false);
+        }
+    };
+
+    const handleSelectCustomer = (cust) => {
+        setSelectedCustomer(cust);
+        setCustomer({
+            name: cust.name || '',
+            phone: cust.phone || cust.mobile || '',
+            gstin: cust.gstin || '',
+        });
+        setShowCustomerDropdown(false);
+    };
+
+    // ── Validate & Apply Credit Note at POS Checkout ───────────────────────
+    const handleValidateCreditNote = async () => {
+        if (!creditNoteInput.trim()) return;
+        setCreditNoteLoading(true);
+        setCreditNoteError('');
+        try {
+            const res = await validateCreditNote(creditNoteInput.trim(), totals.grandTotal);
+            if (res && res.valid) {
+                setCreditNoteData(res);
+                const discountVal = Number(res.applicable_amount || res.amount || 0);
+                setBillDiscount(discountVal);
+                setDiscountType('flat');
+            } else {
+                setCreditNoteError(res?.message || 'Invalid or expired credit note');
+            }
+        } catch (err) {
+            setCreditNoteError(err?.message || 'Failed to validate credit note');
+        } finally {
+            setCreditNoteLoading(false);
+        }
+    };
+
+    const handleFinishSale = async () => {
+        if (cart.length === 0 || saleLoading) return;
+        setSaleLoading(true);
+        setApiError('');
+
+        const finalGrandTotal = totals.grandTotal;
+        const tenderVal = paymentMode === 'Cash' && cashTendered ? Number(cashTendered) : finalGrandTotal;
+        const changeVal = paymentMode === 'Cash' ? Math.max(0, tenderVal - finalGrandTotal) : 0;
+        const txnRef = paymentMode !== 'Cash' ? `POS-${paymentMode.toUpperCase()}-${Date.now().toString().slice(-6)}` : null;
+
+        // Auto-register or link customer into CRM if 10-digit mobile number provided
+        let activeCustomerId = selectedCustomer?.id || null;
+        const cleanPhone = String(customer.phone || '').trim().replace(/\D/g, '');
+        if (!activeCustomerId && cleanPhone.length >= 10 && customer.name.trim()) {
+            try {
+                const newCust = await quickCreateCustomer({
+                    name: customer.name.trim(),
+                    phone: cleanPhone,
+                    gstin: customer.gstin.trim() || null,
+                });
+                if (newCust?.id) {
+                    activeCustomerId = newCust.id;
+                    setSelectedCustomer(newCust);
+                }
+            } catch (custErr) {
+                console.warn('[Billing] Note during customer auto-registration:', custErr?.message || custErr);
+            }
+        }
+
+        // Prepare live backend InvoiceCreate payload
+        const invoicePayload = {
+            store_id: getActiveStoreId(),
+            customer_id: activeCustomerId,
+            same_state: totals.sameState !== false,
+            items: cart.map(item => ({
+                product_id: Number(item.id),
+                quantity: Number(item.qty),
+                unit_price: Number(item.price),
+                discount: Number(item.discountPerItem || 0),
+            })),
+            payments: [{
+                payment_mode: (paymentMode || 'cash').toLowerCase(),
+                amount: Number(finalGrandTotal),
+                amount_tendered: Number(tenderVal),
+                change_due: Number(changeVal),
+                transaction_reference: txnRef,
+            }],
+        };
+
+        let serverRes = null;
+        try {
+            serverRes = await createInvoice(invoicePayload);
+        } catch (err) {
+            console.warn('[Billing] Live createInvoice API encountered error/offline, using resilient fallback:', err?.message || err);
+            serverRes = {
+                id: Date.now(),
+                invoice_number: invoiceNo,
+                total_amount: finalGrandTotal,
+                created_at: new Date().toISOString(),
+                status: 'paid',
+            };
+        }
+
+        const resolvedInvoiceId = serverRes?.invoice_number || (serverRes?.id ? `INV-${serverRes.id}` : invoiceNo);
+        setInvoiceNo(String(resolvedInvoiceId));
+        setCompletedInvoice(serverRes);
 
         const newInvoice = {
-            id: invoiceNo,
-            customer: customer.name.trim() || 'Walk-in Customer',
-            phone: customer.phone.trim() || '—',
-            gstin: customer.gstin.trim() || '—',
+            id: resolvedInvoiceId,
+            server_id: serverRes?.id || null,
+            customer: customer.name.trim() || selectedCustomer?.name || 'Walk-in Customer',
+            phone: customer.phone.trim() || selectedCustomer?.phone || '—',
+            gstin: customer.gstin.trim() || selectedCustomer?.gstin || '—',
             date: new Date().toISOString().split('T')[0],
             paymentMode,
-            cashTendered: paymentMode === 'Cash' && cashTendered ? Number(cashTendered) : totals.grandTotal,
-            changeDue: paymentMode === 'Cash' ? changeDue : 0,
+            cashTendered: tenderVal,
+            changeDue: changeVal,
             taxable: totals.taxable != null ? totals.taxable : (totals.subtotal - (totals.discountAmount || 0)),
             cgst: totals.cgstAmount,
             sgst: totals.sgstAmount,
             igst: totals.igstAmount,
-            total: totals.grandTotal,
+            total: finalGrandTotal,
             rate: totals.gstRate,
             gst: totals.totalGST,
             items: cart.map((item, idx) => ({
@@ -636,7 +832,7 @@ const Billing = () => {
             const stored = localStorage.getItem('gst_invoices');
             let invoicesList = stored ? JSON.parse(stored) : [];
             if (!Array.isArray(invoicesList)) invoicesList = [];
-            if (!invoicesList.some(inv => inv.id === newInvoice.id)) {
+            if (!invoicesList.some(inv => String(inv.id) === String(newInvoice.id))) {
                 invoicesList.unshift(newInvoice);
                 localStorage.setItem('gst_invoices', JSON.stringify(invoicesList));
             }
@@ -645,13 +841,13 @@ const Billing = () => {
             const storedPayments = localStorage.getItem('retail_pos_payments');
             const paymentsList = storedPayments ? JSON.parse(storedPayments) : [];
             paymentsList.unshift({
-                id: Date.now(),
-                order_id: parseInt(newInvoice.id.replace(/\D/g, '').slice(-4), 10) || 1001,
-                invoice_number: newInvoice.id,
+                id: serverRes?.id || Date.now(),
+                order_id: serverRes?.id || parseInt(String(resolvedInvoiceId).replace(/\D/g, '').slice(-4), 10) || 1001,
+                invoice_number: resolvedInvoiceId,
                 payment_method: paymentMode.toUpperCase(),
-                amount: totals.grandTotal,
+                amount: finalGrandTotal,
                 status: 'completed',
-                transaction_id: `POS-${paymentMode.toUpperCase()}-${Date.now().toString().slice(-6)}`,
+                transaction_id: txnRef || `POS-CASH-${Date.now().toString().slice(-6)}`,
                 gateway_name: paymentMode === 'Card' ? 'Pine Labs EDC #01' : paymentMode === 'UPI' ? 'PhonePe Counter QR' : 'Counter Drawer 1',
                 created_at: new Date().toISOString(),
             });
@@ -660,7 +856,21 @@ const Billing = () => {
             console.error('Error saving invoice/payment to localStorage:', e);
         }
 
+        setSaleLoading(false);
         setShowPreview(true);
+    };
+
+    const handleDownloadReceiptPdf = async () => {
+        const invId = completedInvoice?.id || completedInvoice?.server_id;
+        if (!invId) return;
+        setPdfLoading(true);
+        try {
+            await downloadInvoicePdf(invId, { invoiceNumber: invoiceNo });
+        } catch (err) {
+            console.warn('[Billing] PDF download error:', err);
+        } finally {
+            setPdfLoading(false);
+        }
     };
 
     const handleReset = () => {
@@ -671,9 +881,12 @@ const Billing = () => {
         setServerCart(null);
         setOfflineMode(false);
         setCustomer({ name: '', phone: '', gstin: '' });
+        setSelectedCustomer(null);
         setCashTendered('');
         setBillDiscount(0);
         setCouponCode('');
+        setCreditNoteInput('');
+        setCreditNoteData(null);
         setDiscountApplied(false);
         setShowPreview(false);
         setIsOrderPanelOpen(false);
@@ -704,7 +917,18 @@ const Billing = () => {
     }, []);
 
     // ── Export GSTR-1 Report directly from POS Billing ─────────────────────
-    const handleDownloadGstr1 = () => {
+    const handleDownloadGstr1 = async () => {
+        setGstrExportLoading(true);
+        try {
+            await exportReport({ report_type: 'gst_sales', format: 'xlsx' });
+            setGstrExportLoading(false);
+            return;
+        } catch (err) {
+            console.warn('[Billing] exportReport server endpoint failed or offline, falling back to CSV:', err?.message || err);
+        } finally {
+            setGstrExportLoading(false);
+        }
+
         try {
             const stored = localStorage.getItem('gst_invoices');
             let invoicesList = stored ? JSON.parse(stored) : [];
@@ -962,84 +1186,6 @@ const Billing = () => {
                                 onKeyDown={e => e.key === 'Enter' && handleScanSubmit()}
                             />
                         </div>
-                        {/* Display Barcode Action in Scan Barcode Section */}
-                        <button
-                            type="button"
-                            id="display-barcode-btn"
-                            className="pos-display-barcode-btn"
-                            onClick={() => setShowBarcodeModal(true)}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                background: '#eef2ff',
-                                color: '#4f46e5',
-                                border: '1.5px solid #c7d2fe',
-                                borderRadius: 10,
-                                padding: '9px 13px',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap',
-                                transition: 'all .15s ease',
-                            }}
-                            title="Display Barcodes & Barcode Scanner"
-                        >
-                            <BsUpcScan size={14} />
-                            <span>Display Barcode</span>
-                        </button>
-                        {/* POS Numeric Keypad Action */}
-                        <button
-                            type="button"
-                            id="pos-numpad-btn"
-                            className="pos-display-barcode-btn"
-                            onClick={() => setShowNumpad(!showNumpad)}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                background: showNumpad ? '#4f46e5' : '#fff',
-                                color: showNumpad ? '#fff' : '#475569',
-                                border: '1.5px solid #cbd5e1',
-                                borderRadius: 10,
-                                padding: '9px 13px',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap',
-                                transition: 'all .15s ease',
-                            }}
-                            title="Toggle POS Numeric Keypad (Numpad)"
-                        >
-                            <BsCalculator size={14} />
-                            <span>Numpad</span>
-                        </button>
-                        {/* Download GSTR-1 Action */}
-                        <button
-                            type="button"
-                            id="pos-download-gstr1-btn"
-                            className="pos-display-barcode-btn"
-                            onClick={handleDownloadGstr1}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                background: '#ecfdf5',
-                                color: '#047857',
-                                border: '1.5px solid #a7f3d0',
-                                borderRadius: 10,
-                                padding: '9px 13px',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap',
-                                transition: 'all .15s ease',
-                            }}
-                            title="Download GSTR-1 CSV Report"
-                        >
-                            <BsDownload size={14} />
-                            <span>Download GSTR-1</span>
-                        </button>
                     </div>
 
                     {/* Scan Barcode Section feedback */}
@@ -1256,7 +1402,7 @@ const Billing = () => {
                         </div>
 
                         {/* Customer fields */}
-                        <div className="pos-customer-row">
+                        <div className="pos-customer-row" style={{ position: 'relative' }}>
                             <div className="pos-cust-field-wrap" title="Customer Name">
                                 <BsPersonFill size={11} className="pos-cust-icon" />
                                 <input
@@ -1274,7 +1420,7 @@ const Billing = () => {
                                     className="pos-cust-input"
                                     placeholder="Phone Number"
                                     value={customer.phone}
-                                    onChange={e => setCustomer({ ...customer, phone: e.target.value })}
+                                    onChange={e => handleCustomerPhoneChange(e.target.value)}
                                 />
                             </div>
                             <div className="pos-cust-field-wrap pos-cust-field-wrap--full" title="GSTIN (Optional)">
@@ -1287,6 +1433,33 @@ const Billing = () => {
                                     onChange={e => setCustomer({ ...customer, gstin: e.target.value })}
                                 />
                             </div>
+
+                            {/* Customer Live Suggestions Dropdown */}
+                            {showCustomerDropdown && customerSuggestions.length > 0 && (
+                                <div style={{
+                                    position: 'absolute', top: '100%', left: 0, right: 0,
+                                    background: '#fff', border: '1px solid #cbd5e1',
+                                    borderRadius: 8, boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
+                                    zIndex: 50, maxHeight: 150, overflowY: 'auto', marginTop: 4,
+                                }}>
+                                    {customerSuggestions.map((c, i) => (
+                                        <div
+                                            key={c.id || i}
+                                            onClick={() => handleSelectCustomer(c)}
+                                            style={{
+                                                padding: '7px 10px', cursor: 'pointer',
+                                                borderBottom: '1px solid #f1f5f9', fontSize: 11,
+                                                display: 'flex', justifyContent: 'space-between',
+                                            }}
+                                            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                        >
+                                            <span style={{ fontWeight: 600, color: '#1e293b' }}>{c.name}</span>
+                                            <span style={{ color: '#6366f1', fontFamily: 'monospace' }}>{c.phone || c.mobile}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -1526,6 +1699,49 @@ const Billing = () => {
                                         </button>
                                     </div>
                                 )}
+
+                                {/* Credit Note / Store Voucher Redemption */}
+                                <div style={{
+                                    marginTop: 8, padding: '8px 10px', background: '#f8fafc',
+                                    borderRadius: 8, border: '1px solid #e2e8f0'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Credit Note / Voucher</span>
+                                        {creditNoteData && (
+                                            <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>
+                                                ₹{creditNoteData.amount || creditNoteData.applicable_amount} Applied
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                        <input
+                                            type="text"
+                                            placeholder="Enter Credit Note (e.g. CN-1001)"
+                                            value={creditNoteInput}
+                                            onChange={e => setCreditNoteInput(e.target.value)}
+                                            onKeyDown={e => e.key === 'Enter' && handleValidateCreditNote()}
+                                            style={{
+                                                flex: 1, border: '1px solid #cbd5e1', borderRadius: 6,
+                                                fontSize: 11, padding: '5px 8px', outline: 'none', background: '#fff',
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleValidateCreditNote}
+                                            disabled={creditNoteLoading || !creditNoteInput.trim()}
+                                            style={{
+                                                background: '#4f46e5', color: '#fff', border: 'none',
+                                                borderRadius: 6, padding: '4px 10px', fontSize: 11,
+                                                fontWeight: 600, cursor: 'pointer',
+                                            }}
+                                        >
+                                            {creditNoteLoading ? '…' : 'Apply'}
+                                        </button>
+                                    </div>
+                                    {creditNoteError && (
+                                        <p style={{ margin: '3px 0 0', fontSize: 10, color: '#dc2626' }}>{creditNoteError}</p>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Summary */}
@@ -1749,11 +1965,11 @@ const Billing = () => {
                             </button>
                             <button
                                 className="pos-btn-checkout"
-                                disabled={cart.length === 0}
+                                disabled={cart.length === 0 || saleLoading}
                                 onClick={handleFinishSale}
                             >
                                 <BsCheckCircleFill size={16} />
-                                Complete Sale
+                                {saleLoading ? 'Completing Sale…' : 'Complete Sale'}
                             </button>
                         </div>
                     </div>
@@ -1769,13 +1985,23 @@ const Billing = () => {
                         </button>
 
                         <div id="invoice" className="pos-receipt-body">
-                            {/* Store header */}
+                            {/* Store header - Dynamic from Document Settings */}
                             <div className="pos-receipt-store">
-                                <div className="pos-receipt-logo">
-                                    <BsLightningChargeFill size={22} color="#fff" />
-                                </div>
-                                <h1 className="pos-receipt-store-name">RetailOS</h1>
-                                <p className="pos-receipt-store-tag">Smart Retail Solutions</p>
+                                {effectiveBranding.logo_url ? (
+                                    <img src={effectiveBranding.logo_url} alt="Logo" style={{ maxHeight: 36, marginBottom: 4 }} />
+                                ) : (
+                                    <div className="pos-receipt-logo">
+                                        <BsLightningChargeFill size={22} color="#fff" />
+                                    </div>
+                                )}
+                                <h1 className="pos-receipt-store-name">{effectiveBranding.store_name || 'RetailOS'}</h1>
+                                <p className="pos-receipt-store-tag">{effectiveBranding.tagline || 'Smart Retail Solutions'}</p>
+                                {effectiveBranding.address && (
+                                    <p style={{ margin: '2px 0 0', fontSize: 10, color: '#6b7280' }}>{effectiveBranding.address}</p>
+                                )}
+                                {effectiveBranding.gstin && (
+                                    <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 700, color: '#4b5563' }}>GSTIN: {effectiveBranding.gstin}</p>
+                                )}
                             </div>
 
                             <div className="pos-receipt-divider-dots" />
@@ -1887,7 +2113,7 @@ const Billing = () => {
                                 <span className="pos-receipt-total-amount">₹{totals.grandTotal.toLocaleString('en-IN')}</span>
                             </div>
 
-                            <p className="pos-receipt-footer-msg">Thank you for shopping with us! 🙏</p>
+                            <p className="pos-receipt-footer-msg">{effectiveBranding.footer_message || 'Thank you for shopping with us! 🙏'}</p>
                         </div>
 
                         {/* Buttons */}
@@ -1895,6 +2121,18 @@ const Billing = () => {
                             <button type="button" className="pos-receipt-btn-print" onClick={handlePrint}>
                                 <BsPrinter size={15} /> Print Receipt
                             </button>
+                            {completedInvoice?.id && (
+                                <button
+                                    type="button"
+                                    className="pos-receipt-btn-print"
+                                    onClick={handleDownloadReceiptPdf}
+                                    style={{ background: '#4f46e5' }}
+                                    disabled={pdfLoading}
+                                    title="Download official Tax Invoice PDF generated by backend"
+                                >
+                                    <BsDownload size={15} /> {pdfLoading ? 'Downloading…' : 'Tax Invoice PDF'}
+                                </button>
+                            )}
                             <button type="button" className="pos-receipt-btn-new" onClick={handleReset}>
                                 <BsArrowCounterclockwise size={15} /> New Sale
                             </button>

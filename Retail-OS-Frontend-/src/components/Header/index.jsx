@@ -51,6 +51,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
         currentPath.startsWith('/billing-management') ||
         currentPath.startsWith('/gst-management')
     );
+    const isProfileModule = currentPath.startsWith('/profile');
     const isDashboard = currentPath === '/dashboard' || currentPath === '/';
     const isStoreTransfers = currentPath === '/inventory/store-transfers' || currentPath.startsWith('/inventory/store-transfers/');
     const isWarehouses = currentPath === '/inventory/warehouses' || currentPath.startsWith('/inventory/warehouses/') || currentPath === '/warehouses' || currentPath.startsWith('/warehouses/');
@@ -66,6 +67,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const shouldHideSearchBar = (
         isCustomerModule ||
         isBillingGstModule ||
+        isProfileModule ||
         isDashboard ||
         isStoreTransfers ||
         isWarehouses ||

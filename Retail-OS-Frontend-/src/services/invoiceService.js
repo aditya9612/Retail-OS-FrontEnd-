@@ -1,9 +1,9 @@
 import apiClient from './api';
 import { getAccessToken } from '../utils/tokenStorage';
-import { getCart, returnOrder, returnInvoiceItem } from './billingService';
+import { getCart, returnOrder, returnInvoiceItem, getActiveStoreId } from './billingService';
 
 // Re-export utility billing functions needed in invoice management
-export { getCart, returnOrder, returnInvoiceItem };
+export { getCart, returnOrder, returnInvoiceItem, getActiveStoreId };
 
 /**
  * Handle API error and extract meaningful message, handling JSON and Blob response errors
@@ -147,7 +147,7 @@ export const searchInvoices = async (params = {}) => {
 
         // Backend requires at least one parameter to prevent unbounded queries
         if (Object.keys(cleanParams).length === 0) {
-            cleanParams.store_id = 1;
+            cleanParams.store_id = getActiveStoreId();
         }
 
         const response = await apiClient.get('/invoices', { params: cleanParams });

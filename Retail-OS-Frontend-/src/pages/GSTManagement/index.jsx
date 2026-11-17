@@ -32,8 +32,9 @@ import {
     deleteGstRate,
 } from '../../services/gstService';
 
-import { getInvoices } from '../../services/billingService';
+import { getInvoices, getActiveStoreId } from '../../services/billingService';
 import { getPurchaseOrders } from '../../api/purchaseOrdersApi';
+import { exportReport, getGstReport } from '../../services/reportService';
 
 /* ── Standard Indian Statutory Retail GST Slabs ── */
 const STANDARD_SLABS = [
@@ -123,18 +124,29 @@ const GSTManagement = () => {
     // 2. Fetch Invoices from backend (for GSTR-1 & 3B)
     const loadInvoicesData = useCallback(async () => {
         try {
-            const res = await getInvoices();
+            const storeId = getActiveStoreId();
+            const res = await getInvoices({ store_id: storeId });
             const list = Array.isArray(res) ? res : (res?.data || res?.items || []);
-            if (list.length > 0) {
-                const normalized = list.map((inv, idx) => {
-                    const taxable = parseFloat(inv.taxable_amount || inv.subtotal || inv.total_amount || 1000);
-                    const rate = parseFloat(inv.gst_rate || 18);
-                    const isInterstate = Boolean(inv.is_interstate || (inv.customer_gstin && !inv.customer_gstin.startsWith('27')));
+            const stored = localStorage.getItem('gst_invoices');
+            const local = stored ? JSON.parse(stored) : [];
+            const merged = [...list];
+            if (Array.isArray(local)) {
+                local.forEach(loc => {
+                    if (!merged.some(m => String(m.id || m.invoice_number) === String(loc.id))) {
+                        merged.unshift(loc);
+                    }
+                });
+            }
+            if (merged.length > 0) {
+                const normalized = merged.map((inv, idx) => {
+                    const taxable = parseFloat(inv.taxable || inv.taxable_amount || inv.subtotal || inv.total_amount || 1000);
+                    const rate = parseFloat(inv.rate || inv.gst_rate || 18);
+                    const isInterstate = Boolean(inv.is_interstate || (inv.gstin && !String(inv.gstin).startsWith('27')));
                     return {
-                        id: inv.invoice_number || `INV-2026-${String(idx + 1).padStart(5, '0')}`,
-                        customer: inv.customer_name || 'Walk-in Customer',
-                        gstin: inv.customer_gstin || inv.gstin || '—',
-                        date: inv.created_at ? inv.created_at.slice(0, 10) : '2026-11-02',
+                        id: inv.invoice_number || inv.id || `INV-2026-${String(idx + 1).padStart(5, '0')}`,
+                        customer: inv.customer || inv.customer_name || 'Walk-in Customer',
+                        gstin: inv.gstin || inv.customer_gstin || '—',
+                        date: inv.date || (inv.created_at ? inv.created_at.slice(0, 10) : new Date().toISOString().slice(0, 10)),
                         taxable,
                         rate,
                         isInterstate,
@@ -381,8 +393,15 @@ const GSTManagement = () => {
         };
     }, [gstr1Stats, purchases]);
 
-    // Export GSTR-1 CSV Handler
-    const handleExportGstr1 = () => {
+    // Export GSTR-1 Report Handler
+    const handleExportGstr1 = async () => {
+        try {
+            await exportReport({ report_type: 'gst_sales', format: 'xlsx' });
+            return;
+        } catch (err) {
+            console.warn('[GSTManagement] exportReport fallback to CSV:', err?.message || err);
+        }
+
         const headers = ['Invoice No', 'Date', 'Customer Name', 'GSTIN', 'Type', 'Taxable Amount', 'GST Rate', 'CGST', 'SGST', 'IGST', 'Invoice Total'];
         const rows = processedInvoices.map(i => [
             i.id, i.date, `"${i.customer}"`, i.gstin, i.isB2B ? 'B2B' : 'B2C',
