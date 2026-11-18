@@ -69,7 +69,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 5,
         category: 'Apparel',
         barcode: '1001',
-        image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/tshirt.jpg',
         discount: 50,
     },
     {
@@ -80,7 +80,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1002',
-        image: 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/parle-g.jpg',
         discount: 0,
     },
     {
@@ -91,7 +91,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Accessories',
         barcode: '1003',
-        image: 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/wallet.jpg',
         discount: 100,
     },
     {
@@ -102,7 +102,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 5,
         category: 'Groceries',
         barcode: '1004',
-        image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/green-tea.jpg',
         discount: 20,
     },
     {
@@ -113,7 +113,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Electronics',
         barcode: '1005',
-        image: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/fitness-tracker.jpg',
         discount: 200,
     },
     {
@@ -124,7 +124,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 12,
         category: 'Apparel',
         barcode: '1006',
-        image: 'https://images.unsplash.com/photo-1542272604-780c96856592?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/jeans.jpg',
         discount: 150,
     },
     {
@@ -135,7 +135,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Electronics',
         barcode: '1007',
-        image: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/usb-charger.jpg',
         discount: 50,
     },
     {
@@ -146,7 +146,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 0,
         category: 'Groceries',
         barcode: '1008',
-        image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/milk-bottle.jpg',
         discount: 0,
     },
     {
@@ -157,7 +157,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1009',
-        image: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/marie-biscuits.jpg',
         discount: 5,
     },
     {
@@ -168,7 +168,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1010',
-        image: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/oreo.jpg',
         discount: 5,
     },
     {
@@ -179,7 +179,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1011',
-        image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/butter-cookies.jpg',
         discount: 30,
     },
     {
@@ -190,7 +190,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Accessories',
         barcode: '1012',
-        image: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=600&auto=format&fit=crop&q=85',
+        image: '/images/products/steel-bottle.jpg',
         discount: 50,
     },
 ];
@@ -1374,11 +1374,10 @@ const Billing = () => {
                                         src={pImg}
                                         alt={product.name}
                                         loading="lazy"
-                                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                                         onError={(e) => {
                                             if (!e.target.dataset.triedFallback) {
                                                 e.target.dataset.triedFallback = 'true';
-                                                e.target.src = resolveProductImage({ name: product.name, category: product.category, image: null });
+                                                e.target.src = '/images/products/parle-g.jpg';
                                             }
                                         }}
                                     />
@@ -1751,11 +1750,11 @@ const Billing = () => {
                                                     <img
                                                         src={itemImg}
                                                         alt={item.name}
-                                                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                                         onError={(e) => {
                                                             if (!e.target.dataset.triedFallback) {
                                                                 e.target.dataset.triedFallback = 'true';
-                                                                e.target.src = resolveProductImage({ name: item.name, category: item.category, image: null });
+                                                                e.target.src = '/images/products/parle-g.jpg';
                                                             }
                                                         }}
                                                     />
