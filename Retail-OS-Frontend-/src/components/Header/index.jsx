@@ -39,11 +39,11 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     // 1. Customer module (/customers) - [from t1]
     // 2. Billing & GST module (/billing, /invoices, /billing-management, /gst-management) - [from t1]
     // 3. Dashboard (/dashboard, /) - [from t1 & Punam]
-    // 4. Store Transfers (/inventory/store-transfers) - [from t1]
+    // 4. Store Transfers (/inventory/store-transfers) - [from t1 & Shital]
     // 5. Product Master (/products) & Barcode (/products/barcode) - [from Punam]
     // 6. Category Management (/categories) - [from Punam]
     // 7. Store Management & Targets (/stores, /stores/targets, /ecommerce/store) - [from Punam]
-    // 8. Inventory, Warehouses, Purchases, Suppliers, GRN, Purchase Returns - [from shital-login-fix]
+    // 8. Warehouses, Purchases, Suppliers, GRN, Purchase Returns, Stock - [from Shital]
     const isCustomerModule = currentPath.startsWith('/customers');
     const isBillingGstModule = (
         currentPath.startsWith('/billing') ||
@@ -51,32 +51,34 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
         currentPath.startsWith('/billing-management') ||
         currentPath.startsWith('/gst-management')
     );
+    const isProfileModule = currentPath.startsWith('/profile');
     const isDashboard = currentPath === '/dashboard' || currentPath === '/';
     const isStoreTransfers = currentPath === '/inventory/store-transfers' || currentPath.startsWith('/inventory/store-transfers/');
-    const isProductModule = currentPath.startsWith('/products');
-    const isCategoryModule = currentPath.startsWith('/categories');
-    const isStoreModule = currentPath.startsWith('/stores') || currentPath === '/ecommerce/store';
     const isWarehouses = currentPath === '/inventory/warehouses' || currentPath.startsWith('/inventory/warehouses/') || currentPath === '/warehouses' || currentPath.startsWith('/warehouses/');
     const isPurchases = currentPath === '/purchases' || currentPath.startsWith('/purchases/') || currentPath === '/inventory/purchases' || currentPath.startsWith('/inventory/purchases/');
     const isSuppliers = currentPath === '/suppliers' || currentPath.startsWith('/suppliers/') || currentPath === '/inventory/suppliers' || currentPath.startsWith('/inventory/suppliers/');
     const isGRN = currentPath === '/inventory/grn' || currentPath.startsWith('/inventory/grn/') || currentPath === '/grn' || currentPath.startsWith('/grn/');
     const isPurchaseReturns = currentPath === '/inventory/purchase-returns' || currentPath.startsWith('/inventory/purchase-returns/') || currentPath === '/purchase-order-returns' || currentPath.startsWith('/purchase-order-returns/') || currentPath === '/returns' || currentPath.startsWith('/returns/');
     const isInventoryStock = currentPath === '/inventory' || currentPath === '/inventory/' || currentPath === '/inventory/dashboard' || currentPath === '/inventory/stock' || currentPath === '/stock';
+    const isProductModule = currentPath.startsWith('/products');
+    const isCategoryModule = currentPath.startsWith('/categories');
+    const isStoreModule = currentPath.startsWith('/stores') || currentPath === '/ecommerce/store';
 
     const shouldHideSearchBar = (
         isCustomerModule ||
         isBillingGstModule ||
+        isProfileModule ||
         isDashboard ||
         isStoreTransfers ||
-        isProductModule ||
-        isCategoryModule ||
-        isStoreModule ||
         isWarehouses ||
         isPurchases ||
         isSuppliers ||
         isGRN ||
         isPurchaseReturns ||
-        isInventoryStock
+        isInventoryStock ||
+        isProductModule ||
+        isCategoryModule ||
+        isStoreModule
     );
     const isSearchHidden = shouldHideSearchBar;
     const hideSearch = shouldHideSearchBar;

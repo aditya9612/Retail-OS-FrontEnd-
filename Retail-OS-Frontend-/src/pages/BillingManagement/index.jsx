@@ -35,6 +35,7 @@ import {
     getCustomers,
     getProducts,
 } from '../../services/invoiceService';
+import { exportReport, getSalesReport } from '../../services/reportService';
 
 /* ── Status badges configuration ── */
 const statusConfig = {
@@ -284,15 +285,21 @@ const BillingManagement = () => {
         setFetchError(null);
         try {
             // Build backend query parameters strictly conforming to OpenAPI GET /api/v1/invoices
-            const queryParams = { ...searchFilters };
-            if (!queryParams.store_id) {
-                queryParams.store_id = 1;
+            const queryParams = {};
+            if (searchFilters.store_id) queryParams.store_id = Number(searchFilters.store_id);
+            if (searchFilters.payment_status && searchFilters.payment_status !== 'all') {
+                queryParams.payment_status = searchFilters.payment_status;
             }
+            if (searchFilters.date_from) queryParams.date_from = searchFilters.date_from;
+            if (searchFilters.date_to) queryParams.date_to = searchFilters.date_to;
+            if (searchFilters.gstin) queryParams.gstin = searchFilters.gstin;
 
             // Handle combined search input
             if (debouncedSearch) {
                 if (/^inv/i.test(debouncedSearch) || debouncedSearch.startsWith('#')) {
                     queryParams.invoice_number = debouncedSearch.replace('#', '');
+                } else if (/^\d{10}$/.test(debouncedSearch)) {
+                    queryParams.mobile = debouncedSearch;
                 } else if (debouncedSearch.length >= 2) {
                     queryParams.customer_name = debouncedSearch;
                 } else if (debouncedSearch.length === 1) {
@@ -1070,8 +1077,15 @@ const BillingManagement = () => {
         }));
     }, [invoices]);
 
-    // CSV Export
-    const handleExportCsv = () => {
+    // CSV / Report Export
+    const handleExportCsv = async () => {
+        try {
+            await exportReport({ report_type: 'invoices', format: 'csv' });
+            return;
+        } catch (err) {
+            console.warn('[Invoices] exportReport server endpoint fallback to local CSV:', err?.message || err);
+        }
+
         const headers = ['Invoice Number', 'Invoice ID', 'Order ID', 'Customer Name', 'Date', 'Store ID', 'Taxable Amount', 'CGST', 'SGST', 'IGST', 'Grand Total', 'Status'];
         const rows = filteredInvoices.map((inv) => [
             `"${inv.invoice_number || `INV-${inv.id}`}"`,

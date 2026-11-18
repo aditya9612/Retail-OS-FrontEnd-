@@ -44,6 +44,7 @@ import {
     createSettlement,
     getSettlementById,
 } from '../../services/paymentService';
+import { exportReport } from '../../services/reportService';
 
 /* ── Fallback Seed Data when Backend database is fresh or empty ── */
 const SEED_PAYMENTS = [
@@ -248,9 +249,21 @@ export const BillingPaymentsPage = () => {
         try {
             const res = await getPayments();
             const list = Array.isArray(res) ? res : (res?.items || []);
-            setPayments(list.length > 0 ? list : SEED_PAYMENTS);
+            const stored = localStorage.getItem('retail_pos_payments');
+            const localPos = stored ? JSON.parse(stored) : [];
+            const merged = [...list];
+            if (Array.isArray(localPos)) {
+                localPos.forEach(p => {
+                    if (!merged.some(m => String(m.id) === String(p.id) || (m.invoice_number && m.invoice_number === p.invoice_number))) {
+                        merged.unshift(p);
+                    }
+                });
+            }
+            setPayments(merged.length > 0 ? merged : SEED_PAYMENTS);
         } catch (_) {
-            setPayments(SEED_PAYMENTS);
+            const stored = localStorage.getItem('retail_pos_payments');
+            const localPos = stored ? JSON.parse(stored) : [];
+            setPayments(Array.isArray(localPos) && localPos.length > 0 ? [...localPos, ...SEED_PAYMENTS] : SEED_PAYMENTS);
         }
 
         // 2. Fetch Gateways
@@ -429,6 +442,35 @@ export const BillingPaymentsPage = () => {
         }
     };
 
+    // Handle Export Payments Register
+    const handleExportPayments = async () => {
+        try {
+            await exportReport({ report_type: 'payments', format: 'xlsx' });
+            return;
+        } catch (err) {
+            console.warn('[Payments] exportReport fallback to CSV:', err?.message || err);
+        }
+        const headers = ['Txn ID', 'Order ID', 'Invoice No', 'Method', 'Gateway / EDC', 'Amount', 'Status', 'Date'];
+        const rows = filteredPayments.map(p => [
+            `"${p.transaction_id || `TXN-${p.id}`}"`,
+            p.order_id || '—',
+            `"${p.invoice_number || '—'}"`,
+            `"${p.payment_method || 'CASH'}"`,
+            `"${p.gateway_name || 'Counter Drawer'}"`,
+            Number(p.amount || 0).toFixed(2),
+            `"${p.status || 'completed'}"`,
+            `"${p.created_at ? new Date(p.created_at).toLocaleDateString('en-IN') : 'Today'}"`,
+        ]);
+        const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement('a');
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', `payments_register_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     // Filtered Payments
     const filteredPayments = useMemo(() => {
         return payments.filter(p => {
@@ -539,6 +581,25 @@ export const BillingPaymentsPage = () => {
                         }}
                     >
                         <BsArrowClockwise className={loading ? 'spin-anim' : ''} size={14} /> Refresh
+                    </button>
+                    <button
+                        onClick={handleExportPayments}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '9px 14px',
+                            background: '#ecfdf5',
+                            border: '1.5px solid #a7f3d0',
+                            borderRadius: 8,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: '#065f46',
+                            cursor: 'pointer'
+                        }}
+                        title="Download official Payments Register report"
+                    >
+                        <BsDownload size={14} /> Export Register
                     </button>
                     <button
                         onClick={() => { setShowQrModal(true); handleFetchQr(); }}

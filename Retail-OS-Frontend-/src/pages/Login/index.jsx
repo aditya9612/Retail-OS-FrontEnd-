@@ -288,23 +288,38 @@ const Login = () => {
         }
 
         const apiUser = loginData?.user || loginData?.data?.user || fetchedUser || {};
+
+        // Restore any persistent custom profile settings saved for this account (keyed by email/identifier)
+        const userKey = (identifier || apiUser?.email || '').toLowerCase().trim();
+        let savedProfile = null;
+        try {
+            const raw = (userKey && localStorage.getItem(`retail_profile_${userKey}`)) || localStorage.getItem('retail_last_saved_profile');
+            if (raw) savedProfile = JSON.parse(raw);
+        } catch (_) {}
+
+        const mergedUser = {
+            ...apiUser,
+            ...(savedProfile || {}),
+            identifier,
+            role: apiUser?.role || tokenPayload?.role,
+        };
+
         const { name: resolvedName, email: resolvedEmail, role: resolvedRole } = resolveUserInfo(
-            {
-                ...apiUser,
-                identifier,
-                role: apiUser?.role || tokenPayload?.role,
-            },
+            mergedUser,
             identifier
         );
 
         const userDataToStore = {
-            ...apiUser,
+            ...mergedUser,
             id: apiUser?.id || tokenPayload?.sub || 1,
             tenant_id: apiUser?.tenant_id || tokenPayload?.tenant_id || 1,
             store_id: apiUser?.store_id || tokenPayload?.store_id || 1,
             email: resolvedEmail,
             full_name: resolvedName,
             name: resolvedName,
+            phone: savedProfile?.phone || apiUser?.phone || '',
+            address: savedProfile?.address || apiUser?.address || '',
+            is_custom_name: Boolean(savedProfile?.is_custom_name || mergedUser?.is_custom_name),
             role: typeof resolvedRole === "object" ? resolvedRole : { name: resolvedRole },
             identifier,
             logged_at: new Date().toISOString(),
