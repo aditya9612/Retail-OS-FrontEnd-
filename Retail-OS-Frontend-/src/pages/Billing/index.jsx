@@ -20,6 +20,7 @@ import {
     sendCustomerWhatsapp
 } from '../../services/customer';
 import productService from '../../services/product';
+import { resolveProductImage } from '../../utils/productImages';
 import {
     BsSearch,
     BsTrash,
@@ -57,83 +58,7 @@ const PAYMENT_MODES = [
     { id: 'Card', label: 'Card', icon: <BsCreditCard2Front size={15} /> },
 ];
 
-// ── Robust Retail Product Image Resolver with High-Resolution Photography ──
-export const resolveProductImage = (product) => {
-    if (!product) return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&auto=format&fit=crop&q=80';
-    const raw = product.image || product.image_url;
-    if (raw && typeof raw === 'string' && raw.startsWith('http')) {
-        return raw;
-    }
-
-    const name = (product.name || '').toLowerCase();
-    const cat = (product.category || '').toLowerCase();
-
-    // Specific product keyword matches with high-res Unsplash retail photography
-    if (name.includes('t-shirt') || name.includes('tshirt') || name.includes('shirt') || name.includes('polo')) {
-        return 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('jean') || name.includes('denim') || name.includes('pant') || name.includes('trouser')) {
-        return 'https://images.unsplash.com/photo-1542272604-780c96856592?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('wallet') || name.includes('purse')) {
-        return 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('tea') || name.includes('chai') || name.includes('coffee')) {
-        return 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('fitness') || name.includes('tracker') || name.includes('smartwatch') || name.includes('band')) {
-        return 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('charger') || name.includes('usb') || name.includes('cable') || name.includes('adapter')) {
-        return 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('milk') || name.includes('dairy') || name.includes('paneer') || name.includes('curd')) {
-        return 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('marie')) {
-        return 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('oreo')) {
-        return 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('butter cookie') || name.includes('cookies') || name.includes('biscuit') || name.includes('parle')) {
-        return 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('bottle') || name.includes('flask') || name.includes('sipper')) {
-        return 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('headphone') || name.includes('earphone') || name.includes('airpod') || name.includes('buds')) {
-        return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('sunglass') || name.includes('glass') || name.includes('spectacle')) {
-        return 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('shoe') || name.includes('sneaker') || name.includes('footwear')) {
-        return 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('almond') || name.includes('cashew') || name.includes('nut') || name.includes('dry fruit')) {
-        return 'https://images.unsplash.com/photo-1508061252445-5350f3ab0a55?w=500&auto=format&fit=crop&q=80';
-    }
-    if (name.includes('bag') || name.includes('backpack')) {
-        return 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&auto=format&fit=crop&q=80';
-    }
-
-    // Category fallbacks
-    if (cat.includes('apparel') || cat.includes('cloth') || cat.includes('fashion')) {
-        return 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?w=500&auto=format&fit=crop&q=80';
-    }
-    if (cat.includes('grocer') || cat.includes('food') || cat.includes('snack')) {
-        return 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=80';
-    }
-    if (cat.includes('electronics') || cat.includes('gadget')) {
-        return 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=500&auto=format&fit=crop&q=80';
-    }
-    if (cat.includes('accessor')) {
-        return 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop&q=80';
-    }
-
-    return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&auto=format&fit=crop&q=80';
-};
+export { resolveProductImage };
 
 const DEFAULT_PRODUCTS = [
     {
@@ -144,7 +69,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 5,
         category: 'Apparel',
         barcode: '1001',
-        image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&auto=format&fit=crop&q=85',
         discount: 50,
     },
     {
@@ -155,7 +80,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1002',
-        image: 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=600&auto=format&fit=crop&q=85',
         discount: 0,
     },
     {
@@ -166,7 +91,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Accessories',
         barcode: '1003',
-        image: 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=600&auto=format&fit=crop&q=85',
         discount: 100,
     },
     {
@@ -177,7 +102,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 5,
         category: 'Groceries',
         barcode: '1004',
-        image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=600&auto=format&fit=crop&q=85',
         discount: 20,
     },
     {
@@ -188,7 +113,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Electronics',
         barcode: '1005',
-        image: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=600&auto=format&fit=crop&q=85',
         discount: 200,
     },
     {
@@ -199,7 +124,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 12,
         category: 'Apparel',
         barcode: '1006',
-        image: 'https://images.unsplash.com/photo-1542272604-780c96856592?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1542272604-780c96856592?w=600&auto=format&fit=crop&q=85',
         discount: 150,
     },
     {
@@ -210,7 +135,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Electronics',
         barcode: '1007',
-        image: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=600&auto=format&fit=crop&q=85',
         discount: 50,
     },
     {
@@ -221,7 +146,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 0,
         category: 'Groceries',
         barcode: '1008',
-        image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=600&auto=format&fit=crop&q=85',
         discount: 0,
     },
     {
@@ -232,7 +157,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1009',
-        image: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=600&auto=format&fit=crop&q=85',
         discount: 5,
     },
     {
@@ -243,7 +168,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1010',
-        image: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=600&auto=format&fit=crop&q=85',
         discount: 5,
     },
     {
@@ -254,7 +179,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1011',
-        image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=600&auto=format&fit=crop&q=85',
         discount: 30,
     },
     {
@@ -265,7 +190,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Accessories',
         barcode: '1012',
-        image: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop&q=80',
+        image: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=600&auto=format&fit=crop&q=85',
         discount: 50,
     },
 ];
@@ -1449,9 +1374,12 @@ const Billing = () => {
                                         src={pImg}
                                         alt={product.name}
                                         loading="lazy"
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                                         onError={(e) => {
-                                            e.target.src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&auto=format&fit=crop&q=80';
+                                            if (!e.target.dataset.triedFallback) {
+                                                e.target.dataset.triedFallback = 'true';
+                                                e.target.src = resolveProductImage({ name: product.name, category: product.category, image: null });
+                                            }
                                         }}
                                     />
                                 </div>
@@ -1807,20 +1735,28 @@ const Billing = () => {
 
                                                 {/* Product Image Thumbnail */}
                                                 <div style={{
-                                                    width: 48,
-                                                    height: 48,
-                                                    borderRadius: 8,
+                                                    width: 52,
+                                                    height: 52,
+                                                    borderRadius: 10,
                                                     overflow: 'hidden',
                                                     flexShrink: 0,
                                                     border: '1px solid #e2e8f0',
-                                                    background: '#f8fafc',
+                                                    background: '#ffffff',
+                                                    padding: 3,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)',
                                                 }}>
                                                     <img
                                                         src={itemImg}
                                                         alt={item.name}
-                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                                                         onError={(e) => {
-                                                            e.target.src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&auto=format&fit=crop&q=80';
+                                                            if (!e.target.dataset.triedFallback) {
+                                                                e.target.dataset.triedFallback = 'true';
+                                                                e.target.src = resolveProductImage({ name: item.name, category: item.category, image: null });
+                                                            }
                                                         }}
                                                     />
                                                 </div>

@@ -9,6 +9,7 @@ import {
 
 import productService from '../../services/product';
 import categoryService from '../../services/categoryService';
+import { resolveProductImage } from '../../utils/productImages';
 
 const PAGE_SIZE = 10;
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
@@ -942,21 +943,25 @@ const ProductCatalog = () => {
                                     <td style={{ padding: '12px 16px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                             <div style={{
-                                                width: 38, height: 38, borderRadius: 8,
-                                                background: p.status === 'Inactive' ? '#e5e7eb' : '#f3f4f6',
+                                                width: 48, height: 48, borderRadius: 10,
+                                                background: '#ffffff',
+                                                border: '1.5px solid #e5e7eb',
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                                                 position: 'relative',
+                                                padding: 2,
+                                                boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
                                             }}>
-                                                {p.image ? (
-                                                    <img
-                                                        src={p.image}
-                                                        alt={p.name}
-                                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
-                                                        onError={(e) => { e.target.style.display = 'none'; }}
-                                                    />
-                                                ) : (
-                                                    <BsImage size={16} color={p.status === 'Inactive' ? '#9ca3af' : '#d1d5db'} />
-                                                )}
+                                                <img
+                                                    src={resolveProductImage(p)}
+                                                    alt={p.name}
+                                                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                                                    onError={(e) => {
+                                                        if (!e.target.dataset.triedFallback) {
+                                                            e.target.dataset.triedFallback = 'true';
+                                                            e.target.src = resolveProductImage({ name: p.name, category: p.category });
+                                                        }
+                                                    }}
+                                                />
                                                 {p.status === 'Inactive' && (
                                                     <div style={{
                                                         position: 'absolute', top: -4, right: -4,
