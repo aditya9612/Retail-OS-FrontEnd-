@@ -10,7 +10,7 @@ import {
     getActiveStoreId,
 } from '../../services/billingService';
 import { createInvoice, downloadInvoicePdf } from '../../services/invoiceService';
-import { getEffectiveBranding } from '../../services/documentSettingsService';
+import { getEffectiveBranding, normalizeLogoUrl } from '../../services/documentSettingsService';
 import { exportReport, getTopSellingProducts } from '../../services/reportService';
 import { validateCreditNote } from '../../services/creditNoteService';
 import {
@@ -38,6 +38,7 @@ import {
     BsPersonFill,
     BsReceiptCutoff,
     BsLightningChargeFill,
+    BsShop,
     BsX,
     BsPercent,
     BsTagFill,
@@ -255,6 +256,7 @@ const Billing = () => {
         logo_url: null,
         footer_message: 'Thank you for shopping with us! 🙏',
     });
+    const [receiptLogoFailed, setReceiptLogoFailed] = useState(false);
     const [completedInvoice, setCompletedInvoice] = useState(null);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [customerLoyaltyPoints, setCustomerLoyaltyPoints] = useState(0);
@@ -285,7 +287,7 @@ const Billing = () => {
                         gstin: branding.gstin || prev.gstin,
                         address: branding.address || prev.address,
                         phone: branding.phone || prev.phone,
-                        logo_url: branding.logo_url || prev.logo_url,
+                        logo_url: normalizeLogoUrl(branding.logo_url) || prev.logo_url,
                         footer_message: branding.footer_message || prev.footer_message,
                     }));
                 }
@@ -296,6 +298,11 @@ const Billing = () => {
         loadSettings();
         return () => { isMounted = false; };
     }, []);
+
+    // Reset logo error state when preview opens or logo URL changes
+    useEffect(() => {
+        setReceiptLogoFailed(false);
+    }, [effectiveBranding.logo_url, showPreview]);
 
     // Prevent background page scrolling while receipt modal is open
     useEffect(() => {
@@ -2368,11 +2375,22 @@ const Billing = () => {
                         <div id="invoice" className="pos-receipt-body">
                             {/* Store header - Dynamic from Document Settings */}
                             <div className="pos-receipt-store">
-                                {effectiveBranding.logo_url ? (
-                                    <img src={effectiveBranding.logo_url} alt="Logo" style={{ maxHeight: 36, marginBottom: 4 }} />
+                                {effectiveBranding.logo_url && !receiptLogoFailed ? (
+                                    <img
+                                        src={effectiveBranding.logo_url}
+                                        alt=""
+                                        onError={() => setReceiptLogoFailed(true)}
+                                        style={{
+                                            maxHeight: 46,
+                                            maxWidth: 160,
+                                            objectFit: 'contain',
+                                            display: 'block',
+                                            margin: '0 auto 8px',
+                                        }}
+                                    />
                                 ) : (
                                     <div className="pos-receipt-logo">
-                                        <BsLightningChargeFill size={22} color="#fff" />
+                                        <BsShop size={22} color="#fff" />
                                     </div>
                                 )}
                                 <h1 className="pos-receipt-store-name">{effectiveBranding.store_name || 'RetailOS'}</h1>
