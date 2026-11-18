@@ -57,6 +57,84 @@ const PAYMENT_MODES = [
     { id: 'Card', label: 'Card', icon: <BsCreditCard2Front size={15} /> },
 ];
 
+// ── Robust Retail Product Image Resolver with High-Resolution Photography ──
+export const resolveProductImage = (product) => {
+    if (!product) return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&auto=format&fit=crop&q=80';
+    const raw = product.image || product.image_url;
+    if (raw && typeof raw === 'string' && raw.startsWith('http')) {
+        return raw;
+    }
+
+    const name = (product.name || '').toLowerCase();
+    const cat = (product.category || '').toLowerCase();
+
+    // Specific product keyword matches with high-res Unsplash retail photography
+    if (name.includes('t-shirt') || name.includes('tshirt') || name.includes('shirt') || name.includes('polo')) {
+        return 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('jean') || name.includes('denim') || name.includes('pant') || name.includes('trouser')) {
+        return 'https://images.unsplash.com/photo-1542272604-780c96856592?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('wallet') || name.includes('purse')) {
+        return 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('tea') || name.includes('chai') || name.includes('coffee')) {
+        return 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('fitness') || name.includes('tracker') || name.includes('smartwatch') || name.includes('band')) {
+        return 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('charger') || name.includes('usb') || name.includes('cable') || name.includes('adapter')) {
+        return 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('milk') || name.includes('dairy') || name.includes('paneer') || name.includes('curd')) {
+        return 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('marie')) {
+        return 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('oreo')) {
+        return 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('butter cookie') || name.includes('cookies') || name.includes('biscuit') || name.includes('parle')) {
+        return 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('bottle') || name.includes('flask') || name.includes('sipper')) {
+        return 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('headphone') || name.includes('earphone') || name.includes('airpod') || name.includes('buds')) {
+        return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('sunglass') || name.includes('glass') || name.includes('spectacle')) {
+        return 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('shoe') || name.includes('sneaker') || name.includes('footwear')) {
+        return 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('almond') || name.includes('cashew') || name.includes('nut') || name.includes('dry fruit')) {
+        return 'https://images.unsplash.com/photo-1508061252445-5350f3ab0a55?w=500&auto=format&fit=crop&q=80';
+    }
+    if (name.includes('bag') || name.includes('backpack')) {
+        return 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&auto=format&fit=crop&q=80';
+    }
+
+    // Category fallbacks
+    if (cat.includes('apparel') || cat.includes('cloth') || cat.includes('fashion')) {
+        return 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?w=500&auto=format&fit=crop&q=80';
+    }
+    if (cat.includes('grocer') || cat.includes('food') || cat.includes('snack')) {
+        return 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=80';
+    }
+    if (cat.includes('electronics') || cat.includes('gadget')) {
+        return 'https://images.unsplash.com/photo-1526738549149-8e07eca6c147?w=500&auto=format&fit=crop&q=80';
+    }
+    if (cat.includes('accessor')) {
+        return 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop&q=80';
+    }
+
+    return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&auto=format&fit=crop&q=80';
+};
+
 const DEFAULT_PRODUCTS = [
     {
         id: 101,
@@ -66,7 +144,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 5,
         category: 'Apparel',
         barcode: '1001',
-        image: '/images/products/tshirt.jpg',
+        image: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=500&auto=format&fit=crop&q=80',
         discount: 50,
     },
     {
@@ -77,7 +155,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1002',
-        image: '/images/products/parle-g.jpg',
+        image: 'https://images.unsplash.com/photo-1558961363-fa8fdf82db35?w=500&auto=format&fit=crop&q=80',
         discount: 0,
     },
     {
@@ -88,7 +166,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Accessories',
         barcode: '1003',
-        image: '/images/products/wallet.jpg',
+        image: 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&auto=format&fit=crop&q=80',
         discount: 100,
     },
     {
@@ -99,7 +177,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 5,
         category: 'Groceries',
         barcode: '1004',
-        image: '/images/products/green-tea.jpg',
+        image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=80',
         discount: 20,
     },
     {
@@ -110,7 +188,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Electronics',
         barcode: '1005',
-        image: '/images/products/fitness-tracker.jpg',
+        image: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?w=500&auto=format&fit=crop&q=80',
         discount: 200,
     },
     {
@@ -121,7 +199,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 12,
         category: 'Apparel',
         barcode: '1006',
-        image: '/images/products/jeans.jpg',
+        image: 'https://images.unsplash.com/photo-1542272604-780c96856592?w=500&auto=format&fit=crop&q=80',
         discount: 150,
     },
     {
@@ -132,7 +210,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Electronics',
         barcode: '1007',
-        image: '/images/products/usb-charger.jpg',
+        image: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=500&auto=format&fit=crop&q=80',
         discount: 50,
     },
     {
@@ -143,7 +221,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 0,
         category: 'Groceries',
         barcode: '1008',
-        image: '/images/products/milk-bottle.jpg',
+        image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=500&auto=format&fit=crop&q=80',
         discount: 0,
     },
     {
@@ -154,7 +232,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1009',
-        image: '/images/products/marie-biscuits.jpg',
+        image: 'https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?w=500&auto=format&fit=crop&q=80',
         discount: 5,
     },
     {
@@ -165,7 +243,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1010',
-        image: '/images/products/oreo.jpg',
+        image: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=500&auto=format&fit=crop&q=80',
         discount: 5,
     },
     {
@@ -176,7 +254,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1011',
-        image: '/images/products/butter-cookies.jpg',
+        image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=500&auto=format&fit=crop&q=80',
         discount: 30,
     },
     {
@@ -187,7 +265,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Accessories',
         barcode: '1012',
-        image: '/images/products/steel-bottle.jpg',
+        image: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=500&auto=format&fit=crop&q=80',
         discount: 50,
     },
 ];
@@ -230,6 +308,8 @@ const Billing = () => {
     const [couponCode, setCouponCode] = useState('');
     const [discountApplied, setDiscountApplied] = useState(false); // true = server confirmed
     const [discountLoading, setDiscountLoading] = useState(false);
+    const [promoSectionOpen, setPromoSectionOpen] = useState(false);
+    const [activePromoTab, setActivePromoTab] = useState('discount'); // 'discount' | 'coupon' | 'creditNote'
     // ── Barcode & Scanner state ────────────────────────────────────────────
     const [showBarcodeModal, setShowBarcodeModal] = useState(false);
     const [lastScanned, setLastScanned] = useState(null);
@@ -322,7 +402,7 @@ const Billing = () => {
                         gstRate: Number(p.gst_rate ?? p.tax_rate ?? 18),
                         category: p.category_name || p.category?.name || p.category || 'General',
                         barcode: String(p.barcode || p.sku || p.id),
-                        image: p.image_url || p.image || null,
+                        image: resolveProductImage(p),
                         discount: Number(p.discount || 0),
                     }));
                     setProducts(mapped);
@@ -472,7 +552,7 @@ const Billing = () => {
         setCart(prev => {
             const existing = prev.find(i => i.id === product.id);
             if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1, unsynced: true } : i);
-            return [...prev, { ...product, qty: 1, discountPerItem: product.discount || 0, unsynced: true }];
+            return [...prev, { ...product, image: resolveProductImage(product), qty: 1, discountPerItem: product.discount || 0, unsynced: true }];
         });
 
         setAddingItemId(product.id);
@@ -1353,108 +1433,107 @@ const Billing = () => {
                         </div>
                     ) : (
                         filteredProducts.map(product => {
-                            const inCart = cart.find(i => i.id === product.id);
-                            return (
-                                <div
-                                    key={product.id}
-                                    className={`pos-product-card${inCart ? ' pos-product-card--in-cart' : ''}`}
-                                    onClick={() => addToCart(product)}
-                                >
-                                    {inCart && (
-                                        <div className="pos-product-qty-badge">{inCart.qty}</div>
-                                    )}
-                                    <div className="pos-product-image">
-                                        {product.image && (product.image.startsWith('/') || product.image.startsWith('http')) ? (
-                                            <img
-                                                src={product.image}
-                                                alt={product.name}
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                onError={(e) => { e.target.style.display = 'none'; }}
-                                            />
-                                        ) : (
-                                            <span>{product.image}</span>
-                                        )}
-                                    </div>
-                                    <span className="pos-product-cat">{product.category}</span>
-                                    <h3 className="pos-product-name">{product.name}</h3>
-                                    {/* Display Item ID and Barcode on product card */}
-                                    <div style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 5,
-                                        fontSize: 10,
-                                        fontFamily: 'monospace',
-                                        fontWeight: 700,
-                                        color: '#4f46e5',
-                                        background: '#eef2ff',
-                                        padding: '2px 6px',
-                                        borderRadius: 4,
-                                        width: 'fit-content',
-                                        marginTop: 2,
-                                        marginBottom: 2,
-                                        flexWrap: 'wrap',
-                                    }}>
-                                        <span>Item #{product.id}</span>
-                                        <span>•</span>
-                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                            <BsUpcScan size={10} /> Barcode: {product.barcode}
-                                        </span>
-                                    </div>
-                                    {/* ── Discount badge on product card ── */}
-                                    {product.discount > 0 && (
-                                        <div style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                                            fontSize: 10, fontWeight: 700,
-                                            color: '#dc2626', background: '#fef2f2',
-                                            border: '1px solid #fecaca',
-                                            padding: '2px 6px', borderRadius: 4,
-                                            width: 'fit-content', marginBottom: 2,
-                                        }}>
-                                            <BsPercent size={9} /> ₹{product.discount} OFF per item
-                                        </div>
-                                    )}
-                                    <div className="pos-product-footer">
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                            {product.discount > 0 ? (
-                                                <>
-                                                    <span style={{ fontSize: 10, color: '#9ca3af', textDecoration: 'line-through' }}>
-                                                        ₹{product.price.toLocaleString()}
-                                                    </span>
-                                                    <span className="pos-product-price" style={{ color: '#10b981' }}>
-                                                        ₹{(product.price - product.discount).toLocaleString()}
-                                                    </span>
-                                                </>
-                                            ) : (
-                                                <span className="pos-product-price">₹{product.price.toLocaleString()}</span>
-                                            )}
-                                            <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 500 }}>excl. GST</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            className="pos-product-add-btn"
-                                            style={{
-                                                border: 'none',
-                                                outline: 'none',
-                                                cursor: 'pointer',
-                                                ...(addingItemId === product.id ? { opacity: 0.6 } : {})
-                                            }}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                addToCart(product);
-                                            }}
-                                            title={`Add ${product.name} to cart`}
-                                        >
-                                            {addingItemId === product.id
-                                                ? <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0 }}>…</span>
-                                                : <BsPlus size={18} />
-                                            }
-                                        </button>
-                                    </div>
-                                    <span className="pos-product-gst-tag">GST {product.gstRate}% excl.</span>
+                        const inCart = cart.find(i => i.id === product.id);
+                        const pImg = resolveProductImage(product);
+                        return (
+                            <div
+                                key={product.id}
+                                className={`pos-product-card${inCart ? ' pos-product-card--in-cart' : ''}`}
+                                onClick={() => addToCart(product)}
+                            >
+                                {inCart && (
+                                    <div className="pos-product-qty-badge">{inCart.qty}</div>
+                                )}
+                                <div className="pos-product-image">
+                                    <img
+                                        src={pImg}
+                                        alt={product.name}
+                                        loading="lazy"
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        onError={(e) => {
+                                            e.target.src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&auto=format&fit=crop&q=80';
+                                        }}
+                                    />
                                 </div>
-                            );
-                        })
-                    )}
+                                <span className="pos-product-cat">{product.category}</span>
+                                <h3 className="pos-product-name">{product.name}</h3>
+                                {/* Display Item ID and Barcode on product card */}
+                                <div style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    fontSize: 10,
+                                    fontFamily: 'monospace',
+                                    fontWeight: 700,
+                                    color: '#4f46e5',
+                                    background: '#eef2ff',
+                                    padding: '2px 6px',
+                                    borderRadius: 4,
+                                    width: 'fit-content',
+                                    marginTop: 2,
+                                    marginBottom: 2,
+                                    flexWrap: 'wrap',
+                                }}>
+                                    <span>Item #{product.id}</span>
+                                    <span>•</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                        <BsUpcScan size={10} /> Barcode: {product.barcode}
+                                    </span>
+                                </div>
+                                {/* ── Discount badge on product card ── */}
+                                {product.discount > 0 && (
+                                    <div style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                                        fontSize: 10, fontWeight: 700,
+                                        color: '#dc2626', background: '#fef2f2',
+                                        border: '1px solid #fecaca',
+                                        padding: '2px 6px', borderRadius: 4,
+                                        width: 'fit-content', marginBottom: 2,
+                                    }}>
+                                        <BsPercent size={9} /> ₹{product.discount} OFF per item
+                                    </div>
+                                )}
+                                <div className="pos-product-footer">
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                        {product.discount > 0 ? (
+                                            <>
+                                                <span style={{ fontSize: 10, color: '#9ca3af', textDecoration: 'line-through' }}>
+                                                    ₹{product.price.toLocaleString()}
+                                                </span>
+                                                <span className="pos-product-price" style={{ color: '#10b981' }}>
+                                                    ₹{(product.price - product.discount).toLocaleString()}
+                                                </span>
+                                            </>
+                                        ) : (
+                                            <span className="pos-product-price">₹{product.price.toLocaleString()}</span>
+                                        )}
+                                        <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 500 }}>excl. GST</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="pos-product-add-btn"
+                                        style={{
+                                            border: 'none',
+                                            outline: 'none',
+                                            cursor: 'pointer',
+                                            ...(addingItemId === product.id ? { opacity: 0.6 } : {})
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            addToCart(product);
+                                        }}
+                                        title={`Add ${product.name} to cart`}
+                                    >
+                                        {addingItemId === product.id
+                                            ? <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0 }}>…</span>
+                                            : <BsPlus size={18} />
+                                        }
+                                    </button>
+                                </div>
+                                <span className="pos-product-gst-tag">GST {product.gstRate}% excl.</span>
+                            </div>
+                        );
+                    }))}
                 </div>
             </div>
 
@@ -1500,113 +1579,133 @@ const Billing = () => {
                             </div>
                         </div>
 
-                        {/* Customer fields */}
-                        <div className="pos-customer-row" style={{ position: 'relative' }}>
-                            <div className="pos-cust-field-wrap" title="Customer Name">
-                                <BsPersonFill size={11} className="pos-cust-icon" />
-                                <input
-                                    type="text"
-                                    className="pos-cust-input"
-                                    placeholder="Customer Name"
-                                    value={customer.name}
-                                    onChange={e => setCustomer({ ...customer, name: e.target.value })}
-                                />
-                            </div>
-                            <div className="pos-cust-field-wrap" title="Customer Phone Number">
-                                <BsTelephoneFill size={10} className="pos-cust-icon" color="#64748b" />
-                                <input
-                                    type="tel"
-                                    className="pos-cust-input"
-                                    placeholder="Phone Number"
-                                    value={customer.phone}
-                                    onChange={e => handleCustomerPhoneChange(e.target.value)}
-                                />
-                            </div>
-                            <div className="pos-cust-field-wrap pos-cust-field-wrap--full" title="GSTIN (Optional)">
-                                <BsHash size={12} className="pos-cust-icon" color="#94a3b8" />
-                                <input
-                                    type="text"
-                                    className="pos-cust-input"
-                                    placeholder="GSTIN (optional)"
-                                    value={customer.gstin || ''}
-                                    onChange={e => setCustomer({ ...customer, gstin: e.target.value })}
-                                />
+                        {/* Customer Box */}
+                        <div style={{
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: 10,
+                            padding: '10px 12px',
+                            marginTop: 4,
+                            position: 'relative'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <BsPersonFill size={12} color="#6366f1" /> Customer CRM
+                                </span>
+                                {selectedCustomer && (
+                                    <span style={{ fontSize: 10, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 10, fontWeight: 700, border: '1px solid #a7f3d0' }}>
+                                        ✓ Linked #{selectedCustomer.id || selectedCustomer.backendId}
+                                    </span>
+                                )}
                             </div>
 
-                            {/* Customer Live Suggestions Dropdown */}
-                            {showCustomerDropdown && customerSuggestions.length > 0 && (
+                            <div className="pos-customer-row">
+                                <div className="pos-cust-field-wrap" title="Customer Name">
+                                    <BsPersonFill size={11} className="pos-cust-icon" />
+                                    <input
+                                        type="text"
+                                        className="pos-cust-input"
+                                        placeholder="Customer Name"
+                                        value={customer.name}
+                                        onChange={e => setCustomer({ ...customer, name: e.target.value })}
+                                    />
+                                </div>
+                                <div className="pos-cust-field-wrap" title="Customer Phone Number">
+                                    <BsTelephoneFill size={10} className="pos-cust-icon" color="#64748b" />
+                                    <input
+                                        type="tel"
+                                        className="pos-cust-input"
+                                        placeholder="Phone (10 digits)"
+                                        value={customer.phone}
+                                        onChange={e => handleCustomerPhoneChange(e.target.value)}
+                                    />
+                                </div>
+                                <div className="pos-cust-field-wrap pos-cust-field-wrap--full" title="GSTIN (Optional)">
+                                    <BsHash size={12} className="pos-cust-icon" color="#94a3b8" />
+                                    <input
+                                        type="text"
+                                        className="pos-cust-input"
+                                        placeholder="GSTIN (Optional for B2B Invoice)"
+                                        value={customer.gstin || ''}
+                                        onChange={e => setCustomer({ ...customer, gstin: e.target.value })}
+                                    />
+                                </div>
+
+                                {/* Customer Live Suggestions Dropdown */}
+                                {showCustomerDropdown && customerSuggestions.length > 0 && (
+                                    <div style={{
+                                        position: 'absolute', top: '100%', left: 0, right: 0,
+                                        background: '#fff', border: '1px solid #cbd5e1',
+                                        borderRadius: 8, boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
+                                        zIndex: 50, maxHeight: 150, overflowY: 'auto', marginTop: 4,
+                                    }}>
+                                        {customerSuggestions.map((c, i) => (
+                                            <div
+                                                key={c.id || i}
+                                                onClick={() => handleSelectCustomer(c)}
+                                                style={{
+                                                    padding: '7px 10px', cursor: 'pointer',
+                                                    borderBottom: '1px solid #f1f5f9', fontSize: 11,
+                                                    display: 'flex', justifyContent: 'space-between',
+                                                }}
+                                                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <span style={{ fontWeight: 600, color: '#1e293b' }}>{c.name}</span>
+                                                <span style={{ color: '#6366f1', fontFamily: 'monospace' }}>{c.phone || c.mobile}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Customer Loyalty Points Card */}
+                            {selectedCustomer && (
                                 <div style={{
-                                    position: 'absolute', top: '100%', left: 0, right: 0,
-                                    background: '#fff', border: '1px solid #cbd5e1',
-                                    borderRadius: 8, boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
-                                    zIndex: 50, maxHeight: 150, overflowY: 'auto', marginTop: 4,
+                                    marginTop: 8,
+                                    padding: '8px 10px',
+                                    borderRadius: 8,
+                                    background: '#fffbeb',
+                                    border: '1px solid #fde68a',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    fontSize: 11.5
                                 }}>
-                                    {customerSuggestions.map((c, i) => (
-                                        <div
-                                            key={c.id || i}
-                                            onClick={() => handleSelectCustomer(c)}
-                                            style={{
-                                                padding: '7px 10px', cursor: 'pointer',
-                                                borderBottom: '1px solid #f1f5f9', fontSize: 11,
-                                                display: 'flex', justifyContent: 'space-between',
-                                            }}
-                                            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                        >
-                                            <span style={{ fontWeight: 600, color: '#1e293b' }}>{c.name}</span>
-                                            <span style={{ color: '#6366f1', fontFamily: 'monospace' }}>{c.phone || c.mobile}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <span style={{ fontSize: 14 }}>🪙</span>
+                                        <div>
+                                            <span style={{ fontWeight: 800, color: '#92400e' }}>
+                                                {customerLoyaltyPoints.toLocaleString('en-IN')} Pts Available
+                                            </span>
+                                            <span style={{ color: '#b45309', marginLeft: 6, fontSize: 11 }}>
+                                                (Worth ₹{(customerLoyaltyPoints * 0.10).toFixed(2)})
+                                            </span>
                                         </div>
-                                    ))}
+                                    </div>
+                                    {customerLoyaltyPoints > 0 ? (
+                                        <button
+                                            type="button"
+                                            onClick={handleToggleLoyaltyRedeem}
+                                            style={{
+                                                padding: '4px 10px',
+                                                borderRadius: 6,
+                                                border: 'none',
+                                                background: loyaltyRedeemApplied ? '#059669' : '#d97706',
+                                                color: '#fff',
+                                                fontWeight: 700,
+                                                fontSize: 11,
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {loyaltyRedeemApplied ? `✓ Applied (-₹${totals.loyaltyDiscount.toFixed(2)})` : 'Redeem Points'}
+                                        </button>
+                                    ) : (
+                                        <span style={{ fontSize: 10, color: '#92400e', fontWeight: 600 }}>0 Balance</span>
+                                    )}
                                 </div>
                             )}
                         </div>
-
-                        {/* Customer Loyalty Points Card */}
-                        {selectedCustomer && (
-                            <div style={{
-                                marginTop: 8,
-                                padding: '8px 12px',
-                                borderRadius: 8,
-                                background: '#fffbeb',
-                                border: '1px solid #fde68a',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                fontSize: 12
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 14 }}>🪙</span>
-                                    <div>
-                                        <span style={{ fontWeight: 800, color: '#92400e' }}>
-                                            {customerLoyaltyPoints.toLocaleString('en-IN')} Pts Available
-                                        </span>
-                                        <span style={{ color: '#b45309', marginLeft: 6, fontSize: 11 }}>
-                                            (Worth ₹{(customerLoyaltyPoints * 0.10).toFixed(2)})
-                                        </span>
-                                    </div>
-                                </div>
-                                {customerLoyaltyPoints > 0 ? (
-                                    <button
-                                        type="button"
-                                        onClick={handleToggleLoyaltyRedeem}
-                                        style={{
-                                            padding: '4px 10px',
-                                            borderRadius: 6,
-                                            border: 'none',
-                                            background: loyaltyRedeemApplied ? '#059669' : '#d97706',
-                                            color: '#fff',
-                                            fontWeight: 700,
-                                            fontSize: 11,
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        {loyaltyRedeemApplied ? `✓ Applied (-₹${totals.loyaltyDiscount.toFixed(2)})` : 'Redeem Points'}
-                                    </button>
-                                ) : (
-                                    <span style={{ fontSize: 10, color: '#92400e', fontWeight: 600 }}>0 Balance</span>
-                                )}
-                            </div>
-                        )}
                     </div>
 
                     {/* ── Scrollable middle body: Cart + Discounts + Breakdown + Payment ── */}
@@ -1634,7 +1733,36 @@ const Billing = () => {
                             </div>
                         )}
 
-                        {/* Cart items */}
+                        {/* Cart Header */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: '0 2px' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                Cart Items ({cart.length})
+                            </span>
+                            {cart.length > 0 && (
+                                <button
+                                    type="button"
+                                    onClick={handleReset}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        fontSize: 11,
+                                        color: '#ef4444',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        padding: '2px 6px',
+                                        borderRadius: 4
+                                    }}
+                                    title="Clear all items in cart"
+                                >
+                                    <BsTrash size={11} /> Clear Cart
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Cart items list */}
                         <div className="pos-cart-list custom-scrollbar">
                             {(() => {
                                 if (cartLoading) {
@@ -1647,247 +1775,413 @@ const Billing = () => {
                                 }
                                 if (cart.length === 0) {
                                     return (
-                                        <div className="pos-cart-empty">
-                                            <BsCart3 size={48} />
-                                            <p>Cart is empty</p>
-                                            <span>Click a product to add it</span>
+                                        <div className="pos-cart-empty" style={{ padding: '36px 12px' }}>
+                                            <BsCart3 size={46} color="#cbd5e1" />
+                                            <p style={{ marginTop: 8, fontSize: 13 }}>Cart is empty</p>
+                                            <span style={{ fontSize: 11 }}>Click any product on the left to add it</span>
                                         </div>
                                     );
                                 }
-                                return cart.map((item, index) => (
-                                    <div key={item.id} className="pos-cart-item" style={{ height: 'auto', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                                        {/* Serial Number Badge */}
-                                        <span
-                                            title={`Line item #${index + 1}`}
-                                            style={{
-                                                width: 22, height: 22, borderRadius: 6,
-                                                background: '#f1f5f9', color: '#475569',
-                                                fontSize: 10, fontWeight: 800,
-                                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                                flexShrink: 0, border: '1px solid #e2e8f0',
-                                            }}
-                                        >
-                                            #{index + 1}
-                                        </span>
-                                        <div className="pos-cart-item-emoji">
-                                            {item.image && (item.image.startsWith('/') || item.image.startsWith('http')) ? (
-                                                <img
-                                                    src={item.image}
-                                                    alt={item.name}
-                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
-                                                    onError={(e) => { e.target.style.display = 'none'; }}
-                                                />
-                                            ) : (
-                                                <span>{item.image}</span>
-                                            )}
-                                        </div>
-                                        <div className="pos-cart-item-info" style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
-                                            <h4 className="pos-cart-item-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
-                                                {item.unsynced && (
-                                                    <span style={{ fontSize: 9, color: '#d97706', background: '#fef3c7', padding: '2px 5px', borderRadius: 4 }}>Offline</span>
-                                                )}
-                                            </h4>
-                                            <span className="pos-cart-item-price" style={{ fontSize: 11, color: '#6b7280' }}>
-                                                ₹{item.price.toLocaleString()} × {item.qty}
-                                                {item.discountPerItem > 0 && (
-                                                    <span style={{ color: '#ef4444', fontWeight: 600, marginLeft: 6 }}>
-                                                        (-₹{item.discountPerItem}/item)
+                                return cart.map((item, index) => {
+                                    const itemImg = resolveProductImage(item);
+                                    const netPrice = item.price - (item.discountPerItem || 0);
+                                    const lineTotal = netPrice * item.qty;
+
+                                    return (
+                                        <div key={item.id} className="pos-cart-item-card">
+                                            {/* Top Row: Serial + Image + Info + Delete */}
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, width: '100%' }}>
+                                                {/* Serial number */}
+                                                <span
+                                                    title={`Line item #${index + 1}`}
+                                                    style={{
+                                                        width: 20, height: 20, borderRadius: 5,
+                                                        background: '#f1f5f9', color: '#475569',
+                                                        fontSize: 10, fontWeight: 800,
+                                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                        flexShrink: 0, marginTop: 2, border: '1px solid #e2e8f0',
+                                                    }}
+                                                >
+                                                    #{index + 1}
+                                                </span>
+
+                                                {/* Product Image Thumbnail */}
+                                                <div style={{
+                                                    width: 48,
+                                                    height: 48,
+                                                    borderRadius: 8,
+                                                    overflow: 'hidden',
+                                                    flexShrink: 0,
+                                                    border: '1px solid #e2e8f0',
+                                                    background: '#f8fafc',
+                                                }}>
+                                                    <img
+                                                        src={itemImg}
+                                                        alt={item.name}
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                        onError={(e) => {
+                                                            e.target.src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&auto=format&fit=crop&q=80';
+                                                        }}
+                                                    />
+                                                </div>
+
+                                                {/* Product Details (Spacious, Multi-line, NO Ellipsis Clipping!) */}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <h4 style={{
+                                                        fontSize: 13,
+                                                        fontWeight: 700,
+                                                        color: '#0f172a',
+                                                        margin: 0,
+                                                        lineHeight: 1.35,
+                                                        wordBreak: 'break-word',
+                                                    }}>
+                                                        {item.name}
+                                                        {item.unsynced && (
+                                                            <span style={{ fontSize: 9, color: '#d97706', background: '#fef3c7', padding: '1px 5px', borderRadius: 4, marginLeft: 6, fontWeight: 600 }}>
+                                                                Offline
+                                                            </span>
+                                                        )}
+                                                    </h4>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap', fontSize: 10.5, color: '#64748b' }}>
+                                                        <span style={{ fontFamily: 'monospace', color: '#4f46e5', fontWeight: 700 }}>#{item.id}</span>
+                                                        {item.barcode && (
+                                                            <>
+                                                                <span>•</span>
+                                                                <span style={{ fontFamily: 'monospace' }}>BC: {item.barcode}</span>
+                                                            </>
+                                                        )}
+                                                        {item.hsn && (
+                                                            <>
+                                                                <span>•</span>
+                                                                <span>HSN: {item.hsn}</span>
+                                                            </>
+                                                        )}
+                                                        <span>•</span>
+                                                        <span style={{ color: '#059669', fontWeight: 600 }}>GST {item.gstRate || totals.gstRate}%</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Delete Item Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeFromCart(item.id)}
+                                                    title={`Remove ${item.name} from order`}
+                                                    style={{
+                                                        background: '#f8fafc',
+                                                        border: '1px solid #e2e8f0',
+                                                        color: '#94a3b8',
+                                                        borderRadius: 6,
+                                                        padding: '5px 6px',
+                                                        cursor: 'pointer',
+                                                        flexShrink: 0,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        transition: 'all 0.15s ease',
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                                                >
+                                                    <BsTrash size={13} />
+                                                </button>
+                                            </div>
+
+                                            {/* Bottom Row: Unit Price + Quantity Stepper + Line Total */}
+                                            <div style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                paddingTop: 8,
+                                                borderTop: '1px dashed #f1f5f9',
+                                                width: '100%',
+                                                boxSizing: 'border-box'
+                                            }}>
+                                                {/* Unit Price & Discounts */}
+                                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>
+                                                        ₹{netPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                     </span>
-                                                )}
-                                            </span>
-                                            <div style={{ fontSize: '10px', color: '#64748b', display: 'flex', gap: '6px', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
-                                                <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#4f46e5' }}>ID #{item.id}</span>
-                                                <span>•</span>
-                                                {item.barcode && (
-                                                    <>
-                                                        <span style={{ fontFamily: 'monospace' }}>Barcode: {item.barcode}</span>
-                                                        <span>•</span>
-                                                    </>
-                                                )}
-                                                {item.hsn && (
-                                                    <>
-                                                        <span>HSN: {item.hsn}</span>
-                                                        <span>•</span>
-                                                    </>
-                                                )}
-                                                <span>GST {item.gstRate || totals.gstRate}% (excl.)</span>
+                                                    <span style={{ fontSize: 10, color: '#94a3b8' }}>/ unit</span>
+                                                    {item.discountPerItem > 0 && (
+                                                        <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 600, background: '#fef2f2', padding: '1px 4px', borderRadius: 4 }}>
+                                                            -₹{item.discountPerItem}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Stepper + Line Total */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                    {/* Quantity Stepper */}
+                                                    <div className="pos-qty-ctrl" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8 }}>
+                                                        <button
+                                                            type="button"
+                                                            className="pos-qty-btn"
+                                                            onClick={() => updateQty(item.id, -1)}
+                                                            title="Decrease quantity"
+                                                            style={{ width: 26, height: 26, cursor: 'pointer' }}
+                                                        >
+                                                            <BsDash size={12} />
+                                                        </button>
+                                                        <span
+                                                            className="pos-qty-val"
+                                                            style={{
+                                                                width: 28,
+                                                                textAlign: 'center',
+                                                                fontSize: 12,
+                                                                fontWeight: 800,
+                                                                color: item.qty >= MAX_QTY ? '#d97706' : '#0f172a'
+                                                            }}
+                                                        >
+                                                            {item.qty}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            className="pos-qty-btn"
+                                                            onClick={() => updateQty(item.id, 1)}
+                                                            disabled={item.qty >= MAX_QTY}
+                                                            title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units` : 'Increase quantity'}
+                                                            style={{
+                                                                width: 26,
+                                                                height: 26,
+                                                                cursor: item.qty >= MAX_QTY ? 'not-allowed' : 'pointer',
+                                                                opacity: item.qty >= MAX_QTY ? 0.35 : 1
+                                                            }}
+                                                        >
+                                                            <BsPlus size={12} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Line Item Total */}
+                                                    <span style={{
+                                                        fontSize: 14,
+                                                        fontWeight: 800,
+                                                        color: '#0f172a',
+                                                        minWidth: 70,
+                                                        textAlign: 'right'
+                                                    }}>
+                                                        ₹{lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="pos-qty-ctrl">
-                                            <button className="pos-qty-btn" onClick={() => updateQty(item.id, -1)} title="Decrease quantity">
-                                                <BsDash size={12} />
-                                            </button>
-                                            <span
-                                                className="pos-qty-val"
-                                                title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units` : ''}
-                                                style={item.qty >= MAX_QTY ? { color: '#d97706', fontWeight: 800 } : {}}
-                                            >
-                                                {item.qty}{item.qty >= MAX_QTY && <span style={{ fontSize: 8, marginLeft: 2, verticalAlign: 'super', color: '#d97706' }}>MAX</span>}
-                                            </span>
-                                            <button
-                                                className="pos-qty-btn"
-                                                onClick={() => updateQty(item.id, 1)}
-                                                disabled={item.qty >= MAX_QTY}
-                                                title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units per item` : 'Increase quantity'}
-                                                style={item.qty >= MAX_QTY ? { opacity: 0.35, cursor: 'not-allowed' } : {}}
-                                            >
-                                                <BsPlus size={12} />
-                                            </button>
-                                        </div>
-                                        <span className="pos-cart-item-total" style={{ fontWeight: 700, minWidth: 65, textAlign: 'right' }}>
-                                            ₹{((item.price - (item.discountPerItem || 0)) * item.qty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </span>
-                                        <button className="pos-cart-item-del" onClick={() => removeFromCart(item.id)} title="Remove item from order">
-                                            <BsTrash size={13} />
-                                        </button>
-                                    </div>
-                                ));
+                                    );
+                                });
                             })()}
                         </div>
 
                         {/* Totals & payment */}
                         <div className="pos-right-options">
 
-                            {/* Discount + Coupon section */}
-                            <div style={{ marginBottom: 10 }}>
-
-                                {/* Applied discount badge */}
-                                {discountApplied && (
-                                    <div style={{
-                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                        background: '#ecfdf5', border: '1px solid #6ee7b7',
-                                        borderRadius: 8, padding: '6px 10px', marginBottom: 8,
-                                    }}>
-                                        <span style={{ fontSize: 12, color: '#065f46', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <BsTagFill size={12} color="#10b981" />
-                                            {couponCode.trim()
-                                                ? `Coupon "${couponCode.trim()}" applied`
-                                                : `Discount applied: ${discountType === 'percentage' ? `${billDiscount}%` : `₹${billDiscount} flat`}`
-                                            }
-                                        </span>
-                                        <button
-                                            onClick={handleClearDiscount}
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', display: 'flex' }}
-                                            title="Remove discount"
-                                        >
-                                            <BsX size={16} />
-                                        </button>
-                                    </div>
-                                )}
-
-                                {/* Discount type + value row */}
-                                {!discountApplied && (
-                                    <div className="pos-discount-row" style={{ marginBottom: 6 }}>
-                                        <div className="pos-discount-type-btns">
-                                            <button
-                                                className={`pos-disc-type-btn${discountType === 'percentage' ? ' pos-disc-type-btn--active' : ''}`}
-                                                onClick={() => setDiscountType('percentage')}
-                                            >
-                                                %
-                                            </button>
-                                            <button
-                                                className={`pos-disc-type-btn${discountType === 'fixed' ? ' pos-disc-type-btn--active' : ''}`}
-                                                onClick={() => setDiscountType('fixed')}
-                                            >
-                                                ₹ Flat
-                                            </button>
-                                        </div>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            className="pos-discount-input"
-                                            placeholder={discountType === 'percentage' ? '% off' : '₹ off'}
-                                            value={billDiscount || ''}
-                                            onChange={e => setBillDiscount(Number(e.target.value))}
-                                        />
-                                    </div>
-                                )}
-
-                                {/* Coupon code + Apply button */}
-                                {!discountApplied && (
-                                    <div style={{ display: 'flex', gap: 6 }}>
+                            {/* Discounts & Vouchers Card (Clean & Collapsible) */}
+                            <div style={{
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 10,
+                                padding: '10px 12px',
+                                marginBottom: 10
+                            }}>
+                                {/* Active Discount / Credit Note Badges */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    {discountApplied && (
                                         <div style={{
-                                            flex: 1, display: 'flex', alignItems: 'center', gap: 6,
-                                            background: '#f8fafc', border: '1px solid #e2e8f0',
-                                            borderRadius: 8, padding: '0 10px',
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            background: '#ecfdf5', border: '1px solid #6ee7b7',
+                                            borderRadius: 6, padding: '4px 8px', fontSize: 11,
                                         }}>
-                                            <BsTagFill size={11} color="#9ca3af" />
-                                            <input
-                                                type="text"
-                                                placeholder="Coupon code (optional)"
-                                                value={couponCode}
-                                                onChange={e => setCouponCode(e.target.value)}
-                                                onKeyDown={e => e.key === 'Enter' && handleApplyDiscount()}
-                                                style={{
-                                                    flex: 1, border: 'none', background: 'transparent',
-                                                    fontSize: 12, outline: 'none', color: '#374151',
-                                                    padding: '7px 0',
-                                                }}
-                                            />
-                                        </div>
-                                        <button
-                                            onClick={handleApplyDiscount}
-                                            disabled={discountLoading}
-                                            style={{
-                                                background: discountLoading ? '#a5b4fc' : '#6366f1',
-                                                color: '#fff', border: 'none', borderRadius: 8,
-                                                padding: '0 14px', cursor: discountLoading ? 'not-allowed' : 'pointer',
-                                                fontWeight: 600, fontSize: 12, display: 'flex',
-                                                alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
-                                                transition: 'background .2s',
-                                            }}
-                                            title="Apply discount to cart"
-                                        >
-                                            {discountLoading
-                                                ? <span style={{ fontSize: 11 }}>…</span>
-                                                : <><BsCheckLg size={11} /> Apply</>}
-                                        </button>
-                                    </div>
-                                )}
-
-                                {/* Credit Note / Store Voucher Redemption */}
-                                <div style={{
-                                    marginTop: 8, padding: '8px 10px', background: '#f8fafc',
-                                    borderRadius: 8, border: '1px solid #e2e8f0'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Credit Note / Voucher</span>
-                                        {creditNoteData && (
-                                            <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>
-                                                ₹{creditNoteData.amount || creditNoteData.applicable_amount} Applied
+                                            <span style={{ color: '#065f46', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                <BsTagFill size={11} color="#10b981" />
+                                                {couponCode.trim()
+                                                    ? `Coupon "${couponCode.trim()}" applied`
+                                                    : `Discount: ${discountType === 'percentage' ? `${billDiscount}%` : `₹${billDiscount}`} applied`
+                                                }
                                             </span>
-                                        )}
-                                    </div>
-                                    <div style={{ display: 'flex', gap: 6 }}>
-                                        <input
-                                            type="text"
-                                            placeholder="Enter Credit Note (e.g. CN-1001)"
-                                            value={creditNoteInput}
-                                            onChange={e => setCreditNoteInput(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && handleValidateCreditNote()}
-                                            style={{
-                                                flex: 1, border: '1px solid #cbd5e1', borderRadius: 6,
-                                                fontSize: 11, padding: '5px 8px', outline: 'none', background: '#fff',
-                                            }}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={handleValidateCreditNote}
-                                            disabled={creditNoteLoading || !creditNoteInput.trim()}
-                                            style={{
-                                                background: '#4f46e5', color: '#fff', border: 'none',
-                                                borderRadius: 6, padding: '4px 10px', fontSize: 11,
-                                                fontWeight: 600, cursor: 'pointer',
-                                            }}
-                                        >
-                                            {creditNoteLoading ? '…' : 'Apply'}
-                                        </button>
-                                    </div>
-                                    {creditNoteError && (
-                                        <p style={{ margin: '3px 0 0', fontSize: 10, color: '#dc2626' }}>{creditNoteError}</p>
+                                            <button
+                                                onClick={handleClearDiscount}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', display: 'flex', padding: 0 }}
+                                                title="Remove discount"
+                                            >
+                                                <BsX size={15} />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {creditNoteData && (
+                                        <div style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            background: '#ecfdf5', border: '1px solid #6ee7b7',
+                                            borderRadius: 6, padding: '4px 8px', fontSize: 11,
+                                        }}>
+                                            <span style={{ color: '#065f46', fontWeight: 600 }}>
+                                                Credit Note: ₹{creditNoteData.amount || creditNoteData.applicable_amount} applied
+                                            </span>
+                                            <button
+                                                onClick={() => { setCreditNoteData(null); setCreditNoteInput(''); }}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', display: 'flex', padding: 0 }}
+                                                title="Remove credit note"
+                                            >
+                                                <BsX size={15} />
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
+
+                                {/* Header / Toggle */}
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        cursor: 'pointer',
+                                        marginTop: (discountApplied || creditNoteData) ? 6 : 0
+                                    }}
+                                    onClick={() => setPromoSectionOpen(!promoSectionOpen)}
+                                >
+                                    <span style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <BsTagFill size={12} color="#6366f1" /> Add Discounts & Coupons
+                                    </span>
+                                    <span style={{ fontSize: 10.5, color: '#6366f1', fontWeight: 700 }}>
+                                        {promoSectionOpen ? '▲ Hide' : '▼ Expand'}
+                                    </span>
+                                </div>
+
+                                {/* Expandable Content */}
+                                {promoSectionOpen && (
+                                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid #e2e8f0', paddingTop: 10 }}>
+                                        {/* Tabs */}
+                                        <div style={{ display: 'flex', gap: 4, background: '#f1f5f9', padding: 2, borderRadius: 6 }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActivePromoTab('discount')}
+                                                style={{
+                                                    flex: 1, padding: '4px 6px', border: 'none', borderRadius: 5,
+                                                    background: activePromoTab === 'discount' ? '#fff' : 'transparent',
+                                                    color: activePromoTab === 'discount' ? '#4f46e5' : '#64748b',
+                                                    fontSize: 10.5, fontWeight: 700, cursor: 'pointer'
+                                                }}
+                                            >
+                                                Discount
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActivePromoTab('coupon')}
+                                                style={{
+                                                    flex: 1, padding: '4px 6px', border: 'none', borderRadius: 5,
+                                                    background: activePromoTab === 'coupon' ? '#fff' : 'transparent',
+                                                    color: activePromoTab === 'coupon' ? '#4f46e5' : '#64748b',
+                                                    fontSize: 10.5, fontWeight: 700, cursor: 'pointer'
+                                                }}
+                                            >
+                                                Coupon Code
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActivePromoTab('creditNote')}
+                                                style={{
+                                                    flex: 1, padding: '4px 6px', border: 'none', borderRadius: 5,
+                                                    background: activePromoTab === 'creditNote' ? '#fff' : 'transparent',
+                                                    color: activePromoTab === 'creditNote' ? '#4f46e5' : '#64748b',
+                                                    fontSize: 10.5, fontWeight: 700, cursor: 'pointer'
+                                                }}
+                                            >
+                                                Credit Note
+                                            </button>
+                                        </div>
+
+                                        {/* Tab 1: Discount % or Flat */}
+                                        {activePromoTab === 'discount' && !discountApplied && (
+                                            <div style={{ display: 'flex', gap: 6 }}>
+                                                <div className="pos-discount-type-btns">
+                                                    <button
+                                                        type="button"
+                                                        className={`pos-disc-type-btn${discountType === 'percentage' ? ' pos-disc-type-btn--active' : ''}`}
+                                                        onClick={() => setDiscountType('percentage')}
+                                                    >
+                                                        %
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`pos-disc-type-btn${discountType === 'fixed' ? ' pos-disc-type-btn--active' : ''}`}
+                                                        onClick={() => setDiscountType('fixed')}
+                                                    >
+                                                        ₹ Flat
+                                                    </button>
+                                                </div>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    className="pos-discount-input"
+                                                    placeholder={discountType === 'percentage' ? '% discount' : '₹ discount'}
+                                                    value={billDiscount || ''}
+                                                    onChange={e => setBillDiscount(Number(e.target.value))}
+                                                    style={{ flex: 1 }}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Tab 2: Coupon */}
+                                        {activePromoTab === 'coupon' && !discountApplied && (
+                                            <div style={{ display: 'flex', gap: 6 }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Enter coupon (e.g. WELCOME10)"
+                                                    value={couponCode}
+                                                    onChange={e => setCouponCode(e.target.value)}
+                                                    onKeyDown={e => e.key === 'Enter' && handleApplyDiscount()}
+                                                    style={{
+                                                        flex: 1, border: '1px solid #cbd5e1', borderRadius: 6,
+                                                        fontSize: 11, padding: '6px 8px', outline: 'none', background: '#fff'
+                                                    }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleApplyDiscount}
+                                                    disabled={discountLoading || !couponCode.trim()}
+                                                    style={{
+                                                        background: '#6366f1', color: '#fff', border: 'none',
+                                                        borderRadius: 6, padding: '4px 12px', fontSize: 11,
+                                                        fontWeight: 600, cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    {discountLoading ? '…' : 'Apply'}
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Tab 3: Credit Note */}
+                                        {activePromoTab === 'creditNote' && (
+                                            <div>
+                                                <div style={{ display: 'flex', gap: 6 }}>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Enter Credit Note (e.g. CN-1001)"
+                                                        value={creditNoteInput}
+                                                        onChange={e => setCreditNoteInput(e.target.value)}
+                                                        onKeyDown={e => e.key === 'Enter' && handleValidateCreditNote()}
+                                                        style={{
+                                                            flex: 1, border: '1px solid #cbd5e1', borderRadius: 6,
+                                                            fontSize: 11, padding: '6px 8px', outline: 'none', background: '#fff'
+                                                        }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleValidateCreditNote}
+                                                        disabled={creditNoteLoading || !creditNoteInput.trim()}
+                                                        style={{
+                                                            background: '#4f46e5', color: '#fff', border: 'none',
+                                                            borderRadius: 6, padding: '4px 12px', fontSize: 11,
+                                                            fontWeight: 600, cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        {creditNoteLoading ? '…' : 'Apply'}
+                                                    </button>
+                                                </div>
+                                                {creditNoteError && (
+                                                    <p style={{ margin: '4px 0 0', fontSize: 10, color: '#dc2626' }}>{creditNoteError}</p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Summary */}

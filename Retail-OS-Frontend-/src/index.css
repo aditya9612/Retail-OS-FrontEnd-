@@ -2371,17 +2371,17 @@ body {
 .pos-product-image {
   font-size: 36px;
   width: 100%;
-  height: 88px;
-  background: #f8fafc;
+  height: 124px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 8px;
-  transition: transform 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s;
   overflow: hidden;
   position: relative;
-  border: 1px solid #f1f5f9;
+  border: 1px solid #e2e8f0;
 }
 
 .pos-product-image img {
@@ -2458,16 +2458,16 @@ body {
 
 /* ── RIGHT panel ── */
 .pos-right {
-  width: 380px;
-  max-width: 400px;
+  width: 440px;
+  max-width: 470px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   height: 100%;
   max-height: 100%;
-  background: #fff;
+  background: #ffffff;
   border-left: 1px solid var(--color-border);
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.03);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.05);
   overflow: hidden;
   box-sizing: border-box;
   position: relative;
@@ -2625,6 +2625,24 @@ body {
   padding: 10px 8px;
   border-radius: 12px;
   transition: background 0.15s;
+}
+
+/* Modern Spacious POS Cart Item Card */
+.pos-cart-item-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.15s ease;
+}
+
+.pos-cart-item-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
 }
 
 .pos-cart-item:hover {
@@ -3249,7 +3267,7 @@ body {
 ───────────────────────────────────────── */
 @media (max-width: 1280px) {
   .pos-right {
-    width: 350px;
+    width: 400px;
   }
 }
 
@@ -3269,7 +3287,7 @@ body {
     top: 0;
     right: 0;
     bottom: 0;
-    width: 360px;
+    width: 390px;
     max-width: 100%;
     z-index: 50;
     box-shadow: -8px 0 30px rgba(0, 0, 0, 0.15);
