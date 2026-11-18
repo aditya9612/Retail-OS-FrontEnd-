@@ -1283,9 +1283,12 @@ const PurchaseOrderReturns = () => {
       setActionError("");
       setActionSuccess("");
 
-      await deletePurchaseOrderReturn(returnId);
+      const response = await deletePurchaseOrderReturn(returnId);
 
-      setActionSuccess(`Purchase Order Return #${returnId} deleted successfully.`);
+      const successMessage =
+        response?.message ||
+        `Purchase Order Return #${returnId} deleted successfully.`;
+      setActionSuccess(successMessage);
       if (selectedReturn?.id === returnId) {
         setSelectedReturn(null);
       }
@@ -1297,21 +1300,12 @@ const PurchaseOrderReturns = () => {
       await fetchReturnsStats();
     } catch (err) {
       console.error("Failed to delete purchase order return:", err);
-      if (err?.response?.status === 405) {
-        setActionError(
-          "Delete operation is not supported by the backend API (HTTP 405 Method Not Allowed). The endpoint DELETE /api/v1/purchase-order-returns/{id} is not implemented on the server."
-        );
-      } else if (err?.response?.status === 404) {
+      if (err?.response?.status === 404) {
         setActionError("Purchase order return not found.");
-      } else if (err?.response?.status === 409) {
-        setActionError(
-          extractErrorMessage(
-            err,
-            "Cannot delete purchase order return due to active stock or status conflicts."
-          )
-        );
       } else {
-        setActionError(extractErrorMessage(err, "Failed to delete purchase order return."));
+        setActionError(
+          extractErrorMessage(err, "Failed to delete purchase order return.")
+        );
       }
     } finally {
       setDeletingId(null);
@@ -2438,23 +2432,21 @@ const PurchaseOrderReturns = () => {
                           </button>
                         )}
 
-                        {/* 7. Delete (when requested or rejected) */}
-                        {(itemStatus === "requested" || itemStatus === "rejected") && (
-                          <button
-                            type="button"
-                            className="por-action-btn por-btn-delete"
-                            onClick={() => handleDelete(item.id)}
-                            disabled={isRowProcessing}
-                            title={deletingId === item.id ? "Deleting..." : "Delete Return"}
-                            aria-label={deletingId === item.id ? "Deleting..." : "Delete Return"}
-                          >
-                            {deletingId === item.id ? (
-                              <BsArrowRepeat className="animate-spin" size={14} />
-                            ) : (
-                              <BsTrash size={14} />
-                            )}
-                          </button>
-                        )}
+                        {/* 7. Delete */}
+                        <button
+                          type="button"
+                          className="por-action-btn por-btn-delete"
+                          onClick={() => handleDelete(item.id)}
+                          disabled={isRowProcessing}
+                          title={deletingId === item.id ? "Deleting..." : "Delete"}
+                          aria-label={deletingId === item.id ? "Deleting..." : "Delete"}
+                        >
+                          {deletingId === item.id ? (
+                            <BsArrowRepeat className="animate-spin" size={14} />
+                          ) : (
+                            <BsTrash size={14} />
+                          )}
+                        </button>
                       </div>
                     </td>
                   </tr>

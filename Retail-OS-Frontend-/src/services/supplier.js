@@ -2,20 +2,33 @@ import apiClient from "./api";
 
 export const supplier = {
   getAll: async (params = {}) => {
-    const response = await apiClient.get("/suppliers", { params });
-    return response.data;
+    try {
+      const response = await apiClient.get("/suppliers", { params });
+      return response.data;
+    } catch (err) {
+      if (err.response?.status === 404) {
+        return [];
+      }
+      throw err;
+    }
   },
 
   search: async (search) => {
     const query = typeof search === "string" ? search.trim() : "";
     if (!query) {
-      const response = await apiClient.get("/suppliers");
-      return response.data;
+      return supplier.getAll();
     }
-    const response = await apiClient.get("/suppliers/search", {
-      params: { search: query },
-    });
-    return response.data;
+    try {
+      const response = await apiClient.get("/suppliers/search", {
+        params: { search: query },
+      });
+      return response.data;
+    } catch (err) {
+      if (err.response?.status === 404) {
+        return [];
+      }
+      throw err;
+    }
   },
 
   getSummary: async () => {
