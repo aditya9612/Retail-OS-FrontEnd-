@@ -13,6 +13,12 @@ import { createInvoice, downloadInvoicePdf } from '../../services/invoiceService
 import { getEffectiveBranding } from '../../services/documentSettingsService';
 import { exportReport, getTopSellingProducts } from '../../services/reportService';
 import { validateCreditNote } from '../../services/creditNoteService';
+import {
+    getCustomerLoyalty,
+    earnLoyalty,
+    redeemLoyalty,
+    sendCustomerWhatsapp
+} from '../../services/customer';
 import productService from '../../services/product';
 import {
     BsSearch,
@@ -246,6 +252,10 @@ const Billing = () => {
     });
     const [completedInvoice, setCompletedInvoice] = useState(null);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [customerLoyaltyPoints, setCustomerLoyaltyPoints] = useState(0);
+    const [loyaltyRedeemApplied, setLoyaltyRedeemApplied] = useState(false);
+    const [loyaltyPointsRedeemed, setLoyaltyPointsRedeemed] = useState(0);
+    const [loyaltyLoading, setLoyaltyLoading] = useState(false);
     const [customerSuggestions, setCustomerSuggestions] = useState([]);
     const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
     const [creditNoteInput, setCreditNoteInput] = useState('');
@@ -589,6 +599,13 @@ const Billing = () => {
 
         const discountedTaxable = Math.max(0, subtotal - discountAmount);
 
+        // Loyalty points discount calculation (10 pts = ₹1.00 store discount)
+        let loyaltyDiscountVal = 0;
+        if (loyaltyRedeemApplied && loyaltyPointsRedeemed > 0) {
+            loyaltyDiscountVal = Math.min(Math.round(loyaltyPointsRedeemed * 0.10 * 100) / 100, discountedTaxable);
+        }
+        const finalTaxable = Math.max(0, discountedTaxable - loyaltyDiscountVal);
+
         // GST is counted on all bill based on the statutory bill GST rate
         const effectiveRate = billGstRate != null
             ? billGstRate
@@ -605,14 +622,14 @@ const Billing = () => {
             storeGstin.slice(0, 2) !== custGstin.slice(0, 2)
         );
 
-        const totalGST = Math.round(((discountedTaxable * effectiveRate) / 100) * 100) / 100;
+        const totalGST = Math.round(((finalTaxable * effectiveRate) / 100) * 100) / 100;
         const cgstAmount = isInterState ? 0 : Math.round((totalGST / 2) * 100) / 100;
         const sgstAmount = isInterState ? 0 : Math.round((totalGST - cgstAmount) * 100) / 100;
         const igstAmount = isInterState ? totalGST : 0;
 
         return {
             subtotal,
-            taxable: discountedTaxable,
+            taxable: finalTaxable,
             totalGST,
             cgstAmount,
             sgstAmount,
@@ -620,10 +637,11 @@ const Billing = () => {
             isInterState,
             sameState: !isInterState,
             discountAmount,
+            loyaltyDiscount: loyaltyDiscountVal,
             gstRate: effectiveRate,
-            grandTotal: Math.round((discountedTaxable + totalGST) * 100) / 100
+            grandTotal: Math.round((finalTaxable + totalGST) * 100) / 100
         };
-    }, [cart, billDiscount, discountType, billGstRate, effectiveBranding?.gstin, customer.gstin, selectedCustomer?.gstin]);
+    }, [cart, billDiscount, discountType, billGstRate, effectiveBranding?.gstin, customer.gstin, selectedCustomer?.gstin, loyaltyRedeemApplied, loyaltyPointsRedeemed]);
 
     // Change Due calculation when cash is tendered
     const changeDue = useMemo(() => {
@@ -698,7 +716,7 @@ const Billing = () => {
         }
     };
 
-    const handleSelectCustomer = (cust) => {
+    const handleSelectCustomer = async (cust) => {
         setSelectedCustomer(cust);
         setCustomer({
             name: cust.name || '',
@@ -706,6 +724,38 @@ const Billing = () => {
             gstin: cust.gstin || '',
         });
         setShowCustomerDropdown(false);
+        setLoyaltyRedeemApplied(false);
+        setLoyaltyPointsRedeemed(0);
+
+        const custId = cust.id || cust.backendId;
+        if (custId) {
+            setLoyaltyLoading(true);
+            try {
+                const loyRes = await getCustomerLoyalty(custId);
+                const pts = loyRes?.balance_points ?? loyRes?.points ?? cust.loyalty_points ?? cust.loyaltyPoints ?? 0;
+                setCustomerLoyaltyPoints(Number(pts) || 0);
+            } catch (_) {
+                setCustomerLoyaltyPoints(Number(cust.loyalty_points || cust.loyaltyPoints || 0));
+            } finally {
+                setLoyaltyLoading(false);
+            }
+        } else {
+            setCustomerLoyaltyPoints(Number(cust.loyalty_points || cust.loyaltyPoints || 0));
+        }
+    };
+
+    const handleToggleLoyaltyRedeem = () => {
+        if (!loyaltyRedeemApplied) {
+            const currentTaxable = totals.taxable + (totals.loyaltyDiscount || 0);
+            const maxPtsForBill = Math.floor(currentTaxable / 0.10);
+            const ptsToUse = Math.min(customerLoyaltyPoints, maxPtsForBill);
+            if (ptsToUse <= 0) return;
+            setLoyaltyPointsRedeemed(ptsToUse);
+            setLoyaltyRedeemApplied(true);
+        } else {
+            setLoyaltyRedeemApplied(false);
+            setLoyaltyPointsRedeemed(0);
+        }
     };
 
     // ── Validate & Apply Credit Note at POS Checkout ───────────────────────
@@ -856,6 +906,52 @@ const Billing = () => {
             console.error('Error saving invoice/payment to localStorage:', e);
         }
 
+        // ── Loyalty Earn & Redeem Execution + WhatsApp Alert ──
+        if (activeCustomerId) {
+            // 1. Redeem points if applied
+            if (loyaltyRedeemApplied && loyaltyPointsRedeemed > 0) {
+                try {
+                    await redeemLoyalty({
+                        customer_id: activeCustomerId,
+                        points: Number(loyaltyPointsRedeemed)
+                    });
+                } catch (loyErr) {
+                    console.warn('[Billing] Loyalty redeem error:', loyErr?.message || loyErr);
+                }
+            }
+
+            // 2. Earn loyalty points on order (1 pt per ₹100 of bill total)
+            const earnedPts = Math.floor(finalGrandTotal / 100);
+            if (earnedPts > 0) {
+                try {
+                    await earnLoyalty({
+                        customer_id: activeCustomerId,
+                        points: earnedPts,
+                        invoice_id: serverRes?.id || null,
+                        reason: `POS Invoice #${resolvedInvoiceId} Reward`
+                    });
+                } catch (loyErr) {
+                    console.warn('[Billing] Loyalty earn error:', loyErr?.message || loyErr);
+                }
+            }
+
+            // 3. Send WhatsApp receipt alert
+            const cleanPhone = (customer.phone || selectedCustomer?.phone || '').replace(/\D/g, '');
+            if (cleanPhone.length === 10) {
+                try {
+                    const remainingBalance = Math.max(0, customerLoyaltyPoints - (loyaltyRedeemApplied ? loyaltyPointsRedeemed : 0) + earnedPts);
+                    await sendCustomerWhatsapp({
+                        customer_id: activeCustomerId,
+                        channel: 'whatsapp',
+                        communication_type: 'WHATSAPP',
+                        message: `Dear ${customer.name || 'Shopper'}, your tax invoice #${resolvedInvoiceId} of ₹${finalGrandTotal.toLocaleString('en-IN')} has been successfully generated at Shekru Retail. You earned ${earnedPts} loyalty points on this order! Your total loyalty balance is ${remainingBalance} pts (Worth ₹${(remainingBalance * 0.10).toFixed(2)} store credit). Thank you for shopping with us! 🙏`
+                    });
+                } catch (wErr) {
+                    console.warn('[Billing] WhatsApp receipt error:', wErr?.message || wErr);
+                }
+            }
+        }
+
         setSaleLoading(false);
         setShowPreview(true);
     };
@@ -882,6 +978,9 @@ const Billing = () => {
         setOfflineMode(false);
         setCustomer({ name: '', phone: '', gstin: '' });
         setSelectedCustomer(null);
+        setCustomerLoyaltyPoints(0);
+        setLoyaltyRedeemApplied(false);
+        setLoyaltyPointsRedeemed(0);
         setCashTendered('');
         setBillDiscount(0);
         setCouponCode('');
@@ -1461,6 +1560,53 @@ const Billing = () => {
                                 </div>
                             )}
                         </div>
+
+                        {/* Customer Loyalty Points Card */}
+                        {selectedCustomer && (
+                            <div style={{
+                                marginTop: 8,
+                                padding: '8px 12px',
+                                borderRadius: 8,
+                                background: '#fffbeb',
+                                border: '1px solid #fde68a',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                fontSize: 12
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 14 }}>🪙</span>
+                                    <div>
+                                        <span style={{ fontWeight: 800, color: '#92400e' }}>
+                                            {customerLoyaltyPoints.toLocaleString('en-IN')} Pts Available
+                                        </span>
+                                        <span style={{ color: '#b45309', marginLeft: 6, fontSize: 11 }}>
+                                            (Worth ₹{(customerLoyaltyPoints * 0.10).toFixed(2)})
+                                        </span>
+                                    </div>
+                                </div>
+                                {customerLoyaltyPoints > 0 ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleToggleLoyaltyRedeem}
+                                        style={{
+                                            padding: '4px 10px',
+                                            borderRadius: 6,
+                                            border: 'none',
+                                            background: loyaltyRedeemApplied ? '#059669' : '#d97706',
+                                            color: '#fff',
+                                            fontWeight: 700,
+                                            fontSize: 11,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {loyaltyRedeemApplied ? `✓ Applied (-₹${totals.loyaltyDiscount.toFixed(2)})` : 'Redeem Points'}
+                                    </button>
+                                ) : (
+                                    <span style={{ fontSize: 10, color: '#92400e', fontWeight: 600 }}>0 Balance</span>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* ── Scrollable middle body: Cart + Discounts + Breakdown + Payment ── */}
@@ -1754,6 +1900,12 @@ const Billing = () => {
                                     <div className="pos-summary-row pos-summary-row--discount">
                                         <span>Discount</span>
                                         <span>−₹{totals.discountAmount.toFixed(2)}</span>
+                                    </div>
+                                )}
+                                {totals.loyaltyDiscount > 0 && (
+                                    <div className="pos-summary-row pos-summary-row--discount" style={{ color: '#d97706', fontWeight: 600 }}>
+                                        <span>🪙 Loyalty Discount ({loyaltyPointsRedeemed} pts)</span>
+                                        <span>−₹{totals.loyaltyDiscount.toFixed(2)}</span>
                                     </div>
                                 )}
                                 <div className="pos-summary-row">
@@ -2086,6 +2238,12 @@ const Billing = () => {
                                         <span>−₹{totals.discountAmount.toFixed(2)}</span>
                                     </div>
                                 )}
+                                {totals.loyaltyDiscount > 0 && (
+                                    <div className="pos-receipt-sum-row" style={{ color: '#d97706', fontWeight: 600 }}>
+                                        <span>🪙 Loyalty Discount ({loyaltyPointsRedeemed} pts)</span>
+                                        <span>−₹{totals.loyaltyDiscount.toFixed(2)}</span>
+                                    </div>
+                                )}
                                 <div className="pos-receipt-sum-row" style={{ fontWeight: 600 }}>
                                     <span>Taxable Value</span>
                                     <span>₹{totals.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -2112,6 +2270,22 @@ const Billing = () => {
                                 <span>TOTAL PAID</span>
                                 <span className="pos-receipt-total-amount">₹{totals.grandTotal.toLocaleString('en-IN')}</span>
                             </div>
+
+                            {selectedCustomer && Math.floor(totals.grandTotal / 100) > 0 && (
+                                <div style={{
+                                    marginTop: 6,
+                                    padding: '5px 10px',
+                                    background: '#fffbeb',
+                                    border: '1px dashed #fde68a',
+                                    borderRadius: 6,
+                                    textAlign: 'center',
+                                    fontSize: 11,
+                                    color: '#92400e',
+                                    fontWeight: 700
+                                }}>
+                                    ✨ {Math.floor(totals.grandTotal / 100)} Loyalty Points Earned on this Bill!
+                                </div>
+                            )}
 
                             <p className="pos-receipt-footer-msg">{effectiveBranding.footer_message || 'Thank you for shopping with us! 🙏'}</p>
                         </div>

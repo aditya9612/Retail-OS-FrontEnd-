@@ -24,6 +24,7 @@ import {
     earnLoyalty,
     redeemLoyalty,
     getLoyaltyHistory,
+    sendCustomerWhatsapp,
 } from '../../services/customer';
 import CustomerDetailPanel from '../../components/customers/CustomerDetailPanel';
 import {
@@ -232,6 +233,8 @@ export const CustomerLoyaltyPage = () => {
     const [formPoints, setFormPoints] = useState('');
     const [formReason, setFormReason] = useState('Purchase bonus reward');
     const [formInvoiceId, setFormInvoiceId] = useState('');
+    const [formSendWhatsapp, setFormSendWhatsapp] = useState(true);
+    const [birthdayGifting, setBirthdayGifting] = useState(false);
 
     // Loyalty History Drawer
     const [historyOpen, setHistoryOpen] = useState(false);
@@ -385,6 +388,7 @@ export const CustomerLoyaltyPage = () => {
         setModalTargetCustomer(null);
         setFormPoints('');
         setFormInvoiceId('');
+        setFormSendWhatsapp(true);
     };
 
     // ── Submit Earn / Redeem / Adjust ──
@@ -442,6 +446,33 @@ export const CustomerLoyaltyPage = () => {
                 });
             }
 
+            // WhatsApp instant alert notification
+            if (formSendWhatsapp && modalTargetCustomer?.phone) {
+                try {
+                    const actionTxt = modalMode === 'earn'
+                        ? `credited with ${pts} bonus loyalty points`
+                        : modalMode === 'redeem'
+                        ? `redeemed ${pts} loyalty points (-${fmt(pts * POINTS_TO_INR_RATE)})`
+                        : `adjusted by ${pts} points`;
+
+                    const oldBal = Number(modalTargetCustomer.loyaltyPoints) || 0;
+                    const newBal = modalMode === 'earn'
+                        ? oldBal + pts
+                        : modalMode === 'redeem'
+                        ? Math.max(0, oldBal - pts)
+                        : oldBal + pts;
+
+                    await sendCustomerWhatsapp({
+                        customer_id: targetBackendId,
+                        channel: 'whatsapp',
+                        communication_type: 'WHATSAPP',
+                        message: `Hello ${modalTargetCustomer.name}, your loyalty account at Shekru Retail was just ${actionTxt}. Your new balance is ${newBal} pts (Worth ${fmt(newBal * POINTS_TO_INR_RATE)} store credit). Thank you! 🙏`
+                    });
+                } catch (waErr) {
+                    console.warn('WhatsApp alert dispatch failed:', waErr);
+                }
+            }
+
             handleCloseModal();
             await loadLoyaltyDashboard(false);
         } catch (err) {
@@ -449,6 +480,46 @@ export const CustomerLoyaltyPage = () => {
             alert(getApiErrorMessage(err, `Failed to ${modalMode} points. Please verify details and try again.`));
         } finally {
             setActionLoading(false);
+        }
+    };
+
+    // ── Birthday Bonus Automation (1-Click Gift 100 Points + WhatsApp wishes) ──
+    const handleGiftAllBirthdays = async () => {
+        if (!birthdayCustomers || birthdayCustomers.length === 0) return;
+        if (!window.confirm(`Gift 100 Birthday Bonus Points & send WhatsApp greetings to all ${birthdayCustomers.length} birthday customers?`)) {
+            return;
+        }
+        setBirthdayGifting(true);
+        let successCount = 0;
+        try {
+            for (const b of birthdayCustomers) {
+                const bId = b.id || b.backendId || b.customer_id;
+                try {
+                    await earnLoyalty({
+                        customer_id: bId,
+                        points: 100,
+                        reason: 'Happy Birthday Celebration Gift 🎂'
+                    });
+                    if (b.phone) {
+                        await sendCustomerWhatsapp({
+                            customer_id: bId,
+                            channel: 'whatsapp',
+                            communication_type: 'WHATSAPP',
+                            message: `🎉 Happy Birthday from Shekru Retail, ${b.name || 'valued customer'}! 🎂 As a special birthday gift, 100 bonus loyalty points (Worth ₹10.00 store credit) have been added to your account. Enjoy your special day! 🎁`
+                        }).catch(() => {});
+                    }
+                    successCount++;
+                } catch (err) {
+                    console.warn(`Birthday gift failed for customer ${bId}:`, err);
+                }
+            }
+            setNotification({
+                type: 'success',
+                message: `🎉 Gifted 100 Birthday Bonus Points to ${successCount} shopper${successCount === 1 ? '' : 's'} and sent WhatsApp greetings!`
+            });
+            await loadLoyaltyDashboard(false);
+        } finally {
+            setBirthdayGifting(false);
         }
     };
 
@@ -761,9 +832,9 @@ export const CustomerLoyaltyPage = () => {
 
             {/* ── Birthday Reminders Banner (Matching Customer Directory) ── */}
             {birthdayCustomers.length > 0 && (
-                <div style={{ background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', border: '1px solid #fde68a', borderRadius: 14, padding: '12px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', border: '1px solid #fde68a', borderRadius: 14, padding: '12px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 22 }}>🎂</span>
+                        <span style={{ fontSize: 24 }}>🎂</span>
                         <div>
                             <p style={{ fontSize: 13, fontWeight: 700, color: '#92400e', margin: 0 }}>Birthday Reminders & Bonus Rewards</p>
                             <p style={{ fontSize: 12, color: '#b45309', margin: '2px 0 0 0' }}>
@@ -772,9 +843,33 @@ export const CustomerLoyaltyPage = () => {
                             </p>
                         </div>
                     </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#92400e', background: '#fef3c7', padding: '4px 10px', borderRadius: 16, border: '1px solid #fde68a' }}>
-                        {birthdayCustomers.length} Birthdays
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#92400e', background: '#fef3c7', padding: '4px 10px', borderRadius: 16, border: '1px solid #fde68a' }}>
+                            {birthdayCustomers.length} Birthdays
+                        </span>
+                        <button
+                            type="button"
+                            onClick={handleGiftAllBirthdays}
+                            disabled={birthdayGifting}
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                background: '#d97706',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: 8,
+                                padding: '6px 14px',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                cursor: birthdayGifting ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.2s',
+                                boxShadow: '0 2px 4px rgba(217, 119, 6, 0.2)'
+                            }}
+                        >
+                            {birthdayGifting ? 'Gifting Points…' : '🎁 Gift 100 Birthday Points to All'}
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -1657,6 +1752,39 @@ export const CustomerLoyaltyPage = () => {
                                         onChange={(e) => setFormReason(e.target.value)}
                                         required
                                     />
+                                </div>
+                            )}
+
+                            {/* WhatsApp Notification Option */}
+                            {modalTargetCustomer?.phone && (
+                                <div
+                                    style={{
+                                        marginBottom: 16,
+                                        padding: '10px 14px',
+                                        background: '#f0fdf4',
+                                        border: '1px solid #bbf7d0',
+                                        borderRadius: 8,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 10,
+                                        cursor: 'pointer'
+                                    }}
+                                    onClick={() => setFormSendWhatsapp(!formSendWhatsapp)}
+                                >
+                                    <input
+                                        type="checkbox"
+                                        id="formSendWhatsappCheck"
+                                        checked={formSendWhatsapp}
+                                        onChange={(e) => setFormSendWhatsapp(e.target.checked)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#16a34a' }}
+                                    />
+                                    <label
+                                        htmlFor="formSendWhatsappCheck"
+                                        style={{ fontSize: 12, color: '#166534', fontWeight: 600, cursor: 'pointer', margin: 0, userSelect: 'none' }}
+                                    >
+                                        📲 Send instant WhatsApp points confirmation to {modalTargetCustomer.phone}
+                                    </label>
                                 </div>
                             )}
 
