@@ -1,10 +1,38 @@
 /**
  * Retail Product Image Helper
- * Resolves local bundled assets and remote images with 100% reliable fallbacks.
- * Uses local bundled product photography in /images/products/ for instant, offline-capable display.
+ * Direct-imported local assets for 100% reliable, zero-404, offline-ready product imagery.
+ * Works seamlessly in both Vite development and production bundles.
  */
 
-export const DEFAULT_PRODUCT_FALLBACK = '/images/products/parle-g.jpg';
+import butterCookiesImg from '../assets/products/butter-cookies.jpg';
+import fitnessTrackerImg from '../assets/products/fitness-tracker.jpg';
+import greenTeaImg from '../assets/products/green-tea.jpg';
+import jeansImg from '../assets/products/jeans.jpg';
+import marieBiscuitsImg from '../assets/products/marie-biscuits.jpg';
+import milkBottleImg from '../assets/products/milk-bottle.jpg';
+import oreoImg from '../assets/products/oreo.jpg';
+import parleGImg from '../assets/products/parle-g.jpg';
+import steelBottleImg from '../assets/products/steel-bottle.jpg';
+import tshirtImg from '../assets/products/tshirt.jpg';
+import usbChargerImg from '../assets/products/usb-charger.jpg';
+import walletImg from '../assets/products/wallet.jpg';
+
+export const LOCAL_PRODUCT_IMAGES = {
+    tshirt: tshirtImg,
+    parleG: parleGImg,
+    wallet: walletImg,
+    greenTea: greenTeaImg,
+    fitnessTracker: fitnessTrackerImg,
+    jeans: jeansImg,
+    usbCharger: usbChargerImg,
+    milkBottle: milkBottleImg,
+    marieBiscuits: marieBiscuitsImg,
+    oreo: oreoImg,
+    butterCookies: butterCookiesImg,
+    steelBottle: steelBottleImg,
+};
+
+export const DEFAULT_PRODUCT_FALLBACK = parleGImg;
 
 export const resolveProductImage = (product) => {
     if (!product) return DEFAULT_PRODUCT_FALLBACK;
@@ -15,9 +43,20 @@ export const resolveProductImage = (product) => {
         if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:image/') || trimmed.startsWith('blob:')) {
             return trimmed;
         }
-        if (trimmed.startsWith('/images/') || trimmed.startsWith('images/')) {
-            return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-        }
+        // Direct local file match
+        if (trimmed.includes('tshirt')) return tshirtImg;
+        if (trimmed.includes('parle-g') || trimmed.includes('parleg')) return parleGImg;
+        if (trimmed.includes('wallet')) return walletImg;
+        if (trimmed.includes('green-tea')) return greenTeaImg;
+        if (trimmed.includes('fitness-tracker')) return fitnessTrackerImg;
+        if (trimmed.includes('jeans')) return jeansImg;
+        if (trimmed.includes('usb-charger') || trimmed.includes('charger')) return usbChargerImg;
+        if (trimmed.includes('milk-bottle') || trimmed.includes('milk')) return milkBottleImg;
+        if (trimmed.includes('marie-biscuits') || trimmed.includes('marie')) return marieBiscuitsImg;
+        if (trimmed.includes('oreo')) return oreoImg;
+        if (trimmed.includes('butter-cookies')) return butterCookiesImg;
+        if (trimmed.includes('steel-bottle')) return steelBottleImg;
+
         if (trimmed.startsWith('/') || trimmed.startsWith('uploads/')) {
             const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
             return `https://api-testing.myretailos.com${cleanPath}`;
@@ -50,14 +89,24 @@ export const resolveProductImage = (product) => {
             lower !== 'false' &&
             trimmed.length > 3
         ) {
-            // Local frontend assets in public folder
-            if (trimmed.startsWith('/images/') || trimmed.startsWith('images/')) {
-                return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-            }
             // Absolute HTTP or data URI
             if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith('data:image/') || trimmed.startsWith('blob:')) {
                 return trimmed;
             }
+            // Direct local file match
+            if (trimmed.includes('tshirt')) return tshirtImg;
+            if (trimmed.includes('parle-g') || trimmed.includes('parleg')) return parleGImg;
+            if (trimmed.includes('wallet')) return walletImg;
+            if (trimmed.includes('green-tea')) return greenTeaImg;
+            if (trimmed.includes('fitness-tracker')) return fitnessTrackerImg;
+            if (trimmed.includes('jeans')) return jeansImg;
+            if (trimmed.includes('usb-charger') || trimmed.includes('charger')) return usbChargerImg;
+            if (trimmed.includes('milk-bottle') || trimmed.includes('milk')) return milkBottleImg;
+            if (trimmed.includes('marie-biscuits') || trimmed.includes('marie')) return marieBiscuitsImg;
+            if (trimmed.includes('oreo')) return oreoImg;
+            if (trimmed.includes('butter-cookies')) return butterCookiesImg;
+            if (trimmed.includes('steel-bottle')) return steelBottleImg;
+
             // Backend uploaded files
             if (trimmed.startsWith('/uploads/') || trimmed.startsWith('uploads/') || trimmed.startsWith('media/') || trimmed.startsWith('static/')) {
                 const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
@@ -69,56 +118,56 @@ export const resolveProductImage = (product) => {
     const name = String(product.name || product.title || '').toLowerCase();
     const cat = String(product.category || product.category_name || '').toLowerCase();
 
-    // ── Local Bundled Photography Matches (Always available, Zero Network Failures) ──
+    // ── Local Direct-Import Matches (Guaranteed to display, zero network failure) ──
     if (name.includes('t-shirt') || name.includes('tshirt') || name.includes('shirt') || name.includes('polo') || name.includes('tees')) {
-        return '/images/products/tshirt.jpg';
+        return tshirtImg;
     }
     if (name.includes('jean') || name.includes('denim') || name.includes('pant') || name.includes('trouser')) {
-        return '/images/products/jeans.jpg';
+        return jeansImg;
     }
     if (name.includes('wallet') || name.includes('purse') || name.includes('card holder')) {
-        return '/images/products/wallet.jpg';
+        return walletImg;
     }
     if (name.includes('tea') || name.includes('chai') || name.includes('coffee')) {
-        return '/images/products/green-tea.jpg';
+        return greenTeaImg;
     }
     if (name.includes('fitness') || name.includes('tracker') || name.includes('smartwatch') || name.includes('band') || name.includes('watch')) {
-        return '/images/products/fitness-tracker.jpg';
+        return fitnessTrackerImg;
     }
     if (name.includes('charger') || name.includes('usb') || name.includes('cable') || name.includes('adapter') || name.includes('power bank')) {
-        return '/images/products/usb-charger.jpg';
+        return usbChargerImg;
     }
     if (name.includes('milk') || name.includes('dairy') || name.includes('paneer') || name.includes('curd') || name.includes('cheese')) {
-        return '/images/products/milk-bottle.jpg';
+        return milkBottleImg;
     }
     if (name.includes('marie') || name.includes('cracker')) {
-        return '/images/products/marie-biscuits.jpg';
+        return marieBiscuitsImg;
     }
     if (name.includes('oreo')) {
-        return '/images/products/oreo.jpg';
+        return oreoImg;
     }
     if (name.includes('butter cookie') || name.includes('tin') || name.includes('cookies') || name.includes('bakery')) {
-        return '/images/products/butter-cookies.jpg';
+        return butterCookiesImg;
     }
     if (name.includes('parle') || name.includes('biscuit') || name.includes('glucose') || name.includes('rusk')) {
-        return '/images/products/parle-g.jpg';
+        return parleGImg;
     }
     if (name.includes('bottle') || name.includes('flask') || name.includes('sipper') || name.includes('thermos') || name.includes('steel')) {
-        return '/images/products/steel-bottle.jpg';
+        return steelBottleImg;
     }
 
     // ── Category Fallbacks ──
     if (cat.includes('apparel') || cat.includes('cloth') || cat.includes('fashion') || cat.includes('garment')) {
-        return '/images/products/tshirt.jpg';
+        return tshirtImg;
     }
     if (cat.includes('grocer') || cat.includes('food') || cat.includes('snack') || cat.includes('fmcg')) {
-        return '/images/products/parle-g.jpg';
+        return parleGImg;
     }
     if (cat.includes('electronics') || cat.includes('gadget') || cat.includes('device') || cat.includes('tech')) {
-        return '/images/products/usb-charger.jpg';
+        return usbChargerImg;
     }
     if (cat.includes('accessor') || cat.includes('lifestyle')) {
-        return '/images/products/wallet.jpg';
+        return walletImg;
     }
 
     return DEFAULT_PRODUCT_FALLBACK;

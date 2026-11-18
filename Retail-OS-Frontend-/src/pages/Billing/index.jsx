@@ -20,7 +20,7 @@ import {
     sendCustomerWhatsapp
 } from '../../services/customer';
 import productService from '../../services/product';
-import { resolveProductImage } from '../../utils/productImages';
+import { resolveProductImage, LOCAL_PRODUCT_IMAGES } from '../../utils/productImages';
 import {
     BsSearch,
     BsTrash,
@@ -69,7 +69,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 5,
         category: 'Apparel',
         barcode: '1001',
-        image: '/images/products/tshirt.jpg',
+        image: LOCAL_PRODUCT_IMAGES.tshirt,
         discount: 50,
     },
     {
@@ -80,7 +80,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1002',
-        image: '/images/products/parle-g.jpg',
+        image: LOCAL_PRODUCT_IMAGES.parleG,
         discount: 0,
     },
     {
@@ -91,7 +91,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Accessories',
         barcode: '1003',
-        image: '/images/products/wallet.jpg',
+        image: LOCAL_PRODUCT_IMAGES.wallet,
         discount: 100,
     },
     {
@@ -102,7 +102,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 5,
         category: 'Groceries',
         barcode: '1004',
-        image: '/images/products/green-tea.jpg',
+        image: LOCAL_PRODUCT_IMAGES.greenTea,
         discount: 20,
     },
     {
@@ -113,7 +113,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Electronics',
         barcode: '1005',
-        image: '/images/products/fitness-tracker.jpg',
+        image: LOCAL_PRODUCT_IMAGES.fitnessTracker,
         discount: 200,
     },
     {
@@ -124,7 +124,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 12,
         category: 'Apparel',
         barcode: '1006',
-        image: '/images/products/jeans.jpg',
+        image: LOCAL_PRODUCT_IMAGES.jeans,
         discount: 150,
     },
     {
@@ -135,7 +135,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Electronics',
         barcode: '1007',
-        image: '/images/products/usb-charger.jpg',
+        image: LOCAL_PRODUCT_IMAGES.usbCharger,
         discount: 50,
     },
     {
@@ -146,7 +146,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 0,
         category: 'Groceries',
         barcode: '1008',
-        image: '/images/products/milk-bottle.jpg',
+        image: LOCAL_PRODUCT_IMAGES.milkBottle,
         discount: 0,
     },
     {
@@ -157,7 +157,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1009',
-        image: '/images/products/marie-biscuits.jpg',
+        image: LOCAL_PRODUCT_IMAGES.marieBiscuits,
         discount: 5,
     },
     {
@@ -168,7 +168,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1010',
-        image: '/images/products/oreo.jpg',
+        image: LOCAL_PRODUCT_IMAGES.oreo,
         discount: 5,
     },
     {
@@ -179,7 +179,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Groceries',
         barcode: '1011',
-        image: '/images/products/butter-cookies.jpg',
+        image: LOCAL_PRODUCT_IMAGES.butterCookies,
         discount: 30,
     },
     {
@@ -190,7 +190,7 @@ const DEFAULT_PRODUCTS = [
         gstRate: 18,
         category: 'Accessories',
         barcode: '1012',
-        image: '/images/products/steel-bottle.jpg',
+        image: LOCAL_PRODUCT_IMAGES.steelBottle,
         discount: 50,
     },
 ];
@@ -1377,7 +1377,7 @@ const Billing = () => {
                                         onError={(e) => {
                                             if (!e.target.dataset.triedFallback) {
                                                 e.target.dataset.triedFallback = 'true';
-                                                e.target.src = '/images/products/parle-g.jpg';
+                                                e.target.src = LOCAL_PRODUCT_IMAGES.parleG;
                                             }
                                         }}
                                     />
@@ -1754,7 +1754,7 @@ const Billing = () => {
                                                         onError={(e) => {
                                                             if (!e.target.dataset.triedFallback) {
                                                                 e.target.dataset.triedFallback = 'true';
-                                                                e.target.src = '/images/products/parle-g.jpg';
+                                                                e.target.src = LOCAL_PRODUCT_IMAGES.parleG;
                                                             }
                                                         }}
                                                     />
