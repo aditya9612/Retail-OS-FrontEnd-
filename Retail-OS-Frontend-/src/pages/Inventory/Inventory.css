@@ -718,69 +718,96 @@
 }
 
 .inv-page .inventory-action-btn {
-    height: 30px !important;
-    padding: 0 10px !important;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+    padding: 0 !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 5px !important;
+    gap: 0 !important;
     border-radius: 7px !important;
-    font-size: 12px !important;
-    font-weight: 600 !important;
     cursor: pointer !important;
     transition: all 0.15s ease !important;
-    border: 1px solid transparent !important;
 }
 
-.inv-page .inventory-action-update {
-    background: #eff6ff !important;
-    color: #2563eb !important;
-    border-color: #bfdbfe !important;
+.inv-page .inventory-action-btn * {
+    cursor: pointer !important;
 }
 
-.inv-page .inventory-action-update:hover {
-    background: #dbeafe !important;
-    color: #1d4ed8 !important;
-    border-color: #93c5fd !important;
-    transform: translateY(-1px) !important;
+.inv-page .inventory-action-btn svg {
+    pointer-events: none !important;
+    cursor: pointer !important;
 }
 
 .inv-page .inventory-action-view {
-    background: #f8fafc !important;
-    color: #475569 !important;
-    border-color: #cbd5e1 !important;
+    background: #ffffff !important;
+    color: #2563eb !important;
+    border: 1px solid #bfdbfe !important;
 }
 
 .inv-page .inventory-action-view:hover {
-    background: #f1f5f9 !important;
-    color: #0f172a !important;
-    border-color: #94a3b8 !important;
+    background: #eff6ff !important;
+    color: #1d4ed8 !important;
+    border-color: #93c5fd !important;
+    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.18) !important;
     transform: translateY(-1px) !important;
 }
 
-.inv-page .inventory-action-history {
-    background: #faf5ff !important;
-    color: #7c3aed !important;
-    border-color: #e9d5ff !important;
+.inv-page .inventory-action-add {
+    background: #ffffff !important;
+    color: #4f46e5 !important;
+    border: 1px solid #c7d2fe !important;
 }
 
-.inv-page .inventory-action-history:hover {
-    background: #f3e8ff !important;
-    color: #6d28d9 !important;
-    border-color: #d8b4fe !important;
+.inv-page .inventory-action-add:hover {
+    color: #4338ca !important;
+    background: #eef2ff !important;
+    border-color: #a5b4fc !important;
+    box-shadow: 0 3px 8px rgba(79, 70, 229, 0.15) !important;
     transform: translateY(-1px) !important;
 }
 
-.inv-page .inventory-action-adjust {
-    background: #fffbeb !important;
-    color: #d97706 !important;
-    border-color: #fde68a !important;
+.inv-page .inventory-action-stock-in {
+    background: #ffffff !important;
+    color: #059669 !important;
+    border: 1px solid #d1fae5 !important;
 }
 
-.inv-page .inventory-action-adjust:hover {
-    background: #fef3c7 !important;
-    color: #b45309 !important;
-    border-color: #fcd34d !important;
+.inv-page .inventory-action-stock-in:hover {
+    color: #047857 !important;
+    background: #ecfdf5 !important;
+    border-color: #6ee7b7 !important;
+    box-shadow: 0 3px 8px rgba(16, 185, 129, 0.15) !important;
+    transform: translateY(-1px) !important;
+}
+
+.inv-page .inventory-action-stock-out {
+    background: #ffffff !important;
+    color: #dc2626 !important;
+    border: 1px solid #fee2e2 !important;
+}
+
+.inv-page .inventory-action-stock-out:hover {
+    color: #b91c1c !important;
+    background: #fef2f2 !important;
+    border-color: #fca5a5 !important;
+    box-shadow: 0 3px 8px rgba(220, 38, 38, 0.15) !important;
+    transform: translateY(-1px) !important;
+}
+
+.inv-page .inventory-action-transfer {
+    background: #ffffff !important;
+    color: #0284c7 !important;
+    border: 1px solid #bae6fd !important;
+}
+
+.inv-page .inventory-action-transfer:hover {
+    color: #0369a1 !important;
+    background: #f0f9ff !important;
+    border-color: #7dd3fc !important;
+    box-shadow: 0 3px 8px rgba(2, 132, 199, 0.15) !important;
     transform: translateY(-1px) !important;
 }
 
@@ -788,21 +815,21 @@
    8. PAGINATION
    ========================================================= */
 .inv-pagination {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     padding: 10px 16px;
     border-top: 1px solid #f1f5f9;
     background: #ffffff;
-    flex-wrap: wrap;
-    gap: 10px;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .inv-pagination-left {
+    justify-self: start;
     display: flex;
     align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
 }
 
 .inv-page-size-select-wrap {
@@ -838,15 +865,35 @@
     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
+.inv-pagination-center {
+    justify-self: center;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+}
+
 .inv-pagination-info {
     font-size: 12px;
     color: #64748b;
     font-weight: 500;
+    text-align: center;
+    white-space: nowrap;
+    margin: 0;
+    padding: 0;
 }
 
 .inv-pagination-info strong {
     color: #0f172a;
     font-weight: 700;
+}
+
+.inv-pagination-right {
+    justify-self: end;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
 }
 
 .inv-page-buttons {
@@ -1285,6 +1332,24 @@
         flex-direction: column;
         align-items: flex-start;
         gap: 10px;
+    }
+    .inv-pagination {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+    .inv-pagination-left,
+    .inv-pagination-center,
+    .inv-pagination-right {
+        justify-self: center;
+        justify-content: center;
+        width: 100%;
+        text-align: center;
+    }
+    .inv-pagination-info {
+        width: 100%;
+        text-align: center;
     }
 }
 

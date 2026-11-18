@@ -71,6 +71,19 @@ export const getWarehouseById = async (warehouseId) => {
 };
 
 /**
+ * Update Warehouse
+ * PATCH /api/v1/warehouses/{warehouse_id}
+ */
+export const updateWarehouse = async (warehouseId, data) => {
+  if (!warehouseId) {
+    throw new Error("warehouseId is required");
+  }
+
+  const response = await axiosInstance.patch(`/warehouses/${warehouseId}`, data);
+  return response.data;
+};
+
+/**
  * Delete Warehouse by ID
  * DELETE /api/v1/warehouses/{warehouse_id}
  */
@@ -118,6 +131,7 @@ export default {
   getWarehouseDashboard,
   getWarehouseById,
   createWarehouse,
+  updateWarehouse,
   deleteWarehouse,
   getWarehouseTransfers,
 };

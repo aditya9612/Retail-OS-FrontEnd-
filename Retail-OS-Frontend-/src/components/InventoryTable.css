@@ -355,7 +355,7 @@
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 7px;
-  cursor: pointer;
+  cursor: pointer !important;
   box-sizing: border-box;
   visibility: visible;
   opacity: 1;
@@ -367,13 +367,19 @@
     transform 0.15s ease;
 }
 
-.inventory-action-btn svg {
+.inventory-action-btn * {
+  cursor: pointer !important;
+}
+
+.inventory-action-btn svg,
+.inventory-action-btn svg * {
   width: 15px;
   height: 15px;
   display: block;
   flex-shrink: 0;
   pointer-events: none;
   stroke-width: 2;
+  cursor: pointer !important;
 }
 
 /* Specific Action Button Colors & Hover Highlights */
@@ -438,15 +444,28 @@
   transform: translateY(-1px);
 }
 
-/* View & History secondary buttons if present */
-.inventory-action-view,
+/* 0. View Store Stock - Blue */
+.inventory-action-view {
+  color: #2563eb;
+  border-color: #bfdbfe;
+  background: #ffffff;
+}
+
+.inventory-action-view:hover {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #93c5fd;
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.18);
+  transform: translateY(-1px);
+}
+
+/* History secondary button if present */
 .inventory-action-history {
   color: #64748b;
   border-color: #e2e8f0;
   background: #ffffff;
 }
 
-.inventory-action-view:hover,
 .inventory-action-history:hover {
   color: #0f172a;
   background: #f1f5f9;

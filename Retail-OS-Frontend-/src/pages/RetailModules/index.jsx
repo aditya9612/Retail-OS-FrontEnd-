@@ -4,7 +4,7 @@ import apiClient from '../../services/api';
 import { getInvoices } from '../../services/billingService';
 import productService from '../../services/product';
 import { generateBarcodeDataUrl, generateBarcodeLabelsPDF, downloadBarcodeImage, generateBarcodeSVG, generateLabelSVG, downloadBarcodeSVG, downloadLabelSVG, downloadBlob } from './barcodeUtils';
-import { getWarehouses, getWarehouseDashboard, getWarehouseById, createWarehouse, deleteWarehouse, getWarehouseTransfers } from '../../api/warehouseApi';
+import { getWarehouses, getWarehouseDashboard, getWarehouseById, createWarehouse, updateWarehouse, deleteWarehouse, getWarehouseTransfers } from '../../api/warehouseApi';
 import { warehouseService } from '../../services/warehouseService';
 import userService from '../../services/userService';
 import { listStores } from '../../services/inventoryService';
@@ -21,7 +21,7 @@ import {
     BsStars, BsPlug, BsDisplay, BsCashStack, BsArrowReturnLeft, BsReceiptCutoff,
     BsCreditCard2Front, BsBoxSeam, BsSend, BsGear, BsTag, BsExclamationTriangle, BsImage,
     BsTrash, BsShop, BsChevronLeft, BsChevronRight, BsX, BsEye, BsCheckCircle, BsXCircle,
-    BsChevronDown, BsChevronUp, BsActivity, BsTable
+    BsChevronDown, BsChevronUp, BsActivity, BsTable, BsPencilFill, BsTrashFill, BsPlusCircle
 } from 'react-icons/bs';
 
 
@@ -1017,6 +1017,22 @@ export const WarehousesPage = () => {
     const [addFormData, setAddFormData] = useState(initialAddForm);
     const [validationErrors, setValidationErrors] = useState({});
 
+    // Edit Warehouse Modal State
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingWarehouse, setEditingWarehouse] = useState(null);
+    const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+    const [editFormError, setEditFormError] = useState(null);
+    const [editFormSuccess, setEditFormSuccess] = useState(null);
+    const [editValidationErrors, setEditValidationErrors] = useState({});
+    const initialEditForm = {
+        name: "",
+        code: "",
+        store_id: "",
+        address: "",
+        is_active: true,
+    };
+    const [editFormData, setEditFormData] = useState(initialEditForm);
+
     const [search, setSearch] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
     const [storeFilter, setStoreFilter] = useState("all");
@@ -1512,6 +1528,184 @@ export const WarehousesPage = () => {
         }
     };
 
+    const handleOpenEditModal = (wh) => {
+        if (!wh) return;
+        setEditingWarehouse(wh);
+        const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code ?? "";
+        setEditFormData({
+            name: wh.name || wh.warehouse_name || "",
+            code: (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "—") ? String(rawCode).trim() : "",
+            store_id: wh.store_id ?? wh.storeId ?? "",
+            address: wh.address || wh.location || "",
+            is_active: wh.is_active !== false && wh.status !== 'Inactive' && wh.status !== 'inactive',
+        });
+        setEditValidationErrors({});
+        setEditFormError(null);
+        setEditFormSuccess(null);
+        setIsEditModalOpen(true);
+
+        if (availableStores.length === 0) {
+            setLoadingStores(true);
+            listStores()
+                .then((res) => {
+                    const list = res?.data?.data || res?.data || (Array.isArray(res) ? res : []);
+                    setAvailableStores(list);
+                })
+                .catch((err) => {
+                    console.error("Failed to load stores for warehouse modal:", err);
+                })
+                .finally(() => {
+                    setLoadingStores(false);
+                });
+        }
+    };
+
+    const handleCloseEditModal = () => {
+        if (isSubmittingEdit) return;
+        setIsEditModalOpen(false);
+        setEditingWarehouse(null);
+        setEditValidationErrors({});
+        setEditFormError(null);
+        setEditFormSuccess(null);
+    };
+
+    const validateEditWarehouseForm = () => {
+        const errors = {};
+        const trimmedName = String(editFormData.name || "").trim();
+        const trimmedCode = String(editFormData.code || "").trim();
+        const trimmedAddress = String(editFormData.address || "").trim();
+
+        if (!trimmedName) {
+            errors.name = "Warehouse name is required";
+        } else if (trimmedName.length < 2) {
+            errors.name = "Warehouse name must be at least 2 characters";
+        } else if (trimmedName.length > 100) {
+            errors.name = "Warehouse name cannot exceed 100 characters";
+        }
+
+        if (!trimmedCode) {
+            errors.code = "Warehouse code is required";
+        } else if (trimmedCode.length < 2) {
+            errors.code = "Warehouse code must be at least 2 characters";
+        } else if (trimmedCode.length > 50) {
+            errors.code = "Warehouse code cannot exceed 50 characters";
+        } else if (/^\d+$/.test(trimmedCode)) {
+            errors.code = "Warehouse code cannot contain only numbers. Please include letters (e.g. WH-001 or WH01).";
+        }
+
+        if (trimmedAddress && trimmedAddress.length < 5) {
+            errors.address = "Address must be at least 5 characters if provided";
+        } else if (trimmedAddress && trimmedAddress.length > 500) {
+            errors.address = "Address cannot exceed 500 characters";
+        }
+
+        setEditValidationErrors(errors);
+        return Object.keys(errors).length === 0;
+    };
+
+    const handleUpdateWarehouse = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (isSubmittingEdit || !editingWarehouse?.id) return;
+
+        if (!validateEditWarehouseForm()) {
+            return;
+        }
+
+        try {
+            setIsSubmittingEdit(true);
+            setEditFormError(null);
+            setEditFormSuccess(null);
+
+            const targetId = Number(editingWarehouse.id) || editingWarehouse.id;
+            const payload = {
+                name: editFormData.name.trim(),
+                code: editFormData.code.trim().toUpperCase(),
+                is_active: Boolean(editFormData.is_active),
+            };
+
+            if (editFormData.store_id && Number(editFormData.store_id) > 0) {
+                payload.store_id = Number(editFormData.store_id);
+            } else {
+                payload.store_id = null;
+            }
+
+            if (editFormData.address && editFormData.address.trim()) {
+                payload.address = editFormData.address.trim();
+            } else {
+                payload.address = null;
+            }
+
+            console.log(`Submitting update for warehouse #${targetId}:`, payload);
+            const res = await updateWarehouse(targetId, payload);
+
+            const successMsg = res?.message || `Warehouse #${targetId} updated successfully!`;
+            setEditFormSuccess(successMsg);
+
+            await fetchWarehouses();
+            await fetchDashboard();
+
+            if (selectedWarehouseId === targetId) {
+                handleViewWarehouse(targetId);
+            }
+
+            setTimeout(() => {
+                setIsEditModalOpen(false);
+                setEditingWarehouse(null);
+                setEditFormSuccess(null);
+            }, 800);
+        } catch (err) {
+            console.error("Update Warehouse Error:", err);
+            const data = err?.response?.data;
+            const backendErrors = {};
+
+            if (Array.isArray(data?.errors)) {
+                data.errors.forEach((e) => {
+                    if (e.field) {
+                        backendErrors[e.field] = e.message;
+                    }
+                });
+            }
+
+            if (Array.isArray(data?.detail)) {
+                data.detail.forEach((d) => {
+                    const field = Array.isArray(d.loc)
+                        ? d.loc[d.loc.length - 1]
+                        : null;
+                    if (field && typeof field === "string") {
+                        const cleanMsg = (d.msg || "").replace(/^Value error,\s*/i, "");
+                        backendErrors[field] = cleanMsg;
+                    }
+                });
+            }
+
+            if (Object.keys(backendErrors).length > 0) {
+                setEditValidationErrors((prev) => ({ ...prev, ...backendErrors }));
+            }
+
+            const errorMsg =
+                data?.message ||
+                (typeof data?.detail === "string" ? data.detail : null) ||
+                data?.detail?.message ||
+                (Array.isArray(data?.detail)
+                    ? data.detail
+                        .map((d) => {
+                            const loc = Array.isArray(d.loc)
+                                ? d.loc.filter((p) => p !== "body").join(".")
+                                : "";
+                            const cleanMsg = (d.msg || "").replace(/^Value error,\s*/i, "");
+                            return loc ? `${loc}: ${cleanMsg}` : cleanMsg;
+                        })
+                        .join(" | ")
+                    : null) ||
+                err?.message ||
+                "Failed to update warehouse. Please check the entered data.";
+
+            setEditFormError(errorMsg);
+        } finally {
+            setIsSubmittingEdit(false);
+        }
+    };
+
     const dashboardData = dashboard?.data ?? dashboard;
 
     const totalWarehouses = dashboardLoading
@@ -1630,6 +1824,273 @@ export const WarehousesPage = () => {
                 }
                 .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-corner {
                     background: #f1f5f9 !important;
+                }
+
+                /* Action Button & Tooltip Styles */
+                .wh-actions {
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 6px;
+                }
+                .wh-action-btn {
+                    position: relative;
+                    width: 32px;
+                    height: 32px;
+                    padding: 0;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    border-radius: 7px;
+                    font-size: 13px;
+                    cursor: pointer;
+                    transition: all 0.15s ease;
+                    border: 1px solid transparent;
+                    flex-shrink: 0;
+                    box-sizing: border-box;
+                }
+                .wh-action-btn:active {
+                    transform: translateY(0);
+                }
+                .wh-btn-view {
+                    background: #eef2ff;
+                    color: #4f46e5;
+                    border-color: #c7d2fe;
+                }
+                .wh-btn-view:hover {
+                    background: #e0e7ff;
+                    color: #4338ca;
+                    border-color: #a5b4fc;
+                    transform: translateY(-1px);
+                }
+                .wh-btn-create {
+                    background: #ecfdf5;
+                    color: #059669;
+                    border-color: #a7f3d0;
+                }
+                .wh-btn-create:hover {
+                    background: #d1fae5;
+                    color: #047857;
+                    border-color: #6ee7b7;
+                    transform: translateY(-1px);
+                }
+                .wh-btn-edit {
+                    background: #f8fafc;
+                    color: #334155;
+                    border-color: #cbd5e1;
+                }
+                .wh-btn-edit:hover {
+                    background: #f1f5f9;
+                    color: #0f172a;
+                    border-color: #94a3b8;
+                    transform: translateY(-1px);
+                }
+                .wh-btn-delete {
+                    background: #fef2f2;
+                    color: #dc2626;
+                    border-color: #fee2e2;
+                }
+                .wh-btn-delete:hover:not(:disabled) {
+                    background: #fee2e2;
+                    color: #b91c1c;
+                    border-color: #fca5a5;
+                    transform: translateY(-1px);
+                }
+                .wh-btn-delete:disabled {
+                    cursor: not-allowed;
+                    opacity: 0.5;
+                }
+
+                /* Tooltip base styling & stacking */
+                .wh-action-btn:hover,
+                .wh-action-btn:focus-visible {
+                    z-index: 1000 !important;
+                }
+                .warehouse-table tbody tr:hover td {
+                    z-index: 35 !important;
+                }
+
+                .wh-action-btn[data-tooltip]::after {
+                    content: attr(data-tooltip);
+                    position: absolute;
+                    top: calc(100% + 7px);
+                    bottom: auto;
+                    padding: 5px 9px;
+                    background: #0f172a;
+                    color: #ffffff;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                    font-size: 11px;
+                    font-weight: 600;
+                    line-height: 1.2;
+                    letter-spacing: 0.01em;
+                    white-space: nowrap;
+                    border-radius: 6px;
+                    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.28);
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    z-index: 99999;
+                    transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+                }
+
+                .wh-action-btn[data-tooltip]::before {
+                    content: "";
+                    position: absolute;
+                    top: calc(100% + 2px);
+                    bottom: auto;
+                    border-width: 0 5px 5px 5px;
+                    border-style: solid;
+                    border-color: transparent transparent #0f172a transparent;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    z-index: 99999;
+                    transition: opacity 0.15s ease, visibility 0.15s ease;
+                }
+
+                .wh-action-btn[data-tooltip]:hover::after,
+                .wh-action-btn[data-tooltip]:hover::before,
+                .wh-action-btn[data-tooltip]:focus-visible::after,
+                .wh-action-btn[data-tooltip]:focus-visible::before {
+                    opacity: 1;
+                    visibility: visible;
+                }
+
+                /* Header Action Button (Add Warehouse): opens downward, aligned to right edge of button */
+                .warehouse-table thead th .wh-btn-create[data-tooltip]::after {
+                    top: calc(100% + 7px);
+                    bottom: auto;
+                    left: auto;
+                    right: 0;
+                    transform: translateY(-3px);
+                }
+                .warehouse-table thead th .wh-btn-create[data-tooltip]:hover::after,
+                .warehouse-table thead th .wh-btn-create[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
+                }
+                .warehouse-table thead th .wh-btn-create[data-tooltip]::before {
+                    top: calc(100% + 2px);
+                    bottom: auto;
+                    left: auto;
+                    right: 8px;
+                    transform: none;
+                    border-width: 0 5px 5px 5px;
+                    border-color: transparent transparent #0f172a transparent;
+                }
+
+                /* Row: View button (leftmost): opens downward, aligned to left edge of button */
+                .wh-actions .wh-btn-view[data-tooltip]::after {
+                    top: calc(100% + 7px);
+                    bottom: auto;
+                    left: 0;
+                    right: auto;
+                    transform: translateY(-3px);
+                }
+                .wh-actions .wh-btn-view[data-tooltip]:hover::after,
+                .wh-actions .wh-btn-view[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
+                }
+                .wh-actions .wh-btn-view[data-tooltip]::before {
+                    top: calc(100% + 2px);
+                    bottom: auto;
+                    left: 11px;
+                    right: auto;
+                    transform: none;
+                    border-width: 0 5px 5px 5px;
+                    border-color: transparent transparent #0f172a transparent;
+                }
+
+                /* Row: Edit button (middle): opens downward, centered horizontally */
+                .wh-actions .wh-btn-edit[data-tooltip]::after {
+                    top: calc(100% + 7px);
+                    bottom: auto;
+                    left: 50%;
+                    right: auto;
+                    transform: translateX(-50%) translateY(-3px);
+                }
+                .wh-actions .wh-btn-edit[data-tooltip]:hover::after,
+                .wh-actions .wh-btn-edit[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
+                }
+                .wh-actions .wh-btn-edit[data-tooltip]::before {
+                    top: calc(100% + 2px);
+                    bottom: auto;
+                    left: 50%;
+                    right: auto;
+                    transform: translateX(-50%);
+                    border-width: 0 5px 5px 5px;
+                    border-color: transparent transparent #0f172a transparent;
+                }
+
+                /* Row: Delete button (rightmost): opens downward, aligned to right edge of button */
+                .wh-actions .wh-btn-delete[data-tooltip]::after {
+                    top: calc(100% + 7px);
+                    bottom: auto;
+                    left: auto;
+                    right: 0;
+                    transform: translateY(-3px);
+                }
+                .wh-actions .wh-btn-delete[data-tooltip]:hover::after,
+                .wh-actions .wh-btn-delete[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
+                }
+                .wh-actions .wh-btn-delete[data-tooltip]::before {
+                    top: calc(100% + 2px);
+                    bottom: auto;
+                    left: auto;
+                    right: 11px;
+                    transform: none;
+                    border-width: 0 5px 5px 5px;
+                    border-color: transparent transparent #0f172a transparent;
+                }
+
+                /* Bottom 2 rows of table: flip upward so tooltip never overflows bottom table boundary */
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]::after {
+                    top: auto;
+                    bottom: calc(100% + 7px);
+                    transform: translateY(3px);
+                }
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]:hover::after,
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
+                }
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]::before {
+                    top: auto;
+                    bottom: calc(100% + 2px);
+                    border-width: 5px 5px 0 5px;
+                    border-color: #0f172a transparent transparent transparent;
+                }
+
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]::after {
+                    top: auto;
+                    bottom: calc(100% + 7px);
+                    transform: translateX(-50%) translateY(3px);
+                }
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]:hover::after,
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]:focus-visible::after {
+                    transform: translateX(-50%) translateY(0);
+                }
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]::before {
+                    top: auto;
+                    bottom: calc(100% + 2px);
+                    border-width: 5px 5px 0 5px;
+                    border-color: #0f172a transparent transparent transparent;
+                }
+
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]::after {
+                    top: auto;
+                    bottom: calc(100% + 7px);
+                    transform: translateY(3px);
+                }
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]:hover::after,
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
+                }
+                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]::before {
+                    top: auto;
+                    bottom: calc(100% + 2px);
+                    border-width: 5px 5px 0 5px;
+                    border-color: #0f172a transparent transparent transparent;
                 }
             `}</style>
             <ModuleContainer
@@ -2173,14 +2634,31 @@ export const WarehousesPage = () => {
                                             right: 0,
                                             zIndex: 25,
                                             background: '#f9fafb',
-                                            padding: '11px 16px',
+                                            padding: '8px 14px',
                                             borderBottom: '1px solid #e5e7eb',
                                             color: '#4b5563',
                                             fontWeight: 600,
                                             textAlign: 'center',
                                             whiteSpace: 'nowrap',
+                                            minWidth: 155,
+                                            width: 155,
                                             boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                        }}>Action</th>
+                                        }}>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                                <span>Action</span>
+                                                <button
+                                                    type="button"
+                                                    className="wh-action-btn wh-btn-create"
+                                                    data-tooltip="Add Warehouse"
+                                                    title="Add Warehouse"
+                                                    aria-label="Add Warehouse"
+                                                    onClick={handleOpenAddModal}
+                                                    style={{ width: 26, height: 26, borderRadius: 6 }}
+                                                >
+                                                    <BsPlus size={18} />
+                                                </button>
+                                            </div>
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2275,30 +2753,48 @@ export const WarehousesPage = () => {
                                                     padding: '11px 16px',
                                                     textAlign: 'center',
                                                     whiteSpace: 'nowrap',
+                                                    minWidth: 155,
+                                                    width: 155,
                                                     boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
                                                 }}>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleViewWarehouse(wh.id)}
-                                                        title="View Warehouse Details"
-                                                        aria-label="View Warehouse Details"
-                                                        style={{
-                                                            background: '#eef2ff',
-                                                            color: '#4f46e5',
-                                                            border: '1px solid #c7d2fe',
-                                                            padding: '5px 12px',
-                                                            borderRadius: 6,
-                                                            fontSize: 12,
-                                                            fontWeight: 600,
-                                                            cursor: 'pointer',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 5,
-                                                            transition: 'all 0.15s ease'
-                                                        }}
-                                                    >
-                                                        <BsEye size={13} /> View
-                                                    </button>
+                                                    <div className="wh-actions">
+                                                        {/* VIEW */}
+                                                        <button
+                                                            type="button"
+                                                            className="wh-action-btn wh-btn-view"
+                                                            data-tooltip="View Warehouse"
+                                                            title="View Warehouse"
+                                                            aria-label="View Warehouse"
+                                                            onClick={() => handleViewWarehouse(wh.id)}
+                                                        >
+                                                            <BsEye size={14} />
+                                                        </button>
+
+                                                        {/* EDIT */}
+                                                        <button
+                                                            type="button"
+                                                            className="wh-action-btn wh-btn-edit"
+                                                            data-tooltip="Edit Warehouse"
+                                                            title="Edit Warehouse"
+                                                            aria-label="Edit Warehouse"
+                                                            onClick={() => handleOpenEditModal(wh)}
+                                                        >
+                                                            <BsPencilFill size={13} />
+                                                        </button>
+
+                                                        {/* DELETE */}
+                                                        <button
+                                                            type="button"
+                                                            className="wh-action-btn wh-btn-delete"
+                                                            data-tooltip="Delete Warehouse"
+                                                            title="Delete Warehouse"
+                                                            aria-label="Delete Warehouse"
+                                                            disabled={deletingId !== null}
+                                                            onClick={() => handleRequestDelete(wh)}
+                                                        >
+                                                            <BsTrashFill size={13} />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -2610,15 +3106,30 @@ export const WarehousesPage = () => {
                                             right: 0,
                                             zIndex: 25,
                                             background: '#f9fafb',
-                                            padding: '11px 16px',
+                                            padding: '8px 14px',
                                             textAlign: 'center',
                                             whiteSpace: 'nowrap',
                                             borderBottom: '1px solid #e5e7eb',
                                             color: '#4b5563',
                                             fontWeight: 600,
+                                            minWidth: 155,
+                                            width: 155,
                                             boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
                                         }}>
-                                            Actions
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                                <span>Action</span>
+                                                <button
+                                                    type="button"
+                                                    className="wh-action-btn wh-btn-create"
+                                                    data-tooltip="Add Warehouse"
+                                                    title="Add Warehouse"
+                                                    aria-label="Add Warehouse"
+                                                    onClick={handleOpenAddModal}
+                                                    style={{ width: 26, height: 26, borderRadius: 6 }}
+                                                >
+                                                    <BsPlus size={18} />
+                                                </button>
+                                            </div>
                                         </th>
                                     </tr>
                                 </thead>
@@ -2690,48 +3201,54 @@ export const WarehousesPage = () => {
                                                         {isActive ? (wh.status || 'Active') : 'Inactive'}
                                                     </span>
                                                 </td>
-                                                <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                                                <td style={{
+                                                    position: 'sticky',
+                                                    right: 0,
+                                                    zIndex: 10,
+                                                    background: '#ffffff',
+                                                    padding: '11px 16px',
+                                                    textAlign: 'center',
+                                                    whiteSpace: 'nowrap',
+                                                    minWidth: 155,
+                                                    width: 155,
+                                                    boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
+                                                }}>
+                                                    <div className="wh-actions">
+                                                        {/* VIEW */}
                                                         <button
                                                             type="button"
+                                                            className="wh-action-btn wh-btn-view"
+                                                            data-tooltip="View Warehouse"
+                                                            title="View Warehouse"
+                                                            aria-label="View Warehouse"
                                                             onClick={() => handleViewWarehouse(wh.id)}
-                                                            style={{
-                                                                background: '#f8fafc',
-                                                                color: '#4f46e5',
-                                                                border: '1px solid #e0e7ff',
-                                                                padding: '6px 12px',
-                                                                borderRadius: 6,
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: 4
-                                                            }}
                                                         >
-                                                            <BsEye size={13} /> View
+                                                            <BsEye size={14} />
                                                         </button>
+
+                                                        {/* EDIT */}
                                                         <button
                                                             type="button"
-                                                            onClick={() => handleRequestDelete(wh)}
-                                                            disabled={deletingId !== null}
-                                                            title={`Delete Warehouse #${wh.id}`}
-                                                            style={{
-                                                                background: '#fef2f2',
-                                                                color: '#dc2626',
-                                                                border: '1px solid #fee2e2',
-                                                                padding: '6px 12px',
-                                                                borderRadius: 6,
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: deletingId !== null ? 'not-allowed' : 'pointer',
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: 4,
-                                                                opacity: deletingId === wh.id ? 0.6 : (deletingId !== null ? 0.4 : 1)
-                                                            }}
+                                                            className="wh-action-btn wh-btn-edit"
+                                                            data-tooltip="Edit Warehouse"
+                                                            title="Edit Warehouse"
+                                                            aria-label="Edit Warehouse"
+                                                            onClick={() => handleOpenEditModal(wh)}
                                                         >
-                                                            <BsTrash size={13} /> {deletingId === wh.id ? 'Deleting...' : 'Delete'}
+                                                            <BsPencilFill size={13} />
+                                                        </button>
+
+                                                        {/* DELETE */}
+                                                        <button
+                                                            type="button"
+                                                            className="wh-action-btn wh-btn-delete"
+                                                            data-tooltip="Delete Warehouse"
+                                                            title="Delete Warehouse"
+                                                            aria-label="Delete Warehouse"
+                                                            disabled={deletingId !== null}
+                                                            onClick={() => handleRequestDelete(wh)}
+                                                        >
+                                                            <BsTrashFill size={13} />
                                                         </button>
                                                     </div>
                                                 </td>
@@ -2829,51 +3346,37 @@ export const WarehousesPage = () => {
                                             </span>
                                         </div>
                                     </div>
-                                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f3f4f6', display: 'flex', gap: 8 }}>
+                                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                                         <button
                                             type="button"
+                                            className="wh-action-btn wh-btn-view"
+                                            data-tooltip="View Warehouse"
+                                            title="View Warehouse"
+                                            aria-label="View Warehouse"
                                             onClick={() => handleViewWarehouse(wh.id)}
-                                            style={{
-                                                flex: 1,
-                                                background: '#f8fafc',
-                                                color: '#4f46e5',
-                                                border: '1px solid #e0e7ff',
-                                                padding: '7px 12px',
-                                                borderRadius: 8,
-                                                fontSize: 12.5,
-                                                fontWeight: 600,
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: 6
-                                            }}
                                         >
-                                            View Details
+                                            <BsEye size={14} />
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() => handleRequestDelete(wh)}
-                                            disabled={deletingId !== null}
-                                            title={`Delete Warehouse #${wh.id}`}
-                                            style={{
-                                                background: '#fef2f2',
-                                                color: '#dc2626',
-                                                border: '1px solid #fee2e2',
-                                                padding: '7px 12px',
-                                                borderRadius: 8,
-                                                fontSize: 12.5,
-                                                fontWeight: 600,
-                                                cursor: deletingId !== null ? 'not-allowed' : 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: 6,
-                                                opacity: deletingId === wh.id ? 0.6 : (deletingId !== null ? 0.4 : 1)
-                                            }}
+                                            className="wh-action-btn wh-btn-edit"
+                                            data-tooltip="Edit Warehouse"
+                                            title="Edit Warehouse"
+                                            aria-label="Edit Warehouse"
+                                            onClick={() => handleOpenEditModal(wh)}
                                         >
-                                            <BsTrash size={14} />
-                                            {deletingId === wh.id ? 'Deleting...' : 'Delete'}
+                                            <BsPencilFill size={13} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="wh-action-btn wh-btn-delete"
+                                            data-tooltip="Delete Warehouse"
+                                            title="Delete Warehouse"
+                                            aria-label="Delete Warehouse"
+                                            disabled={deletingId !== null}
+                                            onClick={() => handleRequestDelete(wh)}
+                                        >
+                                            <BsTrashFill size={13} />
                                         </button>
                                     </div>
                                 </div>
@@ -3306,28 +3809,49 @@ export const WarehousesPage = () => {
                             gap: 12
                         }}>
                             {selectedWarehouse && (
-                                <button
-                                    type="button"
-                                    onClick={() => handleRequestDelete(selectedWarehouse)}
-                                    disabled={deletingId !== null}
-                                    style={{
-                                        background: '#fef2f2',
-                                        color: '#dc2626',
-                                        border: '1px solid #fee2e2',
-                                        padding: '8px 16px',
-                                        borderRadius: 8,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: deletingId !== null ? 'not-allowed' : 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 6,
-                                        opacity: deletingId === selectedWarehouse.id ? 0.6 : (deletingId !== null ? 0.4 : 1)
-                                    }}
-                                >
-                                    <BsTrash size={14} />
-                                    {deletingId === selectedWarehouse.id ? 'Deleting...' : 'Delete Warehouse'}
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenEditModal(selectedWarehouse)}
+                                        style={{
+                                            background: '#f8fafc',
+                                            color: '#334155',
+                                            border: '1px solid #cbd5e1',
+                                            padding: '8px 16px',
+                                            borderRadius: 8,
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 6
+                                        }}
+                                    >
+                                        <BsPencilFill size={13} /> Edit Warehouse
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRequestDelete(selectedWarehouse)}
+                                        disabled={deletingId !== null}
+                                        style={{
+                                            background: '#fef2f2',
+                                            color: '#dc2626',
+                                            border: '1px solid #fee2e2',
+                                            padding: '8px 16px',
+                                            borderRadius: 8,
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            cursor: deletingId !== null ? 'not-allowed' : 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            opacity: deletingId === selectedWarehouse.id ? 0.6 : (deletingId !== null ? 0.4 : 1)
+                                        }}
+                                    >
+                                        <BsTrashFill size={13} />
+                                        {deletingId === selectedWarehouse.id ? 'Deleting...' : 'Delete Warehouse'}
+                                    </button>
+                                </div>
                             )}
                             <button
                                 onClick={handleCloseModal}
@@ -3850,6 +4374,375 @@ export const WarehousesPage = () => {
                                         <>
                                             <BsPlus size={18} />
                                             <span>Create Warehouse</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* EDIT WAREHOUSE MODAL (PATCH /api/v1/warehouses/{id}) */}
+            {isEditModalOpen && editingWarehouse && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10000,
+                        padding: 20,
+                        backdropFilter: 'blur(3px)'
+                    }}
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget && !isSubmittingEdit) {
+                            handleCloseEditModal();
+                        }
+                    }}
+                >
+                    <div
+                        style={{
+                            background: '#ffffff',
+                            borderRadius: 14,
+                            width: '100%',
+                            maxWidth: 540,
+                            maxHeight: '90vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                            border: '1px solid #e5e7eb',
+                            overflow: 'hidden'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div style={{
+                            padding: '18px 24px',
+                            borderBottom: '1px solid #e5e7eb',
+                            background: '#fafafa',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 8,
+                                    background: '#eef2ff',
+                                    color: '#6366f1',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BsPencilFill size={16} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                        Edit Warehouse #{editingWarehouse.id}
+                                    </h3>
+                                    <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                        PATCH /api/v1/warehouses/{editingWarehouse.id}
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCloseEditModal}
+                                disabled={isSubmittingEdit}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    fontSize: 20,
+                                    lineHeight: 1,
+                                    cursor: isSubmittingEdit ? 'not-allowed' : 'pointer',
+                                    color: '#9ca3af',
+                                    padding: '4px 8px'
+                                }}
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Modal Body / Form */}
+                        <form onSubmit={handleUpdateWarehouse} style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ padding: '24px', overflowY: 'auto', maxHeight: 'calc(90vh - 140px)' }}>
+                                {/* Error Alert */}
+                                {editFormError && (
+                                    <div style={{
+                                        marginBottom: 18,
+                                        background: '#fef2f2',
+                                        border: '1px solid #fee2e2',
+                                        borderRadius: 8,
+                                        padding: '12px 14px',
+                                        color: '#b91c1c',
+                                        fontSize: 12.5,
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: 8
+                                    }}>
+                                        <BsExclamationTriangle size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                                        <div style={{ flex: 1 }}>{editFormError}</div>
+                                    </div>
+                                )}
+
+                                {/* Success Alert */}
+                                {editFormSuccess && (
+                                    <div style={{
+                                        marginBottom: 18,
+                                        background: '#ecfdf5',
+                                        border: '1px solid #a7f3d0',
+                                        borderRadius: 8,
+                                        padding: '12px 14px',
+                                        color: '#065f46',
+                                        fontSize: 12.5,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8
+                                    }}>
+                                        <BsCheckCircle size={16} style={{ flexShrink: 0 }} />
+                                        <div>{editFormSuccess}</div>
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                    {/* Warehouse Name */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Warehouse Name <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. Central Distribution Depot"
+                                            value={editFormData.name}
+                                            onChange={(e) => {
+                                                setEditFormData(prev => ({ ...prev, name: e.target.value }));
+                                                if (editValidationErrors.name) {
+                                                    setEditValidationErrors(prev => ({ ...prev, name: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${editValidationErrors.name ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingEdit}
+                                            required
+                                        />
+                                        {editValidationErrors.name && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {editValidationErrors.name}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Warehouse Code */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Warehouse Code <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. WH-MUM-01"
+                                            value={editFormData.code}
+                                            onChange={(e) => {
+                                                setEditFormData(prev => ({ ...prev, code: e.target.value.toUpperCase() }));
+                                                if (editValidationErrors.code) {
+                                                    setEditValidationErrors(prev => ({ ...prev, code: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${editValidationErrors.code ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                fontFamily: 'monospace',
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingEdit}
+                                            required
+                                        />
+                                        {editValidationErrors.code && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {editValidationErrors.code}
+                                            </span>
+                                        )}
+                                        <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                            Unique identifier (2-50 characters). Must include letters (e.g. WH-001 or WH01; cannot contain only numbers)
+                                        </span>
+                                    </div>
+
+                                    {/* Associated Store */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Associated Store <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
+                                        </label>
+                                        <select
+                                            value={editFormData.store_id || ""}
+                                            onChange={(e) => setEditFormData(prev => ({ ...prev, store_id: e.target.value }))}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: '1px solid #d1d5db',
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                background: '#fff',
+                                                cursor: 'pointer',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingEdit || loadingStores}
+                                        >
+                                            <option value="">-- None (Central / Independent Depot) --</option>
+                                            {availableStores.map(st => (
+                                                <option key={st.id} value={st.id}>
+                                                    {st.name} {st.code ? `(${st.code})` : `(Store #${st.id})`}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                            Link to a specific retail branch store or keep unlinked for central warehouse
+                                        </span>
+                                    </div>
+
+                                    {/* Operational Status */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Operational Status
+                                        </label>
+                                        <select
+                                            value={editFormData.is_active ? "active" : "inactive"}
+                                            onChange={(e) => setEditFormData(prev => ({ ...prev, is_active: e.target.value === "active" }))}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: '1px solid #d1d5db',
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                background: '#fff',
+                                                cursor: 'pointer',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingEdit}
+                                        >
+                                            <option value="active">Active (Ready for Inward & Dispatch)</option>
+                                            <option value="inactive">Inactive (Operations Paused)</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Location / Address */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Address / Location Details <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
+                                        </label>
+                                        <textarea
+                                            rows={3}
+                                            placeholder="Enter warehouse physical address, city, or location details..."
+                                            value={editFormData.address}
+                                            onChange={(e) => {
+                                                setEditFormData(prev => ({ ...prev, address: e.target.value }));
+                                                if (editValidationErrors.address) {
+                                                    setEditValidationErrors(prev => ({ ...prev, address: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${editValidationErrors.address ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                resize: 'vertical',
+                                                fontFamily: 'inherit',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingEdit}
+                                        />
+                                        {editValidationErrors.address && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {editValidationErrors.address}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div style={{
+                                padding: '16px 24px',
+                                borderTop: '1px solid #e5e7eb',
+                                background: '#fafafa',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'flex-end',
+                                gap: 10
+                            }}>
+                                <button
+                                    type="button"
+                                    onClick={handleCloseEditModal}
+                                    disabled={isSubmittingEdit}
+                                    style={{
+                                        background: '#f3f4f6',
+                                        color: '#374151',
+                                        border: '1px solid #d1d5db',
+                                        padding: '9px 18px',
+                                        borderRadius: 8,
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        cursor: isSubmittingEdit ? 'not-allowed' : 'pointer'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingEdit}
+                                    style={{
+                                        background: isSubmittingEdit ? '#818cf8' : '#4f46e5',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        padding: '9px 20px',
+                                        borderRadius: 8,
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        cursor: isSubmittingEdit ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        boxShadow: '0 1px 2px rgba(79, 70, 229, 0.2)'
+                                    }}
+                                >
+                                    {isSubmittingEdit ? (
+                                        <>
+                                            <span style={{
+                                                display: 'inline-block',
+                                                width: 14,
+                                                height: 14,
+                                                border: '2px solid #ffffff',
+                                                borderTopColor: 'transparent',
+                                                borderRadius: '50%',
+                                                animation: 'spin 1s linear infinite'
+                                            }} />
+                                            <span>Saving...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <BsPencilFill size={13} />
+                                            <span>Save Changes</span>
                                         </>
                                     )}
                                 </button>
@@ -9986,27 +10879,132 @@ export const StoreTransfersPage = () => {
                     scrollbar-color: #cbd5e1 #f1f5f9 !important;
                 }
 
-                /* Clean, modern, properly spaced action pill buttons */
+                /* Clean, modern icon-only action buttons with hover tooltips */
                 .store-transfers-page-root .store-transfer-action-btn {
-                    width: auto !important;
-                    height: 30px !important;
-                    min-width: unset !important;
-                    padding: 0 11px !important;
-                    gap: 6px !important;
-                    font-size: 12px !important;
-                    font-weight: 600 !important;
-                    border-radius: 6px !important;
+                    position: relative !important;
+                    width: 32px !important;
+                    height: 32px !important;
+                    min-width: 32px !important;
+                    padding: 0 !important;
+                    font-size: 13px !important;
+                    border-radius: 7px !important;
                     display: inline-flex !important;
                     align-items: center !important;
                     justify-content: center !important;
-                    white-space: nowrap !important;
                     cursor: pointer !important;
                     transition: all 0.15s ease !important;
+                    box-sizing: border-box !important;
+                    flex-shrink: 0 !important;
+                    border: 1px solid transparent;
                 }
                 .store-transfers-page-root .store-transfer-action-btn svg {
-                    width: 13px !important;
-                    height: 13px !important;
+                    width: 14px !important;
+                    height: 14px !important;
                     flex-shrink: 0 !important;
+                }
+                .store-transfers-page-root .store-transfer-action-btn:hover:not(:disabled) {
+                    transform: translateY(-1px);
+                }
+                .store-transfers-page-root .store-transfer-action-btn:active {
+                    transform: translateY(0);
+                }
+
+                /* Tooltip bubble (default: opens upwards) */
+                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]::after {
+                    content: attr(data-tooltip);
+                    position: absolute;
+                    bottom: calc(100% + 7px);
+                    left: 50%;
+                    transform: translateX(-50%) translateY(3px);
+                    padding: 5px 8px;
+                    background: #0f172a;
+                    color: #ffffff;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                    font-size: 11px;
+                    font-weight: 600;
+                    line-height: 1;
+                    white-space: nowrap;
+                    border-radius: 6px;
+                    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    z-index: 99999;
+                    transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+                }
+
+                /* Tooltip caret / arrow */
+                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]::before {
+                    content: "";
+                    position: absolute;
+                    bottom: calc(100% + 2px);
+                    left: 50%;
+                    transform: translateX(-50%);
+                    border-width: 5px 5px 0 5px;
+                    border-style: solid;
+                    border-color: #0f172a transparent transparent transparent;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    z-index: 99999;
+                    transition: opacity 0.15s ease, visibility 0.15s ease;
+                }
+
+                /* Show tooltip on hover or keyboard focus */
+                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::after,
+                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::before,
+                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::after,
+                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::before {
+                    opacity: 1;
+                    visibility: visible;
+                }
+
+                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::after,
+                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::after {
+                    transform: translateX(-50%) translateY(0);
+                }
+
+                /* First 2 rows: open downward to avoid clipping by sticky header or table boundary */
+                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]::after {
+                    bottom: auto;
+                    top: calc(100% + 7px);
+                    transform: translateX(-50%) translateY(-3px);
+                }
+
+                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]:hover::after,
+                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]:focus-visible::after {
+                    transform: translateX(-50%) translateY(0);
+                }
+
+                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]::before {
+                    bottom: auto;
+                    top: calc(100% + 2px);
+                    border-width: 0 5px 5px 5px;
+                    border-color: transparent transparent #0f172a transparent;
+                }
+
+                /* Rightmost button alignment to prevent right-edge clipping */
+                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::after {
+                    left: auto;
+                    right: 0;
+                    transform: translateY(3px);
+                }
+                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:hover::after,
+                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
+                }
+                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::before {
+                    left: auto;
+                    right: 11px;
+                }
+                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::after {
+                    left: auto;
+                    right: 0;
+                    transform: translateY(-3px);
+                }
+                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:hover::after,
+                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
                 }
                 .store-transfers-page-root table tbody tr:hover td {
                     background-color: #f8fafc;
@@ -10918,7 +11916,7 @@ export const StoreTransfersPage = () => {
                                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 130 }}>Status</th>
                                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 150, whiteSpace: 'nowrap' }}>Created Date</th>
                                 <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 140 }}>Approved By</th>
-                                <th style={{ position: 'sticky', top: 0, right: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', textAlign: 'center', minWidth: 260, whiteSpace: 'nowrap', boxShadow: '-3px 0 6px rgba(0,0,0,0.04)' }}>Actions</th>
+                                <th style={{ position: 'sticky', top: 0, right: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', textAlign: 'center', minWidth: 160, whiteSpace: 'nowrap', boxShadow: '-3px 0 6px rgba(0,0,0,0.04)' }}>Actions</th>
                             </tr>
                         </thead>
                     <tbody>
@@ -11162,24 +12160,12 @@ export const StoreTransfersPage = () => {
                                                     <button
                                                         type="button"
                                                         className="store-transfer-action-btn store-transfer-btn-view"
+                                                        data-tooltip="View Transfer Details"
+                                                        title="View Transfer Details"
+                                                        aria-label="View Transfer Details"
                                                         onClick={() => handleOpenDetailsModal(trId)}
-                                                        title="View full transfer details"
                                                     >
-                                                        <BsEye size={13} /> View
-                                                    </button>
-
-                                                    {/* 2. Items breakdown expand/collapse toggle - Available on ALL transfers */}
-                                                    <button
-                                                        type="button"
-                                                        className={`store-transfer-action-btn store-transfer-btn-items ${isExpanded ? 'active' : ''}`}
-                                                        onClick={() => toggleExpandRow(trId)}
-                                                        title={isExpanded ? "Hide product items breakdown" : "View product items breakdown"}
-                                                    >
-                                                        {isExpanded ? (
-                                                            <>Hide <BsChevronUp size={11} /></>
-                                                        ) : (
-                                                            <>Items <BsChevronDown size={11} /></>
-                                                        )}
+                                                        <BsEye size={14} />
                                                     </button>
 
                                                     {/* Subtle visual divider before status progression buttons */}
@@ -11187,7 +12173,7 @@ export const StoreTransfersPage = () => {
                                                         <span className="store-transfers-action-divider" style={{ width: 1, height: 16, background: '#e2e8f0', margin: '0 3px', flexShrink: 0 }} />
                                                     )}
 
-                                                    {/* 3. Status-based Workflow Progression Actions */}
+                                                    {/* 2. Status-based Workflow Progression Actions */}
 
                                                     {/* Pending transfers: Approve */}
                                                     {statusNorm === 'pending' && (
@@ -11196,10 +12182,16 @@ export const StoreTransfersPage = () => {
                                                             className="store-transfer-action-btn store-transfer-btn-approve"
                                                             onClick={() => handleRequestApprove(tr)}
                                                             disabled={isSrcInactive || approvingTransferId === trId || rejectingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId}
+                                                            data-tooltip={isSrcInactive ? "Cannot approve: Source store is inactive" : "Approve Transfer"}
                                                             title={isSrcInactive ? "Cannot approve this transfer because its source store is inactive or has been deleted." : "Approve this stock transfer"}
+                                                            aria-label="Approve this stock transfer"
                                                             style={isSrcInactive ? { background: '#f3f4f6', color: '#9ca3af', borderColor: '#e5e7eb', cursor: 'not-allowed' } : {}}
                                                         >
-                                                            <BsCheckCircle size={13} /> {approvingTransferId === trId ? "..." : "Approve"}
+                                                            {approvingTransferId === trId ? (
+                                                                <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                            ) : (
+                                                                <BsCheckCircle size={14} />
+                                                            )}
                                                         </button>
                                                     )}
 
@@ -11210,9 +12202,15 @@ export const StoreTransfersPage = () => {
                                                             className="store-transfer-action-btn store-transfer-btn-reject"
                                                             onClick={() => handleRequestReject(tr)}
                                                             disabled={rejectingTransferId === trId || approvingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId}
+                                                            data-tooltip="Reject Transfer"
                                                             title="Reject this stock transfer"
+                                                            aria-label="Reject this stock transfer"
                                                         >
-                                                            <BsXCircle size={13} /> {rejectingTransferId === trId ? "..." : "Reject"}
+                                                            {rejectingTransferId === trId ? (
+                                                                <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                            ) : (
+                                                                <BsXCircle size={14} />
+                                                            )}
                                                         </button>
                                                     )}
 
@@ -11223,9 +12221,15 @@ export const StoreTransfersPage = () => {
                                                             className="store-transfer-action-btn store-transfer-btn-dispatch"
                                                             onClick={() => handleRequestDispatch(tr)}
                                                             disabled={dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingTransferId === trId}
+                                                            data-tooltip="Dispatch Transfer"
                                                             title="Dispatch this approved stock transfer"
+                                                            aria-label="Dispatch this approved stock transfer"
                                                         >
-                                                            <BsTruck size={13} /> {dispatchingTransferId === trId ? "..." : "Dispatch"}
+                                                            {dispatchingTransferId === trId ? (
+                                                                <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                            ) : (
+                                                                <BsTruck size={14} />
+                                                            )}
                                                         </button>
                                                     )}
 
@@ -11236,9 +12240,15 @@ export const StoreTransfersPage = () => {
                                                             className="store-transfer-action-btn store-transfer-btn-receive"
                                                             onClick={() => handleRequestReceive(tr)}
                                                             disabled={receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId}
+                                                            data-tooltip="Receive Transfer"
                                                             title="Receive this dispatched stock transfer"
+                                                            aria-label="Receive this dispatched stock transfer"
                                                         >
-                                                            <BsBoxSeam size={13} /> {receivingTransferId === trId ? "..." : "Receive"}
+                                                            {receivingTransferId === trId ? (
+                                                                <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                            ) : (
+                                                                <BsBoxSeam size={14} />
+                                                            )}
                                                         </button>
                                                     )}
 
@@ -11249,9 +12259,15 @@ export const StoreTransfersPage = () => {
                                                             className="store-transfer-action-btn store-transfer-btn-discrepancy"
                                                             onClick={() => handleRequestReceiveWithDiscrepancy(tr)}
                                                             disabled={receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId || receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId}
+                                                            data-tooltip="Receive with Discrepancy"
                                                             title="Receive this dispatched transfer with discrepancy breakdown (good, damaged, missing)"
+                                                            aria-label="Receive this dispatched transfer with discrepancy breakdown"
                                                         >
-                                                            <BsExclamationTriangle size={13} /> {verifyingDiscrepancyStatusId === trId ? "Verifying..." : receivingDiscrepancyTransferId === trId ? "..." : "Discrepancy"}
+                                                            {verifyingDiscrepancyStatusId === trId || receivingDiscrepancyTransferId === trId ? (
+                                                                <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                            ) : (
+                                                                <BsExclamationTriangle size={14} />
+                                                            )}
                                                         </button>
                                                     )}
                                                 </div>
@@ -11350,45 +12366,67 @@ export const StoreTransfersPage = () => {
 
                     {/* Right column pagination controls */}
                     <div className="store-transfers-pagination-right">
-                        <button
-                            type="button"
-                            disabled={page <= 1}
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                            style={{
-                                background: page <= 1 ? '#f3f4f6' : '#fff',
-                                color: page <= 1 ? '#9ca3af' : '#374151',
-                                border: '1px solid #d1d5db',
-                                padding: '6px 12px',
-                                borderRadius: 6,
-                                fontSize: 12.5,
-                                fontWeight: 600,
-                                cursor: page <= 1 ? 'not-allowed' : 'pointer'
-                            }}
-                        >
-                            Previous
-                        </button>
-
-                        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
-                            Page {page} of {totalPages}
-                        </span>
-
-                        <button
-                            type="button"
-                            disabled={page >= totalPages}
-                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                            style={{
-                                background: page >= totalPages ? '#f3f4f6' : '#fff',
-                                color: page >= totalPages ? '#9ca3af' : '#374151',
-                                border: '1px solid #d1d5db',
-                                padding: '6px 12px',
-                                borderRadius: 6,
-                                fontSize: 12.5,
-                                fontWeight: 600,
-                                cursor: page >= totalPages ? 'not-allowed' : 'pointer'
-                            }}
-                        >
-                            Next
-                        </button>
+                        {(() => {
+                            let pages = [];
+                            if (totalPages <= 7) {
+                                pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+                            } else {
+                                if (page <= 4) {
+                                    pages = [1, 2, 3, 4, 5, '...', totalPages];
+                                } else if (page >= totalPages - 3) {
+                                    pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+                                } else {
+                                    pages = [1, '...', page - 1, page, page + 1, '...', totalPages];
+                                }
+                            }
+                            return pages.map((p, idx) => {
+                                if (p === '...') {
+                                    return (
+                                        <span
+                                            key={`ellipsis-${idx}`}
+                                            style={{
+                                                minWidth: 28,
+                                                height: 32,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: '#9ca3af',
+                                                fontSize: 13,
+                                                fontWeight: 600
+                                            }}
+                                        >
+                                            …
+                                        </span>
+                                    );
+                                }
+                                return (
+                                    <button
+                                        key={p}
+                                        type="button"
+                                        onClick={() => setPage(p)}
+                                        style={{
+                                            minWidth: 32,
+                                            height: 32,
+                                            padding: '0 6px',
+                                            borderRadius: 6,
+                                            border: p === page ? '1.5px solid #6366f1' : '1px solid #d1d5db',
+                                            background: p === page ? '#eef2ff' : '#ffffff',
+                                            color: p === page ? '#6366f1' : '#374151',
+                                            fontSize: 12.5,
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        aria-current={p === page ? 'page' : undefined}
+                                    >
+                                        {p}
+                                    </button>
+                                );
+                            });
+                        })()}
                     </div>
                 </div>
             )}
@@ -11826,26 +12864,6 @@ export const StoreTransfersPage = () => {
                                             {verifyingDiscrepancyStatusId === detailsData.id ? 'Verifying...' : receivingDiscrepancyTransferId === detailsData.id ? 'Receiving...' : 'Receive with Discrepancy'}
                                         </button>
                                     </>
-                                )}
-                                {detailsData && !['dispatched', 'pending', 'approved'].includes(normalizeStatus(detailsData.status)) && (
-                                    <div style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 6,
-                                        padding: '6px 14px',
-                                        borderRadius: 6,
-                                        background: detailsData.has_discrepancy ? '#fffbeb' : '#f8fafc',
-                                        border: `1px solid ${detailsData.has_discrepancy ? '#fde68a' : '#e2e8f0'}`,
-                                        fontSize: 12.5,
-                                        color: detailsData.has_discrepancy ? '#b45309' : '#64748b'
-                                    }}>
-                                        <BsExclamationTriangle size={13} color={detailsData.has_discrepancy ? '#d97706' : '#94a3b8'} />
-                                        <span>
-                                            {detailsData.has_discrepancy
-                                                ? "Transfer received with discrepancy recorded"
-                                                : `Receive actions disabled: Transfer status is "${detailsData.status || 'Received'}"`}
-                                        </span>
-                                    </div>
                                 )}
                             </div>
                             <button

@@ -5,6 +5,7 @@ import {
   PackagePlus,
   PackageMinus,
   ArrowLeftRight,
+  Eye,
 } from "lucide-react";
 
 import {
@@ -796,12 +797,29 @@ const isMissingRequiredExpiry =
                 ================================================= */}
                 <td className="inventory-actions-cell">
                   <div className="inventory-action-buttons">
+                    {/* View - Store-wise stock details */}
+                    <button
+                      type="button"
+                      className="inventory-action-btn inventory-action-view"
+                      title="View Store Stock"
+                      aria-label="View Store Stock"
+                      style={{ cursor: "pointer" }}
+                      onClick={() => {
+                        if (typeof onView === "function") {
+                          onView(item);
+                        }
+                      }}
+                    >
+                      <Eye size={15} />
+                    </button>
+
                     {/* 1. Add Inventory */}
                     <button
                       type="button"
                       className="inventory-action-btn inventory-action-add"
                       title="Add Inventory"
                       aria-label="Add Inventory"
+                      style={{ cursor: "pointer" }}
                       onClick={() => {
                         if (typeof setStockModal === "function") {
                           setStockModal({
@@ -821,6 +839,7 @@ const isMissingRequiredExpiry =
                       className="inventory-action-btn inventory-action-stock-in"
                       title="Stock In"
                       aria-label="Stock In"
+                      style={{ cursor: "pointer" }}
                       onClick={() => {
                         if (typeof setStockModal === "function") {
                           setStockModal({
@@ -840,6 +859,7 @@ const isMissingRequiredExpiry =
                       className="inventory-action-btn inventory-action-stock-out"
                       title="Stock Out"
                       aria-label="Stock Out"
+                      style={{ cursor: "pointer" }}
                       onClick={() => {
                         if (typeof setStockModal === "function") {
                           setStockModal({
@@ -859,6 +879,7 @@ const isMissingRequiredExpiry =
                       className="inventory-action-btn inventory-action-transfer"
                       title="Transfer"
                       aria-label="Transfer"
+                      style={{ cursor: "pointer" }}
                       onClick={() => {
                         if (typeof setStockModal === "function") {
                           setStockModal({
