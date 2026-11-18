@@ -422,39 +422,7 @@ export const StoreTransfersPage = () => {
 /* ─────────────────────────────────────────────────────────────
    9. CUSTOMERS: Loyalty
 ───────────────────────────────────────────────────────────── */
-export const CustomerLoyaltyPage = () => {
-    return (
-        <ModuleContainer
-            title="Customer Loyalty & Rewards"
-            subtitle="Points calculation, VIP membership tiers (Silver, Gold, Platinum), and points redemption engine"
-            icon={<BsAwardFill />}
-        >
-            <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-                <StatCard label="Active Loyalty Members" value="4,820 Members" sub="+140 this week" color="#6366f1" />
-                <StatCard label="Points In Circulation" value="3,84,000 Pts" sub="Liability: ₹38,400" color="#f59e0b" />
-                <StatCard label="Redeemed (This Month)" value="42,500 Pts" sub="₹4,250 Saved by shoppers" color="#10b981" />
-                <StatCard label="Avg Spend (Members)" value="₹2,450 / bill" sub="3.2x higher than non-members" color="#8b5cf6" />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
-                {[
-                    { tier: 'Silver Tier', criteria: 'Spend ₹0 - ₹10,000', rate: '1 pt per ₹100', perks: 'Birthday Special Discount 5%', color: '#94a3b8' },
-                    { tier: 'Gold Tier', criteria: 'Spend ₹10,001 - ₹30,000', rate: '2 pts per ₹100', perks: 'Free Express Delivery + 10% Off', color: '#f59e0b' },
-                    { tier: 'Platinum Tier', criteria: 'Spend ₹30,000+', rate: '3.5 pts per ₹100', perks: 'Dedicated Relationship Manager + VIP Pre-sale', color: '#6366f1' },
-                ].map((tier, i) => (
-                    <div key={i} style={{ background: '#fff', borderRadius: 12, border: `1px solid #e5e7eb`, borderTop: `4px solid ${tier.color}`, padding: 20 }}>
-                        <h4 style={{ fontSize: 16, fontWeight: 800, color: '#111827', margin: 0 }}>{tier.tier}</h4>
-                        <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 12px 0' }}>{tier.criteria}</p>
-                        <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: 8, fontSize: 12.5, marginBottom: 8 }}>
-                            <strong>Earn Rate:</strong> {tier.rate}
-                        </div>
-                        <p style={{ fontSize: 12, color: '#374151', margin: 0 }}><strong>Perks:</strong> {tier.perks}</p>
-                    </div>
-                ))}
-            </div>
-        </ModuleContainer>
-    );
-};
+export { CustomerLoyaltyPage } from '../CustomerLoyalty';
 
 /* ─────────────────────────────────────────────────────────────
    10. PEOPLE: Roles & Permissions

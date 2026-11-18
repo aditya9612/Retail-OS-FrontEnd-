@@ -119,10 +119,11 @@ export const getCustomerOrders = async (customerId, params = {}) => {
 
 export const addLoyalty = async (customerId, points) => {
     const pts = typeof points === 'object' ? (points.points || points.amount || 0) : points;
+    const numPts = Number(pts);
     const response = await apiClient.post(
         `${CUSTOMER_API_URL}/${customerId}/loyalty`,
-        null,
-        { params: { points: Number(pts) } }
+        { points: numPts },
+        { params: { points: numPts } }
     );
     return response.data;
 };
@@ -135,12 +136,22 @@ export const getCustomerLoyalty = async (customerId) => {
 };
 
 export const earnLoyalty = async (data) => {
-    const response = await apiClient.post(`${CUSTOMER_API_URL}/loyalty/earn`, data);
+    const payload = {
+        points: Number(data.points),
+        reason: data.reason || 'Loyalty Reward Points Earned',
+        ...(data.customer_id ? { customer_id: Number(data.customer_id) } : {}),
+        ...(data.invoice_id ? { invoice_id: Number(data.invoice_id) } : {})
+    };
+    const response = await apiClient.post(`${CUSTOMER_API_URL}/loyalty/earn`, payload);
     return response.data;
 };
 
 export const redeemLoyalty = async (data) => {
-    const response = await apiClient.post(`${CUSTOMER_API_URL}/loyalty/redeem`, data);
+    const payload = {
+        points: Number(data.points),
+        ...(data.customer_id ? { customer_id: Number(data.customer_id) } : {})
+    };
+    const response = await apiClient.post(`${CUSTOMER_API_URL}/loyalty/redeem`, payload);
     return response.data;
 };
 
