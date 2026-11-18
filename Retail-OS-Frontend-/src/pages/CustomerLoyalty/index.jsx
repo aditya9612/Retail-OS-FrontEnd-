@@ -7,7 +7,7 @@ import {
     BsFunnel, BsGift, BsTrophy, BsGraphUp,
     BsAwardFill, BsClockHistory, BsPlusCircle, BsArrowRepeat,
     BsCoin, BsLightningChargeFill, BsInfoCircleFill,
-    BsArrowUpRight, BsArrowDownLeft, BsX
+    BsArrowUpRight, BsArrowDownLeft, BsX, BsGridFill
 } from 'react-icons/bs';
 import {
     getCustomers,
@@ -59,7 +59,8 @@ const TIER_CONFIG = [
         perks: 'Birthday discount 5% & welcome gift voucher',
         color: '#64748b',
         bgColor: '#f1f5f9',
-        borderColor: '#cbd5e1'
+        borderColor: '#cbd5e1',
+        icon: '🥈'
     },
     {
         tier: 'Gold Tier',
@@ -70,7 +71,8 @@ const TIER_CONFIG = [
         perks: 'Free express delivery + 10% seasonal discount',
         color: '#d97706',
         bgColor: '#fffbeb',
-        borderColor: '#fde68a'
+        borderColor: '#fde68a',
+        icon: '🥇'
     },
     {
         tier: 'Platinum Tier',
@@ -81,9 +83,44 @@ const TIER_CONFIG = [
         perks: 'Dedicated concierge + VIP exclusive pre-sale access',
         color: '#6366f1',
         bgColor: '#eef2ff',
-        borderColor: '#c7d2fe'
+        borderColor: '#c7d2fe',
+        icon: '💎'
     }
 ];
+
+// Resolves a customer's dynamic loyalty tier based on spend & segment
+export const resolveCustomerTier = (cust) => {
+    const spend = Number(cust.totalSpent) || 0;
+    const type = (cust.type || '').toUpperCase();
+    if (spend >= 30000 || type === 'VIP') {
+        return {
+            name: 'Platinum VIP',
+            badge: 'Platinum',
+            icon: '💎',
+            color: '#6366f1',
+            bg: '#eef2ff',
+            border: '#c7d2fe'
+        };
+    }
+    if (spend >= 10000) {
+        return {
+            name: 'Gold Member',
+            badge: 'Gold',
+            icon: '🥇',
+            color: '#d97706',
+            bg: '#fffbeb',
+            border: '#fde68a'
+        };
+    }
+    return {
+        name: 'Silver Member',
+        badge: 'Silver',
+        icon: '🥈',
+        color: '#64748b',
+        bg: '#f1f5f9',
+        border: '#cbd5e1'
+    };
+};
 
 // Active / Inactive Toggle Switch Component (Matching Customer Directory exactly)
 const CustomerStatusToggle = ({ isActive, onToggle, loading = false }) => {
@@ -170,11 +207,15 @@ export const CustomerLoyaltyPage = () => {
     const [birthdayCustomers, setBirthdayCustomers] = useState([]);
     const [customerInsights, setCustomerInsights] = useState({});
 
+    // ── Middle Section View Mode Switcher ('tiers' | 'analytics' | 'all') ──
+    const [middleView, setMiddleView] = useState('tiers');
+
     // ── Filters & Search ──
     const [search, setSearch] = useState('');
     const [filterStatus, setFilterStatus] = useState('All');
     const [filterType, setFilterType] = useState('All');
     const [filterPoints, setFilterPoints] = useState('All');
+    const [filterTier, setFilterTier] = useState('All');
     const [filterCity, setFilterCity] = useState('All');
     const [sortBy, setSortBy] = useState('points-desc');
     const [page, setPage] = useState(1);
@@ -414,18 +455,22 @@ export const CustomerLoyaltyPage = () => {
     // ── Export CSV ──
     const handleExportCSV = () => {
         try {
-            const headers = ['Customer ID', 'Name', 'Phone', 'Email', 'Segment', 'Loyalty Points', 'INR Value (₹)', 'Total Spent (₹)', 'Status'];
-            const rows = filteredCustomers.map(c => [
-                c.id,
-                `"${(c.name || '').replace(/"/g, '""')}"`,
-                c.phone || '',
-                c.email || '',
-                c.type || 'Regular',
-                c.loyaltyPoints || 0,
-                ((c.loyaltyPoints || 0) * POINTS_TO_INR_RATE).toFixed(2),
-                c.totalSpent || 0,
-                c.status || 'Active'
-            ]);
+            const headers = ['Customer ID', 'Name', 'Phone', 'Email', 'Segment', 'VIP Tier', 'Loyalty Points', 'INR Value (₹)', 'Total Spent (₹)', 'Status'];
+            const rows = filteredCustomers.map(c => {
+                const tierInfo = resolveCustomerTier(c);
+                return [
+                    c.id,
+                    `"${(c.name || '').replace(/"/g, '""')}"`,
+                    c.phone || '',
+                    c.email || '',
+                    c.type || 'Regular',
+                    tierInfo.name,
+                    c.loyaltyPoints || 0,
+                    ((c.loyaltyPoints || 0) * POINTS_TO_INR_RATE).toFixed(2),
+                    c.totalSpent || 0,
+                    c.status || 'Active'
+                ];
+            });
 
             const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
             const encodedUri = encodeURI(csvContent);
@@ -468,7 +513,13 @@ export const CustomerLoyaltyPage = () => {
                 matchesPoints = (Number(c.loyaltyPoints) || 0) === 0;
             }
 
-            return matchesSearch && matchesStatus && matchesType && matchesCity && matchesPoints;
+            let matchesTier = true;
+            if (filterTier !== 'All') {
+                const tier = resolveCustomerTier(c).badge;
+                matchesTier = tier.toLowerCase() === filterTier.toLowerCase();
+            }
+
+            return matchesSearch && matchesStatus && matchesType && matchesCity && matchesPoints && matchesTier;
         }).sort((a, b) => {
             const ptsA = Number(a.loyaltyPoints) || 0;
             const ptsB = Number(b.loyaltyPoints) || 0;
@@ -479,7 +530,7 @@ export const CustomerLoyaltyPage = () => {
             if (sortBy === 'name-desc') return (b.name || '').localeCompare(a.name || '');
             return (b.backendId || 0) - (a.backendId || 0);
         });
-    }, [customers, search, filterStatus, filterType, filterCity, filterPoints, sortBy]);
+    }, [customers, search, filterStatus, filterType, filterCity, filterPoints, filterTier, sortBy]);
 
     const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE));
     const paginatedCustomers = useMemo(() => {
@@ -487,14 +538,22 @@ export const CustomerLoyaltyPage = () => {
         return filteredCustomers.slice(start, start + PAGE_SIZE);
     }, [filteredCustomers, page]);
 
-    const hasActiveFilters = Boolean(search.trim() || filterStatus !== 'All' || filterType !== 'All' || filterCity !== 'All' || filterPoints !== 'All');
+    const hasActiveFilters = Boolean(
+        search.trim() ||
+        filterStatus !== 'All' ||
+        filterType !== 'All' ||
+        filterCity !== 'All' ||
+        filterPoints !== 'All' ||
+        filterTier !== 'All'
+    );
 
     const handleClearFilters = () => {
         setSearch('');
         setFilterStatus('All');
         setFilterType('All');
-        setFilterCity('All');
         setFilterPoints('All');
+        setFilterTier('All');
+        setFilterCity('All');
         setSortBy('points-desc');
         setPage(1);
     };
@@ -719,226 +778,298 @@ export const CustomerLoyaltyPage = () => {
                 </div>
             )}
 
-            {/* ── Customer Intelligence & Loyalty Analytics Grid (Matching Directory 190px cards) ── */}
-            <div style={{ marginBottom: 20 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <BsStarFill style={{ color: '#6366f1' }} /> Customer Intelligence & Loyalty Analytics
-                </h3>
+            {/* ── MIDDLE SECTION VIEW SWITCHER (Refinement 3: Eliminates excessive vertical scrolling) ── */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: 3, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                    <button
+                        type="button"
+                        onClick={() => setMiddleView('tiers')}
+                        style={{
+                            padding: '6px 14px',
+                            borderRadius: 8,
+                            border: 'none',
+                            background: middleView === 'tiers' ? '#ffffff' : 'transparent',
+                            color: middleView === 'tiers' ? '#111827' : '#64748b',
+                            fontWeight: middleView === 'tiers' ? 700 : 500,
+                            fontSize: 12.5,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            boxShadow: middleView === 'tiers' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            transition: 'all 0.15s ease'
+                        }}
+                    >
+                        <BsAwardFill color="#f59e0b" size={13} />
+                        VIP Tiers & Earning Rules
+                    </button>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-                    {/* Card 1: Top Customers / Champions */}
-                    <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                🏆 Top Champions
-                            </span>
-                            <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>By points & spend</span>
-                        </div>
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }} className="custom-scrollbar">
-                            {(() => {
-                                const list = normalizeApiList(customerInsights.topCustomers);
-                                const top5 = list.length > 0
-                                    ? list.slice(0, 5)
-                                    : [...customers].sort((a, b) => (b.loyaltyPoints || 0) - (a.loyaltyPoints || 0)).slice(0, 5);
+                    <button
+                        type="button"
+                        onClick={() => setMiddleView('analytics')}
+                        style={{
+                            padding: '6px 14px',
+                            borderRadius: 8,
+                            border: 'none',
+                            background: middleView === 'analytics' ? '#ffffff' : 'transparent',
+                            color: middleView === 'analytics' ? '#111827' : '#64748b',
+                            fontWeight: middleView === 'analytics' ? 700 : 500,
+                            fontSize: 12.5,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            boxShadow: middleView === 'analytics' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            transition: 'all 0.15s ease'
+                        }}
+                    >
+                        <BsStarFill color="#6366f1" size={13} />
+                        Intelligence & Top Champions
+                    </button>
 
-                                return top5.map((c, idx) => (
-                                    <div key={c.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, padding: '4px 8px', background: '#f9fafb', borderRadius: 8 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <span style={{ fontSize: 10, fontWeight: 800, color: idx === 0 ? '#d97706' : '#6b7280', background: idx === 0 ? '#fffbeb' : '#e5e7eb', width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                                {idx + 1}
-                                            </span>
-                                            <span style={{ fontWeight: 600, color: '#111827', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {c.name || c.customer_name || 'Customer'}
-                                            </span>
+                    <button
+                        type="button"
+                        onClick={() => setMiddleView('all')}
+                        style={{
+                            padding: '6px 14px',
+                            borderRadius: 8,
+                            border: 'none',
+                            background: middleView === 'all' ? '#ffffff' : 'transparent',
+                            color: middleView === 'all' ? '#111827' : '#64748b',
+                            fontWeight: middleView === 'all' ? 700 : 500,
+                            fontSize: 12.5,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            boxShadow: middleView === 'all' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                            transition: 'all 0.15s ease'
+                        }}
+                    >
+                        <BsGridFill size={12} color="#475569" />
+                        View All
+                    </button>
+                </div>
+
+                <div style={{ fontSize: 12, color: '#475569', background: '#fff', padding: '5px 12px', borderRadius: 8, border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <BsInfoCircleFill size={13} color="#6366f1" />
+                    <span>Redemption Formula: <strong>10 Points = ₹1.00 Store Credit</strong> at checkout</span>
+                </div>
+            </div>
+
+            {/* ── VIEW A: VIP Membership Tiers Configuration Cards ── */}
+            {(middleView === 'tiers' || middleView === 'all') && (
+                <div style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+                        {TIER_CONFIG.map((tier) => (
+                            <div
+                                key={tier.slug}
+                                style={{
+                                    background: '#fff',
+                                    borderRadius: 14,
+                                    border: '1px solid #e5e7eb',
+                                    borderTop: `4px solid ${tier.color}`,
+                                    padding: '16px 18px',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'space-between'
+                                }}
+                            >
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <span style={{ fontSize: 16 }}>{tier.icon}</span>
+                                            <h4 style={{ fontSize: 15, fontWeight: 800, color: '#111827', margin: 0 }}>
+                                                {tier.tier}
+                                            </h4>
                                         </div>
-                                        <span style={{ fontWeight: 700, color: '#d97706' }}>
-                                            {(c.loyalty_points ?? c.loyaltyPoints ?? 0)} pts
+                                        <span
+                                            style={{
+                                                fontSize: 10.5,
+                                                fontWeight: 700,
+                                                padding: '2px 8px',
+                                                borderRadius: 6,
+                                                background: tier.bgColor,
+                                                color: tier.color,
+                                                border: `1px solid ${tier.borderColor}`
+                                            }}
+                                        >
+                                            {tier.maxSpend ? `Spend ${fmt(tier.minSpend)} - ${fmt(tier.maxSpend)}` : `Spend ${fmt(tier.minSpend)}+`}
                                         </span>
                                     </div>
-                                ));
-                            })()}
-                        </div>
-                    </div>
 
-                    {/* Card 2: Retention & Active Ratio */}
-                    <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                📈 Retention Report
-                            </span>
-                            <span style={{ fontSize: 10, fontWeight: 800, color: '#10b981', background: '#ecfdf5', padding: '2px 8px', borderRadius: 10 }}>
+                                    <div
+                                        style={{
+                                            marginTop: 10,
+                                            padding: '8px 10px',
+                                            borderRadius: 8,
+                                            background: '#f9fafb',
+                                            fontSize: 12.5,
+                                            color: '#374151'
+                                        }}
+                                    >
+                                        <strong>Earn Rate:</strong> {tier.rate}
+                                    </div>
+
+                                    <p style={{ fontSize: 12, color: '#6b7280', margin: '8px 0 0 0', lineHeight: 1.4 }}>
+                                        <strong>Perks:</strong> {tier.perks}
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* ── VIEW B: Customer Intelligence & Loyalty Analytics Grid ── */}
+            {(middleView === 'analytics' || middleView === 'all') && (
+                <div style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                        {/* Card 1: Top Customers / Champions */}
+                        <div style={analyticsCardStyle}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    🏆 Top Champions
+                                </span>
+                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>By points & spend</span>
+                            </div>
+                            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }} className="custom-scrollbar">
                                 {(() => {
-                                    const raw = customerInsights.retention;
-                                    const tot = raw?.total_customers ?? totalCustomers;
-                                    const act = raw?.active_customers ?? activeCustomers;
-                                    return raw?.retention_rate || (tot > 0 ? `${Math.round((act / tot) * 100)}%` : '0%');
-                                })()}
-                            </span>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
-                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Active Buyers</span>
-                                <p style={{ fontSize: 16, fontWeight: 800, color: '#10b981', margin: '2px 0 0 0' }}>
-                                    {customerInsights.retention?.active_customers ?? activeCustomers}
-                                </p>
-                            </div>
-                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Inactive Base</span>
-                                <p style={{ fontSize: 16, fontWeight: 800, color: '#ef4444', margin: '2px 0 0 0' }}>
-                                    {customerInsights.retention?.inactive_customers ?? inactiveCustomers}
-                                </p>
-                            </div>
-                        </div>
-                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Tracked User Base</span>
-                            <span style={{ fontWeight: 700, color: '#111827' }}>{totalCustomers} customers</span>
-                        </div>
-                    </div>
+                                    const list = normalizeApiList(customerInsights.topCustomers);
+                                    const top5 = list.length > 0
+                                        ? list.slice(0, 5)
+                                        : [...customers].sort((a, b) => (b.loyaltyPoints || 0) - (a.loyaltyPoints || 0)).slice(0, 5);
 
-                    {/* Card 3: Lifetime Value (LTV) */}
-                    <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                💎 Lifetime Value (LTV)
-                            </span>
-                            <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Top 5 LTV</span>
-                        </div>
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }} className="custom-scrollbar">
-                            {(() => {
-                                const rawLtv = customerInsights.lifetimeValue;
-                                let ltvList = [];
-                                if (Array.isArray(rawLtv)) ltvList = rawLtv;
-                                else if (rawLtv?.items || rawLtv?.customers || rawLtv?.top_customers) {
-                                    ltvList = rawLtv.items || rawLtv.customers || rawLtv.top_customers;
-                                } else {
-                                    ltvList = [...customers].sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0));
-                                }
-                                const top5Ltv = ltvList.slice(0, 5);
-
-                                return top5Ltv.length === 0 ? (
-                                    <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', margin: 'auto' }}>No LTV Data</p>
-                                ) : (
-                                    top5Ltv.map((c, idx) => (
+                                    return top5.map((c, idx) => (
                                         <div key={c.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, padding: '4px 8px', background: '#f9fafb', borderRadius: 8 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <span style={{ fontSize: 10, fontWeight: 700, color: '#8b5cf6' }}>#{idx + 1}</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <span style={{ fontSize: 10, fontWeight: 800, color: idx === 0 ? '#d97706' : '#6b7280', background: idx === 0 ? '#fffbeb' : '#e5e7eb', width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                                    {idx + 1}
+                                                </span>
                                                 <span style={{ fontWeight: 600, color: '#111827', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {c.name || c.customer_name || 'Customer'}
                                                 </span>
                                             </div>
-                                            <span style={{ fontWeight: 700, color: '#8b5cf6' }}>
-                                                {fmt(c.ltv || c.lifetime_value || c.total_spend || c.totalSpent || 0)}
+                                            <span style={{ fontWeight: 700, color: '#d97706' }}>
+                                                {(c.loyalty_points ?? c.loyaltyPoints ?? 0)} pts
                                             </span>
                                         </div>
-                                    ))
-                                );
-                            })()}
-                        </div>
-                    </div>
-
-                    {/* Card 4: Loyalty Program Summary */}
-                    <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                🎁 Loyalty Summary
-                            </span>
-                            <span style={{ fontSize: 10, fontWeight: 800, color: '#d97706', background: '#fffbeb', padding: '2px 8px', borderRadius: 10 }}>
-                                Rewards Pool
-                            </span>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
-                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Enrolled</span>
-                                <p style={{ fontSize: 16, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
-                                    {customerInsights.loyaltyReport?.enrolled_members ?? customers.filter(c => (c.loyaltyPoints || 0) > 0).length} members
-                                </p>
-                            </div>
-                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Points Balance</span>
-                                <p style={{ fontSize: 16, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
-                                    {totalPointsPool.toLocaleString('en-IN')} pts
-                                </p>
+                                    ));
+                                })()}
                             </div>
                         </div>
-                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Store Value Liability</span>
-                            <span style={{ fontWeight: 700, color: '#111827' }}>
-                                {fmt(totalPointsPool * POINTS_TO_INR_RATE)}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            {/* ── VIP Membership Tiers Configuration Cards ── */}
-            <div style={{ marginBottom: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-                    <h3 style={{ fontSize: 14, fontWeight: 700, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <BsAwardFill color="#f59e0b" /> VIP Membership Tiers & Earning Rules
-                    </h3>
-                    <div style={{ fontSize: 12, color: '#475569', background: '#fff', padding: '4px 10px', borderRadius: 8, border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <BsInfoCircleFill size={13} color="#6366f1" />
-                        <span>Redemption Formula: <strong>10 Points = ₹1.00 Store Credit</strong></span>
-                    </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-                    {TIER_CONFIG.map((tier) => (
-                        <div
-                            key={tier.slug}
-                            style={{
-                                background: '#fff',
-                                borderRadius: 14,
-                                border: '1px solid #e5e7eb',
-                                borderTop: `4px solid ${tier.color}`,
-                                padding: '16px 18px',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                justifyContent: 'space-between'
-                            }}
-                        >
-                            <div>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <h4 style={{ fontSize: 15, fontWeight: 800, color: '#111827', margin: 0 }}>
-                                        {tier.tier}
-                                    </h4>
-                                    <span
-                                        style={{
-                                            fontSize: 10.5,
-                                            fontWeight: 700,
-                                            padding: '2px 8px',
-                                            borderRadius: 6,
-                                            background: tier.bgColor,
-                                            color: tier.color,
-                                            border: `1px solid ${tier.borderColor}`
-                                        }}
-                                    >
-                                        {tier.maxSpend ? `Spend ${fmt(tier.minSpend)} - ${fmt(tier.maxSpend)}` : `Spend ${fmt(tier.minSpend)}+`}
-                                    </span>
+                        {/* Card 2: Retention & Active Ratio */}
+                        <div style={analyticsCardStyle}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    📈 Retention Report
+                                </span>
+                                <span style={{ fontSize: 10, fontWeight: 800, color: '#10b981', background: '#ecfdf5', padding: '2px 8px', borderRadius: 10 }}>
+                                    {(() => {
+                                        const raw = customerInsights.retention;
+                                        const tot = raw?.total_customers ?? totalCustomers;
+                                        const act = raw?.active_customers ?? activeCustomers;
+                                        return raw?.retention_rate || (tot > 0 ? `${Math.round((act / tot) * 100)}%` : '0%');
+                                    })()}
+                                </span>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                                <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
+                                    <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Active Buyers</span>
+                                    <p style={{ fontSize: 16, fontWeight: 800, color: '#10b981', margin: '2px 0 0 0' }}>
+                                        {customerInsights.retention?.active_customers ?? activeCustomers}
+                                    </p>
                                 </div>
-
-                                <div
-                                    style={{
-                                        marginTop: 10,
-                                        padding: '8px 10px',
-                                        borderRadius: 8,
-                                        background: '#f9fafb',
-                                        fontSize: 12.5,
-                                        color: '#374151'
-                                    }}
-                                >
-                                    <strong>Earn Rate:</strong> {tier.rate}
+                                <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
+                                    <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Inactive Base</span>
+                                    <p style={{ fontSize: 16, fontWeight: 800, color: '#ef4444', margin: '2px 0 0 0' }}>
+                                        {customerInsights.retention?.inactive_customers ?? inactiveCustomers}
+                                    </p>
                                 </div>
-
-                                <p style={{ fontSize: 12, color: '#6b7280', margin: '8px 0 0 0', lineHeight: 1.4 }}>
-                                    <strong>Perks:</strong> {tier.perks}
-                                </p>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Tracked User Base</span>
+                                <span style={{ fontWeight: 700, color: '#111827' }}>{totalCustomers} customers</span>
                             </div>
                         </div>
-                    ))}
+
+                        {/* Card 3: Lifetime Value (LTV) */}
+                        <div style={analyticsCardStyle}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    💎 Lifetime Value (LTV)
+                                </span>
+                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Top 5 LTV</span>
+                            </div>
+                            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }} className="custom-scrollbar">
+                                {(() => {
+                                    const rawLtv = customerInsights.lifetimeValue;
+                                    let ltvList = [];
+                                    if (Array.isArray(rawLtv)) ltvList = rawLtv;
+                                    else if (rawLtv?.items || rawLtv?.customers || rawLtv?.top_customers) {
+                                        ltvList = rawLtv.items || rawLtv.customers || rawLtv.top_customers;
+                                    } else {
+                                        ltvList = [...customers].sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0));
+                                    }
+                                    const top5Ltv = ltvList.slice(0, 5);
+
+                                    return top5Ltv.length === 0 ? (
+                                        <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', margin: 'auto' }}>No LTV Data</p>
+                                    ) : (
+                                        top5Ltv.map((c, idx) => (
+                                            <div key={c.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, padding: '4px 8px', background: '#f9fafb', borderRadius: 8 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#8b5cf6' }}>#{idx + 1}</span>
+                                                    <span style={{ fontWeight: 600, color: '#111827', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {c.name || c.customer_name || 'Customer'}
+                                                    </span>
+                                                </div>
+                                                <span style={{ fontWeight: 700, color: '#8b5cf6' }}>
+                                                    {fmt(c.ltv || c.lifetime_value || c.total_spend || c.totalSpent || 0)}
+                                                </span>
+                                            </div>
+                                        ))
+                                    );
+                                })()}
+                            </div>
+                        </div>
+
+                        {/* Card 4: Loyalty Program Summary */}
+                        <div style={analyticsCardStyle}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                    🎁 Loyalty Summary
+                                </span>
+                                <span style={{ fontSize: 10, fontWeight: 800, color: '#d97706', background: '#fffbeb', padding: '2px 8px', borderRadius: 10 }}>
+                                    Rewards Pool
+                                </span>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                                <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
+                                    <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Enrolled</span>
+                                    <p style={{ fontSize: 16, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
+                                        {customerInsights.loyaltyReport?.enrolled_members ?? customers.filter(c => (c.loyaltyPoints || 0) > 0).length} members
+                                    </p>
+                                </div>
+                                <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
+                                    <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Points Balance</span>
+                                    <p style={{ fontSize: 16, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
+                                        {totalPointsPool.toLocaleString('en-IN')} pts
+                                    </p>
+                                </div>
+                            </div>
+                            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                                <span>Store Value Liability</span>
+                                <span style={{ fontWeight: 700, color: '#111827' }}>
+                                    {fmt(totalPointsPool * POINTS_TO_INR_RATE)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {/* ── Main Customer Loyalty Table Card (Identical Design & Font to Customer Directory) ── */}
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
@@ -973,6 +1104,22 @@ export const CustomerLoyaltyPage = () => {
                                     <option value="has_points">Has Points (&gt; 0)</option>
                                     <option value="high_points">High Balance (100+ Pts)</option>
                                     <option value="zero_points">Zero Balance</option>
+                                </select>
+                            </div>
+
+                            {/* VIP Tier Filter */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>VIP Tier:</span>
+                                <select
+                                    className="ec-input"
+                                    value={filterTier}
+                                    onChange={e => { setFilterTier(e.target.value); setPage(1); }}
+                                    style={{ height: 38, fontSize: 12, padding: '0 10px' }}
+                                >
+                                    <option value="All">All Tiers</option>
+                                    <option value="Silver">🥈 Silver Member</option>
+                                    <option value="Gold">🥇 Gold Member</option>
+                                    <option value="Platinum">💎 Platinum VIP</option>
                                 </select>
                             </div>
 
@@ -1059,6 +1206,12 @@ export const CustomerLoyaltyPage = () => {
                                     <button type="button" onClick={() => setFilterPoints('All')} style={{ border: 'none', background: 'transparent', color: '#d97706', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
                                 </span>
                             )}
+                            {filterTier !== 'All' && (
+                                <span style={{ fontSize: 11, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                    Tier: {filterTier}
+                                    <button type="button" onClick={() => setFilterTier('All')} style={{ border: 'none', background: 'transparent', color: '#7c3aed', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
+                                </span>
+                            )}
                             {filterStatus !== 'All' && (
                                 <span style={{ fontSize: 11, background: '#ecfdf5', color: '#10b981', border: '1px solid #a7f3d0', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
                                     Status: {filterStatus}
@@ -1103,14 +1256,14 @@ export const CustomerLoyaltyPage = () => {
                                     />
                                 </th>
                                 <th style={{ padding: '12px 16px' }}>Customer Name</th>
-                                <th style={{ padding: '12px 16px' }}>ID & Segment</th>
+                                <th style={{ padding: '12px 16px' }}>ID, Segment & Tier</th>
                                 <th style={{ padding: '12px 16px' }}>Phone</th>
                                 <th style={{ padding: '12px 16px' }}>Location</th>
                                 <th style={{ padding: '12px 16px' }}>Orders</th>
                                 <th style={{ padding: '12px 16px' }}>Total Spent</th>
                                 <th style={{ padding: '12px 16px' }}>Loyalty Balance</th>
                                 <th style={{ padding: '12px 16px' }}>Status</th>
-                                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
+                                <th style={{ padding: '12px 16px', textAlign: 'center', width: 145 }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1135,6 +1288,7 @@ export const CustomerLoyaltyPage = () => {
                                     const isRowSelected = selectedIds.includes(custId);
                                     const points = Number(cust.loyaltyPoints) || 0;
                                     const rupeeVal = points * POINTS_TO_INR_RATE;
+                                    const tierInfo = resolveCustomerTier(cust);
 
                                     return (
                                         <tr
@@ -1167,12 +1321,32 @@ export const CustomerLoyaltyPage = () => {
                                                 </div>
                                             </td>
 
+                                            {/* Refinement 2: Dynamic VIP Tier Badge inside Table Row */}
                                             <td style={{ padding: '14px 16px' }}>
                                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
                                                     <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>{cust.id}</span>
-                                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1' }}>
-                                                        {cust.type}
-                                                    </span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                                                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1' }}>
+                                                            {cust.type}
+                                                        </span>
+                                                        <span
+                                                            style={{
+                                                                fontSize: 10,
+                                                                fontWeight: 700,
+                                                                padding: '2px 7px',
+                                                                borderRadius: 12,
+                                                                background: tierInfo.bg,
+                                                                color: tierInfo.color,
+                                                                border: `1px solid ${tierInfo.border}`,
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 3
+                                                            }}
+                                                            title={`Loyalty Tier: ${tierInfo.name}`}
+                                                        >
+                                                            <span>{tierInfo.icon}</span> {tierInfo.badge}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </td>
 
@@ -1192,16 +1366,28 @@ export const CustomerLoyaltyPage = () => {
                                                 {fmt(cust.totalSpent)}
                                             </td>
 
-                                            {/* Loyalty Points with Equivalent Rupee Value */}
+                                            {/* Refinement 4: Visual Color-Coded Loyalty Points Badges */}
                                             <td style={{ padding: '14px 16px' }}>
                                                 <div style={{ fontSize: 12 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 800, color: points > 0 ? '#d97706' : '#9ca3af' }}>
-                                                        <BsCoin size={14} color={points > 0 ? '#d97706' : '#cbd5e1'} />
-                                                        <span>{points.toLocaleString('en-IN')} pts</span>
+                                                    {points === 0 ? (
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: '#f3f4f6', color: '#9ca3af', fontWeight: 600 }}>
+                                                            <BsCoin size={12} color="#cbd5e1" />
+                                                            <span>0 pts</span>
+                                                        </div>
+                                                    ) : points >= 100 ? (
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', fontWeight: 800 }}>
+                                                            <BsCoin size={13} color="#d97706" />
+                                                            <span>{points.toLocaleString('en-IN')} pts</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 700 }}>
+                                                            <BsCoin size={13} color="#10b981" />
+                                                            <span>{points.toLocaleString('en-IN')} pts</span>
+                                                        </div>
+                                                    )}
+                                                    <div style={{ fontSize: 11, color: points > 0 ? '#059669' : '#9ca3af', fontWeight: 600, marginTop: 3 }}>
+                                                        {points > 0 ? `Worth ${fmt(rupeeVal)}` : 'No points yet'}
                                                     </div>
-                                                    <span style={{ fontSize: 11, color: points > 0 ? '#059669' : '#9ca3af', fontWeight: 600 }}>
-                                                        Worth {fmt(rupeeVal)}
-                                                    </span>
                                                 </div>
                                             </td>
 
@@ -1214,60 +1400,96 @@ export const CustomerLoyaltyPage = () => {
                                                 />
                                             </td>
 
-                                            {/* Actions */}
-                                            <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                                                <div style={{ display: 'inline-flex', gap: 6 }}>
-                                                    {/* History */}
+                                            {/* Refinement 1: Sleek & Compact Icon Pill Buttons (Prevents Table Overflow) */}
+                                            <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                                    {/* Earn Button */}
                                                     <button
                                                         type="button"
-                                                        title="Points History"
-                                                        onClick={() => handleOpenHistory(cust)}
-                                                        style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 600 }}
-                                                    >
-                                                        <BsClockHistory size={13} /> History
-                                                    </button>
-
-                                                    {/* Earn */}
-                                                    <button
-                                                        type="button"
-                                                        title="Credit Points"
+                                                        title="Credit / Earn Loyalty Points"
                                                         onClick={() => handleOpenModal('earn', cust)}
-                                                        style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #a7f3d0', background: '#ecfdf5', color: '#059669', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 600 }}
+                                                        style={{
+                                                            width: 30,
+                                                            height: 30,
+                                                            borderRadius: 7,
+                                                            border: '1px solid #a7f3d0',
+                                                            background: '#ecfdf5',
+                                                            color: '#059669',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
                                                     >
-                                                        <BsPlusCircle size={13} /> Earn
+                                                        <BsPlusCircle size={15} />
                                                     </button>
 
-                                                    {/* Redeem */}
+                                                    {/* Redeem Button */}
                                                     <button
                                                         type="button"
-                                                        title="Redeem Points"
+                                                        title={points > 0 ? `Redeem ${points} points for bill discount` : 'No points available to redeem'}
                                                         onClick={() => handleOpenModal('redeem', cust)}
                                                         disabled={points <= 0}
                                                         style={{
-                                                            padding: '6px 8px',
-                                                            borderRadius: 6,
+                                                            width: 30,
+                                                            height: 30,
+                                                            borderRadius: 7,
                                                             border: `1px solid ${points > 0 ? '#c7d2fe' : '#e5e7eb'}`,
                                                             background: points > 0 ? '#eef2ff' : '#f9fafb',
-                                                            color: points > 0 ? '#4f46e5' : '#9ca3af',
+                                                            color: points > 0 ? '#4f46e5' : '#cbd5e1',
                                                             cursor: points > 0 ? 'pointer' : 'not-allowed',
                                                             display: 'flex',
                                                             alignItems: 'center',
-                                                            gap: 4,
-                                                            fontSize: 11.5,
-                                                            fontWeight: 600
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
                                                         }}
                                                     >
-                                                        <BsGift size={13} /> Redeem
+                                                        <BsGift size={14} />
                                                     </button>
 
-                                                    {/* View Profile */}
+                                                    {/* History Button */}
                                                     <button
                                                         type="button"
-                                                        title="View Profile Details"
-                                                        onClick={() => handleViewCustomerProfile(custId)}
-                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#6366f1', cursor: 'pointer' }}
+                                                        title="View Points Transaction Ledger"
+                                                        onClick={() => handleOpenHistory(cust)}
+                                                        style={{
+                                                            width: 30,
+                                                            height: 30,
+                                                            borderRadius: 7,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#475569',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
                                                     >
-                                                        <BsEye size={14} />
+                                                        <BsClockHistory size={14} />
+                                                    </button>
+
+                                                    {/* View Profile Button */}
+                                                    <button
+                                                        type="button"
+                                                        title="View Full Customer CRM Profile"
+                                                        onClick={() => handleViewCustomerProfile(custId)}
+                                                        style={{
+                                                            width: 30,
+                                                            height: 30,
+                                                            borderRadius: 7,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#6366f1',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        <BsEye size={15} />
                                                     </button>
                                                 </div>
                                             </td>
@@ -1346,31 +1568,42 @@ export const CustomerLoyaltyPage = () => {
                                     }}
                                     required
                                 >
-                                    {customers.map((c) => (
-                                        <option key={c.backendId || c.id} value={c.backendId || c.id}>
-                                            {c.name} ({c.phone || c.id}) — Balance: {c.loyaltyPoints || 0} pts
-                                        </option>
-                                    ))}
+                                    {customers.map((c) => {
+                                        const t = resolveCustomerTier(c);
+                                        return (
+                                            <option key={c.backendId || c.id} value={c.backendId || c.id}>
+                                                {c.name} ({c.phone || c.id}) • {t.name} — Balance: {c.loyaltyPoints || 0} pts
+                                            </option>
+                                        );
+                                    })}
                                 </select>
                             </div>
 
-                            {/* Customer Balance Preview Box */}
-                            {modalTargetCustomer && (
-                                <div style={{ background: '#f9fafb', padding: '10px 14px', borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <div>
-                                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Available Balance:</span>
-                                        <div style={{ fontSize: 15, fontWeight: 800, color: '#d97706', display: 'flex', alignItems: 'center', gap: 5 }}>
-                                            <BsCoin /> {(modalTargetCustomer.loyaltyPoints || 0).toLocaleString('en-IN')} pts
+                            {/* Customer Balance & Tier Preview Box */}
+                            {modalTargetCustomer && (() => {
+                                const t = resolveCustomerTier(modalTargetCustomer);
+                                return (
+                                    <div style={{ background: '#f9fafb', padding: '10px 14px', borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                                <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Balance:</span>
+                                                <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: t.bg, color: t.color, border: `1px solid ${t.border}` }}>
+                                                    {t.icon} {t.badge}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontSize: 15, fontWeight: 800, color: '#d97706', display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                <BsCoin /> {(modalTargetCustomer.loyaltyPoints || 0).toLocaleString('en-IN')} pts
+                                            </div>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Rupee Value:</span>
+                                            <div style={{ fontSize: 15, fontWeight: 800, color: '#10b981' }}>
+                                                {fmt((modalTargetCustomer.loyaltyPoints || 0) * POINTS_TO_INR_RATE)}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600 }}>Rupee Value:</span>
-                                        <div style={{ fontSize: 15, fontWeight: 800, color: '#10b981' }}>
-                                            {fmt((modalTargetCustomer.loyaltyPoints || 0) * POINTS_TO_INR_RATE)}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                                );
+                            })()}
 
                             {/* Points Input */}
                             <div style={{ marginBottom: 14 }}>
