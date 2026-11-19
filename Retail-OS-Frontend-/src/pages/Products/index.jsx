@@ -9,6 +9,7 @@ import categoryService from "../../services/categoryService";
 import apiClient from "../../api/axios";
 import ProductVariantModal from "./ProductVariantModal";
 import "../../components/Categories/CategoryCards.css";
+import { resolveProductImage } from "../../utils/productImages";
 
 export const fetchDatabaseCategories = async () => {
     try {
@@ -3297,8 +3298,11 @@ const Products = () => {
                                     <td style={{ padding: '12px 16px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                             {(() => {
-                                                const imgUrl = getProductImageUrl(p);
-                                                const isBroken = Boolean(!imgUrl || brokenImages.has(imgUrl) || brokenImages.has(String(p.id)));
+                                                const rawImg = getProductImageUrl(p);
+                                                const isBroken = Boolean(brokenImages.has(rawImg) || brokenImages.has(String(p.id)));
+                                                const imgUrl = (!rawImg || isBroken)
+                                                    ? resolveProductImage({ name: p.name, category: p.category_name || p.category, ...p })
+                                                    : rawImg;
 
                                                 return (
                                                     <div
@@ -3307,7 +3311,7 @@ const Products = () => {
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             openImagePreview({
-                                                                url: isBroken ? null : imgUrl,
+                                                                url: imgUrl,
                                                                 name: p.name || 'Product Image',
                                                                 sku: p.sku || ''
                                                             }, p.id);
@@ -3316,63 +3320,66 @@ const Products = () => {
                                                             if (e.key === 'Enter' || e.key === ' ') {
                                                                 e.stopPropagation();
                                                                 openImagePreview({
-                                                                    url: isBroken ? null : imgUrl,
+                                                                    url: imgUrl,
                                                                     name: p.name || 'Product Image',
                                                                     sku: p.sku || ''
                                                                 }, p.id);
                                                             }
                                                         }}
                                                         className="prod-thumb-clickable"
-                                                        title={imgUrl && !isBroken ? "Click to view full image" : "Click to view product image"}
+                                                        title="Click to view full image"
                                                         style={{
-                                                            width: 40,
-                                                            height: 40,
-                                                            borderRadius: 8,
+                                                            width: 50,
+                                                            height: 50,
+                                                            borderRadius: 10,
                                                             overflow: 'hidden',
                                                             cursor: 'pointer',
                                                             flexShrink: 0,
-                                                            border: '1px solid #e5e7eb',
-                                                            background: '#f9fafb',
+                                                            border: '1.5px solid #edf2f7',
+                                                            background: '#ffffff',
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
                                                             pointerEvents: 'auto',
                                                             position: 'relative',
                                                             userSelect: 'none',
+                                                            padding: 2,
+                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                                                         }}
                                                     >
-                                                        {imgUrl && !isBroken ? (
-                                                            <img
-                                                                src={imgUrl}
-                                                                alt={p.name || 'Product'}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    openImagePreview({
-                                                                        url: imgUrl,
-                                                                        name: p.name || 'Product Image',
-                                                                        sku: p.sku || ''
-                                                                    }, p.id);
-                                                                }}
-                                                                onError={() => {
+                                                        <img
+                                                            src={imgUrl}
+                                                            alt={p.name || 'Product'}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openImagePreview({
+                                                                    url: imgUrl,
+                                                                    name: p.name || 'Product Image',
+                                                                    sku: p.sku || ''
+                                                                }, p.id);
+                                                            }}
+                                                            onError={(e) => {
+                                                                if (!e.target.dataset.triedFallback) {
+                                                                    e.target.dataset.triedFallback = 'true';
+                                                                    e.target.src = resolveProductImage({ name: p.name, category: p.category_name || p.category });
+                                                                } else {
                                                                     setBrokenImages(prev => {
                                                                         const next = new Set(prev);
                                                                         if (imgUrl) next.add(imgUrl);
                                                                         if (p.id) next.add(String(p.id));
                                                                         return next;
                                                                     });
-                                                                }}
-                                                                style={{
-                                                                    width: '100%',
-                                                                    height: '100%',
-                                                                    objectFit: 'cover',
-                                                                    display: 'block',
-                                                                    cursor: 'pointer',
-                                                                    pointerEvents: 'auto'
-                                                                }}
-                                                            />
-                                                        ) : (
-                                                            <BsImage color="#9ca3af" size={18} style={{ pointerEvents: 'none' }} />
-                                                        )}
+                                                                }
+                                                            }}
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                objectFit: 'contain',
+                                                                display: 'block',
+                                                                cursor: 'pointer',
+                                                                pointerEvents: 'auto'
+                                                            }}
+                                                        />
                                                     </div>
                                                 );
                                             })()}

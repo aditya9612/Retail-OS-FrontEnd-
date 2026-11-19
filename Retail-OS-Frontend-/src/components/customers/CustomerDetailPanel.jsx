@@ -459,12 +459,36 @@ const CustomerDetailPanel = ({
                                                 onAction={handleEnrollLoyalty}
                                             />
                                         ) : (
-                                            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: 16, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 12, padding: 16, marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
                                                 <div>
                                                     <p style={{ fontSize: 11, color: '#d97706', fontWeight: 700, textTransform: 'uppercase', margin: 0 }}>Loyalty Points Balance</p>
-                                                    <p style={{ fontSize: 24, fontWeight: 800, color: '#92400e', marginTop: 2, margin: 0 }}>🎁 {points} Points</p>
+                                                    <p style={{ fontSize: 24, fontWeight: 800, color: '#92400e', marginTop: 2, margin: 0 }}>
+                                                        🎁 {points.toLocaleString('en-IN')} Points
+                                                        <span style={{ fontSize: 12, color: '#059669', fontWeight: 700, marginLeft: 8 }}>(Worth {fmt(points * 0.10)})</span>
+                                                    </p>
                                                 </div>
-                                                <BsGift size={28} style={{ color: '#d97706' }} />
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                    {customer.phone && (
+                                                        <button
+                                                            type="button"
+                                                            className="adm-btn-secondary"
+                                                            style={{ fontSize: 11, padding: '6px 12px', background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                                                            disabled={actionLoading}
+                                                            onClick={() => runAction(
+                                                                () => sendCustomerWhatsapp({
+                                                                    customer_id: Number(customer.backendId || customer.id),
+                                                                    channel: 'whatsapp',
+                                                                    communication_type: 'WHATSAPP',
+                                                                    message: `Hello ${customer.name}, your current loyalty rewards balance at Shekru Retail is ${points} points (Worth ₹${(points * 0.10).toFixed(2)} store credit). Visit us again to redeem your rewards! 🙏`
+                                                                }),
+                                                                'WhatsApp balance update sent to customer!'
+                                                            )}
+                                                        >
+                                                            📲 Send Balance via WhatsApp
+                                                        </button>
+                                                    )}
+                                                    <BsGift size={28} style={{ color: '#d97706' }} />
+                                                </div>
                                             </div>
                                         )}
 
@@ -522,7 +546,8 @@ const CustomerDetailPanel = ({
                                             <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14 }}>
                                                 <p style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Earn Loyalty Points</p>
                                                 <input className="ec-input" type="number" min="1" placeholder="Points" value={earnPoints} onChange={e => setEarnPoints(e.target.value)} style={{ marginBottom: 6, width: '100%' }} />
-                                                <input className="ec-input" placeholder="Invoice ID (Optional)" value={earnOrderId} onChange={e => setEarnOrderId(e.target.value)} style={{ marginBottom: 8, width: '100%' }} />
+                                                <input className="ec-input" placeholder="Invoice ID (Optional)" value={earnOrderId} onChange={e => setEarnOrderId(e.target.value)} style={{ marginBottom: 6, width: '100%' }} />
+                                                <input className="ec-input" placeholder="Reason (e.g. Loyalty Reward)" value={earnReason} onChange={e => setEarnReason(e.target.value)} style={{ marginBottom: 8, width: '100%' }} />
                                                 <button
                                                     type="button"
                                                     className="adm-btn-secondary"
@@ -530,11 +555,10 @@ const CustomerDetailPanel = ({
                                                     disabled={actionLoading || !earnPoints}
                                                     onClick={() => runAction(
                                                         () => earnLoyalty({
-                                                            customer_id: Number(customer.backendId),
-                                                            invoice_id: earnOrderId ? Number(earnOrderId) : null,
-                                                            points_earned: Number(earnPoints),
-                                                            points_redeemed: 0,
-                                                            balance_points: Number(earnPoints),
+                                                            customer_id: Number(customer.backendId || customer.id),
+                                                            points: Number(earnPoints),
+                                                            reason: earnReason?.trim() || 'Loyalty Points Earned',
+                                                            ...(earnOrderId ? { invoice_id: Number(earnOrderId) } : {})
                                                         }),
                                                         'Earned loyalty points recorded successfully.',
                                                         () => { setEarnPoints(''); setEarnOrderId(''); setEarnReason(''); }
@@ -547,7 +571,11 @@ const CustomerDetailPanel = ({
                                             <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14 }}>
                                                 <p style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 6 }}>Redeem Loyalty Points</p>
                                                 <input className="ec-input" type="number" min="1" placeholder="Points to redeem" value={redeemPoints} onChange={e => setRedeemPoints(e.target.value)} style={{ marginBottom: 6, width: '100%' }} />
-                                                <input className="ec-input" placeholder="Invoice ID (Optional)" value={redeemReason} onChange={e => setRedeemReason(e.target.value)} style={{ marginBottom: 8, width: '100%' }} />
+                                                {redeemPoints && !isNaN(parseInt(redeemPoints, 10)) && (
+                                                    <p style={{ fontSize: 11, color: '#10b981', fontWeight: 600, margin: '2px 0 8px 0' }}>
+                                                        Discount: {fmt(parseInt(redeemPoints, 10) * 0.10)}
+                                                    </p>
+                                                )}
                                                 <button
                                                     type="button"
                                                     className="adm-btn-secondary"
@@ -555,11 +583,8 @@ const CustomerDetailPanel = ({
                                                     disabled={actionLoading || !redeemPoints}
                                                     onClick={() => runAction(
                                                         () => redeemLoyalty({
-                                                            customer_id: Number(customer.backendId),
-                                                            invoice_id: redeemReason ? Number(redeemReason) : null,
-                                                            points_earned: 0,
-                                                            points_redeemed: Number(redeemPoints),
-                                                            balance_points: 0,
+                                                            customer_id: Number(customer.backendId || customer.id),
+                                                            points: Number(redeemPoints)
                                                         }),
                                                         'Loyalty points redeemed successfully.',
                                                         () => { setRedeemPoints(''); setRedeemReason(''); }
