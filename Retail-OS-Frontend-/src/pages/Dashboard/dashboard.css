@@ -11,16 +11,39 @@
     flex-direction: column;
     gap: 16px;
     box-sizing: border-box;
+    width: 100%;
     max-width: 100%;
-    overflow-x: hidden;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: #0f172a;
+}
+
+.dashboard-container::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+}
+
+.dashboard-container::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+
+.dashboard-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+.dashboard-container::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
 /* ── Top Header Area ── */
 .dashboard-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 20px;
     flex-wrap: wrap;
@@ -50,7 +73,7 @@
 
 .dashboard-controls {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 14px;
     flex-wrap: wrap;
 }
@@ -130,14 +153,14 @@
     position: absolute;
     top: calc(100% + 4px);
     right: 0;
-    z-index: 50;
+    z-index: 1000;
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 10px;
     padding: 6px;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.06);
     min-width: 210px;
-    max-height: 280px;
+    max-height: 380px;
     overflow-y: auto;
     animation: fadeIn 0.15s ease-out;
 }
@@ -651,6 +674,31 @@ button.kpi-card {
     border-color: #2563eb;
 }
 
+.card-period-select-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.card-year-select {
+    min-width: 58px;
+    background: #ffffff !important;
+    background-image: none !important;
+    padding: 4px 10px !important;
+    text-align: center;
+    cursor: pointer;
+    animation: fadeIn 0.15s ease-out;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.card-year-select::-ms-expand {
+    display: none;
+}
+
 .card-view-all {
     font-size: 12px;
     font-weight: 700;
@@ -764,6 +812,7 @@ button.kpi-card {
     display: grid;
     grid-template-columns: 1.15fr 0.85fr;
     gap: 20px;
+    align-items: start;
 }
 
 @media (max-width: 1024px) {
@@ -980,7 +1029,7 @@ button.kpi-card {
 }
 
 .dashboard-notification-panel {
-    position: fixed;
+    position: absolute;
     width: 350px;
     max-width: calc(100vw - 32px);
     background: #ffffff;
@@ -1556,6 +1605,59 @@ button.kpi-card {
     animation: highlightPulse 2s ease-out;
 }
 
+/* ── Revenue vs Cost Header Filter Row ── */
+#revenue-vs-cost-card .dashboard-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+#revenue-vs-cost-card .card-title-group {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+#revenue-vs-cost-card .rev-cost-filters-wrap {
+    display: inline-flex !important;
+    align-items: center !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    white-space: nowrap !important;
+    flex-shrink: 0;
+}
+
+#revenue-vs-cost-card .card-period-select,
+#revenue-vs-cost-card .card-year-select {
+    height: 30px;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+}
+
+#revenue-vs-cost-card .card-year-select {
+    background-image: none !important;
+    padding: 4px 10px !important;
+    min-width: 58px;
+    text-align: center;
+}
+
+@media (max-width: 768px) {
+    #revenue-vs-cost-card .dashboard-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    #revenue-vs-cost-card .rev-cost-filters-wrap {
+        width: 100%;
+        justify-content: flex-start;
+        overflow-x: auto;
+    }
+}
+
 
 
 .op-icon.products {
@@ -1678,6 +1780,27 @@ button.kpi-card {
 /* ── Product Master KPI Card Styles Integration ── */
 .kpi-cards-grid {
     margin: 0 0 4px 0;
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: 14px;
+}
+
+@media (max-width: 1400px) {
+    .kpi-cards-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 992px) {
+    .kpi-cards-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .kpi-cards-grid {
+        grid-template-columns: 1fr !important;
+    }
 }
 
 button.category-card {
@@ -1694,6 +1817,13 @@ a.category-card {
     color: inherit;
 }
 
+.kpi-category-card.total-sales::before { background: #2563eb; }
+.kpi-category-card.total-sales h2 { color: #1d4ed8; }
+.kpi-category-card.total-sales::after { background: rgba(37, 99, 235, 0.04); }
+.kpi-icon-wrap.total-sales {
+    background-color: #eff6ff;
+    color: #2563eb;
+}
 .kpi-category-card.revenue::before { background: #6366f1; }
 .kpi-category-card.cost::before { background: #ef4444; }
 .kpi-category-card.profit::before { background: #10b981; }
@@ -1723,4 +1853,271 @@ a.category-card {
     background: #f9fafb !important;
     border-color: #cbd5e1 !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+
+/* ==========================================================================
+   PERIOD DROPDOWN & DYNAMIC YEAR SUBMENU STYLING
+   ========================================================================== */
+
+.dropdown-menu.period-dropdown-menu {
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-width: 185px;
+    max-height: 380px;
+    z-index: 1000;
+}
+
+.card-period-dropdown-wrap {
+    position: relative;
+    display: inline-block;
+}
+
+.card-period-dropdown-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 10px;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.15s ease;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.card-period-dropdown-btn:hover {
+    border-color: #94a3b8;
+    background: #f8fafc;
+}
+
+.card-period-dropdown-btn.open,
+.card-period-dropdown-btn:focus-visible {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+}
+
+.card-dropdown-menu {
+    min-width: 180px;
+    right: 0;
+}
+
+.dropdown-item-with-submenu {
+    position: relative;
+    width: 100%;
+}
+
+.dropdown-item-parent {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    cursor: pointer;
+    user-select: none;
+}
+
+.year-selector-pill-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.selected-year-pill {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+    line-height: 1.4;
+}
+
+.dropdown-submenu-arrow {
+    font-size: 11px;
+    color: #64748b;
+    transition: transform 0.2s ease, color 0.15s ease;
+    flex-shrink: 0;
+}
+
+.dropdown-item-parent:hover .dropdown-submenu-arrow,
+.dropdown-item-parent.active .dropdown-submenu-arrow,
+.dropdown-submenu-arrow.open {
+    color: #2563eb;
+}
+
+.dropdown-year-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 6px 6px 12px;
+    margin: 4px 0 6px 6px;
+    background: #f8fafc;
+    border-left: 2px solid #2563eb;
+    border-radius: 0 6px 6px 0;
+    max-height: 220px;
+    overflow-y: auto;
+    animation: fadeIn 0.15s ease-out;
+}
+
+.dropdown-submenu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #334155;
+    background: transparent;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.dropdown-submenu-item:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.dropdown-submenu-item.selected {
+    background: #eff6ff;
+    color: #2563eb;
+    font-weight: 700;
+}
+
+.submenu-check-icon {
+    font-size: 14px;
+    color: #2563eb;
+    stroke-width: 0.5;
+    flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+    .dropdown-submenu {
+        position: static;
+        right: auto;
+        box-shadow: none;
+        border: 1px solid #f1f5f9;
+        margin-top: 4px;
+        background: #f8fafc;
+    }
+}
+
+/* ==========================================================================
+   LAYOUT OPTIMIZATIONS: STORE SUMMARY & TOP SELLING PRODUCTS
+   ========================================================================== */
+
+/* Top Selling Products Card: Content-based height without empty space */
+.top-products-card {
+    height: auto !important;
+    align-self: start;
+}
+
+.top-products-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.top-products-table th,
+.top-products-table td {
+    padding: 10px 12px;
+}
+
+.top-products-table .col-rank {
+    width: 36px;
+    min-width: 36px;
+    text-align: center;
+}
+
+.top-products-table .col-product {
+    text-align: left;
+    width: auto;
+    min-width: 140px;
+}
+
+.top-products-table .col-qty {
+    text-align: center;
+    width: 110px;
+    min-width: 95px;
+    white-space: nowrap;
+}
+
+.top-products-table .col-rev {
+    text-align: right;
+    width: 105px;
+    min-width: 95px;
+    white-space: nowrap;
+}
+
+/* Store-wise Sales Summary: Balanced, compact column widths without excessive gaps */
+.store-summary-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.store-summary-table th,
+.store-summary-table td {
+    padding: 10px 14px;
+}
+
+.store-summary-table th.col-store,
+.store-summary-table td.col-store {
+    text-align: left;
+    width: auto;
+    min-width: 180px;
+}
+
+.store-summary-table th.col-today-sales,
+.store-summary-table td.col-today-sales {
+    text-align: right;
+    width: 14%;
+    min-width: 110px;
+    white-space: nowrap;
+}
+
+.store-summary-table th.col-monthly-sales,
+.store-summary-table td.col-monthly-sales {
+    text-align: right;
+    width: 14%;
+    min-width: 120px;
+    white-space: nowrap;
+}
+
+.store-summary-table th.col-orders,
+.store-summary-table td.col-orders {
+    text-align: center;
+    width: 10%;
+    min-width: 75px;
+    white-space: nowrap;
+}
+
+.store-summary-table th.col-low-stock,
+.store-summary-table td.col-low-stock {
+    text-align: center;
+    width: 10%;
+    min-width: 80px;
+    white-space: nowrap;
+}
+
+.store-summary-table th.col-status,
+.store-summary-table td.col-status {
+    text-align: center;
+    width: 11%;
+    min-width: 90px;
+    white-space: nowrap;
+}
+
+.store-summary-table th.col-action,
+.store-summary-table td.col-action {
+    text-align: center;
+    width: 65px;
+    min-width: 65px;
+    white-space: nowrap;
 }

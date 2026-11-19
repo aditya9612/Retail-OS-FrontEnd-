@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
     BsChevronLeft, BsChevronRight, BsToggleOn, BsToggleOff, BsImage,
-    BsStarFill, BsGrid3X3Gap, BsArrowCounterclockwise
+    BsStarFill, BsGrid3X3Gap, BsArrowCounterclockwise, BsEye
 } from 'react-icons/bs';
 import productService from "../../services/product";
 import categoryService from "../../services/categoryService";
@@ -245,11 +245,20 @@ export const isProductExpired = (pOrDate) => {
     return expZero < todayZero;
 };
 
-export const generateSuggestedSKU = (existingProducts = []) => {
+export const generateSuggestedSKU = (existingProducts = [], currentSku = '') => {
+    const existingSkus = new Set(
+        (Array.isArray(existingProducts) ? existingProducts : [])
+            .map(p => String(p?.sku || '').trim().toUpperCase())
+            .filter(Boolean)
+    );
+    if (currentSku && String(currentSku).trim()) {
+        existingSkus.add(String(currentSku).trim().toUpperCase());
+    }
+
     let maxNum = 0;
     if (Array.isArray(existingProducts)) {
         for (const p of existingProducts) {
-            const sku = String(p.sku || '').trim().toUpperCase();
+            const sku = String(p?.sku || '').trim().toUpperCase();
             const match = sku.match(/^SKU-(\d+)$/);
             if (match) {
                 const num = parseInt(match[1], 10);
@@ -257,8 +266,22 @@ export const generateSuggestedSKU = (existingProducts = []) => {
             }
         }
     }
-    const nextNum = maxNum + 1;
-    return `SKU-${String(nextNum).padStart(3, '0')}`;
+
+    if (currentSku) {
+        const match = String(currentSku).trim().toUpperCase().match(/^SKU-(\d+)$/);
+        if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNum) maxNum = num;
+        }
+    }
+
+    let nextNum = maxNum + 1;
+    let candidate = `SKU-${String(nextNum).padStart(3, '0')}`;
+    while (existingSkus.has(candidate)) {
+        nextNum++;
+        candidate = `SKU-${String(nextNum).padStart(3, '0')}`;
+    }
+    return candidate;
 };
 
 export const generateEAN13 = () => {
@@ -733,6 +756,17 @@ export const mapProductRecord = (p, activeCatMap = {}, inventoryExpiryMap = {}) 
         null
     );
 
+    const hsnVal = (
+        p.hsn_code ||
+        p.hsnCode ||
+        p.hsn ||
+        variants.hsn_code ||
+        variants.hsnCode ||
+        variants.hsn ||
+        localMeta.hsnCode ||
+        null
+    );
+
     const isExpired = isProductExpired(expiryDate);
     const rawActive = Boolean(p.is_active ?? p.status ?? true);
     const effectiveStatus = isExpired ? false : rawActive;
@@ -746,8 +780,11 @@ export const mapProductRecord = (p, activeCatMap = {}, inventoryExpiryMap = {}) 
 
     return {
         ...p,
+        sku: p.sku || variants.sku || localMeta.sku || '',
         category: catName,
         barcode: barcodeVal,
+        hsn_code: hsnVal,
+        hsnCode: hsnVal,
         is_active: effectiveStatus,
         status: effectiveStatus,
         is_expired: isExpired,
@@ -1156,27 +1193,40 @@ if (skuError) {
             }
         }
 
-        const mrp = Number(form.mrp);
-        const sellingPrice = Number(form.sellingPrice);
+        const mrpRaw = form.mrp !== null && form.mrp !== undefined ? String(form.mrp).trim() : '';
+        const spRaw = form.sellingPrice !== null && form.sellingPrice !== undefined ? String(form.sellingPrice).trim() : '';
 
-        if (form.mrp === '' || isNaN(mrp) || mrp <= 0) {
-            newErrors.mrp = 'MRP must be a valid positive number greater than 0';
+        if (!mrpRaw) {
+            newErrors.mrp = 'MRP is required';
+        } else {
+            const mrp = Number(mrpRaw);
+            if (isNaN(mrp) || mrp <= 0) {
+                newErrors.mrp = 'MRP must be a valid positive number greater than 0';
+            }
         }
 
-        if (form.sellingPrice === '' || isNaN(sellingPrice) || sellingPrice <= 0) {
-            newErrors.sellingPrice = 'Selling price must be a valid positive number greater than 0';
-        } else if (sellingPrice > 999999.99) {
-            newErrors.sellingPrice = 'Selling price cannot exceed ₹9,99,999.99';
+        if (!spRaw) {
+            newErrors.sellingPrice = 'Selling price is required';
+        } else {
+            const sellingPrice = Number(spRaw);
+            if (isNaN(sellingPrice) || sellingPrice <= 0) {
+                newErrors.sellingPrice = 'Selling price must be a valid positive number greater than 0';
+            } else if (sellingPrice > 999999.99) {
+                newErrors.sellingPrice = 'Selling price cannot exceed ₹9,99,999.99';
+            }
         }
 
         if (
-            form.mrp !== '' &&
-            form.sellingPrice !== '' &&
-            !isNaN(mrp) &&
-            !isNaN(sellingPrice) &&
-            mrp < sellingPrice
+            mrpRaw &&
+            spRaw &&
+            !newErrors.mrp &&
+            !newErrors.sellingPrice
         ) {
-            newErrors.mrp = 'MRP must be greater than or equal to selling price';
+            const mrp = Number(mrpRaw);
+            const sellingPrice = Number(spRaw);
+            if (mrp < sellingPrice) {
+                newErrors.mrp = 'MRP must be greater than or equal to selling price';
+            }
         }
 
         if (!form.gst) {
@@ -1343,7 +1393,11 @@ if (skuError) {
                                 {isNew && (
                                     <button
                                         type="button"
-                                        onClick={() => set('sku', generateSuggestedSKU(existingProducts))}
+                                        onClick={() => {
+                                            const newSku = generateSuggestedSKU(existingProducts, form.sku);
+                                            set('sku', newSku);
+                                            setErrors(prev => ({ ...prev, sku: undefined }));
+                                        }}
                                         style={{
                                             background: 'none',
                                             border: 'none',
@@ -1354,7 +1408,7 @@ if (skuError) {
                                             padding: 0
                                         }}
                                     >
-                                        Auto-generate
+                                        Auto Generate
                                     </button>
                                 )}
                             </div>
@@ -1585,13 +1639,19 @@ if (skuError) {
 
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                MRP (₹)
+                                MRP (₹) <span style={{ color: 'red' }}>*</span>{' '}
+                                <span style={{ fontSize: 11, fontWeight: 500, color: '#6b7280' }}>(GST Inclusive)</span>
                             </label>
                             <input
                                 type="number"
                                 min="0"
+                                step="any"
                                 value={form.mrp}
-                                onChange={e => set('mrp', e.target.value)}
+                                onChange={e => {
+                                    set('mrp', e.target.value);
+                                    if (errors.mrp) setErrors(prev => ({ ...prev, mrp: undefined }));
+                                }}
+                                placeholder="0.00"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
@@ -1601,6 +1661,9 @@ if (skuError) {
                                     boxSizing: 'border-box'
                                 }}
                             />
+                            <span style={{ fontSize: 11, color: '#6b7280', marginTop: 3, display: 'block' }}>
+                                Maximum Retail Price (inclusive of all taxes / GST)
+                            </span>
                             {errors.mrp && (
                                 <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.mrp}
@@ -1613,14 +1676,19 @@ if (skuError) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                         <div>
                             <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Selling Price (₹)
+                                Selling Price (₹) <span style={{ color: 'red' }}>*</span>{' '}
+                                <span style={{ fontSize: 11, fontWeight: 500, color: '#6b7280' }}>(GST Exclusive)</span>
                             </label>
                             <input
                                 className="ec-input"
                                 type="number"
+                                step="any"
                                 value={form.sellingPrice}
-                                onChange={e => set('sellingPrice', e.target.value)}
-                                placeholder="0"
+                                onChange={e => {
+                                    set('sellingPrice', e.target.value);
+                                    if (errors.sellingPrice) setErrors(prev => ({ ...prev, sellingPrice: undefined }));
+                                }}
+                                placeholder="0.00"
                                 style={{
                                     width: '100%',
                                     marginTop: 4,
@@ -1630,6 +1698,9 @@ if (skuError) {
                                     boxSizing: 'border-box'
                                 }}
                             />
+                            <span style={{ fontSize: 11, color: '#6b7280', marginTop: 3, display: 'block' }}>
+                                Base selling price (exclusive of GST; tax is added at billing)
+                            </span>
                             {errors.sellingPrice && (
                                 <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
                                     {errors.sellingPrice}
@@ -2081,6 +2152,246 @@ if (skuError) {
     );
 };
 
+export const ProductDetailsModal = ({ product, onClose, onEdit, categories = [] }) => {
+    if (!product) return null;
+
+    const variants = (typeof product?.variants === 'object' && product?.variants !== null && !Array.isArray(product?.variants)) ? product.variants : {};
+    const localMeta = getLocalProductMeta(product.id, product.sku);
+
+    const categoryName = product.category_name ||
+        (typeof product.category === 'object' ? product.category?.name : product.category) ||
+        categories.find(c => String(c.id) === String(product.category_id))?.name ||
+        '—';
+
+    const brandName = product.brand || product.brand_name || variants.brand || localMeta.brand || '—';
+    const mrpVal = product.mrp ?? product.cost_price ?? product.mrp_price ?? '—';
+    const sellingPriceVal = product.sellingPrice ?? product.price ?? product.selling_price ?? '—';
+    const gstRateVal = product.gst_rate != null ? `${product.gst_rate}%` : (product.gst || '—');
+    const hsnVal = product.hsn_code ?? product.hsnCode ?? '—';
+    const unitVal = product.unit || 'Pcs';
+    const mfgDateVal = product.manufacturing_date ?? product.manufacturingDate ?? variants.manufacturing_date ?? localMeta.manufacturingDate ?? '—';
+    const expDateVal = product.expiry_date ?? product.expiryDate ?? product.expiration_date ?? product.expirationDate ?? variants.expiry_date ?? localMeta.expiryDate ?? '—';
+    const descVal = product.description || 'No description provided.';
+    const isExpired = isProductExpired(product);
+    const isActive = isExpired ? false : Boolean(product.is_active ?? product.status ?? true);
+    const isFeatured = Boolean(
+        product.featured === true || product.featured === 1 || product.featured === 'true' ||
+        variants.featured === true || variants.featured === 1 || variants.featured === 'true' ||
+        localMeta.featured === true
+    );
+
+    const imgUrl = getValidRemoteImageUrl(
+        product?.imageUrl || product?.image_url ||
+        (Array.isArray(product?.images) && product.images[0]?.image_url) ||
+        variants.image_url || localMeta.imageUrl
+    );
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose} style={{ zIndex: 1200 }}>
+            <div
+                className="ec-modal"
+                style={{ maxWidth: 680, width: '92%', maxHeight: '90vh', overflowY: 'auto', padding: 0 }}
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div style={{
+                    padding: '18px 24px',
+                    borderBottom: '1px solid #e5e7eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: '#f9fafb'
+                }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <h3 style={{ fontSize: 17, fontWeight: 700, color: '#111827', margin: 0 }}>
+                                {product.name || 'Product Details'}
+                            </h3>
+                            {isExpired ? (
+                                <span style={{
+                                    fontSize: 10, background: '#fef2f2', color: '#dc2626',
+                                    border: '1px solid #fecaca', padding: '2px 8px', borderRadius: 12, fontWeight: 700
+                                }}>
+                                    EXPIRED
+                                </span>
+                            ) : isActive ? (
+                                <span style={{
+                                    fontSize: 10, background: '#ecfdf5', color: '#059669',
+                                    border: '1px solid #a7f3d0', padding: '2px 8px', borderRadius: 12, fontWeight: 700
+                                }}>
+                                    ACTIVE
+                                </span>
+                            ) : (
+                                <span style={{
+                                    fontSize: 10, background: '#f3f4f6', color: '#6b7280',
+                                    border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: 12, fontWeight: 700
+                                }}>
+                                    INACTIVE
+                                </span>
+                            )}
+                            {isFeatured && (
+                                <span style={{
+                                    fontSize: 10, background: '#fef3c7', color: '#b45309',
+                                    border: '1px solid #fde68a', padding: '2px 8px', borderRadius: 12, fontWeight: 700
+                                }}>
+                                    ⭐ FEATURED
+                                </span>
+                            )}
+                        </div>
+                        <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0 0' }}>
+                            Product ID #{product.id} • SKU: {product.sku || '—'}
+                        </p>
+                    </div>
+                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+                </div>
+
+                {/* Body Content */}
+                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {/* Top Row: Image & Key Identifiers */}
+                    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        <div style={{
+                            width: 110,
+                            height: 110,
+                            borderRadius: 10,
+                            overflow: 'hidden',
+                            border: '1px solid #e5e7eb',
+                            background: '#f9fafb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                        }}>
+                            {imgUrl ? (
+                                <img
+                                    src={imgUrl}
+                                    alt={product.name || 'Product'}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                            ) : (
+                                <BsImage size={36} color="#9ca3af" />
+                            )}
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 220, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>SKU Code</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 2 }}>{product.sku || '—'}</div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Barcode (EAN-13)</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 2 }}>{product.barcode || '—'}</div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Category</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#4f46e5', marginTop: 2 }}>{categoryName}</div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Brand</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 2 }}>{brandName}</div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Unit of Measure</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 2 }}>{unitVal}</div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>HSN / SAC Code</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 2 }}>{hsnVal}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section: Pricing & Tax Breakdown */}
+                    <div style={{ background: '#f8fafc', padding: 16, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                        <h4 style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 12px 0' }}>
+                            Pricing & Taxation Details
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                            <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>MRP (₹)</span>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                                    {mrpVal !== '—' && !isNaN(Number(mrpVal)) ? `₹${Number(mrpVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : (mrpVal || '—')}
+                                </div>
+                                <span style={{ fontSize: 10, color: '#059669', fontWeight: 600 }}>Inclusive of all taxes (GST)</span>
+                            </div>
+
+                            <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Selling Price (₹)</span>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: '#4f46e5', marginTop: 2 }}>
+                                    {sellingPriceVal !== '—' && !isNaN(Number(sellingPriceVal)) ? `₹${Number(sellingPriceVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : (sellingPriceVal || '—')}
+                                </div>
+                                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>Exclusive of GST (tax added at billing)</span>
+                            </div>
+
+                            <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>GST Rate</span>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                                    {gstRateVal}
+                                </div>
+                                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>Standard statutory rate</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section: Dates & Expiry */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                        <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                            <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Manufacturing Date</span>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 4 }}>
+                                {mfgDateVal}
+                            </div>
+                        </div>
+                        <div style={{ background: isExpired ? '#fef2f2' : '#fff', padding: 12, borderRadius: 8, border: isExpired ? '1px solid #fecaca' : '1px solid #e5e7eb' }}>
+                            <span style={{ fontSize: 11, color: isExpired ? '#dc2626' : '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>
+                                Expiry Date {isExpired && '(Expired)'}
+                            </span>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: isExpired ? '#dc2626' : '#111827', marginTop: 4 }}>
+                                {expDateVal}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section: Description */}
+                    <div style={{ background: '#fff', padding: 14, borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description</span>
+                        <p style={{ fontSize: 13, color: '#374151', margin: '6px 0 0 0', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                            {descVal}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div style={{
+                    padding: '14px 24px',
+                    borderTop: '1px solid #e5e7eb',
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    gap: 10,
+                    background: '#f9fafb'
+                }}>
+                    <button
+                        type="button"
+                        className="adm-btn-secondary"
+                        onClick={onClose}
+                        style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#374151' }}
+                    >
+                        Close
+                    </button>
+                    {onEdit && (
+                        <button
+                            type="button"
+                            className="adm-btn-primary"
+                            onClick={() => { onClose(); onEdit(product); }}
+                            style={{ padding: '8px 18px', borderRadius: 8, background: '#4f46e5', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}
+                        >
+                            <BsPencilFill size={12} /> Edit Product
+                        </button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const NEARLY_EXPIRY_DAYS = 30;
 
@@ -2160,6 +2471,7 @@ const Products = () => {
     const [showSoftDeleted, setShowSoftDeleted] = useState(false);
     const [page, setPage] = useState(1);
     const [modal, setModal] = useState(null);
+    const [viewProduct, setViewProduct] = useState(null);
     const [showVariantModal, setShowVariantModal] = useState(false);
     const [editLoadingId, setEditLoadingId] = useState(null);
     const [togglingId, setTogglingId] = useState(null);
@@ -2400,6 +2712,7 @@ const Products = () => {
                     (p.name || '').toLowerCase().includes(q) ||
                     (p.sku || '').toLowerCase().includes(q) ||
                     (p.barcode || '').toLowerCase().includes(q) ||
+                    (p.hsn_code || p.hsnCode || '').toLowerCase().includes(q) ||
                     (p.brand || '').toLowerCase().includes(q) ||
                     (p.category || '').toLowerCase().includes(q) ||
                     isMatchStatus
@@ -2503,6 +2816,20 @@ const Products = () => {
         }
 
         await fetchProducts(categoryMap, debouncedSearch);
+    };
+
+    const handleOpenViewModal = async (p) => {
+        if (!p) return;
+        setViewProduct(p);
+        try {
+            const res = await productService.getById(p.id);
+            const detailed = res?.data ?? res;
+            if (detailed) {
+                setViewProduct(prev => (prev && String(prev.id) === String(p.id) ? { ...p, ...detailed } : prev));
+            }
+        } catch (err) {
+            console.warn('Could not fetch detailed product in background, continuing with row data:', err);
+        }
     };
 
     const handleOpenEditModal = async (p) => {
@@ -2632,9 +2959,10 @@ const Products = () => {
     const exportCSV = () => {
         const headers = [
             'Product Name',
-            'Category Name',
-            'Barcode Number',
             'SKU',
+            'Category Name',
+            'HSN Code',
+            'Barcode Number',
             'MRP',
             'Selling Price',
             'GST',
@@ -2644,9 +2972,10 @@ const Products = () => {
 
         const rows = filtered.map(p => [
             p.name,
-            p.category,
-            p.barcode,
             p.sku,
+            p.category,
+            p.hsn_code || p.hsnCode || '',
+            p.barcode,
             p.mrp ?? p.cost_price ?? '',
             p.sellingPrice ?? p.price ?? p.selling_price ?? '',
             p.gst_rate || p.gst,
@@ -3207,7 +3536,7 @@ const Products = () => {
                 <div className="table-scroll custom-scrollbar">
                     <table style={{
                         width: '100%',
-                        minWidth: 1100,
+                        minWidth: 1200,
                         borderCollapse: 'collapse',
                         fontSize: 13
                     }}>
@@ -3217,7 +3546,9 @@ const Products = () => {
                                 borderBottom: '1px solid #e5e7eb'
                             }}>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Product Name</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>SKU</th>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Category Name</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>HSN Code</th>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Barcode Number</th>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>MRP</th>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>SELLING PRICE</th>
@@ -3231,7 +3562,7 @@ const Products = () => {
                             {loading && (
                                 <tr>
                                     <td
-                                        colSpan={8}
+                                        colSpan={10}
                                         style={{
                                             padding: 48,
                                             textAlign: 'center',
@@ -3246,7 +3577,7 @@ const Products = () => {
                             {error && !loading && (
                                 <tr>
                                     <td
-                                        colSpan={8}
+                                        colSpan={10}
                                         style={{
                                             padding: 48,
                                             textAlign: 'center',
@@ -3416,11 +3747,22 @@ const Products = () => {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                                                    {p.sku}
-                                                </div>
+                                                {p.brand ? (
+                                                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                                                        {p.brand}
+                                                    </div>
+                                                ) : null}
                                             </div>
                                         </div>
+                                    </td>
+
+                                    <td style={{
+                                        padding: '12px 16px',
+                                        color: '#111827',
+                                        fontWeight: 600,
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {p.sku && String(p.sku).trim() ? String(p.sku).trim() : '—'}
                                     </td>
 
                                     <td style={{ padding: '12px 16px' }}>
@@ -3461,6 +3803,17 @@ const Products = () => {
                                                 ? p.category
                                                 : (categoryMap[p.category_id] || categoryMap[p.category] || (p.category && !/^\d+$/.test(String(p.category).trim()) ? p.category : '—'))}
                                         </span>
+                                    </td>
+
+                                    <td style={{
+                                        padding: '12px 16px',
+                                        color: '#4b5563',
+                                        fontWeight: 500,
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {(p.hsn_code || p.hsnCode || p.hsn) && String(p.hsn_code || p.hsnCode || p.hsn).trim()
+                                            ? String(p.hsn_code || p.hsnCode || p.hsn).trim()
+                                            : '—'}
                                     </td>
 
                                     <td style={{
@@ -3570,30 +3923,61 @@ const Products = () => {
                                             alignItems: 'center'
                                         }}>
                                             {showSoftDeleted ? (
-                                                <button
-                                                    className="adm-btn-secondary"
-                                                    style={{
-                                                        padding: '6px 12px',
-                                                        borderRadius: 6,
-                                                        border: '1px solid #10b981',
-                                                        background: '#ecfdf5',
-                                                        color: '#059669',
-                                                        fontSize: 12,
-                                                        fontWeight: 600,
-                                                        cursor: deletingId === p.id ? 'wait' : 'pointer',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: 4
-                                                    }}
-                                                    onClick={() => handleRestoreProduct(p)}
-                                                    disabled={deletingId === p.id}
-                                                    title="Restore expired product to active list"
-                                                >
-                                                    <BsArrowCounterclockwise size={13} />
-                                                    Restore
-                                                </button>
+                                                <>
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            padding: '6px 8px',
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#fff',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                        onClick={() => handleOpenViewModal(p)}
+                                                        title="View Product Details"
+                                                    >
+                                                        <BsEye size={13} color="#4f46e5" />
+                                                    </button>
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            borderRadius: 6,
+                                                            border: '1px solid #10b981',
+                                                            background: '#ecfdf5',
+                                                            color: '#059669',
+                                                            fontSize: 12,
+                                                            fontWeight: 600,
+                                                            cursor: deletingId === p.id ? 'wait' : 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 4
+                                                        }}
+                                                        onClick={() => handleRestoreProduct(p)}
+                                                        disabled={deletingId === p.id}
+                                                        title="Restore expired product to active list"
+                                                    >
+                                                        <BsArrowCounterclockwise size={13} />
+                                                        Restore
+                                                    </button>
+                                                </>
                                             ) : (
                                                 <>
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            padding: '6px 8px',
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#fff',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                        onClick={() => handleOpenViewModal(p)}
+                                                        title="View Product Details"
+                                                    >
+                                                        <BsEye size={13} color="#4f46e5" />
+                                                    </button>
+
                                                     <button
                                                         className="adm-btn-secondary"
                                                         style={{
@@ -3655,7 +4039,7 @@ const Products = () => {
                             {!loading && !error && paginated.length === 0 && (
                                 <tr>
                                     <td
-                                        colSpan={8}
+                                        colSpan={10}
                                         style={{
                                             padding: 48,
                                             textAlign: 'center',
@@ -3754,6 +4138,18 @@ const Products = () => {
         categories={categories}
         onClose={() => setModal(null)}
         onSave={handleSave}
+    />
+)}
+
+{viewProduct && (
+    <ProductDetailsModal
+        product={viewProduct}
+        categories={categories}
+        onClose={() => setViewProduct(null)}
+        onEdit={(prod) => {
+            setViewProduct(null);
+            handleOpenEditModal(prod);
+        }}
     />
 )}
 
