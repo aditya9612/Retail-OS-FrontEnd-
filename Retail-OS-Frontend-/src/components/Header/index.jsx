@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
     BsSearch,
     BsBell,
@@ -13,7 +13,11 @@ import {
     BsReceiptCutoff,
     BsGrid1X2Fill,
     BsX,
+    BsCheckCircleFill,
+    BsExclamationCircleFill,
+    BsArrowRight,
 } from 'react-icons/bs';
+import { getDashboardSummary } from '../../services/dashboard';
 import { logoutUser } from '../../services/auth';
 import LogoutConfirmModal from '../LogoutConfirmModal';
 import { getInitials, resolveUserInfo } from '../../utils/userHelpers';
@@ -83,6 +87,89 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const isSearchHidden = shouldHideSearchBar;
     const hideSearch = shouldHideSearchBar;
     const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+    // ── Notifications Popup State ──
+    const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+    const [notificationSummary, setNotificationSummary] = useState(null);
+    const bellButtonRef = useRef(null);
+    const notificationDropdownRef = useRef(null);
+
+    // Fetch dashboard summary for real inventory alerts
+    useEffect(() => {
+        let isMounted = true;
+        getDashboardSummary()
+            .then((data) => {
+                if (isMounted && data) {
+                    setNotificationSummary(data);
+                }
+            })
+            .catch(() => {});
+        return () => {
+            isMounted = false;
+        };
+    }, [location.pathname]);
+
+    // Notification items derived from summary
+    const notificationItems = useMemo(() => {
+        const items = [];
+        if (notificationSummary && notificationSummary.low_stock_products > 0) {
+            items.push({
+                id: 'low-stock-alert',
+                type: 'warning',
+                title: 'Low Stock Alert',
+                message: `${notificationSummary.low_stock_products} ${notificationSummary.low_stock_products === 1 ? 'product is' : 'products are'} running low on inventory and need attention.`,
+                time: 'Requires Action',
+                link: '/inventory',
+                linkText: 'View Inventory',
+            });
+        }
+        return items;
+    }, [notificationSummary]);
+
+    // Automatically close notification popup on navigation between pages
+    useEffect(() => {
+        setIsNotificationOpen(false);
+    }, [location.pathname]);
+
+    // Close notification panel on outside click or Escape key
+    useEffect(() => {
+        if (!isNotificationOpen) return;
+
+        const handleClickOutside = (e) => {
+            if (
+                notificationDropdownRef.current &&
+                !notificationDropdownRef.current.contains(e.target) &&
+                bellButtonRef.current &&
+                !bellButtonRef.current.contains(e.target)
+            ) {
+                setIsNotificationOpen(false);
+            }
+        };
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setIsNotificationOpen(false);
+                if (bellButtonRef.current) bellButtonRef.current.focus();
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isNotificationOpen]);
+
+    // Handle clicking a notification item: close popup and navigate
+    const handleNotificationItemClick = (item) => {
+        setIsNotificationOpen(false);
+        if (item.link) {
+            navigate(item.link);
+        }
+    };
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
 
@@ -739,46 +826,165 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
             {/* Right side controls */}
             <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 {/* [Notifications] Bell Icon Button with Count Badge */}
-                <button
-                    type="button"
-                    className="header-icon-btn header-icon-btn--bell"
-                    title="Notifications"
-                    style={{
-                        position: 'relative',
-                        width: 38,
-                        height: 38,
-                        borderRadius: 10,
-                        border: '1px solid #e5e7eb',
-                        background: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                    }}
-                >
-                    <BsBell size={17} color="#6366f1" />
-                    <span
+                <div style={{ position: 'relative' }}>
+                    <button
+                        ref={bellButtonRef}
+                        type="button"
+                        className={`header-icon-btn header-icon-btn--bell ${isNotificationOpen ? 'active' : ''}`}
+                        title="Notifications"
+                        aria-haspopup="dialog"
+                        aria-expanded={isNotificationOpen ? 'true' : 'false'}
+                        aria-controls="dashboard-notification-panel"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsNotificationOpen((prev) => !prev);
+                        }}
                         style={{
-                            position: 'absolute',
-                            top: -3,
-                            right: -3,
-                            background: '#ef4444',
-                            color: '#ffffff',
-                            fontSize: 10,
-                            fontWeight: 800,
-                            width: 16,
-                            height: 16,
-                            borderRadius: '50%',
+                            position: 'relative',
+                            width: 38,
+                            height: 38,
+                            borderRadius: 10,
+                            border: isNotificationOpen ? '1px solid #6366f1' : '1px solid #e5e7eb',
+                            background: isNotificationOpen ? '#eef2ff' : '#ffffff',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            border: '2px solid #ffffff',
+                            cursor: 'pointer',
+                            boxShadow: isNotificationOpen ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : '0 1px 2px rgba(0,0,0,0.04)',
+                            outline: 'none',
                         }}
                     >
-                        1
-                    </span>
-                </button>
+                        <BsBell size={17} color="#6366f1" />
+                        {notificationItems.length > 0 && (
+                            <span
+                                style={{
+                                    position: 'absolute',
+                                    top: -3,
+                                    right: -3,
+                                    background: '#ef4444',
+                                    color: '#ffffff',
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    width: 16,
+                                    height: 16,
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '2px solid #ffffff',
+                                }}
+                            >
+                                {notificationItems.length}
+                            </span>
+                        )}
+                    </button>
+
+                    {/* Notification Dropdown Panel */}
+                    {isNotificationOpen && (
+                        <div
+                            id="dashboard-notification-panel"
+                            ref={notificationDropdownRef}
+                            className="dashboard-notification-panel"
+                            style={{
+                                position: 'absolute',
+                                right: 0,
+                                top: 'calc(100% + 8px)',
+                                zIndex: 1000,
+                            }}
+                            role="dialog"
+                            aria-label="Notifications"
+                            aria-modal="false"
+                        >
+                            {/* Header Banner */}
+                            <div className="dashboard-notification-header">
+                                <div className="dashboard-notification-title-wrap">
+                                    <BsBell className="dashboard-notification-header-icon" />
+                                    <h3 className="dashboard-notification-title">Notifications</h3>
+                                    <span className="dashboard-notification-badge">
+                                        {notificationItems.length > 0 ? `${notificationItems.length} New` : '0 New'}
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="dashboard-notification-close-btn"
+                                    onClick={() => {
+                                        setIsNotificationOpen(false);
+                                        if (bellButtonRef.current) bellButtonRef.current.focus();
+                                    }}
+                                    title="Close notifications"
+                                    aria-label="Close notifications"
+                                >
+                                    <BsX size={18} />
+                                </button>
+                            </div>
+
+                            {/* Notifications List */}
+                            <div className="dashboard-notification-list">
+                                {notificationItems.length === 0 ? (
+                                    <div className="dashboard-notification-empty">
+                                        <div className="dashboard-notification-empty-icon-wrap">
+                                            <BsCheckCircleFill size={22} color="#10b981" />
+                                        </div>
+                                        <p className="dashboard-notification-empty-title">All caught up!</p>
+                                        <p className="dashboard-notification-empty-desc">
+                                            No active inventory alerts or urgent notifications.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    notificationItems.map((item) => (
+                                        <div
+                                            key={item.id}
+                                            className={`dashboard-notification-card ${item.type}`}
+                                            onClick={() => handleNotificationItemClick(item)}
+                                            style={{ cursor: item.link ? 'pointer' : 'default' }}
+                                        >
+                                            <div className="dashboard-notification-card-icon">
+                                                {item.type === 'error' ? (
+                                                    <BsExclamationCircleFill size={16} />
+                                                ) : (
+                                                    <BsBoxSeam size={16} />
+                                                )}
+                                            </div>
+                                            <div className="dashboard-notification-card-body">
+                                                <div className="dashboard-notification-card-header">
+                                                    <span className="dashboard-notification-card-title">{item.title}</span>
+                                                    <span className="dashboard-notification-card-time">{item.time}</span>
+                                                </div>
+                                                <p className="dashboard-notification-card-msg">{item.message}</p>
+                                                {item.link && (
+                                                    <Link
+                                                        to={item.link}
+                                                        className="dashboard-notification-card-link"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setIsNotificationOpen(false);
+                                                        }}
+                                                    >
+                                                        <span>{item.linkText}</span>
+                                                        <BsArrowRight size={12} />
+                                                    </Link>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            {notificationItems.length > 0 && (
+                                <div className="dashboard-notification-footer">
+                                    <Link
+                                        to="/inventory"
+                                        className="dashboard-notification-footer-link"
+                                        onClick={() => setIsNotificationOpen(false)}
+                                    >
+                                        View inventory items &amp; alerts
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 {/* Profile Trigger Button */}
                 <div style={{ position: 'relative' }}>
