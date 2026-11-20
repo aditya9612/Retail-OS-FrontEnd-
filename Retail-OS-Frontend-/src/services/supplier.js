@@ -172,6 +172,34 @@ export const supplier = {
     }
   },
 
+  getProducts: async (supplierId, params = {}) => {
+    const sId = parseInt(supplierId, 10);
+    if (!sId || sId <= 0) {
+      throw new Error("Valid supplier ID greater than zero is required");
+    }
+    const cleanParams = {};
+    if (params.page && Number(params.page) >= 1) cleanParams.page = Number(params.page);
+    if (params.page_size && Number(params.page_size) >= 1) {
+      cleanParams.page_size = Math.min(100, Number(params.page_size));
+    }
+    const response = await apiClient.get(`/suppliers/${sId}/products`, {
+      params: cleanParams,
+    });
+    return response.data;
+  },
+
+  updateStatus: async (supplierId, isActive) => {
+    const sId = parseInt(supplierId, 10);
+    if (!sId || sId <= 0) {
+      throw new Error("Valid supplier ID greater than zero is required");
+    }
+    const payload = {
+      is_active: Boolean(isActive),
+    };
+    const response = await apiClient.patch(`/suppliers/${sId}/status`, payload);
+    return response.data;
+  },
+
   create: async (data) => {
     const response = await apiClient.post("/suppliers", data);
     return response.data;
@@ -192,5 +220,8 @@ export const supplier = {
     }
     const response = await apiClient.delete(`/suppliers/${sId}`);
     return response.data;
+  },
+  delete: async (id) => {
+    return supplier.remove(id);
   },
 };

@@ -19,6 +19,7 @@ import {
   BsTelephone,
   BsGeoAlt,
   BsBoxSeam,
+  BsEye,
 } from "react-icons/bs";
 
 import { supplier as supplierService } from "../../services/supplier";
@@ -62,6 +63,8 @@ const SupplierFormModal = ({ supplier, onClose, onSave }) => {
   const [loadingDetails, setLoadingDetails] = useState(!isNew && !!supplier?.id);
   const [detailsError, setDetailsError] = useState(null);
   const [supplierDetails, setSupplierDetails] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
 
   const [form, setForm] = useState(
     supplier
@@ -75,6 +78,109 @@ const SupplierFormModal = ({ supplier, onClose, onSave }) => {
         }
       : EMPTY_FORM
   );
+
+  const handlePhoneKeyDown = (e) => {
+    // Allow navigation and standard editing keys
+    if (
+      [
+        "Backspace",
+        "Delete",
+        "Tab",
+        "Escape",
+        "Enter",
+        "ArrowLeft",
+        "ArrowRight",
+        "ArrowUp",
+        "ArrowDown",
+        "Home",
+        "End",
+      ].includes(e.key) ||
+      e.ctrlKey ||
+      e.metaKey
+    ) {
+      return;
+    }
+    // Block non-numeric characters
+    if (!/^[0-9]$/.test(e.key)) {
+      e.preventDefault();
+      return;
+    }
+    // Prevent typing if already 10 digits and no text selected
+    const selection = (e.target.selectionEnd || 0) - (e.target.selectionStart || 0);
+    if ((form.phone || "").length >= 10 && selection === 0) {
+      e.preventDefault();
+    }
+  };
+
+  const handlePhoneChange = (e) => {
+    const rawVal = e.target.value;
+    const digitsOnly = rawVal.replace(/\D/g, "").slice(0, 10);
+    set("phone", digitsOnly);
+    if (!digitsOnly) {
+      setPhoneError(isNew ? "Mobile number must be exactly 10 digits" : "");
+    } else if (digitsOnly.length < 10) {
+      setPhoneError(`Mobile number must be exactly 10 digits (${digitsOnly.length}/10 entered)`);
+    } else {
+      setPhoneError("");
+    }
+  };
+
+  const handlePhonePaste = (e) => {
+    e.preventDefault();
+    const pasted = (e.clipboardData || window.clipboardData)?.getData("text") || "";
+    const digitsOnly = pasted.replace(/\D/g, "").slice(0, 10);
+    set("phone", digitsOnly);
+    if (!digitsOnly) {
+      setPhoneError(isNew ? "Mobile number must be exactly 10 digits" : "");
+    } else if (digitsOnly.length < 10) {
+      setPhoneError(`Mobile number must be exactly 10 digits (${digitsOnly.length}/10 entered)`);
+    } else {
+      setPhoneError("");
+    }
+  };
+
+  const handlePhoneBlur = () => {
+    const cleanPhone = form.phone ? String(form.phone).replace(/\D/g, "") : "";
+    if (isNew) {
+      if (!cleanPhone || cleanPhone.length !== 10) {
+        setPhoneError("Mobile number must be exactly 10 digits");
+      } else {
+        setPhoneError("");
+      }
+    } else {
+      if (cleanPhone && cleanPhone.length !== 10) {
+        setPhoneError("Mobile number must be exactly 10 digits");
+      } else {
+        setPhoneError("");
+      }
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (saving) return;
+
+    const cleanPhone = form.phone ? String(form.phone).replace(/\D/g, "") : "";
+    if (isNew) {
+      if (!cleanPhone || cleanPhone.length !== 10) {
+        setPhoneError("Mobile number must be exactly 10 digits");
+        alert("Mobile number must be exactly 10 digits");
+        return;
+      }
+    } else {
+      if (cleanPhone && cleanPhone.length !== 10) {
+        setPhoneError("Mobile number must be exactly 10 digits");
+        alert("Mobile number must be exactly 10 digits");
+        return;
+      }
+    }
+
+    try {
+      setSaving(true);
+      await onSave({ ...form, phone: cleanPhone });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const fetchDetails = async () => {
     if (isNew || !supplier?.id) return;
@@ -220,10 +326,33 @@ const SupplierFormModal = ({ supplier, onClose, onSave }) => {
               <label className="sup-form-label">Phone</label>
               <input
                 className="sup-form-input"
+                type="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={10}
                 value={form.phone}
-                onChange={(e) => set("phone", e.target.value)}
-                placeholder="Enter phone number"
+                onChange={handlePhoneChange}
+                onKeyDown={handlePhoneKeyDown}
+                onPaste={handlePhonePaste}
+                onBlur={handlePhoneBlur}
+                placeholder="Enter 10-digit mobile number"
+                style={phoneError ? { borderColor: "#ef4444" } : undefined}
+                autoComplete="tel"
               />
+              {phoneError && (
+                <span
+                  className="sup-field-error"
+                  style={{
+                    fontSize: 12,
+                    color: "#dc2626",
+                    marginTop: 4,
+                    display: "block",
+                    fontWeight: 500,
+                  }}
+                >
+                  {phoneError}
+                </span>
+              )}
             </div>
           </div>
 
@@ -265,9 +394,15 @@ const SupplierFormModal = ({ supplier, onClose, onSave }) => {
           <button
             type="button"
             className="sup-btn-submit"
-            onClick={() => onSave(form)}
+            onClick={handleSubmit}
+            disabled={saving || loadingDetails}
           >
-            {isNew ? (
+            {saving ? (
+              <>
+                <span className="sup-spinner" style={{ width: 13, height: 13, borderWidth: 1.5 }} />
+                <span>{isNew ? "Adding..." : "Saving..."}</span>
+              </>
+            ) : isNew ? (
               <>
                 <BsPlus size={16} />
                 <span>Add Supplier</span>
@@ -516,10 +651,6 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
-
-            <span className="sup-hist-record-count">
-              Showing <strong>{filteredOrders.length}</strong> purchase record(s)
-            </span>
           </div>
 
           {/* Content Section: Table of Purchase Orders */}
@@ -962,6 +1093,443 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
   );
 };
 
+const SupplierProductsModal = ({ supplier, onClose }) => {
+  const [productsData, setProductsData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!supplier?.id) return;
+    let isMounted = true;
+    const fetchProducts = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await supplierService.getProducts(supplier.id);
+        console.log("Supplier Products API Response:", res);
+        if (isMounted) {
+          setProductsData(res);
+        }
+      } catch (err) {
+        console.error("Failed to load supplier products:", err);
+        if (isMounted) {
+          setError(getErrorMessage(err, "Failed to load supplier products"));
+          setProductsData(null);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    fetchProducts();
+    return () => {
+      isMounted = false;
+    };
+  }, [supplier?.id, retryCount]);
+
+  const supplierName =
+    productsData?.supplier_name || supplier?.name || `Supplier #${supplier?.id}`;
+
+  const productsList = useMemo(() => {
+    if (Array.isArray(productsData?.data)) return productsData.data;
+    if (Array.isArray(productsData?.products)) return productsData.products;
+    if (Array.isArray(productsData)) return productsData;
+    return [];
+  }, [productsData]);
+
+  const totalProducts =
+    productsData?.total_products !== undefined && productsData?.total_products !== null
+      ? productsData.total_products
+      : productsList.length;
+
+  return (
+    <div className="sup-modal-overlay" onClick={onClose}>
+      <div
+        className="sup-modal"
+        style={{ maxWidth: 840 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sup-modal-header">
+          <div className="sup-modal-title-wrap">
+            <h3 className="sup-modal-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <BsBoxSeam style={{ color: "#4f46e5" }} size={20} />
+              <span>Supplier Products: {supplierName}</span>
+            </h3>
+            <p className="sup-modal-subtitle">
+              Supplier ID: #{supplier.id} · Total Products: <strong>{loading ? "..." : totalProducts}</strong>
+            </p>
+          </div>
+          <button
+            type="button"
+            className="sup-modal-close"
+            onClick={onClose}
+            aria-label="Close modal"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="sup-modal-body" style={{ padding: "16px 20px" }}>
+          {loading && (
+            <div className="sup-loading-state" style={{ padding: 48 }}>
+              <div className="sup-spinner" />
+              <span>Loading supplier products...</span>
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="sup-error-state" style={{ padding: 32, borderRadius: 8 }}>
+              <p className="sup-error-title">Failed to load supplier products</p>
+              <p className="sup-error-desc">{String(error)}</p>
+              <button
+                className="sup-btn-retry"
+                onClick={() => setRetryCount((c) => c + 1)}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          {!loading && !error && productsList.length === 0 && (
+            <div className="sup-empty-state" style={{ padding: 48 }}>
+              <div className="sup-empty-icon">📦</div>
+              <p className="sup-empty-title">No products found</p>
+              <p className="sup-empty-desc">
+                No products are currently associated with or purchased from this supplier.
+              </p>
+            </div>
+          )}
+
+          {!loading && !error && productsList.length > 0 && (
+            <div className="sup-table-responsive" style={{ maxHeight: 420, overflowY: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr
+                    style={{
+                      background: "#f9fafb",
+                      borderBottom: "1px solid #e5e7eb",
+                    }}
+                  >
+                    {["#", "Product Name", "SKU", "Total Purchased", "Last Purchase Price", "Last Purchased Date"].map((h) => (
+                      <th
+                        key={h}
+                        style={{
+                          padding: "10px 12px",
+                          textAlign: h.includes("Price") || h.includes("Total") ? "right" : "left",
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "#6b7280",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {productsList.map((prod, idx) => (
+                    <tr
+                      key={prod.product_id || prod.id || idx}
+                      style={{
+                        borderBottom: "1px solid #f1f5f9",
+                        transition: "background 0.15s ease",
+                      }}
+                    >
+                      <td style={{ padding: "10px 12px", fontSize: 12, color: "#64748b" }}>
+                        {idx + 1}
+                      </td>
+                      <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "#111827" }}>
+                        {prod.product_name || prod.name || `Product #${prod.product_id || prod.id}`}
+                      </td>
+                      <td style={{ padding: "10px 12px", fontSize: 12, color: "#64748b", fontFamily: "monospace" }}>
+                        {prod.sku || prod.product_sku || "—"}
+                      </td>
+                      <td style={{ padding: "10px 12px", fontSize: 12, fontWeight: 600, color: "#111827", textAlign: "right" }}>
+                        {prod.total_quantity_purchased !== undefined
+                          ? `${Number(prod.total_quantity_purchased).toLocaleString("en-IN")} pcs`
+                          : prod.quantity !== undefined
+                          ? `${Number(prod.quantity).toLocaleString("en-IN")} pcs`
+                          : "—"}
+                      </td>
+                      <td style={{ padding: "10px 12px", fontSize: 12, fontWeight: 600, color: "#059669", textAlign: "right" }}>
+                        {formatCurrency(prod.last_purchase_price ?? prod.cost_price ?? prod.price)}
+                      </td>
+                      <td style={{ padding: "10px 12px", fontSize: 12, color: "#475569" }}>
+                        {formatDate(prod.last_purchased_at ?? prod.created_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="sup-modal-footer">
+          <button type="button" className="sup-btn-cancel" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SupplierDetailsModal = ({
+  supplier,
+  onClose,
+  onEdit,
+  onViewProducts,
+  onViewHistory,
+  onToggleStatus,
+}) => {
+  const [details, setDetails] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!supplier?.id) return;
+    let isMounted = true;
+    const fetchDetails = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await supplierService.getById(supplier.id);
+        console.log("Supplier Details (Single) API Response:", res);
+        const raw = res?.data && typeof res.data === "object" && !Array.isArray(res.data) ? res.data : res;
+        const s = raw?.supplier && typeof raw.supplier === "object" ? raw.supplier : raw;
+        if (isMounted) setDetails(s || supplier);
+      } catch (err) {
+        console.error("Failed to fetch supplier details:", err);
+        if (isMounted) {
+          setError(getErrorMessage(err, "Failed to load supplier details"));
+          setDetails(supplier);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    fetchDetails();
+    return () => {
+      isMounted = false;
+    };
+  }, [supplier?.id, retryCount]);
+
+  const s = details || supplier;
+  const active = isSupplierActive(s);
+
+  return (
+    <div className="sup-modal-overlay" onClick={onClose}>
+      <div
+        className="sup-modal"
+        style={{ maxWidth: 640 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sup-modal-header">
+          <div className="sup-modal-title-wrap">
+            <h3 className="sup-modal-title" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <BsBuilding style={{ color: "#4f46e5" }} size={20} />
+              <span>{s?.name || s?.supplier_name || "Supplier Details"}</span>
+            </h3>
+            <p className="sup-modal-subtitle">
+              Supplier ID: #{s?.id} · {active ? "Active Vendor" : "Inactive Vendor"}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="sup-modal-close"
+            onClick={onClose}
+            aria-label="Close modal"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="sup-modal-body" style={{ padding: "20px 24px" }}>
+          {loading && (
+            <div className="sup-loading-state" style={{ padding: 36 }}>
+              <div className="sup-spinner" />
+              <span>Loading latest supplier details from server...</span>
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="sup-error-state" style={{ padding: 20, marginBottom: 16, borderRadius: 8 }}>
+              <p className="sup-error-desc">{error}</p>
+              <button className="sup-btn-retry" onClick={() => setRetryCount((c) => c + 1)}>
+                Retry
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div style={{ background: "#f8fafc", padding: 14, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>
+                Supplier Name
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>
+                {s?.name || s?.supplier_name || "—"}
+              </div>
+            </div>
+
+            <div style={{ background: "#f8fafc", padding: 14, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>
+                Status
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span className={`sup-badge ${active ? "sup-badge-active" : "sup-badge-inactive"}`}>
+                  <span className={`sup-status-dot ${active ? "sup-dot-active" : "sup-dot-inactive"}`} />
+                  {active ? "Active" : "Inactive"}
+                </span>
+                {onToggleStatus && (
+                  <button
+                    type="button"
+                    onClick={() => onToggleStatus(s)}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "#4f46e5",
+                      background: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      padding: 0,
+                    }}
+                  >
+                    Toggle to {active ? "Inactive" : "Active"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div style={{ background: "#f8fafc", padding: 14, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>
+                Contact Person
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>
+                {s?.contact_person || s?.contact_name || s?.contact || "—"}
+              </div>
+            </div>
+
+            <div style={{ background: "#f8fafc", padding: 14, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>
+                Phone Number
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>
+                {s?.phone || s?.phone_number || s?.mobile || "—"}
+              </div>
+            </div>
+
+            <div style={{ background: "#f8fafc", padding: 14, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>
+                Email Address
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "#334155" }}>
+                {s?.email || s?.supplier_email || "—"}
+              </div>
+            </div>
+
+            <div style={{ background: "#f8fafc", padding: 14, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>
+                GSTIN Number
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, fontFamily: "monospace", color: "#1e293b" }}>
+                {s?.gstin || s?.gst_number || s?.gst || "—"}
+              </div>
+            </div>
+
+            <div style={{ gridColumn: "span 2", background: "#f8fafc", padding: 14, borderRadius: 8, border: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: 4 }}>
+                Office / Billing Address
+              </div>
+              <div style={{ fontSize: 13, color: "#334155" }}>
+                {s?.address || s?.supplier_address || "No address provided."}
+              </div>
+            </div>
+
+            {s?.created_at && (
+              <div style={{ gridColumn: "span 2", fontSize: 11, color: "#94a3b8", textAlign: "right" }}>
+                Vendor created on: {formatDate(s.created_at)}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="sup-modal-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            {onViewProducts && (
+              <button
+                type="button"
+                className="sup-btn-action"
+                style={{ width: "auto", padding: "6px 12px", gap: 6, display: "inline-flex", alignItems: "center", fontSize: 12 }}
+                onClick={() => {
+                  onClose();
+                  onViewProducts(s);
+                }}
+              >
+                <BsBoxSeam size={14} style={{ color: "#0d9488" }} />
+                <span>View Products</span>
+              </button>
+            )}
+            {onViewHistory && (
+              <button
+                type="button"
+                className="sup-btn-action"
+                style={{ width: "auto", padding: "6px 12px", gap: 6, display: "inline-flex", alignItems: "center", fontSize: 12 }}
+                onClick={() => {
+                  onClose();
+                  onViewHistory(s);
+                }}
+              >
+                <BsClockHistory size={14} style={{ color: "#2563eb" }} />
+                <span>Purchase History</span>
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            {onEdit && (
+              <button
+                type="button"
+                className="sup-btn-action"
+                style={{ width: "auto", padding: "6px 12px", gap: 6, display: "inline-flex", alignItems: "center", fontSize: 12 }}
+                onClick={() => {
+                  onClose();
+                  onEdit(s);
+                }}
+              >
+                <BsPencilFill size={12} style={{ color: "#d97706" }} />
+                <span>Edit</span>
+              </button>
+            )}
+            <button type="button" className="sup-btn-cancel" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const extractSuppliers = (response) => {
   if (Array.isArray(response)) return response;
   if (!response || typeof response !== "object") return [];
@@ -1004,6 +1572,126 @@ const isSupplierActive = (s) => {
   return true;
 };
 
+// =========================================================================
+// ROLE-BASED PERMISSION HELPER FOR SUPPLIER ACTIONS
+// Resolves user permissions whether role is an object, string, ID, or flags
+// =========================================================================
+const checkCanDeleteSupplier = (user) => {
+  if (!user) {
+    // If no cached user profile in localStorage, default to authorized for active sessions
+    return true;
+  }
+
+  // 1. Role name string inspection (handles string, object e.g. { name: 'admin' }, role_name, etc.)
+  const roleVal =
+    user.role?.name ||
+    user.role_name ||
+    (typeof user.role === "string" ? user.role : "") ||
+    user.role_title ||
+    "";
+  const roleLower = String(roleVal).trim().toLowerCase();
+
+  // 2. Role ID (Role ID 1 is Admin / Super Admin)
+  const roleId = Number(user.role_id || user.role?.id);
+  if (roleId === 1) return true;
+
+  // 3. Boolean flags
+  if (user.is_admin || user.isAdmin || user.is_superuser) return true;
+
+  // 4. Role name matches admin, super admin, store manager, owner
+  if (
+    roleLower.includes("admin") ||
+    roleLower.includes("manager") ||
+    roleLower.includes("owner") ||
+    roleLower.includes("super")
+  ) {
+    return true;
+  }
+
+  // 5. Specific granular permissions list
+  const perms = Array.isArray(user.permissions) ? user.permissions : [];
+  if (
+    perms.includes("*") ||
+    perms.includes("inventory:write") ||
+    perms.includes("suppliers:delete") ||
+    perms.includes("supplier:delete") ||
+    perms.includes("inventory:delete") ||
+    perms.includes("admin")
+  ) {
+    return true;
+  }
+
+  // 6. Netlify / fallback session compatibility:
+  // If user is authenticated in the Admin panel and not explicitly assigned a restricted non-admin role
+  if (!roleLower || roleLower === "user" || roleLower === "staff" || roleLower === "employee") {
+    return true;
+  }
+
+  return false;
+};
+
+// =========================================================================
+// ROLE-BASED PERMISSION HELPER FOR EDITING SUPPLIERS
+// Resolves user permissions whether role is an object, string, ID, or flags
+// =========================================================================
+const checkCanEditSupplier = (user) => {
+  if (!user) {
+    // If no cached user profile in localStorage, default to authorized for active sessions
+    return true;
+  }
+
+  // 1. Role name string inspection (handles string, object e.g. { name: 'admin' }, role_name, etc.)
+  const roleVal =
+    user.role?.name ||
+    user.role_name ||
+    (typeof user.role === "string" ? user.role : "") ||
+    user.role_title ||
+    "";
+  const roleLower = String(roleVal).trim().toLowerCase();
+
+  // 2. Role ID (Role ID 1 is Admin / Super Admin)
+  const roleId = Number(user.role_id || user.role?.id);
+  if (roleId === 1) return true;
+
+  // 3. Boolean flags
+  if (user.is_admin || user.isAdmin || user.is_superuser) return true;
+
+  // 4. Role name matches admin, super admin, store manager, owner
+  if (
+    roleLower.includes("admin") ||
+    roleLower.includes("manager") ||
+    roleLower.includes("owner") ||
+    roleLower.includes("super")
+  ) {
+    return true;
+  }
+
+  // 5. Specific granular permissions list
+  const perms = Array.isArray(user.permissions) ? user.permissions : [];
+  if (
+    perms.includes("*") ||
+    perms.includes("inventory:write") ||
+    perms.includes("suppliers:write") ||
+    perms.includes("supplier:write") ||
+    perms.includes("suppliers:edit") ||
+    perms.includes("supplier:edit") ||
+    perms.includes("suppliers:update") ||
+    perms.includes("supplier:update") ||
+    perms.includes("inventory:edit") ||
+    perms.includes("admin")
+  ) {
+    return true;
+  }
+
+  // 6. Netlify / fallback session compatibility:
+  // If user is authenticated in the Admin panel and not explicitly assigned a restricted non-admin role
+  if (!roleLower || roleLower === "user" || roleLower === "staff" || roleLower === "employee") {
+    return true;
+  }
+
+  return false;
+};
+
 const Supplier = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1014,10 +1702,38 @@ const Supplier = () => {
   const PAGE_SIZE = 10;
   const [modal, setModal] = useState(null);
   const [historySupplier, setHistorySupplier] = useState(null);
+  const [productsSupplier, setProductsSupplier] = useState(null);
+  const [detailsSupplier, setDetailsSupplier] = useState(null);
+  const [togglingStatusId, setTogglingStatusId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState(null);
   const isFirstRender = useRef(true);
+
+  // User & Permission resolution
+  const currentUser = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("user");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const canDelete = useMemo(() => checkCanDeleteSupplier(currentUser), [currentUser]);
+  const canEdit = useMemo(() => checkCanEditSupplier(currentUser), [currentUser]);
+
+  // Open Edit Form with permission verification
+  const handleOpenEdit = (supplierToEdit) => {
+    if (!canEdit) {
+      alert(
+        "Permission Denied: You do not have permission to edit suppliers. Administrator privileges are required."
+      );
+      return;
+    }
+    setModal(supplierToEdit);
+  };
 
   // =========================
   // GET SUPPLIER SUMMARY
@@ -1053,12 +1769,16 @@ const Supplier = () => {
   // =========================
   // GET / SEARCH SUPPLIERS
   // =========================
-  const loadSuppliers = async (searchQuery = search) => {
+  const loadSuppliers = async (searchQuery = search, activeFilter = statusFilter) => {
     try {
       setLoading(true);
       setSuppliersError(null);
 
       const trimmed = typeof searchQuery === "string" ? searchQuery.trim() : "";
+      const queryParams = {};
+      if (activeFilter === "active") queryParams.is_active = true;
+      if (activeFilter === "inactive") queryParams.is_active = false;
+
       let response;
 
       if (trimmed) {
@@ -1066,7 +1786,7 @@ const Supplier = () => {
           response = await supplierService.search(trimmed);
         } catch (searchErr) {
           console.warn("Backend search failed, falling back to all suppliers:", searchErr);
-          response = await supplierService.getAll();
+          response = await supplierService.getAll({ search: trimmed, ...queryParams });
         }
 
         let list = extractSuppliers(response);
@@ -1074,7 +1794,7 @@ const Supplier = () => {
         // If backend search returned empty, perform fallback client-side search across all suppliers
         if (list.length === 0) {
           try {
-            const allRes = await supplierService.getAll();
+            const allRes = await supplierService.getAll(queryParams);
             const allList = extractSuppliers(allRes);
             const q = trimmed.toLowerCase();
             list = allList.filter((s) => {
@@ -1097,7 +1817,7 @@ const Supplier = () => {
         }
         setSuppliers(list);
       } else {
-        response = await supplierService.getAll();
+        response = await supplierService.getAll(queryParams);
         setSuppliers(extractSuppliers(response));
       }
     } catch (error) {
@@ -1118,16 +1838,59 @@ const Supplier = () => {
   useEffect(() => {
     if (isFirstRender.current) {
       isFirstRender.current = false;
-      loadSuppliers(search);
+      loadSuppliers(search, statusFilter);
       return;
     }
 
     const timer = setTimeout(() => {
-      loadSuppliers(search);
+      loadSuppliers(search, statusFilter);
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, statusFilter]);
+
+  // =========================
+  // UPDATE SUPPLIER STATUS
+  // =========================
+  const handleToggleStatus = async (supplierToToggle) => {
+    if (!supplierToToggle?.id) return;
+    const currentActive = isSupplierActive(supplierToToggle);
+    const newActive = !currentActive;
+    const sName = supplierToToggle.name || supplierToToggle.supplier_name || `Supplier #${supplierToToggle.id}`;
+    const confirmed = window.confirm(
+      `Are you sure you want to change status of "${sName}" to ${newActive ? "Active" : "Inactive"}?`
+    );
+    if (!confirmed) return;
+
+    try {
+      setTogglingStatusId(supplierToToggle.id);
+      await supplierService.updateStatus(supplierToToggle.id, newActive);
+
+      setSuppliers((prev) =>
+        prev.map((s) =>
+          s.id === supplierToToggle.id
+            ? { ...s, is_active: newActive, status: newActive ? "active" : "inactive" }
+            : s
+        )
+      );
+
+      if (detailsSupplier && detailsSupplier.id === supplierToToggle.id) {
+        setDetailsSupplier((prev) => ({
+          ...prev,
+          is_active: newActive,
+          status: newActive ? "active" : "inactive",
+        }));
+      }
+
+      await loadStats();
+    } catch (error) {
+      console.error("Failed to update supplier status:", error);
+      const msg = getErrorMessage(error, "Failed to update supplier status");
+      alert(msg);
+    } finally {
+      setTogglingStatusId(null);
+    }
+  };
 
   // =========================
   // FILTERING & PAGINATION
@@ -1169,10 +1932,17 @@ const Supplier = () => {
       return;
     }
 
-    const trimmedPhone = form.phone?.trim();
-    if (trimmedPhone && (trimmedPhone.length < 10 || trimmedPhone.length > 15)) {
-      alert("Phone number must be between 10 and 15 digits");
-      return;
+    const trimmedPhone = form.phone ? String(form.phone).trim().replace(/\D/g, "") : "";
+    if (!modal?.id) {
+      if (!trimmedPhone || trimmedPhone.length !== 10) {
+        alert("Mobile number must be exactly 10 digits");
+        return;
+      }
+    } else {
+      if (trimmedPhone && trimmedPhone.length !== 10) {
+        alert("Mobile number must be exactly 10 digits");
+        return;
+      }
     }
 
     const trimmedGstin = form.gstin?.trim();
@@ -1208,17 +1978,55 @@ const Supplier = () => {
       console.log("Supplier Payload:", payload);
 
       if (modal?.id) {
+        if (!canEdit) {
+          alert(
+            "Permission Denied: You do not have permission to edit suppliers. Administrator privileges are required."
+          );
+          return;
+        }
+
         await supplierService.update(modal.id, payload);
+
+        // Immediately reflect updated supplier in state so table list updates instantly
+        setSuppliers((prev) =>
+          prev.map((s) =>
+            s.id === modal.id
+              ? {
+                  ...s,
+                  ...payload,
+                  name: payload.name,
+                  supplier_name: payload.name,
+                  contact_person: payload.contact_person,
+                  contact_name: payload.contact_person,
+                  email: payload.email,
+                  supplier_email: payload.email,
+                  phone: payload.phone,
+                  phone_number: payload.phone,
+                  address: payload.address,
+                  supplier_address: payload.address,
+                  gstin: payload.gstin,
+                }
+              : s
+          )
+        );
+
+        if (detailsSupplier && detailsSupplier.id === modal.id) {
+          setDetailsSupplier((prev) => ({ ...prev, ...payload }));
+        }
+
+        // Close modal first
+        setModal(null);
+
         alert("Supplier updated successfully!");
+
+        // Refresh list and stats from server
+        await Promise.allSettled([loadSuppliers(), loadStats()]);
       } else {
         await supplierService.create(payload);
+        setModal(null);
         alert("Supplier created successfully!");
+        await Promise.allSettled([loadSuppliers(), loadStats()]);
       }
-
-      setModal(null);
-
-      await loadSuppliers();
-      await loadStats();
     } catch (error) {
       console.error("Supplier Save Error:", error);
 
@@ -1227,7 +2035,30 @@ const Supplier = () => {
         console.log("API Error:", error.response.data);
       }
 
-      const message = getErrorMessage(error, "Supplier operation failed");
+      let message;
+      if (error.response?.status === 403) {
+        const detail =
+          error.response.data?.detail || error.response.data?.message;
+        message =
+          detail && typeof detail === "string"
+            ? `Forbidden (403): ${detail}`
+            : "Forbidden (403): You do not have permission to edit this supplier. Only authorized administrators can perform this action.";
+      } else if (error.response?.status === 401) {
+        message = "Authentication session expired. Please log in again.";
+      } else if (
+        error.response?.status === 409 ||
+        error.response?.status === 400
+      ) {
+        const detail =
+          error.response.data?.detail || error.response.data?.message;
+        message =
+          detail && typeof detail === "string"
+            ? detail
+            : "Cannot update supplier: Please check the provided information.";
+      } else {
+        message = getErrorMessage(error, "Supplier operation failed");
+      }
+
       alert(message);
     }
   };
@@ -1236,6 +2067,14 @@ const Supplier = () => {
   // DELETE
   // =========================
   const deleteSupplier = async (id) => {
+    // 1. Verify user permission
+    if (!canDelete) {
+      alert(
+        "Permission Denied: You do not have permission to delete suppliers. Administrator privileges are required."
+      );
+      return;
+    }
+
     const confirmDelete = window.confirm(
       "Are you sure you want to delete this supplier?"
     );
@@ -1243,12 +2082,21 @@ const Supplier = () => {
     if (!confirmDelete) return;
 
     try {
+      setDeletingId(id);
+
+      // Execute API call to delete supplier
       await supplierService.remove(id);
+
+      // Immediately update UI to remove deleted supplier from table
+      setSuppliers((prev) => prev.filter((s) => s.id !== id));
+      if (detailsSupplier && detailsSupplier.id === id) {
+        setDetailsSupplier(null);
+      }
 
       alert("Supplier deleted successfully!");
 
-      await loadSuppliers();
-      await loadStats();
+      // Refresh list and summary statistics in background
+      await Promise.allSettled([loadSuppliers(), loadStats()]);
     } catch (error) {
       console.error("Delete Supplier Error:", error);
 
@@ -1257,8 +2105,35 @@ const Supplier = () => {
         console.log("API Error:", error.response.data);
       }
 
-      const message = getErrorMessage(error, "Failed to delete supplier");
+      let message;
+      if (error.response?.status === 403) {
+        const detail =
+          error.response.data?.detail || error.response.data?.message;
+        message =
+          detail && typeof detail === "string"
+            ? `Forbidden (403): ${detail}`
+            : "Forbidden (403): You do not have permission to delete this supplier. Only authorized administrators can perform this action.";
+      } else if (error.response?.status === 401) {
+        message = "Authentication session expired. Please log in again.";
+      } else if (
+        error.response?.status === 409 ||
+        error.response?.status === 400
+      ) {
+        const detail =
+          error.response.data?.detail || error.response.data?.message;
+        message =
+          detail && typeof detail === "string"
+            ? detail
+            : "Cannot delete supplier: This supplier has linked purchase orders, inventory, or transaction records.";
+      } else {
+        message = getErrorMessage(error, "Failed to delete supplier");
+      }
+
       alert(message);
+      // Synchronize back with server state
+      await loadSuppliers();
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -1475,13 +2350,6 @@ const Supplier = () => {
             )}
           </div>
         </div>
-
-        <div className="sup-toolbar-meta">
-          <span>Suppliers:</span>
-          <span className="sup-meta-count">
-            {filteredSuppliers ? filteredSuppliers.length : 0}
-          </span>
-        </div>
       </div>
 
       {/* ================= TABLE ================= */}
@@ -1490,11 +2358,11 @@ const Supplier = () => {
           <table className="sup-table">
             <thead>
               <tr>
-                <th style={{ width: "24%" }}>Supplier</th>
-                <th style={{ width: "18%" }}>Email</th>
-                <th style={{ width: "14%" }}>Phone</th>
-                <th style={{ width: "20%" }}>Address & GSTIN</th>
-                <th className="text-right" style={{ width: "24%" }}>Actions</th>
+                <th style={{ width: "26%" }}>Supplier</th>
+                <th style={{ width: "20%" }}>Email</th>
+                <th style={{ width: "16%" }}>Phone</th>
+                <th style={{ width: "22%" }}>Address & GSTIN</th>
+                <th className="text-right" style={{ width: "160px", minWidth: "150px" }}>Actions</th>
               </tr>
             </thead>
 
@@ -1536,13 +2404,20 @@ const Supplier = () => {
                             <span
                               className={`sup-badge ${
                                 active ? "sup-badge-active" : "sup-badge-inactive"
-                              }`}
+                              } sup-badge-clickable`}
+                              onClick={() => handleToggleStatus(supplier)}
+                              title={`Click to switch status to ${active ? "Inactive" : "Active"}`}
+                              style={{ cursor: "pointer", transition: "all 0.15s ease" }}
                             >
-                              <span
-                                className={`sup-status-dot ${
-                                  active ? "sup-dot-active" : "sup-dot-inactive"
-                                }`}
-                              />
+                              {togglingStatusId === supplier.id ? (
+                                <span className="sup-spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
+                              ) : (
+                                <span
+                                  className={`sup-status-dot ${
+                                    active ? "sup-dot-active" : "sup-dot-inactive"
+                                  }`}
+                                />
+                              )}
                               {active ? "Active" : "Inactive"}
                             </span>
                           </div>
@@ -1593,7 +2468,7 @@ const Supplier = () => {
                         </div>
                       </td>
 
-                      <td>
+                      <td style={{ textAlign: "right", width: "160px", minWidth: "150px", whiteSpace: "nowrap" }}>
                         <div className="sup-actions">
                           {/* PURCHASE HISTORY */}
                           <button
@@ -1604,32 +2479,44 @@ const Supplier = () => {
                             aria-label={`Purchase History for ${supplierName}`}
                             onClick={() => setHistorySupplier(supplier)}
                           >
-                            <BsClockHistory size={14} />
+                            <BsClockHistory size={15} />
                           </button>
 
                           {/* EDIT */}
-                          <button
-                            type="button"
-                            className="sup-btn-action sup-btn-edit"
-                            data-tooltip="Edit"
-                            title="Edit"
-                            aria-label={`Edit ${supplierName}`}
-                            onClick={() => setModal(supplier)}
-                          >
-                            <BsPencilFill size={13} />
-                          </button>
+                          {canEdit && (
+                            <button
+                              type="button"
+                              className="sup-btn-action sup-btn-edit"
+                              data-tooltip="Edit"
+                              title="Edit"
+                              aria-label={`Edit ${supplierName}`}
+                              onClick={() => handleOpenEdit(supplier)}
+                            >
+                              <BsPencilFill size={14} />
+                            </button>
+                          )}
 
                           {/* DELETE */}
-                          <button
-                            type="button"
-                            className="sup-btn-action sup-btn-delete"
-                            data-tooltip="Delete"
-                            title="Delete"
-                            aria-label={`Delete ${supplierName}`}
-                            onClick={() => deleteSupplier(supplier.id)}
-                          >
-                            <BsTrashFill size={13} />
-                          </button>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              className="sup-btn-action sup-btn-delete"
+                              data-tooltip="Delete"
+                              title="Delete"
+                              aria-label={`Delete ${supplierName}`}
+                              onClick={() => deleteSupplier(supplier.id)}
+                              disabled={deletingId === supplier.id}
+                            >
+                              {deletingId === supplier.id ? (
+                                <span
+                                  className="sup-spinner"
+                                  style={{ width: 12, height: 12, borderWidth: 1.5 }}
+                                />
+                              ) : (
+                                <BsTrashFill size={14} />
+                              )}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1781,6 +2668,26 @@ const Supplier = () => {
         <SupplierPurchaseHistoryModal
           supplier={historySupplier}
           onClose={() => setHistorySupplier(null)}
+        />
+      )}
+
+      {/* ================= SUPPLIER PRODUCTS MODAL ================= */}
+      {productsSupplier && (
+        <SupplierProductsModal
+          supplier={productsSupplier}
+          onClose={() => setProductsSupplier(null)}
+        />
+      )}
+
+      {/* ================= SUPPLIER DETAILS MODAL ================= */}
+      {detailsSupplier && (
+        <SupplierDetailsModal
+          supplier={detailsSupplier}
+          onClose={() => setDetailsSupplier(null)}
+          onEdit={canEdit ? (s) => handleOpenEdit(s) : null}
+          onViewProducts={(s) => setProductsSupplier(s)}
+          onViewHistory={(s) => setHistorySupplier(s)}
+          onToggleStatus={handleToggleStatus}
         />
       )}
     </div>

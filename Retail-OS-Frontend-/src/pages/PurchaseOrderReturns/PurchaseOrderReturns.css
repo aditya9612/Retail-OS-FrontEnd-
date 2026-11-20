@@ -402,22 +402,38 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
 }
 
 /* =========================================================
-   LOOKUP BY RETURN NUMBER BAR
+   PURCHASE RETURNS SEARCH & FILTER SECTION (UNIFIED CARD)
    ========================================================= */
+.purchase-order-returns-filter-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  margin-bottom: 16px;
+  box-sizing: border-box;
+}
+
+/* ROW 1: RETURN LOOKUP BAR */
+.por-lookup-row,
 .purchase-order-returns-lookup-bar {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #ffffff;
-  padding: 10px 14px;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  width: 100%;
+  background: transparent;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
 }
 
 .por-lookup-input-wrap {
   position: relative;
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
 }
@@ -427,20 +443,22 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
   left: 12px;
   color: #94a3b8;
   pointer-events: none;
+  font-size: 14px;
 }
 
 .purchase-order-returns-lookup-input {
   width: 100%;
-  height: 38px;
+  height: 40px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  padding: 0 34px 0 34px;
-  font-size: 12.5px;
+  padding: 0 36px 0 36px;
+  font-size: 13px;
   background: #f8fafc;
   color: #0f172a;
   outline: none;
   font-family: inherit;
   transition: all 0.15s ease;
+  box-sizing: border-box;
 }
 
 .purchase-order-returns-lookup-input:focus {
@@ -455,7 +473,7 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
 
 .purchase-order-returns-lookup-clear {
   position: absolute;
-  right: 8px;
+  right: 10px;
   width: 22px;
   height: 22px;
   display: flex;
@@ -476,27 +494,36 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
 }
 
 .purchase-order-returns-lookup-btn {
-  height: 38px;
-  padding: 0 16px;
+  height: 40px;
+  padding: 0 18px;
   background: #4f46e5;
   color: #ffffff;
   border: 1px solid #4338ca;
   border-radius: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 7px;
   white-space: nowrap;
   font-family: inherit;
   transition: all 0.15s ease;
   user-select: none;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.2);
+  box-sizing: border-box;
 }
 
 .purchase-order-returns-lookup-btn:hover:not(:disabled) {
   background: #4338ca;
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+  transform: translateY(-1px);
+}
+
+.purchase-order-returns-lookup-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .purchase-order-returns-lookup-btn:disabled {
@@ -504,27 +531,34 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
   cursor: not-allowed;
 }
 
-/* =========================================================
-   SEARCH & FILTERS TOOLBAR
-   ========================================================= */
+/* ROW SEPARATOR */
+.por-filter-divider {
+  width: 100%;
+  height: 1px;
+  background: #f1f5f9;
+  margin: 0;
+}
+
+/* ROW 2: SEARCH & FILTER CONTROLS */
+.por-filter-row,
 .purchase-order-returns-filters {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+  width: 100%;
+  box-shadow: none;
   flex-wrap: wrap;
 }
 
+.por-filter-search-wrap,
 .purchase-order-returns-search {
   position: relative;
-  flex: 1;
-  min-width: 260px;
-  max-width: 480px;
+  flex: 1 1 300px;
+  min-width: 240px;
   display: flex;
   align-items: center;
 }
@@ -534,35 +568,40 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
   left: 12px;
   color: #94a3b8;
   pointer-events: none;
+  font-size: 14px;
 }
 
+.por-filter-search-wrap input,
 .purchase-order-returns-search input {
   width: 100%;
-  height: 38px;
-  padding: 0 34px 0 34px;
+  height: 40px;
+  padding: 0 36px 0 36px;
   background: #f8fafc;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: #0f172a;
   outline: none;
   font-family: inherit;
   transition: all 0.15s ease;
+  box-sizing: border-box;
 }
 
+.por-filter-search-wrap input:focus,
 .purchase-order-returns-search input:focus {
   background: #ffffff;
   border-color: #4f46e5;
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
 }
 
+.por-filter-search-wrap input::placeholder,
 .purchase-order-returns-search input::placeholder {
   color: #94a3b8;
 }
 
 .por-search-clear {
   position: absolute;
-  right: 8px;
+  right: 10px;
   width: 22px;
   height: 22px;
   display: flex;
@@ -582,18 +621,20 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
   color: #0f172a;
 }
 
+.por-filter-controls-group,
 .por-filters-right {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  flex: 1 1 auto;
 }
 
 .purchase-order-returns-store-filter,
 .purchase-order-returns-status-filter {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
@@ -601,26 +642,26 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: #475569;
   white-space: nowrap;
 }
 
 .por-filter-text-label {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: #475569;
 }
 
 .purchase-order-returns-store-filter select {
-  width: 180px;
-  height: 38px;
-  padding: 0 28px 0 11px;
+  min-width: 210px;
+  height: 40px;
+  padding: 0 32px 0 12px;
   background-color: #f8fafc;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   color: #1e293b;
   outline: none;
@@ -632,16 +673,17 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
   background-repeat: no-repeat;
   background-position: right 10px center;
   transition: all 0.15s ease;
+  box-sizing: border-box;
 }
 
 .purchase-order-returns-status-filter select {
-  width: 140px;
-  height: 38px;
-  padding: 0 28px 0 11px;
+  min-width: 140px;
+  height: 40px;
+  padding: 0 32px 0 12px;
   background-color: #f8fafc;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   color: #1e293b;
   outline: none;
@@ -653,6 +695,7 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
   background-repeat: no-repeat;
   background-position: right 10px center;
   transition: all 0.15s ease;
+  box-sizing: border-box;
 }
 
 .purchase-order-returns-store-filter select:hover,
@@ -669,20 +712,22 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
 }
 
 .por-btn-reset-filters {
-  height: 38px;
+  height: 40px;
   padding: 0 14px;
   background: #fef2f2;
   border: 1px solid #fecaca;
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   color: #dc2626;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   transition: all 0.15s ease;
   user-select: none;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .por-btn-reset-filters:hover {
@@ -705,6 +750,8 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
   letter-spacing: 0.02em;
   white-space: nowrap;
   user-select: none;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .por-dir-dot {
@@ -1403,11 +1450,14 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
+  line-height: 1;
   transition: all 0.15s ease;
   user-select: none;
   background: #ffffff;
   color: #374151;
   border: 1px solid #d1d5db;
+  outline: none;
 }
 
 .por-pagination-num:hover:not(.active):not(:disabled) {
@@ -1422,6 +1472,11 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
   border: 1.5px solid #6366f1;
   box-shadow: 0 1px 2px rgba(99, 102, 241, 0.15);
   font-weight: 700;
+}
+
+.por-pagination-num:focus-visible {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
 }
 
 .por-pagination-ellipsis {
@@ -1741,36 +1796,72 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
     justify-content: center;
   }
 
+  .purchase-order-returns-filter-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .por-lookup-row,
+  .purchase-order-returns-lookup-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .por-lookup-input-wrap {
+    width: 100%;
+  }
+
+  .purchase-order-returns-lookup-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .por-filter-row,
   .purchase-order-returns-filters {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
   }
 
+  .por-filter-search-wrap,
   .purchase-order-returns-search {
     max-width: none;
     width: 100%;
   }
 
+  .por-filter-controls-group,
   .por-filters-right {
     width: 100%;
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
   }
 
   .purchase-order-returns-store-filter,
   .purchase-order-returns-status-filter {
     width: 100%;
-  }
-
-  .purchase-order-returns-lookup-bar {
     flex-direction: column;
     align-items: stretch;
+    gap: 4px;
   }
 
-  .purchase-order-returns-lookup-btn {
+  .purchase-order-returns-store-filter select,
+  .purchase-order-returns-status-filter select {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .por-btn-reset-filters {
     width: 100%;
     justify-content: center;
+  }
+
+  .por-directory-tag {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+    margin-left: 0;
   }
 
   .purchase-order-returns-pagination {

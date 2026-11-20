@@ -6,7 +6,7 @@ import { getWarehouses, getWarehouseDashboard, getWarehouseById, createWarehouse
 import { warehouseService } from '../../services/warehouseService';
 import userService from '../../services/userService';
 import { listStores } from '../../services/inventoryService';
-import grnService, { createGRN, getGRNs, getGRNById, getGRNStats, getGRNByNumber, exportGRNs, deleteGRN, qualityCheckGRN, receiveGRN, rejectGRN, getGRNHistory, downloadGRNPdf, getGRNPrintSlip } from '../../services/grnService';
+import grnService, { createGRN, getGRNs, getGRNById, getGRNStats, getGRNByNumber, exportGRNs, deleteGRN, qualityCheckGRN, receiveGRN, rejectGRN, getGRNHistory, downloadGRNPdf, previewGRNPdf, downloadGRNCsv, getGRNPrintSlip } from '../../services/grnService';
 import { getPurchaseOrders, getPurchaseOrder } from '../../api/purchaseOrdersApi';
 import { listSuppliers } from '../../api/supplierApi';
 import PurchaseOrderReturns from '../PurchaseOrderReturns';
@@ -4150,11 +4150,14 @@ export const GRNPage = () => {
     const [filterStatus, setFilterStatus] = useState('');
     const [search, setSearch] = useState('');
 
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+
     // GRN Dashboard Statistics (strictly from GET /api/v1/grn/stats)
     const [stats, setStats] = useState(null);
     const [statsLoading, setStatsLoading] = useState(true);
     const [statsError, setStatsError] = useState(null);
-    const [showRecentGrns, setShowRecentGrns] = useState(true);
     const statsRequestIdRef = useRef(0);
 
     // Metadata for creating GRN and filtering
@@ -4208,6 +4211,8 @@ export const GRNPage = () => {
     const [isPrintSlipModalOpen, setIsPrintSlipModalOpen] = useState(false);
     const [printSlipHtml, setPrintSlipHtml] = useState('');
     const [printSlipGrn, setPrintSlipGrn] = useState(null);
+    const [previewingPdfGrnId, setPreviewingPdfGrnId] = useState(null);
+    const [downloadingCsvSlipGrnId, setDownloadingCsvSlipGrnId] = useState(null);
     const printSlipIframeRef = useRef(null);
 
     // Delete GRN State (strictly DELETE /api/v1/grn/{grn_id})
@@ -4760,6 +4765,10 @@ export const GRNPage = () => {
                         background: #f1f5f9;
                         font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                     }
+                    /* Remove / hide internal preview action bar in preview since actions are in the modal header */
+                    .action-bar, .action-buttons, .action-title, .no-print {
+                        display: none !important;
+                    }
                     /* Prevent unintended navigation via unauthenticated relative links */
                     a[href^="/api/"], a[href^="http://"], a[href^="https://"], .action-bar a:not([onclick*="print"]) {
                         pointer-events: none !important;
@@ -4769,7 +4778,7 @@ export const GRNPage = () => {
                     }
                 }
                 @media print {
-                    .action-bar, .actions, .no-print {
+                    .action-bar, .actions, .action-buttons, .action-title, .no-print {
                         display: none !important;
                     }
                     body {
@@ -4781,10 +4790,13 @@ export const GRNPage = () => {
             </style>
         `;
 
-        if (rawHtml.includes('</head>')) {
-            return rawHtml.replace('</head>', `${helperCss}</head>`);
+        // Strip internal action bar element if present in rawHtml
+        let cleanedHtml = rawHtml.replace(/<div[^>]*class=["'][^"']*action-bar[^"']*["'][\s\S]*?<\/div>\s*<\/div>/i, '');
+
+        if (cleanedHtml.includes('</head>')) {
+            return cleanedHtml.replace('</head>', `${helperCss}</head>`);
         }
-        return `${helperCss}${rawHtml}`;
+        return `${helperCss}${cleanedHtml}`;
     };
 
     /**
@@ -4863,6 +4875,105 @@ export const GRNPage = () => {
         } catch (err) {
             console.error('Open new tab error:', err);
             setPrintSlipError('Unable to open preview in a new window.');
+        }
+    };
+
+    /**
+     * Preview GRN PDF in a new window/tab:
+     * Calls GET /api/v1/grn/{grn_id}/download-pdf?format=pdf&mode=preview via previewGRNPdf(numericId)
+     */
+    const handlePreviewPdf = async (record) => {
+        if (!record) return;
+
+        const grnId = record.id ?? record.grn_id;
+        if (grnId === undefined || grnId === null || String(grnId).trim() === '') {
+            setPrintSlipError('Invalid GRN ID. Cannot preview PDF.');
+            return;
+        }
+
+        const numericId = Number(grnId);
+        if (!Number.isSafeInteger(numericId) || numericId <= 0) {
+            setPrintSlipError('Invalid GRN ID. Cannot preview PDF.');
+            return;
+        }
+
+        if (previewingPdfGrnId === numericId) return;
+
+        setPreviewingPdfGrnId(numericId);
+        setPrintSlipError(null);
+
+        try {
+            const response = await previewGRNPdf(numericId);
+
+            if (!response?.data || (response.data instanceof Blob && response.data.size === 0)) {
+                throw new Error('Received empty PDF response from server.');
+            }
+
+            const blob = response.data instanceof Blob
+                ? response.data
+                : new Blob([response.data], { type: 'application/pdf' });
+
+            const blobUrl = window.URL.createObjectURL(blob);
+            const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+            if (!newWindow) {
+                setPrintSlipError('Popup blocked by browser. Please allow popups to preview PDF.');
+            }
+            setTimeout(() => {
+                window.URL.revokeObjectURL(blobUrl);
+            }, 60000);
+        } catch (err) {
+            console.error('GRN PDF Preview Error:', err);
+            const errorMsg = await parsePdfDownloadError(err);
+            setPrintSlipError(errorMsg || 'Unable to preview GRN PDF.');
+        } finally {
+            setPreviewingPdfGrnId(null);
+        }
+    };
+
+    /**
+     * Export / Download GRN CSV:
+     * Calls GET /api/v1/grn/{grn_id}/download-pdf?format=csv&mode=download via downloadGRNCsv(numericId)
+     */
+    const handleSlipDownloadCsv = async (record) => {
+        if (!record) return;
+
+        const grnId = record.id ?? record.grn_id;
+        if (grnId === undefined || grnId === null || String(grnId).trim() === '') {
+            setPrintSlipError('Invalid GRN ID. Cannot export CSV.');
+            return;
+        }
+
+        const numericId = Number(grnId);
+        if (!Number.isSafeInteger(numericId) || numericId <= 0) {
+            setPrintSlipError('Invalid GRN ID. Cannot export CSV.');
+            return;
+        }
+
+        if (downloadingCsvSlipGrnId === numericId) return;
+
+        setDownloadingCsvSlipGrnId(numericId);
+        setPrintSlipError(null);
+
+        try {
+            const response = await downloadGRNCsv(numericId);
+
+            if (!response?.data || (response.data instanceof Blob && response.data.size === 0)) {
+                throw new Error('Received empty CSV response from server.');
+            }
+
+            const grnNumber = record.grn_number || record.grnNumber;
+            const fallbackFilename = grnNumber ? `${grnNumber}.csv` : `GRN-${numericId}.csv`;
+
+            const contentDisposition = response.headers?.['content-disposition'] || response.headers?.['Content-Disposition'];
+            const filename = extractFilename(contentDisposition, fallbackFilename);
+
+            downloadCsvBlob(response.data, filename);
+        } catch (err) {
+            console.error('GRN CSV Download Error:', err);
+            const errorMsg = await parseExportError(err);
+            setPrintSlipError(errorMsg || 'Unable to export GRN CSV.');
+        } finally {
+            setDownloadingCsvSlipGrnId(null);
         }
     };
 
@@ -6108,11 +6219,13 @@ export const GRNPage = () => {
         else if (key === 'supplier_id') setFilterSupplierId(value);
         else if (key === 'status') setFilterStatus(value);
 
+        setCurrentPage(1);
         fetchGrnData({ [key]: value });
     };
 
     const handleSearchSubmit = (e) => {
         if (e && e.preventDefault) e.preventDefault();
+        setCurrentPage(1);
         fetchGrnData({ search });
     };
 
@@ -6128,6 +6241,7 @@ export const GRNPage = () => {
         setFilterSupplierId('');
         setFilterStatus('');
         setSearch('');
+        setCurrentPage(1);
         fetchGrnData({
             purchase_order_id: '',
             warehouse_id: '',
@@ -6137,6 +6251,38 @@ export const GRNPage = () => {
             search: ''
         });
         fetchGrnStats();
+    };
+
+    // Pagination calculations
+    const totalPages = Math.max(1, Math.ceil(grns.length / pageSize));
+
+    useEffect(() => {
+        if (currentPage > totalPages && totalPages > 0) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
+
+    const paginatedGrns = useMemo(() => {
+        if (!Array.isArray(grns)) return [];
+        const startIndex = (currentPage - 1) * pageSize;
+        return grns.slice(startIndex, startIndex + pageSize);
+    }, [grns, currentPage, pageSize]);
+
+    const rangeStart = grns.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    const rangeEnd = Math.min(currentPage * pageSize, grns.length);
+
+    const getPageNumbers = () => {
+        const total = totalPages;
+        if (total <= 7) {
+            return Array.from({ length: total }, (_, i) => i + 1);
+        }
+        if (currentPage <= 4) {
+            return [1, 2, 3, 4, 5, '...', total];
+        }
+        if (currentPage >= total - 3) {
+            return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+        }
+        return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', total];
     };
 
     const hasActiveFilters = Boolean(
@@ -6545,296 +6691,6 @@ export const GRNPage = () => {
                 </div>
             )}
 
-            {/* Recent GRNs Section from GET /api/v1/grn/stats */}
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', marginBottom: 24, overflow: 'hidden' }}>
-                <div style={{ padding: '14px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f9fafb' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <BsClockHistory style={{ color: '#6366f1' }} size={16} />
-                        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1e293b' }}>Recent GRNs</h3>
-                        <span style={{ fontSize: 11, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
-                            {stats?.recent_grns?.length ?? 0} records
-                        </span>
-                    </div>
-                    <button
-                        onClick={() => setShowRecentGrns(!showRecentGrns)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#6366f1', fontWeight: 600 }}
-                    >
-                        {showRecentGrns ? 'Collapse' : 'Expand'}
-                    </button>
-                </div>
-
-                {showRecentGrns && (
-                    <div>
-                        {statsLoading ? (
-                            <div style={{ padding: '24px 20px', textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
-                                Loading recent GRNs...
-                            </div>
-                        ) : (!stats?.recent_grns || stats.recent_grns.length === 0) ? (
-                            <div style={{ padding: '28px 20px', textAlign: 'center', color: '#6b7280' }}>
-                                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#4b5563' }}>No recent GRN records found</p>
-                            </div>
-                        ) : (
-                            <div className="grn-table-container" style={{ overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
-                                    <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
-                                        <tr>
-                                            <th style={{ padding: '10px 14px' }}>GRN #</th>
-                                            <th style={{ padding: '10px 14px' }}>PO Number</th>
-                                            <th style={{ padding: '10px 14px' }}>Supplier</th>
-                                            <th style={{ padding: '10px 14px' }}>Warehouse</th>
-                                            <th style={{ padding: '10px 14px' }}>Store</th>
-                                            <th style={{ padding: '10px 14px' }}>Status</th>
-                                            <th style={{ padding: '10px 14px', textAlign: 'right' }}>Items / Recv</th>
-                                            <th style={{ padding: '10px 14px', textAlign: 'right' }}>Cost Value</th>
-                                            <th style={{ padding: '10px 14px' }}>Received / Created At</th>
-                                            <th style={{ padding: '10px 14px', textAlign: 'right' }}>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {stats.recent_grns.map((rg, idx) => {
-                                            const grnId = rg.id ?? rg.grn_id;
-                                            const grnNum = rg.grn_number || (grnId ? `GRN-${grnId}` : '—');
-                                            const grnStatus = rg.status ?? rg.grn_status ?? '';
-                                            const eligible = isGrnReceiveEligible(grnStatus);
-                                            const isReceiveDisabled = !eligible || Boolean(receivingGrnId);
-
-                                            console.log("GRN Receive Debug:", {
-                                                id: grnId,
-                                                status: grnStatus,
-                                                eligible: eligible,
-                                                receivingGrnId,
-                                                disabled: isReceiveDisabled
-                                            });
-
-                                            const poNum = rg.purchase_order_number || (rg.purchase_order_id ? `PO-${rg.purchase_order_id}` : '—');
-                                            const supName = rg.supplier_name || '—';
-                                            const whName = rg.warehouse_name || '—';
-                                            const stName = rg.store_name || '—';
-                                            const itemsCnt = rg.total_items_count ?? (Array.isArray(rg.items) ? rg.items.length : 0);
-                                            const recvQty = rg.total_received_quantity ?? 0;
-                                            const costVal = rg.total_cost_value != null ? `₹${Number(rg.total_cost_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00';
-                                            const dateStr = rg.received_at ? new Date(rg.received_at).toLocaleDateString() : (rg.created_at ? new Date(rg.created_at).toLocaleDateString() : '—');
-
-                                            return (
-                                                <tr key={grnId || idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#6366f1' }}>
-                                                        {grnNum}
-                                                        <div style={{ fontSize: 10.5, color: '#9ca3af', fontWeight: 400 }}>ID: #{grnId ?? '—'}</div>
-                                                    </td>
-                                                    <td style={{ padding: '10px 14px', color: '#374151' }}>{poNum}</td>
-                                                    <td style={{ padding: '10px 14px', fontWeight: 600 }}>{supName}</td>
-                                                    <td style={{ padding: '10px 14px' }}>{whName}</td>
-                                                    <td style={{ padding: '10px 14px', color: '#6b7280' }}>{stName}</td>
-                                                    <td style={{ padding: '10px 14px' }}>{renderStatusBadge(grnStatus)}</td>
-                                                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                                                        {recvQty} pcs <span style={{ color: '#9ca3af' }}>({itemsCnt} items)</span>
-                                                    </td>
-                                                    <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>{costVal}</td>
-                                                    <td style={{ padding: '10px 14px', color: '#6b7280', fontSize: 11.5 }}>{dateStr}</td>
-                                                    <td style={{ padding: '10px 14px', textAlign: 'right', pointerEvents: 'auto', position: 'relative', zIndex: 1 }}>
-                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, pointerEvents: 'auto', position: 'relative', zIndex: 1 }}>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleViewGrn(rg);
-                                                                }}
-                                                                style={{ background: '#f3f4f6', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, pointerEvents: 'auto', position: 'relative', zIndex: 2 }}
-                                                                title={`View Goods Received Note ${grnNum}`}
-                                                            >
-                                                                <BsEye size={11} /> View Note
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleViewHistory(rg);
-                                                                }}
-                                                                style={{ background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 4, padding: '4px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, pointerEvents: 'auto', position: 'relative', zIndex: 2 }}
-                                                                title={`View History Timeline for ${grnNum}`}
-                                                            >
-                                                                <BsClockHistory size={11} /> History
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDownloadPdf(rg);
-                                                                }}
-                                                                disabled={downloadingPdfGrnId === grnId}
-                                                                title={`Download PDF for ${grnNum}`}
-                                                                style={{
-                                                                    background: '#f8fafc',
-                                                                    color: '#475569',
-                                                                    border: '1px solid #cbd5e1',
-                                                                    borderRadius: 4,
-                                                                    padding: '4px 8px',
-                                                                    fontSize: 11.5,
-                                                                    fontWeight: 600,
-                                                                    cursor: downloadingPdfGrnId === grnId ? 'not-allowed' : 'pointer',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: 4,
-                                                                    pointerEvents: 'auto',
-                                                                    position: 'relative',
-                                                                    zIndex: 2
-                                                                }}
-                                                            >
-                                                                <BsDownload size={11} /> {downloadingPdfGrnId === grnId ? 'Downloading...' : 'PDF'}
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleOpenPrintSlip(rg);
-                                                                }}
-                                                                disabled={fetchingSlipGrnId === grnId}
-                                                                title={`Print Slip for ${grnNum}`}
-                                                                style={{
-                                                                    background: '#f8fafc',
-                                                                    color: '#475569',
-                                                                    border: '1px solid #cbd5e1',
-                                                                    borderRadius: 4,
-                                                                    padding: '4px 8px',
-                                                                    fontSize: 11.5,
-                                                                    fontWeight: 600,
-                                                                    cursor: fetchingSlipGrnId === grnId ? 'not-allowed' : 'pointer',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: 4,
-                                                                    pointerEvents: 'auto',
-                                                                    position: 'relative',
-                                                                    zIndex: 2
-                                                                }}
-                                                            >
-                                                                <BsPrinter size={11} /> {fetchingSlipGrnId === grnId ? 'Loading...' : 'Print Slip'}
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleOpenQcModal(rg);
-                                                                }}
-                                                                disabled={!isGrnQcEligible(grnStatus)}
-                                                                title={!isGrnQcEligible(grnStatus) ? "Quality check can only be performed on pending GRN shipments" : `Perform Quality Check for ${grnNum}`}
-                                                                style={{
-                                                                    background: !isGrnQcEligible(grnStatus) ? '#f8fafc' : '#eff6ff',
-                                                                    color: !isGrnQcEligible(grnStatus) ? '#94a3b8' : '#2563eb',
-                                                                    border: !isGrnQcEligible(grnStatus) ? '1px solid #e2e8f0' : '1px solid #bfdbfe',
-                                                                    borderRadius: 4,
-                                                                    padding: '4px 8px',
-                                                                    fontSize: 11.5,
-                                                                    fontWeight: 600,
-                                                                    cursor: !isGrnQcEligible(grnStatus) ? 'not-allowed' : 'pointer',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: 4,
-                                                                    opacity: !isGrnQcEligible(grnStatus) ? 0.6 : 1,
-                                                                    pointerEvents: 'auto',
-                                                                    position: 'relative',
-                                                                    zIndex: 2
-                                                                }}
-                                                            >
-                                                                <BsShieldLock size={11} /> QC
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    console.log('[GRN Receive Button Click] Clicked Receive on Recent GRNs row:', rg);
-                                                                    handleReceiveGrn(rg);
-                                                                }}
-                                                                disabled={isReceiveDisabled}
-                                                                title={!eligible ? (isGrnReceived(grnStatus) ? "This GRN has already been received and inventory has been updated" : "Cannot receive a rejected GRN") : `Receive ${grnNum} into inventory`}
-                                                                style={{
-                                                                    background: !eligible ? '#f8fafc' : '#ecfdf5',
-                                                                    color: !eligible ? '#94a3b8' : '#059669',
-                                                                    border: !eligible ? '1px solid #e2e8f0' : '1px solid #a7f3d0',
-                                                                    borderRadius: 4,
-                                                                    padding: '4px 8px',
-                                                                    fontSize: 11.5,
-                                                                    fontWeight: 600,
-                                                                    cursor: isReceiveDisabled ? 'not-allowed' : 'pointer',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: 4,
-                                                                    opacity: !eligible ? 0.6 : 1,
-                                                                    pointerEvents: 'auto',
-                                                                    position: 'relative',
-                                                                    zIndex: 2
-                                                                }}
-                                                            >
-                                                                <BsBoxSeam size={11} /> {receivingGrnId === grnId ? 'Receiving...' : 'Receive'}
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleRequestRejectGrn(rg);
-                                                                }}
-                                                                disabled={!isGrnRejectEligible(grnStatus) || Boolean(rejectingGrnId)}
-                                                                title={!isGrnRejectEligible(grnStatus) ? (isGrnReceived(grnStatus) ? "Cannot reject a GRN that has already been received into inventory" : "This GRN has already been rejected") : `Reject ${grnNum}`}
-                                                                style={{
-                                                                    background: !isGrnRejectEligible(grnStatus) ? '#f8fafc' : '#fff1f2',
-                                                                    color: !isGrnRejectEligible(grnStatus) ? '#94a3b8' : '#e11d48',
-                                                                    border: !isGrnRejectEligible(grnStatus) ? '1px solid #e2e8f0' : '1px solid #fecdd3',
-                                                                    borderRadius: 4,
-                                                                    padding: '4px 8px',
-                                                                    fontSize: 11.5,
-                                                                    fontWeight: 600,
-                                                                    cursor: (!isGrnRejectEligible(grnStatus) || Boolean(rejectingGrnId)) ? 'not-allowed' : 'pointer',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: 4,
-                                                                    opacity: !isGrnRejectEligible(grnStatus) ? 0.6 : 1,
-                                                                    pointerEvents: 'auto',
-                                                                    position: 'relative',
-                                                                    zIndex: 2
-                                                                }}
-                                                            >
-                                                                <BsXCircle size={11} /> {rejectingGrnId === grnId ? 'Rejecting...' : 'Reject'}
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleRequestDeleteGrn(rg);
-                                                                }}
-                                                                disabled={isGrnReceived(rg.status) || deletingGrnId === rg.id}
-                                                                title={isGrnReceived(rg.status) ? "Cannot delete a GRN that has already been received into inventory" : `Delete ${grnNum}`}
-                                                                style={{
-                                                                    background: isGrnReceived(rg.status) ? '#f3f4f6' : '#fef2f2',
-                                                                    color: isGrnReceived(rg.status) ? '#9ca3af' : '#dc2626',
-                                                                    border: isGrnReceived(rg.status) ? '1px solid #e5e7eb' : '1px solid #fecaca',
-                                                                    borderRadius: 4,
-                                                                    padding: '4px 8px',
-                                                                    fontSize: 11.5,
-                                                                    fontWeight: 600,
-                                                                    cursor: (isGrnReceived(rg.status) || deletingGrnId === rg.id) ? 'not-allowed' : 'pointer',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: 4,
-                                                                    opacity: isGrnReceived(rg.status) ? 0.6 : 1,
-                                                                    pointerEvents: 'auto',
-                                                                    position: 'relative',
-                                                                    zIndex: 2
-                                                                }}
-                                                            >
-                                                                <BsTrash size={11} /> Delete
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-
             {/* Main GRN Table Container */}
             <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
                 {/* Filter Bar with search and supported query parameters */}
@@ -6864,34 +6720,18 @@ export const GRNPage = () => {
                                     </button>
                                 )}
                             </div>
-                            <button
-                                type="submit"
-                                style={{ background: '#6366f1', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                            >
-                                Search
-                            </button>
                         </form>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                            {hasActiveFilters && (
+                        {hasActiveFilters && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                                 <button
                                     onClick={handleResetFilters}
                                     style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
                                 >
                                     <BsX size={16} /> Clear Filters
                                 </button>
-                            )}
-                            <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>
-                                {loading ? 'Loading...' : `Showing ${grns.length} records`}
-                            </span>
-                            <button
-                                onClick={handleRefreshAll}
-                                title="Refresh GRN list and statistics"
-                                style={{ background: '#f9fafb', border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, color: '#374151' }}
-                            >
-                                <BsArrowRepeat size={14} /> Refresh
-                            </button>
-                        </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Dropdown Filters corresponding to backend query parameters */}
@@ -7029,7 +6869,7 @@ export const GRNPage = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {grns.map((row, i) => {
+                                {paginatedGrns.map((row, i) => {
                                     const grnId = row.id ?? row.grn_id;
                                     const grnLabel = row.grn_number || (grnId ? `GRN-${grnId}` : '-');
                                     const grnStatus = row.status ?? row.grn_status ?? '';
@@ -7297,6 +7137,157 @@ export const GRNPage = () => {
                         </table>
                     </div>
                 )}
+
+                {/* GRN List Pagination Controls */}
+                {!loading && grns.length > 0 && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 20px',
+                        borderTop: '1px solid #e5e7eb',
+                        background: '#ffffff',
+                        flexWrap: 'wrap',
+                        gap: 12
+                    }}>
+                        {/* Left: Rows Per Page Selector */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>Rows per page:</span>
+                            <select
+                                value={pageSize}
+                                onChange={(e) => {
+                                    setPageSize(Number(e.target.value));
+                                    setCurrentPage(1);
+                                }}
+                                style={{
+                                    padding: '5px 10px',
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: 6,
+                                    fontSize: 12.5,
+                                    background: '#ffffff',
+                                    color: '#374151',
+                                    outline: 'none',
+                                    cursor: 'pointer'
+                                }}
+                                aria-label="Select rows per page"
+                            >
+                                <option value={2}>2</option>
+                                <option value={5}>5</option>
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                            </select>
+                        </div>
+
+                        {/* Center: Record count info */}
+                        <div style={{ fontSize: 13, color: '#64748b' }}>
+                            Showing <strong>{rangeStart}</strong> to <strong>{rangeEnd}</strong> of <strong>{grns.length}</strong> {grns.length === 1 ? 'record' : 'records'}
+                            {totalPages > 1 && (
+                                <span style={{ marginLeft: 6, color: '#94a3b8' }}>
+                                    (Page {currentPage} of {totalPages})
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Right: Page Navigation Controls */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <button
+                                type="button"
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage <= 1}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '6px 12px',
+                                    borderRadius: 6,
+                                    border: '1px solid #d1d5db',
+                                    background: currentPage <= 1 ? '#f3f4f6' : '#ffffff',
+                                    color: currentPage <= 1 ? '#9ca3af' : '#374151',
+                                    fontSize: 12.5,
+                                    fontWeight: 600,
+                                    cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                aria-label="Previous Page"
+                            >
+                                <BsChevronLeft size={12} /> Previous
+                            </button>
+
+                            {getPageNumbers().map((p, idx) => {
+                                if (p === '...') {
+                                    return (
+                                        <span
+                                            key={`ellipsis-${idx}`}
+                                            style={{
+                                                minWidth: 28,
+                                                height: 32,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: '#9ca3af',
+                                                fontSize: 13,
+                                                fontWeight: 600
+                                            }}
+                                        >
+                                            …
+                                        </span>
+                                    );
+                                }
+                                const isActive = p === currentPage;
+                                return (
+                                    <button
+                                        key={p}
+                                        type="button"
+                                        onClick={() => setCurrentPage(p)}
+                                        style={{
+                                            minWidth: 32,
+                                            height: 32,
+                                            padding: '0 6px',
+                                            borderRadius: 6,
+                                            border: isActive ? '1.5px solid #6366f1' : '1px solid #d1d5db',
+                                            background: isActive ? '#eef2ff' : '#ffffff',
+                                            color: isActive ? '#6366f1' : '#374151',
+                                            fontSize: 12.5,
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        aria-current={isActive ? 'page' : undefined}
+                                    >
+                                        {p}
+                                    </button>
+                                );
+                            })}
+
+                            <button
+                                type="button"
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage >= totalPages}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '6px 12px',
+                                    borderRadius: 6,
+                                    border: '1px solid #d1d5db',
+                                    background: currentPage >= totalPages ? '#f3f4f6' : '#ffffff',
+                                    color: currentPage >= totalPages ? '#9ca3af' : '#374151',
+                                    fontSize: 12.5,
+                                    fontWeight: 600,
+                                    cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                aria-label="Next Page"
+                            >
+                                Next <BsChevronRight size={12} />
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* CREATE INWARD GRN MODAL */}
@@ -7394,7 +7385,9 @@ export const GRNPage = () => {
                                     >
                                         <option value="">-- Select Warehouse --</option>
                                         {warehouses.map(wh => (
-                                            <option key={wh.id} value={wh.id}>{wh.name || `Warehouse #${wh.id}`}</option>
+                                            <option key={wh.id} value={wh.id}>
+                                                {wh.warehouse_name || wh.name || (wh.code ? `${wh.code} - Warehouse` : `Warehouse #${wh.id}`)}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
@@ -8566,7 +8559,7 @@ export const GRNPage = () => {
                                                             <td style={{ padding: '8px 12px' }}>
                                                                 <div style={{ fontWeight: 600, color: '#1e293b' }}>{it.product_name}</div>
                                                                 <div style={{ fontSize: 10.5, color: '#64748b' }}>
-                                                                    SKU: {it.product_sku || '—'} | <span style={{ color: '#4f46e5' }}>Item ID: #{it.item_id}</span>
+                                                                    SKU: {it.product_sku || '—'}
                                                                 </div>
                                                             </td>
                                                             <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#059669' }}>
@@ -9094,18 +9087,38 @@ export const GRNPage = () => {
                                         <BsDownload size={14} /> {downloadingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'Downloading...' : 'PDF'}
                                     </button>
                                 )}
-                                <button
-                                    type="button"
-                                    onClick={handleOpenSlipInNewTab}
-                                    style={{
-                                        padding: '8px 12px', background: '#f8fafc', color: '#475569',
-                                        border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12.5, fontWeight: 600,
-                                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6
-                                    }}
-                                    title="Open preview in a separate browser tab"
-                                >
-                                    New Tab
-                                </button>
+                                {printSlipGrn && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handlePreviewPdf(printSlipGrn)}
+                                        disabled={previewingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id)}
+                                        style={{
+                                            padding: '8px 14px', background: '#f8fafc', color: '#334155',
+                                            border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, fontWeight: 600,
+                                            cursor: previewingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex', alignItems: 'center', gap: 6
+                                        }}
+                                        title="Preview GRN PDF document in a new window"
+                                    >
+                                        <BsEye size={14} /> {previewingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'Loading...' : 'PDF Preview'}
+                                    </button>
+                                )}
+                                {printSlipGrn && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSlipDownloadCsv(printSlipGrn)}
+                                        disabled={downloadingCsvSlipGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id)}
+                                        style={{
+                                            padding: '8px 14px', background: '#f8fafc', color: '#334155',
+                                            border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, fontWeight: 600,
+                                            cursor: downloadingCsvSlipGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex', alignItems: 'center', gap: 6
+                                        }}
+                                        title="Export GRN as CSV file"
+                                    >
+                                        <BsDownload size={14} /> {downloadingCsvSlipGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'Exporting...' : 'CSV'}
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -9123,6 +9136,22 @@ export const GRNPage = () => {
                                 </button>
                             </div>
                         </div>
+
+                        {printSlipError && (
+                            <div style={{
+                                padding: '8px 24px', background: '#fef2f2', borderBottom: '1px solid #fee2e2',
+                                color: '#b91c1c', fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                            }}>
+                                <span>{printSlipError}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setPrintSlipError(null)}
+                                    style={{ background: 'transparent', border: 'none', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
 
                         {/* Sandboxed Iframe Container */}
                         <div style={{ flex: 1, padding: 12, background: '#f8fafc', overflow: 'hidden', display: 'flex' }}>

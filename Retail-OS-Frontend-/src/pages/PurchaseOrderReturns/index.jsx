@@ -29,8 +29,6 @@ import {
   BsCheck2All,
   BsTrash,
   BsArrowRepeat,
-  BsChevronLeft,
-  BsChevronRight,
   BsSearch,
   BsX,
   BsPlus,
@@ -1696,257 +1694,6 @@ const PurchaseOrderReturns = () => {
         </div>
       )}
 
-      {/* QUICK LOOKUP BY RETURN NUMBER BAR (GET /by-number/{return_number}) */}
-      <form
-        className="purchase-order-returns-lookup-bar"
-        onSubmit={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          handleLookupByNumber(e);
-        }}
-      >
-        <div className="por-lookup-input-wrap">
-          <BsSearch className="por-lookup-icon" size={14} />
-          <input
-            type="text"
-            className="purchase-order-returns-lookup-input"
-            placeholder="Lookup by Return Number (e.g. POR-20261027064857-50D2) or Debit Note #..."
-            value={lookupNumber}
-            onChange={(e) => {
-              setLookupNumber(e.target.value);
-              if (actionError) setActionError("");
-              if (lookupError) setLookupError("");
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                e.stopPropagation();
-                handleLookupByNumber(e);
-              }
-            }}
-            disabled={lookupLoading}
-          />
-          {lookupNumber && (
-            <button
-              type="button"
-              className="purchase-order-returns-lookup-clear"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setLookupNumber("");
-                setActionError("");
-                setLookupError("");
-                setLookupResult(null);
-              }}
-              disabled={lookupLoading}
-              title="Clear lookup input"
-            >
-              <BsX size={16} />
-            </button>
-          )}
-        </div>
-        <button
-          type="button"
-          className="purchase-order-returns-lookup-btn"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleLookupByNumber(e);
-          }}
-          disabled={lookupLoading}
-          title="Lookup purchase order return from backend API"
-        >
-          {lookupLoading ? (
-            <>
-              <BsArrowRepeat className="animate-spin" size={14} />
-              <span>Looking up...</span>
-            </>
-          ) : (
-            <>
-              <BsSearch size={13} />
-              <span>Lookup Return</span>
-            </>
-          )}
-        </button>
-      </form>
-
-      {/* LOOKUP ERROR BANNER WITH RETRY */}
-      {lookupError && (
-        <div
-          className="purchase-order-returns-error"
-          style={{
-            margin: "0 0 12px 0",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 8,
-          }}
-        >
-          <span>{lookupError}</span>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleLookupByNumber(e);
-              }}
-              style={{
-                padding: "3px 10px",
-                fontSize: 11,
-                cursor: "pointer",
-                borderRadius: 4,
-                border: "1px solid #f87171",
-                background: "#ffffff",
-                color: "#dc2626",
-                fontWeight: 600,
-              }}
-            >
-              Retry
-            </button>
-            <button
-              type="button"
-              onClick={() => setLookupError("")}
-              style={{
-                padding: "3px 8px",
-                fontSize: 11,
-                cursor: "pointer",
-                borderRadius: 4,
-                border: "1px solid #cbd5e1",
-                background: "#ffffff",
-                color: "#64748b",
-              }}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* LOOKUP RESULT PREVIEW CARD */}
-      {lookupResult && (
-        <div
-          className="purchase-order-return-details"
-          style={{
-            margin: "0 0 16px 0",
-            borderColor: "#6366f1",
-            boxShadow: "0 4px 12px rgba(99, 102, 241, 0.08)",
-          }}
-        >
-          <div className="purchase-order-return-details-header">
-            <div>
-              <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span>Lookup Return Result</span>
-                <span
-                  className={
-                    "purchase-order-return-status status-" +
-                    String(lookupResult.status || "").toLowerCase()
-                  }
-                  style={{ fontSize: 11, padding: "2px 8px" }}
-                >
-                  {lookupResult.status || "N/A"}
-                </span>
-              </h3>
-              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>
-                Found via <code>/by-number/</code> API endpoint
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              {lookupResult.id && (
-                <button
-                  type="button"
-                  onClick={() => handleDownloadPdf(lookupResult.id, lookupResult)}
-                  disabled={downloadingPdfId === lookupResult.id}
-                  title="Download Debit Note PDF"
-                >
-                  {downloadingPdfId === lookupResult.id ? "Downloading..." : "Download PDF"}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setLookupResult(null)}
-                title="Close lookup result preview"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-
-          <div className="purchase-order-return-details-grid">
-            <p>
-              <strong>Return Number:</strong>{" "}
-              <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#4f46e5" }}>
-                {lookupResult.return_number || lookupResult.return_no || "N/A"}
-              </span>
-            </p>
-            <p>
-              <strong>Debit Note #:</strong> {lookupResult.debit_note_number ?? "N/A"}
-            </p>
-            <p>
-              <strong>PO Number:</strong>{" "}
-              {lookupResult.purchase_order_number ||
-                (lookupResult.purchase_order_id
-                  ? `PO #${lookupResult.purchase_order_id}`
-                  : "N/A")}
-            </p>
-            <p>
-              <strong>Supplier:</strong>{" "}
-              {lookupResult.supplier_name ||
-                lookupResult.supplier?.name ||
-                (lookupResult.supplier_id ? `Supplier #${lookupResult.supplier_id}` : "N/A")}
-            </p>
-            <p>
-              <strong>Total Debit:</strong>{" "}
-              <strong style={{ color: "#059669" }}>
-                {formatCurrency(lookupResult.total_amount ?? lookupResult.amount)}
-              </strong>
-            </p>
-            <p>
-              <strong>Store / Warehouse:</strong>{" "}
-              {lookupResult.store_name || lookupResult.warehouse_name || "N/A"}
-            </p>
-            <p>
-              <strong>Reason:</strong> {lookupResult.reason || "N/A"}
-            </p>
-          </div>
-
-          {Array.isArray(lookupResult.items) && lookupResult.items.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <h5 style={{ margin: "0 0 6px", fontSize: 12, color: "#334155" }}>
-                Returned Items ({lookupResult.items.length})
-              </h5>
-              <div className="purchase-order-returns-table-wrapper">
-                <table className="purchase-order-returns-table">
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>SKU</th>
-                      <th>Quantity</th>
-                      <th>Unit Price</th>
-                      <th>Total Cost</th>
-                      <th>Item Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lookupResult.items.map((it, idx) => (
-                      <tr key={it.id || idx}>
-                        <td>{it.product_name || `Product #${it.product_id || "-"}`}</td>
-                        <td>{it.product_sku || it.sku || "-"}</td>
-                        <td>{it.quantity ?? 0}</td>
-                        <td>{formatCurrency(it.unit_price ?? it.cost_price ?? 0)}</td>
-                        <td>{formatCurrency(it.total_cost ?? it.total_amount ?? 0)}</td>
-                        <td>{it.reason || it.item_reason || "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* CREATE RETURN MODAL / FORM */}
       {showCreateForm && (
         <form className="purchase-order-return-details" onSubmit={handleCreateReturn}>
@@ -2263,101 +2010,283 @@ const PurchaseOrderReturns = () => {
         </form>
       )}
 
-      {/* SEARCH AND FILTERS TOOLBAR */}
-      <div className="purchase-order-returns-filters">
-        <div className="purchase-order-returns-search">
-          <BsSearch className="por-search-icon" size={14} />
-          <input
-            type="text"
-            placeholder="Search by Return Number, Debit Note, PO Number, Reason, Supplier..."
-            value={searchTerm}
-            onChange={(event) => {
-              setSearchTerm(event.target.value);
-              setPage(1);
-            }}
-          />
-          {searchTerm && (
-            <button
-              type="button"
-              className="por-search-clear"
-              onClick={() => {
-                setSearchTerm("");
-                setPage(1);
-              }}
-              title="Clear search input"
-            >
-              <BsX size={16} />
-            </button>
-          )}
-        </div>
-
-        <div className="por-filters-right">
-          <div className="purchase-order-returns-store-filter">
-            <div className="por-filter-label-wrap">
-              <BsShop size={13} style={{ color: "#6366f1", flexShrink: 0 }} />
-              <span className="por-filter-text-label">Store:</span>
-            </div>
-            <select
-              value={selectedStoreId}
+      {/* ── UNIFIED PROFESSIONAL SEARCH & FILTER SECTION ── */}
+      <div className="purchase-order-returns-filter-card">
+        {/* SEARCH & FILTER CONTROLS */}
+        <div className="por-filter-row purchase-order-returns-filters">
+          <div className="por-filter-search-wrap purchase-order-returns-search">
+            <BsSearch className="por-search-icon" size={14} />
+            <input
+              type="text"
+              placeholder="Search by Return Number, Debit Note, PO Number, Reason, Supplier..."
+              value={searchTerm}
               onChange={(event) => {
-                setSelectedStoreId(event.target.value);
+                setSearchTerm(event.target.value);
                 setPage(1);
               }}
-              aria-label="Filter by store"
-            >
-              <option value="">All Stores</option>
-              {stores.map((st) => (
-                <option key={st.id} value={st.id}>
-                  {st.name || st.store_name || `Store #${st.id}`}
-                </option>
-              ))}
-            </select>
+              aria-label="Search returns"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                className="por-search-clear"
+                onClick={() => {
+                  setSearchTerm("");
+                  setPage(1);
+                }}
+                title="Clear search input"
+                aria-label="Clear search input"
+              >
+                <BsX size={16} />
+              </button>
+            )}
           </div>
 
-          <div className="purchase-order-returns-status-filter">
-            <div className="por-filter-label-wrap">
-              <BsFilter size={15} style={{ color: "#6366f1", flexShrink: 0 }} />
-              <span className="por-filter-text-label">Status:</span>
+          <div className="por-filter-controls-group por-filters-right">
+            <div className="purchase-order-returns-store-filter">
+              <div className="por-filter-label-wrap">
+                <BsShop size={13} style={{ color: "#6366f1", flexShrink: 0 }} />
+                <span className="por-filter-text-label">Store:</span>
+              </div>
+              <select
+                value={selectedStoreId}
+                onChange={(event) => {
+                  setSelectedStoreId(event.target.value);
+                  setPage(1);
+                }}
+                aria-label="Filter by store"
+              >
+                <option value="">All Stores (Overall Stats)</option>
+                {stores.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.name || st.store_name || `Store #${st.id}`}
+                  </option>
+                ))}
+              </select>
             </div>
-            <select
-              value={statusFilter}
-              onChange={(event) => {
-                setStatusFilter(event.target.value);
-                setPage(1);
-              }}
-              aria-label="Filter by status"
-            >
-              <option value="all">All Status</option>
-              <option value="requested">Requested</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="completed">Completed</option>
-            </select>
-          </div>
 
-          {(searchTerm || selectedStoreId || statusFilter !== "all") && (
-            <button
-              type="button"
-              className="por-btn-reset-filters"
-              onClick={() => {
-                setSearchTerm("");
-                setSelectedStoreId("");
-                setStatusFilter("all");
-                setPage(1);
-              }}
-              title="Reset search and filters"
-            >
-              <BsArrowRepeat size={13} />
-              <span>Reset</span>
-            </button>
-          )}
+            <div className="purchase-order-returns-status-filter">
+              <div className="por-filter-label-wrap">
+                <BsFilter size={15} style={{ color: "#6366f1", flexShrink: 0 }} />
+                <span className="por-filter-text-label">Status:</span>
+              </div>
+              <select
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setPage(1);
+                }}
+                aria-label="Filter by status"
+              >
+                <option value="all">All Status</option>
+                <option value="requested">Requested</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
 
-          <div className="por-directory-tag" title="Purchase Order Returns Directory">
-            <span className="por-dir-dot"></span>
-            <span>Purchase Return Directory</span>
+            {(searchTerm || selectedStoreId || statusFilter !== "all") && (
+              <button
+                type="button"
+                className="por-btn-reset-filters"
+                onClick={() => {
+                  setSearchTerm("");
+                  setSelectedStoreId("");
+                  setStatusFilter("all");
+                  setPage(1);
+                }}
+                title="Reset search and filters"
+              >
+                <BsArrowRepeat size={13} />
+                <span>Reset</span>
+              </button>
+            )}
+
+            <div className="por-directory-tag" title="Purchase Order Returns Directory">
+              <span className="por-dir-dot"></span>
+              <span>Purchase Return Directory</span>
+            </div>
           </div>
         </div>
       </div>
+
+      {/* LOOKUP ERROR BANNER WITH RETRY */}
+      {lookupError && (
+        <div
+          className="purchase-order-returns-error"
+          style={{
+            margin: "0 0 12px 0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <span>{lookupError}</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleLookupByNumber(e);
+              }}
+              style={{
+                padding: "3px 10px",
+                fontSize: 11,
+                cursor: "pointer",
+                borderRadius: 4,
+                border: "1px solid #f87171",
+                background: "#ffffff",
+                color: "#dc2626",
+                fontWeight: 600,
+              }}
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => setLookupError("")}
+              style={{
+                padding: "3px 8px",
+                fontSize: 11,
+                cursor: "pointer",
+                borderRadius: 4,
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                color: "#64748b",
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* LOOKUP RESULT PREVIEW CARD */}
+      {lookupResult && (
+        <div
+          className="purchase-order-return-details"
+          style={{
+            margin: "0 0 16px 0",
+            borderColor: "#6366f1",
+            boxShadow: "0 4px 12px rgba(99, 102, 241, 0.08)",
+          }}
+        >
+          <div className="purchase-order-return-details-header">
+            <div>
+              <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Lookup Return Result</span>
+                <span
+                  className={
+                    "purchase-order-return-status status-" +
+                    String(lookupResult.status || "").toLowerCase()
+                  }
+                  style={{ fontSize: 11, padding: "2px 8px" }}
+                >
+                  {lookupResult.status || "N/A"}
+                </span>
+              </h3>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>
+                Found via <code>/by-number/</code> API endpoint
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              {lookupResult.id && (
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPdf(lookupResult.id, lookupResult)}
+                  disabled={downloadingPdfId === lookupResult.id}
+                  title="Download Debit Note PDF"
+                >
+                  {downloadingPdfId === lookupResult.id ? "Downloading..." : "Download PDF"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setLookupResult(null)}
+                title="Close lookup result preview"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          <div className="purchase-order-return-details-grid">
+            <p>
+              <strong>Return Number:</strong>{" "}
+              <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#4f46e5" }}>
+                {lookupResult.return_number || lookupResult.return_no || "N/A"}
+              </span>
+            </p>
+            <p>
+              <strong>Debit Note #:</strong> {lookupResult.debit_note_number ?? "N/A"}
+            </p>
+            <p>
+              <strong>PO Number:</strong>{" "}
+              {lookupResult.purchase_order_number ||
+                (lookupResult.purchase_order_id
+                  ? `PO #${lookupResult.purchase_order_id}`
+                  : "N/A")}
+            </p>
+            <p>
+              <strong>Supplier:</strong>{" "}
+              {lookupResult.supplier_name ||
+                lookupResult.supplier?.name ||
+                (lookupResult.supplier_id ? `Supplier #${lookupResult.supplier_id}` : "N/A")}
+            </p>
+            <p>
+              <strong>Total Debit:</strong>{" "}
+              <strong style={{ color: "#059669" }}>
+                {formatCurrency(lookupResult.total_amount ?? lookupResult.amount)}
+              </strong>
+            </p>
+            <p>
+              <strong>Store / Warehouse:</strong>{" "}
+              {lookupResult.store_name || lookupResult.warehouse_name || "N/A"}
+            </p>
+            <p>
+              <strong>Reason:</strong> {lookupResult.reason || "N/A"}
+            </p>
+          </div>
+
+          {Array.isArray(lookupResult.items) && lookupResult.items.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <h5 style={{ margin: "0 0 6px", fontSize: 12, color: "#334155" }}>
+                Returned Items ({lookupResult.items.length})
+              </h5>
+              <div className="purchase-order-returns-table-wrapper">
+                <table className="purchase-order-returns-table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>SKU</th>
+                      <th>Quantity</th>
+                      <th>Unit Price</th>
+                      <th>Total Cost</th>
+                      <th>Item Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lookupResult.items.map((it, idx) => (
+                      <tr key={it.id || idx}>
+                        <td>{it.product_name || `Product #${it.product_id || "-"}`}</td>
+                        <td>{it.product_sku || it.sku || "-"}</td>
+                        <td>{it.quantity ?? 0}</td>
+                        <td>{formatCurrency(it.unit_price ?? it.cost_price ?? 0)}</td>
+                        <td>{formatCurrency(it.total_cost ?? it.total_amount ?? 0)}</td>
+                        <td>{it.reason || it.item_reason || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <div className="purchase-order-returns-error">{String(error)}</div>}
       {actionError && <div className="purchase-order-returns-error">{String(actionError)}</div>}
@@ -2701,17 +2630,6 @@ const PurchaseOrderReturns = () => {
           </div>
 
           <div className="por-pagination-controls">
-            <button
-              type="button"
-              className="por-pagination-btn"
-              disabled={page <= 1 || loading}
-              onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
-              aria-label="Previous Page"
-            >
-              <BsChevronLeft size={12} />
-              Previous
-            </button>
-
             {getPageNumbers().map((item, index) =>
               item === "..." ? (
                 <span key={`ellipsis-${index}`} className="por-pagination-ellipsis">
@@ -2731,17 +2649,6 @@ const PurchaseOrderReturns = () => {
                 </button>
               )
             )}
-
-            <button
-              type="button"
-              className="por-pagination-btn"
-              disabled={page >= effectiveTotalPages || loading || effectiveTotal === 0}
-              onClick={() => setPage((currentPage) => Math.min(effectiveTotalPages, currentPage + 1))}
-              aria-label="Next Page"
-            >
-              Next
-              <BsChevronRight size={12} />
-            </button>
           </div>
         </div>
       </div>

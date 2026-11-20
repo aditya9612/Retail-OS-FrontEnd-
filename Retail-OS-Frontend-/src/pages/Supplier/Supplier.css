@@ -620,6 +620,18 @@
   border: 1px solid #e2e8f0;
 }
 
+.sup-badge-clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.sup-badge-clickable:hover {
+  filter: brightness(0.92);
+  transform: translateY(-0.5px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
 .sup-text-secondary {
   color: #64748b;
 }
@@ -649,23 +661,53 @@
   align-items: center;
   gap: 8px;
   justify-content: flex-end;
+  flex-wrap: nowrap;
 }
 
 .sup-btn-action {
   position: relative;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 7px;
-  font-size: 13px;
+  border-radius: 8px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.15s ease;
   border: 1px solid transparent;
   flex-shrink: 0;
   box-sizing: border-box;
+  outline: none;
+}
+
+.sup-btn-view {
+  background: #f5f3ff;
+  color: #6366f1;
+  border-color: #ddd6fe;
+}
+
+.sup-btn-view:hover {
+  background: #ede9fe;
+  color: #4f46e5;
+  border-color: #c4b5fd;
+  transform: translateY(-1px);
+}
+
+.sup-btn-products {
+  background: #f0fdfa;
+  color: #0d9488;
+  border-color: #99f6e4;
+}
+
+.sup-btn-products:hover {
+  background: #ccfbf1;
+  color: #0f766e;
+  border-color: #5eead4;
+  transform: translateY(-1px);
 }
 
 .sup-btn-history {
