@@ -70,7 +70,7 @@ export const menuGroups = [
         label: 'PRODUCTS',
         items: [
             { name: 'Product Master', icon: <BsBoxSeam />, path: '/products' },
-            { name: 'Barcode', icon: <BsUpcScan />, path: '/products/barcode' },
+            { name: 'Barcode Management', icon: <BsUpcScan />, path: '/products/barcode' },
             { name: 'Categories', icon: <BsTagFill />, path: '/categories' },
         ],
     },

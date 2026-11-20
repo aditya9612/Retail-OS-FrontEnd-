@@ -699,12 +699,26 @@ export const BarcodePage = () => {
         setStatusMessage(null);
 
         try {
+            const hasMrp = (backendLabel?.mrp !== undefined && backendLabel?.mrp !== null && Number(backendLabel.mrp) > 0)
+                || (selectedProduct?.mrp !== undefined && selectedProduct?.mrp !== null && Number(selectedProduct.mrp) > 0);
+            const priceLabel = hasMrp ? 'MRP' : 'Price';
+            const priceVal = hasMrp
+                ? (backendLabel?.mrp ?? selectedProduct.mrp)
+                : (selectedProduct.selling_price ?? selectedProduct.price ?? backendLabel?.price ?? backendLabel?.mrp ?? selectedProduct.mrp ?? 0);
+
+            const rawSku = (backendLabel?.sku || selectedProduct?.sku || '').trim();
+            let cleanSku = rawSku;
+            while (/^SKU[:\s-]+\s*SKU[:\s-]/i.test(cleanSku)) {
+                cleanSku = cleanSku.replace(/^SKU[:\s-]+\s*/i, '');
+            }
+
             const productForPdf = {
                 id: selectedProduct.id,
                 name: backendLabel?.product_name || selectedProduct.name,
-                sku: backendLabel?.sku || selectedProduct.sku,
+                sku: cleanSku,
                 barcode: previewBarcodeNumber,
-                mrp: backendLabel?.mrp ?? selectedProduct.mrp ?? selectedProduct.selling_price ?? selectedProduct.price ?? 0
+                mrp: priceVal,
+                priceLabel
             };
 
             generateBarcodeLabelsPDF({
@@ -750,12 +764,26 @@ export const BarcodePage = () => {
         setStatusMessage(null);
 
         try {
+            const hasMrp = (backendLabel?.mrp !== undefined && backendLabel?.mrp !== null && Number(backendLabel.mrp) > 0)
+                || (selectedProduct?.mrp !== undefined && selectedProduct?.mrp !== null && Number(selectedProduct.mrp) > 0);
+            const priceLabel = hasMrp ? 'MRP' : 'Price';
+            const priceVal = hasMrp
+                ? (backendLabel?.mrp ?? selectedProduct.mrp)
+                : (selectedProduct.selling_price ?? selectedProduct.price ?? backendLabel?.price ?? backendLabel?.mrp ?? selectedProduct.mrp ?? 0);
+
+            const rawSku = (backendLabel?.sku || selectedProduct?.sku || '').trim();
+            let cleanSku = rawSku;
+            while (/^SKU[:\s-]+\s*SKU[:\s-]/i.test(cleanSku)) {
+                cleanSku = cleanSku.replace(/^SKU[:\s-]+\s*/i, '');
+            }
+
             const productForPdf = {
                 id: selectedProduct.id,
                 name: backendLabel?.product_name || selectedProduct.name,
-                sku: backendLabel?.sku || selectedProduct.sku,
+                sku: cleanSku,
                 barcode: previewBarcodeNumber,
-                mrp: backendLabel?.mrp ?? selectedProduct.mrp ?? selectedProduct.selling_price ?? selectedProduct.price ?? 0
+                mrp: priceVal,
+                priceLabel
             };
 
             generateBarcodeLabelsPDF({
@@ -770,7 +798,7 @@ export const BarcodePage = () => {
 
             setStatusMessage({
                 type: 'success',
-                text: `Sent ${requestedCopies} barcode label(s) to printer.`
+                text: `Sent ${requestedCopies} barcode ${requestedCopies === 1 ? 'label' : 'labels'} to printer.`
             });
         } catch (err) {
             console.error('Print error:', err);
@@ -783,12 +811,25 @@ export const BarcodePage = () => {
     // Preview fields derived from selected product or backend response
     const previewStore = backendLabel?.store_name || 'RetailOS Store';
     const previewProductName = backendLabel?.product_name || selectedProduct?.name || (products.length === 0 ? 'No Products Available' : 'Select a Product');
-    const previewSubtitle = selectedProduct?.sku
-        ? `SKU: ${selectedProduct.sku}`
-        : (selectedProduct?.category?.name || selectedProduct?.category || (selectedProduct ? 'Standard Item' : ''));
+    const rawSku = (backendLabel?.sku || selectedProduct?.sku || '').trim();
+    let cleanSku = rawSku;
+    while (/^SKU[:\s-]+\s*SKU[:\s-]/i.test(cleanSku)) {
+        cleanSku = cleanSku.replace(/^SKU[:\s-]+\s*/i, '');
+    }
+    const formattedSku = cleanSku
+        ? (/^SKU\b/i.test(cleanSku) ? cleanSku : `SKU: ${cleanSku}`)
+        : '';
+    const previewSubtitle = formattedSku
+        || (selectedProduct?.category?.name || selectedProduct?.category || (selectedProduct ? 'Standard Item' : ''));
     const previewBarcodeNumber = backendLabel?.barcode || selectedProduct?.barcode || null;
-    const rawPrice = backendLabel?.mrp ?? selectedProduct?.mrp ?? selectedProduct?.selling_price ?? selectedProduct?.price ?? 0;
-    const previewMrp = Number(rawPrice).toLocaleString('en-IN', {
+
+    const hasMrp = (backendLabel?.mrp !== undefined && backendLabel?.mrp !== null && Number(backendLabel.mrp) > 0)
+        || (selectedProduct?.mrp !== undefined && selectedProduct?.mrp !== null && Number(selectedProduct.mrp) > 0);
+    const priceLabel = hasMrp ? 'MRP' : 'Price';
+    const rawPrice = hasMrp
+        ? (backendLabel?.mrp ?? selectedProduct?.mrp)
+        : (selectedProduct?.selling_price ?? selectedProduct?.price ?? backendLabel?.price ?? backendLabel?.mrp ?? selectedProduct?.mrp ?? 0);
+    const previewPriceFormatted = Number(rawPrice || 0).toLocaleString('en-IN', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     });
@@ -812,7 +853,7 @@ export const BarcodePage = () => {
 
     return (
         <ModuleContainer
-            title="Barcode Management & Label Printing"
+            title="Barcode Management"
             subtitle="Generate EAN-13 / Code 128 barcodes, customize label sticker layouts, and batch print for products"
             icon={<BsUpcScan />}
             actionBtn={
@@ -837,7 +878,7 @@ export const BarcodePage = () => {
                             opacity: !previewBarcodeNumber || !selectedProduct ? 0.6 : 1
                         }}
                     >
-                        <BsImage size={15} /> Download Barcode
+                        <BsDownload size={15} /> Download Barcode
                     </button>
                     <button
                         type="button"
@@ -1112,7 +1153,7 @@ export const BarcodePage = () => {
                                 {previewBarcodeNumber || (selectedProduct ? 'Pending Generation' : '—')}
                             </p>
                             <p style={{ fontSize: 15, fontWeight: 900, color: '#111827', margin: '6px 0 0 0' }}>
-                                MRP: ₹{previewMrp} <span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>(Incl. of GST)</span>
+                                {priceLabel}: ₹{previewPriceFormatted} <span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>(Incl. of GST)</span>
                             </p>
                         </div>
 
@@ -1156,45 +1197,7 @@ export const BarcodePage = () => {
                                         gap: 5
                                     }}
                                 >
-                                    <BsImage size={13} /> Download Barcode (PNG)
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleDownloadBarcodeSVG}
-                                    style={{
-                                        background: '#f8fafc',
-                                        color: '#334155',
-                                        border: '1px solid #cbd5e1',
-                                        padding: '6px 12px',
-                                        borderRadius: 6,
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 5
-                                    }}
-                                >
-                                    <BsDownload size={13} /> Download Barcode (SVG)
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleDownloadLabelSVG}
-                                    style={{
-                                        background: '#f8fafc',
-                                        color: '#334155',
-                                        border: '1px solid #cbd5e1',
-                                        padding: '6px 12px',
-                                        borderRadius: 6,
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 5
-                                    }}
-                                >
-                                    <BsDownload size={13} /> Download Label (SVG)
+                                    <BsDownload size={13} /> Download Barcode (PNG)
                                 </button>
                             </div>
                         )}
