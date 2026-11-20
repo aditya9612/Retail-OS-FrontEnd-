@@ -21,7 +21,7 @@ return (
 </td>
 
 
-<td>
+<td style={{ whiteSpace: 'nowrap' }}>
 {variant.sku}
 </td>
 

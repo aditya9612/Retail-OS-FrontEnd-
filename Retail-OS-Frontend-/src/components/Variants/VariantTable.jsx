@@ -107,7 +107,7 @@ const VariantTable = ({ variants, setVariants }) => {
                                     </td>
 
 
-                                    <td className="px-6 py-4 font-bold">
+                                    <td className="px-6 py-4 font-bold whitespace-nowrap">
                                         {variant.sku || "-"}
                                     </td>
 

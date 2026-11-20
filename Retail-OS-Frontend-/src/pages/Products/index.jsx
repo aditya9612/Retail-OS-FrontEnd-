@@ -977,6 +977,7 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
     }, [product]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+    const [generatingBarcode, setGeneratingBarcode] = useState(false);
 
     // Multiple Images Management State
     const [existingImages, setExistingImages] = useState([]);
@@ -1556,18 +1557,50 @@ if (skuError) {
                                 </label>
                                 <button
                                     type="button"
-                                    onClick={() => set('barcode', generateEAN13())}
+                                    disabled={generatingBarcode}
+                                    onClick={async () => {
+                                        if (generatingBarcode) return;
+                                        if (product?.id) {
+                                            setGeneratingBarcode(true);
+                                            try {
+                                                const res = await productService.generateBarcode(product.id, true);
+                                                const candidateBarcode = (
+                                                    res?.data?.barcode ||
+                                                    res?.data?.data?.barcode ||
+                                                    res?.data?.product?.barcode ||
+                                                    res?.barcode ||
+                                                    (typeof res?.data === 'string' ? res.data : null)
+                                                );
+                                                if (candidateBarcode) {
+                                                    set('barcode', candidateBarcode);
+                                                    if (errors.barcode) setErrors(prev => ({ ...prev, barcode: null }));
+                                                }
+                                            } catch (err) {
+                                                console.error('Failed to generate barcode via API:', err);
+                                                const msg = err?.response?.data?.message ||
+                                                    (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
+                                                    err?.message || 'Failed to generate barcode';
+                                                alert(`Failed to generate barcode: ${msg}`);
+                                            } finally {
+                                                setGeneratingBarcode(false);
+                                            }
+                                        } else {
+                                            set('barcode', generateEAN13());
+                                            if (errors.barcode) setErrors(prev => ({ ...prev, barcode: null }));
+                                        }
+                                    }}
                                     style={{
                                         background: 'none',
                                         border: 'none',
                                         color: '#6366f1',
                                         fontSize: 11,
                                         fontWeight: 600,
-                                        cursor: 'pointer',
-                                        padding: 0
+                                        cursor: generatingBarcode ? 'wait' : 'pointer',
+                                        padding: 0,
+                                        opacity: generatingBarcode ? 0.7 : 1
                                     }}
                                 >
-                                    Auto-generate
+                                    {generatingBarcode ? 'Generating...' : 'Auto-generate'}
                                 </button>
                             </div>
                             <input
@@ -2489,6 +2522,7 @@ const Products = () => {
     const [editLoadingId, setEditLoadingId] = useState(null);
     const [togglingId, setTogglingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
+    const [generatingBarcodeId, setGeneratingBarcodeId] = useState(null);
     const [previewImage, setPreviewImage] = useState(null);
     const [previewError, setPreviewError] = useState(false);
     const [brokenImages, setBrokenImages] = useState(new Set());
@@ -3866,7 +3900,50 @@ const Products = () => {
                                                 {p.barcode}
                                             </span>
                                         ) : (
-                                            '—'
+                                            <button
+                                                type="button"
+                                                disabled={generatingBarcodeId === p.id}
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    if (generatingBarcodeId === p.id) return;
+                                                    setGeneratingBarcodeId(p.id);
+                                                    try {
+                                                        const res = await productService.generateBarcode(p.id, false);
+                                                        const candidateBarcode = (
+                                                            res?.data?.barcode ||
+                                                            res?.data?.data?.barcode ||
+                                                            res?.data?.product?.barcode ||
+                                                            res?.barcode ||
+                                                            (typeof res?.data === 'string' ? res.data : null)
+                                                        );
+                                                        if (candidateBarcode) {
+                                                            setProducts(prev => prev.map(prod => prod.id === p.id ? { ...prod, barcode: candidateBarcode } : prod));
+                                                            alert(`Barcode generated successfully: ${candidateBarcode}`);
+                                                        }
+                                                    } catch (err) {
+                                                        console.error('Failed to generate barcode:', err);
+                                                        const msg = err?.response?.data?.message ||
+                                                            (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
+                                                            err?.message || 'Failed to generate barcode';
+                                                        alert(`Failed to generate barcode: ${msg}`);
+                                                    } finally {
+                                                        setGeneratingBarcodeId(null);
+                                                    }
+                                                }}
+                                                title="Generate barcode for this product"
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#6366f1',
+                                                    fontSize: 11,
+                                                    fontWeight: 600,
+                                                    cursor: generatingBarcodeId === p.id ? 'wait' : 'pointer',
+                                                    textDecoration: 'underline',
+                                                    padding: 0
+                                                }}
+                                            >
+                                                {generatingBarcodeId === p.id ? 'Generating...' : '+ Generate'}
+                                            </button>
                                         )}
                                     </td>
 

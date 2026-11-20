@@ -980,17 +980,7 @@ export const ProductVariantModal = ({
                 {/* 1. MODAL HEADER */}
                 <div className="ec-modal-header" style={{ padding: '16px 24px', borderBottom: '1px solid #e5e7eb', background: '#f9fafb' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{
-                            width: 38,
-                            height: 38,
-                            borderRadius: 10,
-                            background: '#e0e7ff',
-                            color: '#4f46e5',
-                            display: 'grid',
-                            placeItems: 'center'
-                        }}>
-                            <BsGrid3X3Gap size={18} />
-                        </div>
+                        <span style={{ fontSize: 22, display: 'inline-flex', alignItems: 'center' }}>🛒</span>
                         <div>
                             <h3 style={{ margin: 0, fontWeight: 700, fontSize: 17, color: '#111827', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 Product Variant Master
@@ -1418,7 +1408,7 @@ export const ProductVariantModal = ({
                                         <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
                                             <th style={{ padding: '10px 14px' }}>Variant Name</th>
                                             <th style={{ padding: '10px 14px' }}>Parent Product</th>
-                                            <th style={{ padding: '10px 14px' }}>SKU</th>
+                                            <th style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>SKU</th>
                                             <th style={{ padding: '10px 14px' }}>Barcode</th>
                                             <th style={{ padding: '10px 14px' }}>Size & Color</th>
                                             <th style={{ padding: '10px 14px' }}>Attributes</th>
@@ -1493,14 +1483,16 @@ export const ProductVariantModal = ({
                                                                 <span style={{ fontSize: 10, color: '#9ca3af' }}>{parent.category_name}</span>
                                                             )}
                                                         </td>
-                                                        <td style={{ padding: '10px 14px' }}>
+                                                        <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                                                             <span style={{
                                                                 background: '#f3f4f6',
                                                                 padding: '2px 6px',
                                                                 borderRadius: 4,
                                                                 fontFamily: 'monospace',
                                                                 fontSize: 11,
-                                                                color: '#374151'
+                                                                color: '#374151',
+                                                                whiteSpace: 'nowrap',
+                                                                display: 'inline-block'
                                                             }}>
                                                                 {v.sku}
                                                             </span>
@@ -1599,12 +1591,34 @@ export const ProductVariantModal = ({
                                                             )}
                                                         </td>
                                                         <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
-                                                            <div style={{ fontWeight: 600, color: '#111827' }}>
-                                                                {fmt(v.effective_selling_price ?? v.selling_price)}
-                                                            </div>
-                                                            <div style={{ fontSize: 10, color: '#6b7280' }}>
-                                                                Cost: {fmt(v.effective_cost_price ?? v.cost_price)}
-                                                            </div>
+                                                            {(() => {
+                                                                const rawSellingPrice = (v.effective_selling_price !== null && v.effective_selling_price !== undefined && Number(v.effective_selling_price) > 0)
+                                                                    ? v.effective_selling_price
+                                                                    : (v.selling_price !== null && v.selling_price !== undefined && Number(v.selling_price) > 0)
+                                                                        ? v.selling_price
+                                                                        : (v.price !== null && v.price !== undefined && Number(v.price) > 0)
+                                                                            ? v.price
+                                                                            : (parent?.selling_price ?? parent?.price ?? parent?.mrp ?? null);
+
+                                                                const rawCostPrice = (v.effective_cost_price !== null && v.effective_cost_price !== undefined && Number(v.effective_cost_price) > 0)
+                                                                    ? v.effective_cost_price
+                                                                    : (v.cost_price !== null && v.cost_price !== undefined && Number(v.cost_price) > 0)
+                                                                        ? v.cost_price
+                                                                        : (v.cost !== null && v.cost !== undefined && Number(v.cost) > 0)
+                                                                            ? v.cost
+                                                                            : (parent?.cost_price ?? parent?.cost ?? null);
+
+                                                                return (
+                                                                    <>
+                                                                        <div style={{ fontWeight: 600, color: '#111827' }}>
+                                                                            {fmt(rawSellingPrice)}
+                                                                        </div>
+                                                                        <div style={{ fontSize: 10, color: '#6b7280' }}>
+                                                                            Cost: {rawCostPrice !== null && rawCostPrice !== undefined && Number(rawCostPrice) > 0 ? fmt(rawCostPrice) : '—'}
+                                                                        </div>
+                                                                    </>
+                                                                );
+                                                            })()}
                                                         </td>
                                                         <td style={{ padding: '10px 14px' }}>
                                                             <button

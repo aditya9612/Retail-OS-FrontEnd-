@@ -246,13 +246,23 @@ export function generateBarcodeLabelsPDF({
     const cleanCopies = Math.max(1, parseInt(copies, 10) || 1);
     const barcodeNumber = String(product.barcode || product.barcode_number || '8901234567890');
     const productName = String(product.name || 'Classic Polo T-Shirt');
-    const subtitle = String(product.subtitle || (product.sku ? `SKU: ${product.sku}` : 'Size: L | Color: Navy Blue'));
-    const rawPrice = product.mrp ?? product.sellingPrice ?? product.price ?? 1299;
+    const rawSku = String(product.sku || '').trim();
+    let cleanSku = rawSku;
+    while (/^SKU[:\s-]+\s*SKU[:\s-]/i.test(cleanSku)) {
+        cleanSku = cleanSku.replace(/^SKU[:\s-]+\s*/i, '');
+    }
+    const formattedSku = cleanSku
+        ? (/^SKU\b/i.test(cleanSku) ? cleanSku : `SKU: ${cleanSku}`)
+        : '';
+    const subtitle = String(product.subtitle || formattedSku || (product.category || 'Standard Item'));
+    const hasMrp = (product.mrp !== undefined && product.mrp !== null && Number(product.mrp) > 0);
+    const priceLabel = product.priceLabel || (hasMrp ? 'MRP' : 'Price');
+    const rawPrice = hasMrp ? product.mrp : (product.sellingPrice ?? product.price ?? product.selling_price ?? 0);
     const formattedPrice = Number(rawPrice).toLocaleString('en-IN', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     });
-    const priceText = `MRP: Rs. ${formattedPrice} (Incl. of GST)`;
+    const priceText = `${priceLabel}: Rs. ${formattedPrice} (Incl. of GST)`;
 
     const barcodeImage = customBarcodeImage || generateBarcodeDataUrl(barcodeNumber, barcodeStandard);
     const isQR = String(barcodeStandard).toLowerCase().includes('qr');
@@ -516,10 +526,19 @@ export function generateLabelSVG({
     barcode,
     storeName = 'RetailOS Store',
     mrp = 0,
-    barcodeStandard = 'EAN-13'
+    barcodeStandard = 'EAN-13',
+    priceLabel = 'MRP'
 }) {
     const prodName = String(product?.name || 'Retail Product').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const sku = String(product?.sku ? `SKU: ${product.sku}` : (product?.category || '')).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const rawSku = String(product?.sku || '').trim();
+    let cleanSku = rawSku;
+    while (/^SKU[:\s-]+\s*SKU[:\s-]/i.test(cleanSku)) {
+        cleanSku = cleanSku.replace(/^SKU[:\s-]+\s*/i, '');
+    }
+    const formattedSku = cleanSku
+        ? (/^SKU\b/i.test(cleanSku) ? cleanSku : `SKU: ${cleanSku}`)
+        : '';
+    const sku = String(product?.subtitle || formattedSku || (product?.category || '')).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const store = String(storeName).toUpperCase().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const barcodeNum = String(barcode || product?.barcode || '0000000000000');
     const formattedPrice = Number(mrp).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -553,7 +572,7 @@ export function generateLabelSVG({
     <text x="${width / 2}" y="58" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#64748b">${sku}</text>
 ${rects}
     <text x="${width / 2}" y="134" text-anchor="middle" font-family="monospace, Courier, sans-serif" font-size="11" font-weight="bold" fill="#334155">${barcodeNum}</text>
-    <text x="${width / 2}" y="158" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#111827">MRP: ₹${formattedPrice} <tspan font-size="10" font-weight="normal" fill="#64748b">(Incl. of GST)</tspan></text>
+    <text x="${width / 2}" y="158" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#111827">${priceLabel}: ₹${formattedPrice} <tspan font-size="10" font-weight="normal" fill="#64748b">(Incl. of GST)</tspan></text>
 </svg>`;
 }
 
