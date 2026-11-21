@@ -9,6 +9,11 @@ import categoryService from "../../services/categoryService";
 import apiClient from "../../api/axios";
 import ProductVariantModal from "./ProductVariantModal";
 import "../../components/Categories/CategoryCards.css";
+<<<<<<< Updated upstream
+=======
+import { resolveProductImage } from "../../utils/productImages";
+import notificationService from "../../utils/notificationService";
+>>>>>>> Stashed changes
 
 export const fetchDatabaseCategories = async () => {
     try {
@@ -1303,7 +1308,7 @@ if (skuError) {
             } else {
                 errMsg = err?.message || 'Failed to save product. Please check your inputs.';
             }
-            alert('Could not save product:\n' + errMsg);
+            notificationService.error('Could not save product: ' + errMsg);
         } finally {
             setSaving(false);
         }
@@ -1567,7 +1572,7 @@ if (skuError) {
                                                 const msg = err?.response?.data?.message ||
                                                     (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
                                                     err?.message || 'Failed to generate barcode';
-                                                alert(`Failed to generate barcode: ${msg}`);
+                                                notificationService.error(`Failed to generate barcode: ${msg}`);
                                             } finally {
                                                 setGeneratingBarcode(false);
                                             }
@@ -2848,6 +2853,12 @@ const Products = () => {
             }
         }
 
+        if (id) {
+            notificationService.success(`Product "${payload.name || originalForm?.name || 'Item'}" updated successfully.`);
+        } else {
+            notificationService.success(`Product "${payload.name || originalForm?.name || 'Item'}" created successfully.`);
+        }
+
         await fetchProducts(categoryMap, debouncedSearch);
     };
 
@@ -2904,9 +2915,10 @@ const Products = () => {
             setProducts(prev => prev.map(p =>
                 p.id === product.id ? { ...p, is_soft_deleted: true, status: false, is_active: false } : p
             ));
+            notificationService.success(`Expired product "${product.name}" soft-deleted.`);
         } catch (err) {
             console.error('Error soft-deleting product:', err);
-            alert('Could not soft-delete product: ' + (err?.message || err));
+            notificationService.error('Could not soft-delete product: ' + (err?.message || err));
         } finally {
             setDeletingId(null);
         }
@@ -2927,9 +2939,10 @@ const Products = () => {
             setProducts(prev => prev.map(p =>
                 p.id === product.id ? { ...p, is_soft_deleted: false } : p
             ));
+            notificationService.success(`Product "${product.name}" restored successfully.`);
         } catch (err) {
             console.error('Error restoring product:', err);
-            alert('Could not restore product: ' + (err?.message || err));
+            notificationService.error('Could not restore product: ' + (err?.message || err));
         } finally {
             setDeletingId(null);
         }
@@ -2951,10 +2964,11 @@ const Products = () => {
         try {
             await productService.delete(id);
             removeLocalProductMeta(id, prod?.sku);
+            notificationService.success(`Product "${prod?.name || 'Item'}" deleted successfully.`);
             await fetchProducts(categoryMap, debouncedSearch);
         } catch (err) {
             const detail = err?.response?.data?.detail;
-            alert(
+            notificationService.error(
                 'Could not delete product: ' +
                 (typeof detail === 'string'
                     ? detail
@@ -2968,17 +2982,18 @@ const Products = () => {
     const toggleStatus = async (p) => {
         if (togglingId === p.id) return;
         if (p.is_expired || isProductExpired(p)) {
-            alert('Cannot activate an expired product. Please update the expiry date first.');
+            notificationService.warning('Cannot activate an expired product. Please update the expiry date first.');
             return;
         }
         setTogglingId(p.id);
 
         try {
             await productService.toggleStatus(p.id);
+            notificationService.success(`Product "${p.name}" status updated to ${!p.status ? 'Active' : 'Inactive'}.`);
             await fetchProducts(categoryMap, debouncedSearch);
         } catch (err) {
             const detail = err?.response?.data?.detail;
-            alert(
+            notificationService.error(
                 'Status update failed: ' +
                 (typeof detail === 'string'
                     ? detail
@@ -3033,11 +3048,12 @@ const Products = () => {
         a.click();
 
         URL.revokeObjectURL(url);
+        notificationService.success('Products exported to CSV successfully!');
     };
 
     return (
         <div style={{
-            padding: '24px 32px',
+            padding: '20px 24px',
             background: '#f8f9fb',
             minHeight: '100vh',
             fontFamily: 'inherit'
@@ -3162,7 +3178,7 @@ const Products = () => {
                 display: 'flex',
                 alignItems: 'flex-start',
                 justifyContent: 'space-between',
-                marginBottom: 24,
+                marginBottom: 16,
                 flexWrap: 'wrap',
                 gap: 12
             }}>
@@ -3855,7 +3871,7 @@ const Products = () => {
                                                         URL.revokeObjectURL(url);
                                                     } catch (err) {
                                                         console.warn('Barcode download failed', err);
-                                                        alert(`Barcode: ${p.barcode}`);
+                                                        notificationService.info(`Barcode: ${p.barcode}`);
                                                     }
                                                 }}
                                                 title="Click to download barcode image"
@@ -3883,14 +3899,14 @@ const Products = () => {
                                                         );
                                                         if (candidateBarcode) {
                                                             setProducts(prev => prev.map(prod => prod.id === p.id ? { ...prod, barcode: candidateBarcode } : prod));
-                                                            alert(`Barcode generated successfully: ${candidateBarcode}`);
+                                                            notificationService.success(`Barcode generated successfully: ${candidateBarcode}`);
                                                         }
                                                     } catch (err) {
                                                         console.error('Failed to generate barcode:', err);
                                                         const msg = err?.response?.data?.message ||
                                                             (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
                                                             err?.message || 'Failed to generate barcode';
-                                                        alert(`Failed to generate barcode: ${msg}`);
+                                                        notificationService.error(`Failed to generate barcode: ${msg}`);
                                                     } finally {
                                                         setGeneratingBarcodeId(null);
                                                     }

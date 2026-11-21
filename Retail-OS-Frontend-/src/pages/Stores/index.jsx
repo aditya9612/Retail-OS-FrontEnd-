@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import storeService from '../../services/storeService';
 import storeTargetService from '../../services/storeTargetService';
+import notificationService from '../../utils/notificationService';
 import '../../components/Categories/CategoryCards.css';
 import {
     BsBullseye,
@@ -32,7 +33,8 @@ import {
     BsToggleOn,
     BsToggleOff,
     BsSearch,
-    BsShieldCheck
+    BsShieldCheck,
+    BsShieldX
 } from 'react-icons/bs';
 
 const INDIAN_STATES = [
@@ -45,11 +47,12 @@ const INDIAN_STATES = [
     'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
 ];
 
+// Backend TargetType enum options (Requirements 27 & 28)
 const TARGET_TYPES = [
-    { value: 'Sales Target', label: 'Sales Target (₹)' },
-    { value: 'Revenue', label: 'Revenue Target (₹)' },
-    { value: 'Profit', label: 'Gross Profit (₹)' },
-    { value: 'Orders', label: 'Order Count' },
+    { value: 'Sales', label: 'Sales' },
+    { value: 'Revenue', label: 'Revenue' },
+    { value: 'Profit', label: 'Profit' },
+    { value: 'Orders', label: 'Orders' },
     { value: 'Units Sold', label: 'Units Sold' },
     { value: 'New Customers', label: 'New Customers' },
     { value: 'Customer Acquisition', label: 'Customer Acquisition' },
@@ -64,6 +67,16 @@ const PERIOD_OPTIONS = [
     { value: 'quarterly', label: 'Quarterly' },
     { value: 'yearly', label: 'Yearly' },
 ];
+
+// Helper to format ISO datetime to YYYY-MM-DD for date-only inputs (Requirement 26)
+const toDateOnly = (val) => {
+    if (!val) return '';
+    try {
+        return String(val).slice(0, 10);
+    } catch {
+        return '';
+    }
+};
 
 const Stores = () => {
     const location = useLocation();
@@ -90,17 +103,19 @@ const Stores = () => {
         }
     };
 
-    // Shared Notifications
+    // Shared Notifications (Requirement 14)
     const [errorMsg, setErrorMsg] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
 
     const showSuccess = (msg) => {
+        notificationService.success(msg);
         setSuccessMsg(msg);
         setTimeout(() => setSuccessMsg(''), 4500);
     };
 
     const showError = (msg) => {
-        const text = typeof msg === 'string' ? msg : JSON.stringify(msg);
+        const text = typeof msg === 'string' ? msg : (msg?.message || msg?.detail || JSON.stringify(msg));
+        notificationService.error(text);
         setErrorMsg(text);
         setTimeout(() => setErrorMsg(''), 6000);
     };
@@ -112,7 +127,10 @@ const Stores = () => {
     const [storesLoading, setStoresLoading] = useState(false);
     const [storeSearch, setStoreSearch] = useState('');
     const [storeTypeFilter, setStoreTypeFilter] = useState('all'); // 'all' | 'retail' | 'warehouse'
+    const [storeStatusFilter, setStoreStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
+    const [storeCityFilter, setStoreCityFilter] = useState('all');
     const [includeInactive, setIncludeInactive] = useState(true);
+    const [togglingStoreId, setTogglingStoreId] = useState(null);
 
     // Fetch Stores: GET /api/v1/stores/
     const fetchStores = useCallback(async () => {
@@ -132,6 +150,13 @@ const Stores = () => {
 
             const data = await storeService.listStores(params);
             const list = Array.isArray(data) ? data : (data?.items || []);
+            // Requirement 8: Latest created store first in the listing
+            list.sort((a, b) => {
+                if (b.created_at && a.created_at) {
+                    return new Date(b.created_at) - new Date(a.created_at);
+                }
+                return (Number(b.id) || 0) - (Number(a.id) || 0);
+            });
             setStores(list);
         } catch (err) {
             console.error('Fetch Stores Error:', err);
@@ -141,6 +166,41 @@ const Stores = () => {
             setStoresLoading(false);
         }
     }, [includeInactive, storeSearch, storeTypeFilter]);
+
+    // Unique cities for Store Location Filter (Requirement 10)
+    const storeCities = useMemo(() => {
+        const set = new Set();
+        stores.forEach(s => {
+            if (s.city && s.city.trim()) set.add(s.city.trim());
+        });
+        return Array.from(set).sort();
+    }, [stores]);
+
+    // Filtered Stores (Requirement 10: name, code, location, type, status)
+    const filteredStores = useMemo(() => {
+        return stores.filter(store => {
+            if (storeSearch.trim()) {
+                const q = storeSearch.trim().toLowerCase();
+                const matchName = (store.name || '').toLowerCase().includes(q);
+                const matchCode = (store.code || '').toLowerCase().includes(q);
+                const matchCity = (store.city || '').toLowerCase().includes(q);
+                if (!matchName && !matchCode && !matchCity) return false;
+            }
+            if (storeTypeFilter === 'warehouse' && !store.is_warehouse) return false;
+            if (storeTypeFilter === 'retail' && store.is_warehouse) return false;
+            if (storeStatusFilter === 'active' && !store.is_active) return false;
+            if (storeStatusFilter === 'inactive' && store.is_active) return false;
+            if (storeCityFilter !== 'all' && (store.city || '').toLowerCase() !== storeCityFilter.toLowerCase()) return false;
+            return true;
+        });
+    }, [stores, storeSearch, storeTypeFilter, storeStatusFilter, storeCityFilter]);
+
+    const resetStoreFilters = () => {
+        setStoreSearch('');
+        setStoreTypeFilter('all');
+        setStoreStatusFilter('all');
+        setStoreCityFilter('all');
+    };
 
     useEffect(() => {
         if (activeTab === 'stores') {
@@ -299,7 +359,7 @@ const Stores = () => {
                     is_main: storeFormData.is_main,
                 };
                 const created = await storeService.createStore(createPayload);
-                showSuccess(`Store "${created.name}" created successfully (ID: ${created.id})!`);
+                showSuccess(`Store "${created.name}" created successfully!`);
             }
             setShowStoreModal(false);
             fetchStores();
@@ -326,23 +386,33 @@ const Stores = () => {
         }
     };
 
-    // Store Actions: Activate / Deactivate
+    // Store Actions: Activate / Deactivate (Requirement 11)
     const handleToggleStoreActive = async (store) => {
+        if (togglingStoreId === store.id) return;
+        const action = store.is_active ? 'deactivate' : 'activate';
+        const confirmed = window.confirm(`Are you sure you want to ${action} store "${store.name}"?`);
+        if (!confirmed) return;
+
+        setTogglingStoreId(store.id);
         try {
             if (store.is_active) {
                 // PATCH /api/v1/stores/{store_id}/deactivate
                 await storeService.deactivateStore(store.id);
-                showSuccess(`Store "${store.name}" has been deactivated.`);
+                showSuccess(`Store "${store.name}" deactivated successfully.`);
             } else {
                 // PATCH /api/v1/stores/{store_id}/activate
                 await storeService.activateStore(store.id);
                 showSuccess(`Store "${store.name}" activated successfully!`);
             }
+            // Update local state immediately for instant feedback
+            setStores(prev => prev.map(s => s.id === store.id ? { ...s, is_active: !store.is_active } : s));
             fetchStores();
         } catch (err) {
             console.error('Toggle Store Active Error:', err);
-            const detail = err.response?.data?.detail || err.message;
-            showError(`Action failed: ${detail}`);
+            const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
+            showError(`Failed to ${action} store: ${detail}`);
+        } finally {
+            setTogglingStoreId(null);
         }
     };
 
@@ -417,7 +487,17 @@ const Stores = () => {
     const [targets, setTargets] = useState([]);
     const [targetsLoading, setTargetsLoading] = useState(false);
     const [filterPeriod, setFilterPeriod] = useState('all');
+    const [targetStatusFilter, setTargetStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive' | 'completed' | 'cancelled'
+    const [targetTypeFilter, setTargetTypeFilter] = useState('all');
     const [targetsView, setTargetsView] = useState('list'); // 'list' | 'leaderboard'
+
+    // Pagination for Store Targets (Requirement 22)
+    const [targetPage, setTargetPage] = useState(1);
+    const [targetPageSize, setTargetPageSize] = useState(20);
+
+    // Leaderboard filters (Requirement 17)
+    const [leaderboardPeriod, setLeaderboardPeriod] = useState('all');
+    const [leaderboardTargetType, setLeaderboardTargetType] = useState('all');
 
     // Targets Summary from GET /api/v1/store-targets/summary
     const [targetsSummary, setTargetsSummary] = useState({
@@ -439,19 +519,28 @@ const Stores = () => {
     const fetchTargets = useCallback(async () => {
         setTargetsLoading(true);
         try {
-            const params = {};
+            const params = {
+                page_size: 100 // ensure backend returns all configured targets without 12-item truncation (Requirement 22)
+            };
             if (filterPeriod !== 'all') {
                 params.period = filterPeriod;
+            }
+            if (targetStatusFilter !== 'all') {
+                params.status = targetStatusFilter;
+            }
+            if (targetTypeFilter !== 'all') {
+                params.target_type = targetTypeFilter;
             }
 
             // 1. Fetch Targets list
             const listData = await storeTargetService.getTargets(params);
-            const items = Array.isArray(listData) ? listData : (listData?.items || []);
+            const items = Array.isArray(listData) ? listData : (listData?.data || listData?.items || []);
             setTargets(items);
 
             // 2. Fetch Summary Overview
             try {
-                const summaryData = await storeTargetService.getTargetsSummary(params);
+                const summaryParams = filterPeriod !== 'all' ? { period: filterPeriod } : {};
+                const summaryData = await storeTargetService.getTargetsSummary(summaryParams);
                 if (summaryData) {
                     setTargetsSummary(summaryData);
                 }
@@ -465,15 +554,18 @@ const Stores = () => {
         } finally {
             setTargetsLoading(false);
         }
-    }, [filterPeriod]);
+    }, [filterPeriod, targetStatusFilter, targetTypeFilter]);
 
-    // Fetch Leaderboard: GET /api/v1/store-targets/leaderboard
+    // Fetch Leaderboard: GET /api/v1/store-targets/leaderboard (Requirement 17)
     const fetchLeaderboard = useCallback(async () => {
         setLeaderboardLoading(true);
         try {
             const params = {};
-            if (filterPeriod !== 'all') {
-                params.period = filterPeriod;
+            if (leaderboardPeriod !== 'all') {
+                params.period = leaderboardPeriod;
+            }
+            if (leaderboardTargetType !== 'all') {
+                params.target_type = leaderboardTargetType;
             }
             const res = await storeTargetService.getLeaderboard(params);
             const list = res?.leaderboard || (Array.isArray(res) ? res : []);
@@ -483,7 +575,7 @@ const Stores = () => {
         } finally {
             setLeaderboardLoading(false);
         }
-    }, [filterPeriod]);
+    }, [leaderboardPeriod, leaderboardTargetType]);
 
     useEffect(() => {
         if (activeTab === 'targets') {
@@ -499,52 +591,28 @@ const Stores = () => {
     const [editingTarget, setEditingTarget] = useState(null);
     const [targetLoading, setTargetLoading] = useState(false);
     const [targetFormData, setTargetFormData] = useState({
-        store_id: 2,
-        target_type: 'Sales Target',
+        store_id: '',
+        target_type: 'Sales',
         target_value: 100000,
         period: 'monthly',
-        start_date: '2026-10-01T00:00:00',
-        end_date: '2026-10-31T23:59:59',
+        start_date: new Date().toISOString().slice(0, 10),
+        end_date: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10),
         status: 'active',
     });
 
-    // Helper to format date inputs for datetime-local
-    const toInputDatetime = (isoStr) => {
-        if (!isoStr) return '';
-        try {
-            return isoStr.slice(0, 19);
-        } catch {
-            return isoStr;
-        }
-    };
-
-    const formatToISO = (val, isEnd = false) => {
-        if (!val) {
-            const now = new Date();
-            return isEnd
-                ? new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString().slice(0, 19)
-                : new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0).toISOString().slice(0, 19);
-        }
-        if (val.length === 10) {
-            return isEnd ? `${val}T23:59:59` : `${val}T00:00:00`;
-        }
-        return val.length === 16 ? `${val}:00` : val;
-    };
-
     const openCreateTarget = () => {
         setEditingTarget(null);
-        const defaultStoreId = stores.length > 0 ? stores[0].id : 2;
-        const now = new Date();
-        const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0).toISOString().slice(0, 19);
-        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString().slice(0, 19);
+        const defaultStoreId = stores.length > 0 ? stores[0].id : '';
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().slice(0, 10);
 
         setTargetFormData({
             store_id: defaultStoreId,
-            target_type: 'Sales Target',
+            target_type: 'Sales',
             target_value: 100000,
             period: 'monthly',
-            start_date: start,
-            end_date: end,
+            start_date: todayStr,
+            end_date: endOfMonth,
             status: 'active',
         });
         setErrorMsg('');
@@ -559,11 +627,11 @@ const Stores = () => {
             setEditingTarget(fresh);
             setTargetFormData({
                 store_id: fresh.store_id,
-                target_type: fresh.target_type || 'Sales Target',
+                target_type: fresh.target_type || 'Sales',
                 target_value: Number(fresh.target_value || 0),
                 period: fresh.period || 'monthly',
-                start_date: fresh.start_date || '',
-                end_date: fresh.end_date || '',
+                start_date: toDateOnly(fresh.start_date),
+                end_date: toDateOnly(fresh.end_date),
                 status: fresh.status || 'active',
             });
             setErrorMsg('');
@@ -582,19 +650,28 @@ const Stores = () => {
         setErrorMsg('');
         setSuccessMsg('');
 
-        const startISO = formatToISO(targetFormData.start_date, false);
-        const endISO = formatToISO(targetFormData.end_date, true);
+        const startDateOnly = toDateOnly(targetFormData.start_date);
+        const endDateOnly = toDateOnly(targetFormData.end_date);
 
-        if (new Date(endISO) <= new Date(startISO)) {
-            setErrorMsg('End date must be strictly after start date');
+        if (!startDateOnly || !endDateOnly) {
+            setErrorMsg('Start Date and End Date are mandatory.');
             setTargetLoading(false);
             return;
         }
 
+        if (endDateOnly < startDateOnly) {
+            setErrorMsg('End Date cannot be earlier than Start Date.');
+            setTargetLoading(false);
+            return;
+        }
+
+        const startISO = `${startDateOnly}T00:00:00`;
+        const endISO = `${endDateOnly}T23:59:59`;
+
         try {
             if (editingTarget) {
-                // PUT /api/v1/store-targets/{target_id} or PATCH
-                const updatePayload = {
+                // Requirement 19 & 25: PATCH /api/v1/store-targets/{target_id} (Partial update)
+                const patchPayload = {
                     target_type: targetFormData.target_type,
                     target_value: Number(targetFormData.target_value),
                     period: targetFormData.period,
@@ -602,10 +679,10 @@ const Stores = () => {
                     end_date: endISO,
                     status: targetFormData.status,
                 };
-                const updated = await storeTargetService.updateTarget(editingTarget.id, updatePayload);
-                showSuccess(`Target #${updated.id} updated successfully!`);
+                const updated = await storeTargetService.patchTarget(editingTarget.id, patchPayload);
+                showSuccess(`Store Target for "${updated.target_type || targetFormData.target_type}" updated successfully!`);
             } else {
-                // POST /api/v1/store-targets
+                // POST /api/v1/store-targets (Requirement 23 & 24)
                 const createPayload = {
                     store_id: parseInt(targetFormData.store_id, 10),
                     target_type: targetFormData.target_type,
@@ -616,20 +693,20 @@ const Stores = () => {
                     status: targetFormData.status || 'active',
                 };
                 const created = await storeTargetService.createTarget(createPayload);
-                showSuccess(`Target for Store #${created.store_id} created successfully! (ID: ${created.id})`);
+                showSuccess(`Store Target for "${created.target_type || targetFormData.target_type}" created successfully!`);
             }
             setShowCreateModal(false);
             fetchTargets();
         } catch (err) {
             console.error('Save Target Error:', err);
             const errDetail = err.response?.data?.detail || err.response?.data?.message || err.message;
-            setErrorMsg(`Failed to save target: ${typeof errDetail === 'object' ? JSON.stringify(errDetail) : errDetail}`);
+            showError(`Failed to save target: ${typeof errDetail === 'object' ? JSON.stringify(errDetail) : errDetail}`);
         } finally {
             setTargetLoading(false);
         }
     };
 
-    // Delete Target Confirmation: DELETE /api/v1/store-targets/{target_id}
+    // Delete Target Confirmation: DELETE /api/v1/store-targets/{target_id} (Requirement 21)
     const [targetToDelete, setTargetToDelete] = useState(null);
     const [deletingTarget, setDeletingTarget] = useState(false);
 
@@ -638,7 +715,7 @@ const Stores = () => {
         setDeletingTarget(true);
         try {
             await storeTargetService.deleteTarget(targetToDelete.id);
-            showSuccess(`Store Target #${targetToDelete.id} deleted successfully.`);
+            showSuccess(`Store Target for "${targetToDelete.target_type || 'Store'}" deleted successfully.`);
             setTargetToDelete(null);
             fetchTargets();
         } catch (err) {
@@ -650,7 +727,7 @@ const Stores = () => {
         }
     };
 
-    // Target Progress Modal: GET /api/v1/store-targets/{target_id}/progress
+    // Target Progress Modal: GET /api/v1/store-targets/{target_id}/progress (Requirement 20)
     const [progressTarget, setProgressTarget] = useState(null);
     const [targetProgressData, setTargetProgressData] = useState(null);
     const [progressLoading, setProgressLoading] = useState(false);
@@ -682,13 +759,23 @@ const Stores = () => {
         }
     }, [stores.length]);
 
-    // Computed / Fallback values for summary cards if summary API returns 0
+    // Filtered store targets (Requirements 15, 18, 22)
     const filteredTargets = useMemo(() => {
         return targets.filter(t => {
-            if (filterPeriod === 'all') return true;
-            return t.period?.toLowerCase() === filterPeriod.toLowerCase();
+            if (filterPeriod !== 'all' && t.period?.toLowerCase() !== filterPeriod.toLowerCase()) return false;
+            if (targetStatusFilter !== 'all' && (t.status || 'active').toLowerCase() !== targetStatusFilter.toLowerCase()) return false;
+            if (targetTypeFilter !== 'all' && (t.target_type || '').toLowerCase() !== targetTypeFilter.toLowerCase()) return false;
+            return true;
         });
-    }, [targets, filterPeriod]);
+    }, [targets, filterPeriod, targetStatusFilter, targetTypeFilter]);
+
+    // Paginated targets (Requirement 22: Display all returned records)
+    const paginatedTargets = useMemo(() => {
+        const start = (targetPage - 1) * targetPageSize;
+        return filteredTargets.slice(start, start + targetPageSize);
+    }, [filteredTargets, targetPage, targetPageSize]);
+
+    const totalTargetPages = Math.max(1, Math.ceil(filteredTargets.length / targetPageSize));
 
     const displayTotalRevenueTarget = useMemo(() => {
         if (targetsSummary?.total_target_value && Number(targetsSummary.total_target_value) > 0) {
@@ -911,12 +998,12 @@ const Stores = () => {
                                 {stores.find(s => s.is_main)?.name || 'None Set'}
                             </h2>
                             <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
-                                {stores.find(s => s.is_main) ? `Store ID #${stores.find(s => s.is_main)?.id}` : 'Designate a main store'}
+                                {stores.find(s => s.is_main) ? `Code: ${stores.find(s => s.is_main)?.code || 'MAIN'}` : 'Designate a main store'}
                             </span>
                         </div>
                     </div>
 
-                    {/* Filter and Search Bar */}
+                    {/* Filter and Search Bar (Requirement 10) */}
                     <div style={{
                         background: '#fff', borderRadius: 14, padding: '14px 18px',
                         border: '1px solid #e2e8f0', marginBottom: 20,
@@ -924,8 +1011,46 @@ const Stores = () => {
                         flexWrap: 'wrap', gap: 12
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flex: 1 }}>
+                            {/* Search Store Name / Code */}
+                            <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 10px', height: 36, minWidth: 220, flex: '1 1 220px' }}>
+                                <BsSearch size={14} color="#94a3b8" style={{ marginRight: 8, flexShrink: 0 }} />
+                                <input
+                                    type="text"
+                                    value={storeSearch}
+                                    onChange={e => setStoreSearch(e.target.value)}
+                                    placeholder="Search by store name, code, city..."
+                                    style={{ border: 'none', outline: 'none', fontSize: 13, width: '100%' }}
+                                />
+                                {storeSearch && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setStoreSearch('')}
+                                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 13, padding: 0 }}
+                                        title="Clear search"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
+                            </div>
 
+                            {/* Store Location / City Filter */}
+                            {storeCities.length > 0 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>City:</span>
+                                    <select
+                                        value={storeCityFilter}
+                                        onChange={e => setStoreCityFilter(e.target.value)}
+                                        style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 12, outline: 'none', background: '#fff', cursor: 'pointer' }}
+                                    >
+                                        <option value="all">All Cities</option>
+                                        {storeCities.map(c => (
+                                            <option key={c} value={c}>{c}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
 
+                            {/* Store Type Filter */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                 <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Type:</span>
                                 {['all', 'retail', 'warehouse'].map(type => (
@@ -945,7 +1070,41 @@ const Stores = () => {
                                 ))}
                             </div>
 
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer' }}>
+                            {/* Store Status Filter */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Status:</span>
+                                {['all', 'active', 'inactive'].map(st => (
+                                    <button
+                                        key={st}
+                                        onClick={() => setStoreStatusFilter(st)}
+                                        style={{
+                                            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                                            textTransform: 'capitalize', border: 'none', cursor: 'pointer',
+                                            background: storeStatusFilter === st ? '#4f46e5' : '#f1f5f9',
+                                            color: storeStatusFilter === st ? '#fff' : '#475569',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        {st}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Reset Filters */}
+                            {(storeSearch || storeTypeFilter !== 'all' || storeStatusFilter !== 'all' || storeCityFilter !== 'all') && (
+                                <button
+                                    onClick={resetStoreFilters}
+                                    style={{
+                                        padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                                        border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: 'pointer'
+                                    }}
+                                    title="Reset all store filters"
+                                >
+                                    Reset Filters
+                                </button>
+                            )}
+
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer', marginLeft: 4 }}>
                                 <input
                                     type="checkbox"
                                     checked={includeInactive}
@@ -956,11 +1115,11 @@ const Stores = () => {
                         </div>
 
                         <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>
-                            Showing {stores.length} store{stores.length === 1 ? '' : 's'}
+                            Showing {filteredStores.length} of {stores.length} store{stores.length === 1 ? '' : 's'}
                         </div>
                     </div>
 
-                    {/* Stores Table */}
+                    {/* Stores Table (Requirements 1 & 9: OD/ID column removed) */}
                     <div style={{
                         background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0',
                         overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
@@ -969,7 +1128,6 @@ const Stores = () => {
                             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                                 <thead>
                                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ID</th>
                                         <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Store Details</th>
                                         <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type / Role</th>
                                         <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location</th>
@@ -979,21 +1137,21 @@ const Stores = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {stores.length === 0 ? (
+                                    {filteredStores.length === 0 ? (
                                         <tr>
-                                            <td colSpan={7} style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>
+                                            <td colSpan={6} style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>
                                                 <BsShop size={36} style={{ marginBottom: 10, opacity: 0.5 }} />
                                                 <div style={{ fontSize: 14, fontWeight: 600 }}>No Stores Found</div>
-                                                <div style={{ fontSize: 12, marginTop: 4 }}>Click "Add Store" above to register a new store branch or warehouse.</div>
+                                                <div style={{ fontSize: 12, marginTop: 4 }}>
+                                                    {stores.length === 0
+                                                        ? 'Click "Add Store" above to register a new store branch or warehouse.'
+                                                        : 'No stores match the active filter criteria. Click "Reset Filters" to view all.'}
+                                                </div>
                                             </td>
                                         </tr>
                                     ) : (
-                                        stores.map((store) => (
+                                        filteredStores.map((store) => (
                                             <tr key={store.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                <td style={{ padding: '14px 18px', fontFamily: 'monospace', fontWeight: 700, color: '#4f46e5' }}>
-                                                    #{store.id}
-                                                </td>
-
                                                 <td style={{ padding: '14px 18px' }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#1e293b' }}>
                                                         <span>{store.name}</span>
@@ -1037,9 +1195,10 @@ const Stores = () => {
                                                 <td style={{ padding: '14px 18px' }}>
                                                     <button
                                                         onClick={() => handleToggleStoreActive(store)}
+                                                        disabled={togglingStoreId === store.id}
                                                         title={store.is_active ? 'Click to deactivate' : 'Click to activate'}
                                                         style={{
-                                                            border: 'none', background: 'none', cursor: 'pointer', padding: 0,
+                                                            border: 'none', background: 'none', cursor: togglingStoreId === store.id ? 'wait' : 'pointer', padding: 0,
                                                             display: 'inline-flex', alignItems: 'center', gap: 6
                                                         }}
                                                     >
@@ -1048,16 +1207,17 @@ const Stores = () => {
                                                             background: store.is_active ? '#ecfdf5' : '#f1f5f9',
                                                             color: store.is_active ? '#059669' : '#64748b'
                                                         }}>
-                                                            {store.is_active ? 'Active' : 'Inactive'}
+                                                            {togglingStoreId === store.id ? 'Updating...' : store.is_active ? 'Active' : 'Inactive'}
                                                         </span>
                                                     </button>
                                                 </td>
 
                                                 <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                                                    {/* Consistent Action Buttons (Requirement 2 & 11) */}
                                                     <div style={{ display: 'inline-flex', gap: 6 }}>
                                                         <button
                                                             onClick={() => openStoreDetails(store)}
-                                                            title="View Store KPI & Performance Snapshot"
+                                                            title="View Store Details"
                                                             style={{
                                                                 padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0',
                                                                 background: '#fff', color: '#4f46e5', cursor: 'pointer'
@@ -1075,6 +1235,21 @@ const Stores = () => {
                                                             }}
                                                         >
                                                             <BsPencilSquare size={13} />
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => handleToggleStoreActive(store)}
+                                                            disabled={togglingStoreId === store.id}
+                                                            title={store.is_active ? 'Deactivate Store' : 'Activate Store'}
+                                                            style={{
+                                                                padding: '6px 8px', borderRadius: 6,
+                                                                border: store.is_active ? '1px solid #fed7aa' : '1px solid #bbf7d0',
+                                                                background: store.is_active ? '#fff7ed' : '#f0fdf4',
+                                                                color: store.is_active ? '#ea580c' : '#16a34a',
+                                                                cursor: togglingStoreId === store.id ? 'wait' : 'pointer'
+                                                            }}
+                                                        >
+                                                            {store.is_active ? <BsToggleOn size={13} /> : <BsToggleOff size={13} />}
                                                         </button>
 
                                                         {!store.is_main && (
@@ -1140,7 +1315,7 @@ const Stores = () => {
                                     Store Targets
                                 </h1>
                                 <p style={{ fontSize: 13, color: '#64748b', margin: '3px 0 0' }}>
-                                    Manage revenue and performance targets for stores (<code>/api/v1/store-targets</code>)
+                                    Manage revenue, orders and performance milestones across all stores
                                 </p>
                             </div>
                         </div>
@@ -1179,17 +1354,40 @@ const Stores = () => {
                         </div>
                     </div>
 
-                    {/* Stats Overview */}
+                    {/* Stats Overview - Clickable KPI Cards (Requirement 18) */}
                     <div className="category-cards store-targets-cards">
-                        <div className="category-card" title="Active Targets">
-                            <h3>Active Targets</h3>
-                            <h2>{targets.filter(t => t.status === 'active').length}</h2>
-                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 4 }}>
-                                {targetsSummary?.achieved_targets_count ? `${targetsSummary.achieved_targets_count} achieved` : 'Active store milestones'}
+                        <div
+                            className="category-card"
+                            title="Click to view all targets"
+                            onClick={() => { setTargetStatusFilter('all'); setTargetsView('list'); }}
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <h3>Total Targets</h3>
+                            <h2>{targets.length}</h2>
+                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 4 }}>
+                                Configured targets
                             </span>
                         </div>
 
-                        <div className="category-card" title="Total Target Value">
+                        <div
+                            className="category-card"
+                            title="Click to filter active targets"
+                            onClick={() => { setTargetStatusFilter('active'); setTargetsView('list'); }}
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <h3>Active Targets</h3>
+                            <h2>{targets.filter(t => (t.status || 'active').toLowerCase() === 'active').length}</h2>
+                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 4 }}>
+                                Active milestones
+                            </span>
+                        </div>
+
+                        <div
+                            className="category-card"
+                            title="Click to view all revenue & sales targets"
+                            onClick={() => { setTargetTypeFilter('all'); setTargetsView('list'); }}
+                            style={{ cursor: 'pointer' }}
+                        >
                             <h3>Total Target Value</h3>
                             <h2 style={{ fontSize: 22, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 ₹{displayTotalRevenueTarget.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1199,11 +1397,16 @@ const Stores = () => {
                             </span>
                         </div>
 
-                        <div className="category-card" title="Stores Monitored">
-                            <h3>Stores Monitored</h3>
-                            <h2>{targetsSummary?.total_stores_with_targets || new Set(targets.map(t => t.store_id)).size}</h2>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
-                                Configured branch stores
+                        <div
+                            className="category-card"
+                            title="Click to filter completed targets"
+                            onClick={() => { setTargetStatusFilter('completed'); setTargetsView('list'); }}
+                            style={{ cursor: 'pointer' }}
+                        >
+                            <h3>Completed Targets</h3>
+                            <h2>{targets.filter(t => (t.status || '').toLowerCase() === 'completed').length}</h2>
+                            <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 500, marginTop: 4 }}>
+                                Fully reached milestones
                             </span>
                         </div>
                     </div>
@@ -1215,24 +1418,71 @@ const Stores = () => {
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                         flexWrap: 'wrap', gap: 12
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <BsFilter size={16} color="#64748b" />
-                            <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Period Filter:</span>
-                            {['all', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'].map(p => (
-                                <button
-                                    key={p}
-                                    onClick={() => setFilterPeriod(p)}
-                                    style={{
-                                        padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                                        textTransform: 'capitalize', border: 'none', cursor: 'pointer',
-                                        background: filterPeriod === p ? '#4f46e5' : '#f1f5f9',
-                                        color: filterPeriod === p ? '#fff' : '#475569',
-                                        transition: 'all 0.15s ease'
-                                    }}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <BsFilter size={16} color="#64748b" />
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Period:</span>
+                                {['all', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'].map(p => (
+                                    <button
+                                        key={p}
+                                        onClick={() => { setFilterPeriod(p); setTargetPage(1); }}
+                                        style={{
+                                            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
+                                            textTransform: 'capitalize', border: 'none', cursor: 'pointer',
+                                            background: filterPeriod === p ? '#4f46e5' : '#f1f5f9',
+                                            color: filterPeriod === p ? '#fff' : '#475569',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        {p}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Status Filter (Requirement 15) */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Status:</span>
+                                <select
+                                    value={targetStatusFilter}
+                                    onChange={e => { setTargetStatusFilter(e.target.value); setTargetPage(1); }}
+                                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 12, outline: 'none', background: '#fff' }}
                                 >
-                                    {p}
+                                    <option value="all">All Statuses</option>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                            </div>
+
+                            {/* Target Type Filter (Requirements 27 & 28) */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Type:</span>
+                                <select
+                                    value={targetTypeFilter}
+                                    onChange={e => { setTargetTypeFilter(e.target.value); setTargetPage(1); }}
+                                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 12, outline: 'none', background: '#fff' }}
+                                >
+                                    <option value="all">All Types</option>
+                                    {TARGET_TYPES.map(t => (
+                                        <option key={t.value} value={t.value}>{t.label}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {(filterPeriod !== 'all' || targetStatusFilter !== 'all' || targetTypeFilter !== 'all') && (
+                                <button
+                                    onClick={() => {
+                                        setFilterPeriod('all');
+                                        setTargetStatusFilter('all');
+                                        setTargetTypeFilter('all');
+                                        setTargetPage(1);
+                                    }}
+                                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+                                >
+                                    Reset Filters
                                 </button>
-                            ))}
+                            )}
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1278,12 +1528,59 @@ const Stores = () => {
                             background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0',
                             overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                         }}>
-                            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <BsTrophy color="#f59e0b" size={18} />
-                                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
-                                    Store Performance Leaderboard (<code>/api/v1/store-targets/leaderboard</code>)
-                                </h3>
+                            {/* Leaderboard Header without raw API URL (Requirement 16) */}
+                            <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <BsTrophy color="#f59e0b" size={18} />
+                                    <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
+                                        Store Performance Leaderboard
+                                    </h3>
+                                </div>
+
+                                {/* Leaderboard Filters (Requirement 17) */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Period:</span>
+                                        <select
+                                            value={leaderboardPeriod}
+                                            onChange={e => setLeaderboardPeriod(e.target.value)}
+                                            style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 12, outline: 'none', background: '#fff' }}
+                                        >
+                                            <option value="all">All Periods</option>
+                                            {PERIOD_OPTIONS.map(p => (
+                                                <option key={p.value} value={p.value}>{p.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Target Type:</span>
+                                        <select
+                                            value={leaderboardTargetType}
+                                            onChange={e => setLeaderboardTargetType(e.target.value)}
+                                            style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 12, outline: 'none', background: '#fff' }}
+                                        >
+                                            <option value="all">All Types</option>
+                                            {TARGET_TYPES.map(t => (
+                                                <option key={t.value} value={t.value}>{t.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {(leaderboardPeriod !== 'all' || leaderboardTargetType !== 'all') && (
+                                        <button
+                                            onClick={() => {
+                                                setLeaderboardPeriod('all');
+                                                setLeaderboardTargetType('all');
+                                            }}
+                                            style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+                                        >
+                                            Reset Filters
+                                        </button>
+                                    )}
+                                </div>
                             </div>
+
                             <div style={{ overflowX: 'auto' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                                     <thead>
@@ -1374,7 +1671,6 @@ const Stores = () => {
                                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                                     <thead>
                                         <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                            <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ID</th>
                                             <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Store</th>
                                             <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Target Type</th>
                                             <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Target Value</th>
@@ -1385,20 +1681,21 @@ const Stores = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {filteredTargets.length === 0 ? (
+                                        {paginatedTargets.length === 0 ? (
                                             <tr>
-                                                <td colSpan={8} style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>
+                                                <td colSpan={7} style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>
                                                     <BsBullseye size={36} style={{ marginBottom: 10, opacity: 0.5 }} />
                                                     <div style={{ fontSize: 14, fontWeight: 600 }}>No Store Targets Found</div>
-                                                    <div style={{ fontSize: 12, marginTop: 4 }}>Click "Create Target" above to configure your first target.</div>
+                                                    <div style={{ fontSize: 12, marginTop: 4 }}>
+                                                        {targets.length === 0
+                                                            ? 'Click "Create Target" above to configure your first target.'
+                                                            : 'No targets match the active filter criteria. Click "Reset Filters" to view all.'}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ) : (
-                                            filteredTargets.map((item) => (
+                                            paginatedTargets.map((item) => (
                                                 <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                    <td style={{ padding: '14px 18px', fontFamily: 'monospace', fontWeight: 700, color: '#4f46e5' }}>
-                                                        #{item.id}
-                                                    </td>
                                                     <td style={{ padding: '14px 18px' }}>
                                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#1e293b' }}>
                                                             <BsShop color="#64748b" size={13} />
@@ -1423,15 +1720,25 @@ const Stores = () => {
                                                     <td style={{ padding: '14px 18px', textTransform: 'capitalize', color: '#475569', fontWeight: 600 }}>
                                                         {item.period}
                                                     </td>
+                                                    {/* Requirement 26: Date-only range display */}
                                                     <td style={{ padding: '14px 18px', fontSize: 12, color: '#64748b' }}>
-                                                        <div>{new Date(item.start_date).toLocaleDateString('en-IN')}</div>
-                                                        <div style={{ fontSize: 10, color: '#94a3b8' }}>to {new Date(item.end_date).toLocaleDateString('en-IN')}</div>
+                                                        <div>{item.start_date ? item.start_date.slice(0, 10) : '—'}</div>
+                                                        <div style={{ fontSize: 10, color: '#94a3b8' }}>to {item.end_date ? item.end_date.slice(0, 10) : '—'}</div>
                                                     </td>
+                                                    {/* Requirement 15: Status Mapping */}
                                                     <td style={{ padding: '14px 18px' }}>
                                                         <span style={{
                                                             padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
-                                                            background: item.status === 'active' ? '#ecfdf5' : '#f1f5f9',
-                                                            color: item.status === 'active' ? '#059669' : '#64748b',
+                                                            background:
+                                                                (item.status || 'active').toLowerCase() === 'active' ? '#ecfdf5' :
+                                                                (item.status || '').toLowerCase() === 'completed' ? '#e0e7ff' :
+                                                                (item.status || '').toLowerCase() === 'cancelled' ? '#fef2f2' :
+                                                                '#f1f5f9',
+                                                            color:
+                                                                (item.status || 'active').toLowerCase() === 'active' ? '#059669' :
+                                                                (item.status || '').toLowerCase() === 'completed' ? '#4338ca' :
+                                                                (item.status || '').toLowerCase() === 'cancelled' ? '#dc2626' :
+                                                                '#64748b',
                                                             textTransform: 'capitalize'
                                                         }}>
                                                             {item.status || 'active'}
@@ -1479,6 +1786,46 @@ const Stores = () => {
                                     </tbody>
                                 </table>
                             </div>
+
+                            {/* Pagination Controls (Requirement 22: Display all records) */}
+                            {filteredTargets.length > 0 && (
+                                <div style={{
+                                    padding: '12px 18px', borderTop: '1px solid #f1f5f9',
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    background: '#f8fafc', fontSize: 12, color: '#64748b', flexWrap: 'wrap', gap: 10
+                                }}>
+                                    <div>
+                                        Showing {filteredTargets.length === 0 ? 0 : (targetPage - 1) * targetPageSize + 1} to {Math.min(targetPage * targetPageSize, filteredTargets.length)} of {filteredTargets.length} targets
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        <button
+                                            disabled={targetPage <= 1}
+                                            onClick={() => setTargetPage(prev => Math.max(1, prev - 1))}
+                                            style={{
+                                                padding: '4px 10px', borderRadius: 6, border: '1px solid #cbd5e1',
+                                                background: '#fff', cursor: targetPage <= 1 ? 'not-allowed' : 'pointer',
+                                                opacity: targetPage <= 1 ? 0.5 : 1
+                                            }}
+                                        >
+                                            Prev
+                                        </button>
+                                        <span style={{ fontWeight: 600, color: '#334155' }}>
+                                            Page {targetPage} of {totalTargetPages}
+                                        </span>
+                                        <button
+                                            disabled={targetPage >= totalTargetPages}
+                                            onClick={() => setTargetPage(prev => Math.min(totalTargetPages, prev + 1))}
+                                            style={{
+                                                padding: '4px 10px', borderRadius: 6, border: '1px solid #cbd5e1',
+                                                background: '#fff', cursor: targetPage >= totalTargetPages ? 'not-allowed' : 'pointer',
+                                                opacity: targetPage >= totalTargetPages ? 0.5 : 1
+                                            }}
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -1513,10 +1860,10 @@ const Stores = () => {
                                 </div>
                                 <div>
                                     <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                                        {editingStore ? `Edit Store #${editingStore.id}` : 'Add New Store'}
+                                        {editingStore ? 'Edit Store' : 'Add New Store'}
                                     </h3>
                                     <span style={{ fontSize: 11, color: '#64748b' }}>
-                                        {editingStore ? `PATCH /api/v1/stores/${editingStore.id}` : 'POST /api/v1/stores/'}
+                                        {editingStore ? 'Update details for this branch' : 'Register a new store branch'}
                                     </span>
                                 </div>
                             </div>
@@ -1830,7 +2177,7 @@ const Stores = () => {
                                         {detailStore.name} {detailStore.is_main ? '⭐' : ''}
                                     </h3>
                                     <span style={{ fontSize: 11, color: '#64748b' }}>
-                                        Store #{detailStore.id} | Code: {detailStore.code || 'N/A'}
+                                        Code: {detailStore.code || 'N/A'}
                                     </span>
                                 </div>
                             </div>
@@ -1865,11 +2212,11 @@ const Stores = () => {
                                         </div>
                                     </div>
 
-                                    {/* 2. Real-time KPI & Summary (GET /stores/{id}/summary) */}
+                                    {/* 2. Real-time KPI & Summary */}
                                     {storeSummary && (
                                         <div>
                                             <h4 style={{ fontSize: 13, fontWeight: 700, color: '#334155', margin: '0 0 10px', textTransform: 'uppercase' }}>
-                                                Store KPI & Performance Snapshot (<code>GET /summary</code>)
+                                                Store KPI & Performance Snapshot
                                             </h4>
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                                                 <div style={{ background: '#ecfdf5', padding: '12px 14px', borderRadius: 10, border: '1px solid #a7f3d0' }}>
@@ -1899,11 +2246,11 @@ const Stores = () => {
                                         </div>
                                     )}
 
-                                    {/* 3. Stock & Valuation Summary (GET /stores/{id}/inventory-summary) */}
+                                    {/* 3. Stock & Valuation Summary */}
                                     {storeInventorySummary && (
                                         <div>
                                             <h4 style={{ fontSize: 13, fontWeight: 700, color: '#334155', margin: '0 0 10px', textTransform: 'uppercase' }}>
-                                                Stock & Valuation Summary (<code>GET /inventory-summary</code>)
+                                                Stock & Valuation Summary
                                             </h4>
                                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                                                 <div style={{ background: '#f8fafc', padding: '12px 14px', borderRadius: 10, border: '1px solid #e2e8f0' }}>
@@ -1931,13 +2278,13 @@ const Stores = () => {
                                         </div>
                                     )}
 
-                                    {/* 4. Assigned Store Staff (GET /stores/{id}/staff) */}
+                                    {/* 4. Assigned Store Staff */}
                                     <div>
                                         <h4 style={{ fontSize: 13, fontWeight: 700, color: '#334155', margin: '0 0 10px', textTransform: 'uppercase' }}>
-                                            Assigned Staff ({storeStaff.length}) (<code>GET /staff</code>)
+                                            Assigned Staff ({storeStaff.length})
                                         </h4>
                                         {storeStaff.length === 0 ? (
-                                            <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: '8px 0' }}>
+                                             <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: '8px 0' }}>
                                                 No employees directly assigned to this branch yet.
                                             </div>
                                         ) : (
@@ -1949,6 +2296,7 @@ const Stores = () => {
                                                             <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Role</th>
                                                             <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Email</th>
                                                             <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Phone</th>
+                                                            <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Status</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
@@ -1958,6 +2306,15 @@ const Stores = () => {
                                                                 <td style={{ padding: '8px 12px', textTransform: 'capitalize' }}>{member.role}</td>
                                                                 <td style={{ padding: '8px 12px', color: '#64748b' }}>{member.email}</td>
                                                                 <td style={{ padding: '8px 12px', color: '#64748b' }}>{member.phone || '—'}</td>
+                                                                <td style={{ padding: '8px 12px' }}>
+                                                                    <span style={{
+                                                                        padding: '2px 8px', borderRadius: 9999, fontSize: 11, fontWeight: 700,
+                                                                        background: member.is_active ? '#ecfdf5' : '#f1f5f9',
+                                                                        color: member.is_active ? '#059669' : '#64748b'
+                                                                    }}>
+                                                                        {member.is_active ? 'Active' : 'Inactive'}
+                                                                    </span>
+                                                                </td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
@@ -2046,7 +2403,7 @@ const Stores = () => {
                             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Delete Store Target</h3>
                         </div>
                         <p style={{ fontSize: 13, color: '#64748b', lineHeight: 1.5, margin: '0 0 20px' }}>
-                            Are you sure you want to delete Target #{targetToDelete.id} ({targetToDelete.target_type} - ₹{Number(targetToDelete.target_value).toLocaleString('en-IN')})?
+                            Are you sure you want to delete this store target ({targetToDelete.target_type} target for {targetToDelete.store_name || 'Store'})?
                         </p>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
                             <button
@@ -2104,10 +2461,10 @@ const Stores = () => {
                                 </div>
                                 <div>
                                     <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: 0 }}>
-                                        {editingTarget ? `Edit Store Target #${editingTarget.id}` : 'Create Store Target'}
+                                        {editingTarget ? 'Edit Store Target' : 'Create Store Target'}
                                     </h3>
                                     <span style={{ fontSize: 11, color: '#64748b' }}>
-                                        {editingTarget ? `PUT /api/v1/store-targets/${editingTarget.id}` : 'POST /api/v1/store-targets'}
+                                        {editingTarget ? 'Update performance goals for this store' : 'Set milestone and performance goals for a store'}
                                     </span>
                                 </div>
                             </div>
@@ -2122,45 +2479,28 @@ const Stores = () => {
                         {/* Modal Form */}
                         <form onSubmit={handleSaveTarget} style={{ padding: '20px 24px' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                {/* Store Selection */}
+                                {/* Store Selection (Requirement 24) */}
                                 <div>
                                     <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                         Target Store <span style={{ color: '#ef4444' }}>*</span>
                                     </label>
-                                    {stores.length > 0 ? (
-                                        <select
-                                            disabled={Boolean(editingTarget)}
-                                            value={targetFormData.store_id}
-                                            onChange={e => setTargetFormData({ ...targetFormData, store_id: Number(e.target.value) })}
-                                            style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
-                                                border: '1px solid #cbd5e1', fontSize: 13, outline: 'none',
-                                                background: editingTarget ? '#f8fafc' : '#fff', boxSizing: 'border-box'
-                                            }}
-                                        >
-                                            {stores.map(s => (
-                                                <option key={s.id} value={s.id}>
-                                                    #{s.id} - {s.name} ({s.city || 'No city'}) {s.is_main ? '⭐' : ''}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    ) : (
-                                        <input
-                                            type="number"
-                                            required
-                                            min="1"
-                                            disabled={Boolean(editingTarget)}
-                                            value={targetFormData.store_id}
-                                            onChange={e => setTargetFormData({ ...targetFormData, store_id: e.target.value })}
-                                            placeholder="e.g. 2"
-                                            style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
-                                                border: '1px solid #cbd5e1', fontSize: 13, outline: 'none',
-                                                boxSizing: 'border-box'
-                                            }}
-                                        />
-                                    )}
-                                    <span style={{ fontSize: 11, color: '#94a3b8' }}>ID of store for this milestone goal</span>
+                                    <select
+                                        disabled={Boolean(editingTarget)}
+                                        value={targetFormData.store_id}
+                                        onChange={e => setTargetFormData({ ...targetFormData, store_id: Number(e.target.value) })}
+                                        style={{
+                                            width: '100%', padding: '9px 12px', borderRadius: 8,
+                                            border: '1px solid #cbd5e1', fontSize: 13, outline: 'none',
+                                            background: editingTarget ? '#f8fafc' : '#fff', boxSizing: 'border-box'
+                                        }}
+                                    >
+                                        <option value="">Select a Store</option>
+                                        {stores.map(s => (
+                                            <option key={s.id} value={s.id}>
+                                                {s.name} ({s.city || 'No city'}) {s.is_main ? '⭐' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 {/* Target Type & Period (2 columns) */}
@@ -2226,16 +2566,16 @@ const Stores = () => {
                                     <span style={{ fontSize: 11, color: '#94a3b8' }}>Target goal amount to achieve (e.g. 100000)</span>
                                 </div>
 
-                                {/* Date Range (Start Date & End Date) */}
+                                {/* Date Range (Start Date & End Date) (Requirement 26) */}
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                                     <div>
                                         <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                                            Start Date & Time <span style={{ color: '#ef4444' }}>*</span>
+                                            Start Date <span style={{ color: '#ef4444' }}>*</span>
                                         </label>
                                         <input
-                                            type="datetime-local"
+                                            type="date"
                                             required
-                                            value={toInputDatetime(targetFormData.start_date)}
+                                            value={toDateOnly(targetFormData.start_date)}
                                             onChange={e => setTargetFormData({ ...targetFormData, start_date: e.target.value })}
                                             style={{
                                                 width: '100%', padding: '9px 10px', borderRadius: 8,
@@ -2247,12 +2587,13 @@ const Stores = () => {
 
                                     <div>
                                         <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                                            End Date & Time <span style={{ color: '#ef4444' }}>*</span>
+                                            End Date <span style={{ color: '#ef4444' }}>*</span>
                                         </label>
                                         <input
-                                            type="datetime-local"
+                                            type="date"
                                             required
-                                            value={toInputDatetime(targetFormData.end_date)}
+                                            min={targetFormData.start_date ? toDateOnly(targetFormData.start_date) : undefined}
+                                            value={toDateOnly(targetFormData.end_date)}
                                             onChange={e => setTargetFormData({ ...targetFormData, end_date: e.target.value })}
                                             style={{
                                                 width: '100%', padding: '9px 10px', borderRadius: 8,
@@ -2263,28 +2604,26 @@ const Stores = () => {
                                     </div>
                                 </div>
 
-                                {/* Status if Editing */}
-                                {editingTarget && (
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
-                                            Status
-                                        </label>
-                                        <select
-                                            value={targetFormData.status}
-                                            onChange={e => setTargetFormData({ ...targetFormData, status: e.target.value })}
-                                            style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
-                                                border: '1px solid #cbd5e1', fontSize: 13, outline: 'none',
-                                                background: '#fff', boxSizing: 'border-box'
-                                            }}
-                                        >
-                                            <option value="active">Active</option>
-                                            <option value="inactive">Inactive</option>
-                                            <option value="completed">Completed</option>
-                                            <option value="cancelled">Cancelled</option>
-                                        </select>
-                                    </div>
-                                )}
+                                {/* Status for both Create and Edit (Requirement 23) */}
+                                <div>
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                                        Status
+                                    </label>
+                                    <select
+                                        value={targetFormData.status || 'active'}
+                                        onChange={e => setTargetFormData({ ...targetFormData, status: e.target.value })}
+                                        style={{
+                                            width: '100%', padding: '9px 12px', borderRadius: 8,
+                                            border: '1px solid #cbd5e1', fontSize: 13, outline: 'none',
+                                            background: '#fff', boxSizing: 'border-box'
+                                        }}
+                                    >
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                </div>
                             </div>
 
                             {/* Actions */}
