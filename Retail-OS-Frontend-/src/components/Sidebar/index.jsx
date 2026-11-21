@@ -71,7 +71,7 @@ export const menuGroups = [
         items: [
             { name: 'Product Master', icon: <BsBoxSeam />, path: '/products' },
             { name: 'Barcode Management', icon: <BsUpcScan />, path: '/products/barcode' },
-            { name: 'Categories', icon: <BsTagFill />, path: '/categories' },
+            { name: 'Category Management', icon: <BsTagFill />, path: '/categories' },
         ],
     },
     {
@@ -152,9 +152,23 @@ export const menuGroups = [
     },
 ];
 
+const NO_COLLAPSE_ROUTES = [
+    '/dashboard',
+    '/products',
+    '/products/barcode',
+    '/categories',
+    '/stores',
+    '/inventory/store-transfers'
+];
+
 const Sidebar = ({ collapsed, onToggle }) => {
     const location = useLocation();
     const currentPath = location.pathname;
+
+    const isNoCollapseModule = NO_COLLAPSE_ROUTES.some(r =>
+        currentPath === r || currentPath.startsWith(r + '/')
+    );
+    const isEffectiveCollapsed = isNoCollapseModule ? false : collapsed;
 
     const [searchQuery, setSearchQuery] = useState('');
     const [collapsedGroups, setCollapsedGroups] = useState({});
@@ -284,21 +298,26 @@ const Sidebar = ({ collapsed, onToggle }) => {
 
     return (
         <aside
-            className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}
-            style={{ width: collapsed ? '68px' : '242px' }}
+            className={`sidebar ${isEffectiveCollapsed ? 'sidebar--collapsed' : ''}`}
+            style={{ width: isEffectiveCollapsed ? '68px' : '242px' }}
         >
             {/* Sidebar Brand Header */}
-            <div className="sidebar-logo">
+            <div
+                className="sidebar-logo"
+                style={{ cursor: isEffectiveCollapsed ? 'pointer' : 'default' }}
+                onClick={isEffectiveCollapsed ? onToggle : undefined}
+                title={isEffectiveCollapsed ? 'Expand sidebar rail' : undefined}
+            >
                 <div className="sidebar-logo-icon">
                     <BsShop size={18} />
                 </div>
-                {!collapsed && (
+                {!isEffectiveCollapsed && (
                     <div className="sidebar-brand-wrap">
                         <span className="sidebar-brand">RetailOS</span>
                         <span className="sidebar-pro-pill">PRO</span>
                     </div>
                 )}
-                {!collapsed && (
+                {!isEffectiveCollapsed && !isNoCollapseModule && (
                     <button
                         type="button"
                         className="sidebar-toggle"
@@ -311,7 +330,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
             </div>
 
             {/* Quick Filter Search Bar (when expanded) */}
-            {!collapsed && (
+            {!isEffectiveCollapsed && (
                 <div className="sidebar-search-box">
                     <div className="sidebar-search-inner">
                         <BsSearch className="sidebar-search-icon" />
@@ -363,7 +382,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
                         return (
                             <div key={group.id} className="sidebar-group">
                                 {/* Group Header Accordion Trigger */}
-                                {!collapsed ? (
+                                {!isEffectiveCollapsed ? (
                                     <button
                                         type="button"
                                         className="sidebar-group-btn"
@@ -383,7 +402,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
                                 )}
 
                                 {/* Group Items */}
-                                {(!isCollapsed || collapsed) && (
+                                {(!isCollapsed || isEffectiveCollapsed) && (
                                     <div className="sidebar-group-items">
                                         {group.items.map((item) => {
                                             const active = isItemActive(item);
@@ -401,7 +420,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
                                                     >
                                                         <span className="sidebar-item-icon">{item.icon}</span>
 
-                                                        {!collapsed && (
+                                                        {!isEffectiveCollapsed && (
                                                             <>
                                                                 <span className="sidebar-item-label">{item.name}</span>
                                                                 {item.badge && (
@@ -416,7 +435,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
                                                     </NavLink>
 
                                                     {/* Tooltip for collapsed mode */}
-                                                    {collapsed && hoveredItem === item.name && (
+                                                    {isEffectiveCollapsed && hoveredItem === item.name && (
                                                         <div
                                                             style={{
                                                                 position: 'absolute',
@@ -456,7 +475,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
             </nav>
 
             {/* Sidebar Footer Info */}
-            {!collapsed ? (
+            {!isEffectiveCollapsed ? (
                 <div className="sidebar-footer">
                     <div className="sidebar-footer-store">
                         <span className="sidebar-footer-store-name">Store: Main Outlet</span>
