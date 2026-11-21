@@ -18,6 +18,7 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
   const [activeTab, setActiveTab] = useState("details"); // 'details' | 'products' | 'subcategories'
   const [categoryProducts, setCategoryProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [productsError, setProductsError] = useState("");
   const [categorySubcategories, setCategorySubcategories] = useState([]);
   const [loadingSubs, setLoadingSubs] = useState(false);
 
@@ -71,6 +72,7 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
     if (isView && category?.id) {
       // 1. Fetch category products: GET /api/v1/categories/{category_id}/products
       setLoadingProducts(true);
+      setProductsError("");
       categoryApi.getCategoryProducts(category.id, { page: 1, page_size: 50 })
         .then((res) => {
           const data = Array.isArray(res?.data?.data)
@@ -84,6 +86,8 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
         })
         .catch((err) => {
           console.warn("Failed to fetch category products:", err);
+          const msg = err?.response?.data?.message || err?.response?.data?.detail || err?.message || "Failed to load products for this category.";
+          setProductsError(typeof msg === 'string' ? msg : JSON.stringify(msg));
           setCategoryProducts([]);
         })
         .finally(() => setLoadingProducts(false));
@@ -355,6 +359,11 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
               {loadingProducts ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "30px 0", gap: 8, color: "#64748b" }}>
                   <BsArrowClockwise className="spin" size={16} /> Loading products for this category...
+                </div>
+              ) : productsError ? (
+                <div style={{ textAlign: "center", padding: "24px 20px", color: "#dc2626", background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca", fontSize: 13 }}>
+                  <div style={{ fontWeight: 600, marginBottom: 4 }}>Error loading products</div>
+                  <div>{productsError}</div>
                 </div>
               ) : categoryProducts.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "30px 0", color: "#94a3b8", fontSize: 13 }}>

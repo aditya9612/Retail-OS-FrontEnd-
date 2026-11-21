@@ -15,6 +15,7 @@ import { listSuppliers } from '../../api/supplierApi';
 import PurchaseOrderReturns from '../PurchaseOrderReturns';
 import TransferStockModal from '../../components/TransferStockModel';
 import { getStoreTransfers, getStoreTransfersSummary, getStoreTransferById, approveStoreTransfer, rejectStoreTransfer, dispatchStoreTransfer, receiveStoreTransfer, receiveStoreTransferWithDiscrepancy, checkStoreActiveStatus } from '../../services/storeTransferService';
+import notificationService from '../../utils/notificationService';
 import {
     BsSearch, BsPlus, BsDownload, BsFilter, BsCheckCircleFill, BsClockHistory,
     BsXCircleFill, BsPrinter, BsUpcScan, BsBuildings, BsTruck, BsArrowRepeat,
@@ -279,16 +280,19 @@ export const BarcodePage = () => {
                 setProducts(prev => prev.map(p => p.id === currentProd.id ? { ...p, barcode: generatedBarcode } : p));
             }
 
+            const successText = `Barcode successfully generated: ${generatedBarcode || currentProd.barcode || ''} for ${currentProd.name}!`;
             setStatusMessage({
                 type: 'success',
-                text: `Barcode successfully generated: ${generatedBarcode || currentProd.barcode || ''} for ${currentProd.name}!`
+                text: successText
             });
+            notificationService.success(successText);
         } catch (err) {
             console.error('Failed to generate barcode on server:', err);
             const msg = err?.response?.data?.message ||
                 (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
                 'Failed to generate barcode on server. Please try again.';
             setStatusMessage({ type: 'error', text: msg });
+            notificationService.error(msg);
         } finally {
             setIsGenerating(false);
         }
@@ -323,16 +327,20 @@ export const BarcodePage = () => {
                 }
             }
 
+            const previewText = `Preview updated for ${selectedProduct.name} (Barcode: ${labelData?.barcode || selectedProduct.barcode || 'Generated'})`;
             setStatusMessage({
                 type: 'success',
-                text: `Preview updated for ${selectedProduct.name} (Barcode: ${labelData?.barcode || selectedProduct.barcode || 'Generated'})`
+                text: previewText
             });
+            notificationService.success(previewText);
         } catch (err) {
             console.error('Failed to load barcode preview:', err);
+            const infoText = `Preview rendered locally for ${selectedProduct.name}.`;
             setStatusMessage({
                 type: 'info',
-                text: `Preview rendered locally for ${selectedProduct.name}.`
+                text: infoText
             });
+            notificationService.info(infoText);
         } finally {
             setIsPreviewing(false);
         }

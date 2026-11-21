@@ -14,6 +14,7 @@ import {
 
 import category from "../../services/categoryService";
 import productService from "../../services/product";
+import notificationService from "../../utils/notificationService";
 
 import CategoryCards from "../../components/Categories/CategoryCards";
 import CategoryTable, { formatCategoryName } from "../../components/Categories/CategoryTable";
@@ -533,12 +534,13 @@ if (!status) {
   };
 
   /* =========================================================
-     EXPORT HANDLER (Issue 8: GET /api/v1/categories/export)
+     EXPORT HANDLER (Requirement 29: GET /api/v1/categories/export)
   ========================================================= */
 
   const handleExport = async () => {
+    if (isExporting) return;
     if (!categories || categories.length === 0) {
-      alert("No categories available to export");
+      notificationService.warning("No categories available to export");
       return;
     }
 
@@ -557,29 +559,20 @@ if (!status) {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      notificationService.success("Categories exported successfully!");
     } catch (exportErr) {
-      console.warn("Backend export API call failed, generating CSV fallback:", exportErr);
-      const headers = ["ID", "Category Name", "Total Products", "Status", "Created Date", "Description"];
-      const rows = categories.map((cat) => [
-        cat.id,
-        `"${(cat.name || "").replace(/"/g, '""')}"`,
-        cat.products ?? 0,
-        cat.status || "Active",
-        `"${cat.created || ""}"`,
-        `"${(cat.description || "").replace(/"/g, '""')}"`,
-      ]);
-
-      const csvContent =
-        "data:text/csv;charset=utf-8," +
-        [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `categories_${new Date().toISOString().slice(0, 10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      console.error("Backend category export error:", exportErr);
+      const status = exportErr?.response?.status;
+      let errorMsg = "Failed to export categories.";
+      if (status === 422) {
+        errorMsg = "Export failed (HTTP 422): Backend endpoint /categories/export is matched by /{category_id} integer validator. Please ensure the backend defines @router.get('/export') before /{category_id}.";
+      } else if (exportErr?.response?.data?.message || exportErr?.response?.data?.detail) {
+        const detail = exportErr.response.data.detail || exportErr.response.data.message;
+        errorMsg = typeof detail === "string" ? detail : JSON.stringify(detail);
+      } else if (exportErr?.message) {
+        errorMsg = exportErr.message;
+      }
+      notificationService.error(errorMsg);
     } finally {
       setIsExporting(false);
     }
@@ -665,10 +658,7 @@ if (!status) {
       );
 
       await category.delete(item.id);
-
-      console.log(
-        "✅ Category deleted successfully"
-      );
+      notificationService.success(`Category "${item.name || 'Category'}" deleted successfully.`);
 
       await loadCategories();
 
@@ -684,15 +674,13 @@ if (!status) {
         error
       );
 
-      if (error.response) {
-        console.error(
-          "❌ Delete API Error Response:",
-          error.response.data
-        );
-      }
+      const errorMsg =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        "Failed to delete category. Please try again.";
 
-      alert(
-        "Failed to delete category. Please try again."
+      notificationService.error(
+        typeof errorMsg === "string" ? errorMsg : "Failed to delete category. Please try again."
       );
     } finally {
       setLoading(false);
@@ -770,8 +758,8 @@ const handleStatusChange = async (
       setStatusFilter("All");
     }
 
-    console.log(
-      `Category ${item.id} status successfully changed to ${nextStatus}`
+    notificationService.success(
+      `Category "${item.name || 'Category'}" status successfully changed to ${nextStatus}.`
     );
   } catch (error) {
     console.error(
@@ -784,7 +772,7 @@ const handleStatusChange = async (
       error?.response?.data?.message ||
       "Failed to change category status.";
 
-    alert(typeof errorMsg === "string" ? errorMsg : "Failed to change category status.");
+    notificationService.error(typeof errorMsg === "string" ? errorMsg : "Failed to change category status.");
     setError(typeof errorMsg === "string" ? errorMsg : "Failed to change category status.");
   } finally {
     setLoading(false);
@@ -800,15 +788,15 @@ const handleStatusChange = async (
       const formattedName = formatCategoryName(data?.name);
       const trimmedName = formattedName.trim();
       if (!trimmedName) {
-        alert("Please enter category name");
+        notificationService.warning("Please enter category name");
         return;
       }
       if (trimmedName.length < 2) {
-        alert("Category name must be at least 2 characters");
+        notificationService.warning("Category name must be at least 2 characters");
         return;
       }
       if (trimmedName.length > 255) {
-        alert("Category name cannot exceed 255 characters");
+        notificationService.warning("Category name cannot exceed 255 characters");
         return;
       }
 
@@ -905,6 +893,12 @@ const handleStatusChange = async (
         );
       }
 
+      notificationService.success(
+        selectedCategory
+          ? `Category "${payload.name}" updated successfully.`
+          : `Category "${payload.name}" created successfully.`
+      );
+
       /* =====================================================
          CLOSE MODAL
       ===================================================== */
@@ -917,18 +911,12 @@ const handleStatusChange = async (
         error
       );
 
-      if (error.response) {
-        console.error(
-          "❌ API Error Response:",
-          error.response.data
-        );
-      }
+      const errorMsg =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        (selectedCategory ? "Failed to update category" : "Failed to create category");
 
-      alert(
-        selectedCategory
-          ? "Failed to update category"
-          : "Failed to create category"
-      );
+      notificationService.error(typeof errorMsg === "string" ? errorMsg : JSON.stringify(errorMsg));
     }
   };
 

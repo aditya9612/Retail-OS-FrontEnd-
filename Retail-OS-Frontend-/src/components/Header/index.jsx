@@ -91,8 +91,20 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     // ── Notifications Popup State ──
     const [isNotificationOpen, setIsNotificationOpen] = useState(false);
     const [notificationSummary, setNotificationSummary] = useState(null);
+    const [systemNotifications, setSystemNotifications] = useState([]);
     const bellButtonRef = useRef(null);
     const notificationDropdownRef = useRef(null);
+
+    // Listen for global real-time notifications across modules
+    useEffect(() => {
+        const handleSystemNotif = (e) => {
+            if (e.detail) {
+                setSystemNotifications((prev) => [e.detail, ...prev.slice(0, 19)]);
+            }
+        };
+        window.addEventListener('retail-os:notification', handleSystemNotif);
+        return () => window.removeEventListener('retail-os:notification', handleSystemNotif);
+    }, []);
 
     // Fetch dashboard summary for real inventory alerts
     useEffect(() => {
@@ -109,9 +121,9 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
         };
     }, [location.pathname]);
 
-    // Notification items derived from summary
+    // Notification items derived from summary & real-time system notifications
     const notificationItems = useMemo(() => {
-        const items = [];
+        const items = [...systemNotifications];
         if (notificationSummary && notificationSummary.low_stock_products > 0) {
             items.push({
                 id: 'low-stock-alert',
@@ -124,7 +136,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
             });
         }
         return items;
-    }, [notificationSummary]);
+    }, [notificationSummary, systemNotifications]);
 
     // Automatically close notification popup on navigation between pages
     useEffect(() => {
