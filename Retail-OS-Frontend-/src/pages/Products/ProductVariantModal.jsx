@@ -177,7 +177,7 @@ export const ProductVariantModal = ({
     const [listLoading, setListLoading] = useState(false);
     const [togglingVariantId, setTogglingVariantId] = useState(null);
     const [page, setPage] = useState(1);
-    const pageSize = 10;
+    const [pageSize, setPageSize] = useState(10);
 
     // Filters
     const [filterProduct, setFilterProduct] = useState('');
@@ -732,23 +732,17 @@ export const ProductVariantModal = ({
         if (!variantToDelete || !variantToDelete.id || deleting) return;
         setDeleting(true);
         try {
-            if (variantToDelete.is_active) {
-                // If active, deactivate to preserve data instead of hard deletion
-                await productService.deactivateVariant(variantToDelete.id);
-                showNotify('success', `Variant "${variantToDelete.variant_name}" deactivated successfully.`);
-            } else {
-                // If already inactive, perform delete
-                await productService.deleteVariant(variantToDelete.id);
-                showNotify('success', `Variant "${variantToDelete.variant_name}" removed successfully.`);
-            }
+            // Issue 12: Trigger HTTP DELETE /api/v1/variants/{id} on deletion endpoint
+            await productService.deleteVariant(variantToDelete.id);
+            showNotify('success', `Variant "${variantToDelete.variant_name}" deleted successfully.`);
             setVariantToDelete(null);
             fetchVariantsList(page);
             if (typeof onRefresh === 'function') {
                 onRefresh();
             }
         } catch (err) {
-            console.error('Failed to update variant:', err);
-            const msg = extractErrorMessage(err, 'Failed to update variant');
+            console.error('Failed to delete variant:', err);
+            const msg = extractErrorMessage(err, 'Failed to delete variant');
             showNotify('error', msg);
         } finally {
             setDeleting(false);
@@ -1378,32 +1372,11 @@ export const ProductVariantModal = ({
                                         <span> for <em>{productMap.get(Number(filterProduct)).name}</em></span>
                                     )}
                                 </div>
-
-                                <div style={{ display: 'flex', gap: 8 }}>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleOpenMatrix(filterProduct)}
-                                        className="adm-btn-secondary"
-                                        style={{ padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
-                                    >
-                                        <BsGrid3X3Gap size={12} />
-                                        Matrix Generator
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleOpenCreate(filterProduct)}
-                                        className="adm-btn-primary"
-                                        style={{ padding: '6px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
-                                    >
-                                        <BsPlus size={16} />
-                                        New Variant
-                                    </button>
-                                </div>
                             </div>
 
                             {/* Variants Table */}
-                            <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
+                            <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', width: '100%' }}>
+                                <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
                                     <thead>
                                         <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
                                             <th style={{ padding: '10px 14px' }}>Variant Name</th>
@@ -1625,73 +1598,42 @@ export const ProductVariantModal = ({
                                                                 type="button"
                                                                 onClick={() => handleToggleVariantStatus(v)}
                                                                 disabled={isTogglingThis}
-                                                                title={v.is_active ? "Click to deactivate" : "Click to activate"}
+                                                                title={v.is_active ? "Active (Click to deactivate)" : "Inactive (Click to activate)"}
                                                                 style={{
                                                                     display: 'inline-flex',
                                                                     alignItems: 'center',
-                                                                    gap: 4,
-                                                                    padding: '2px 8px',
-                                                                    borderRadius: 12,
-                                                                    fontSize: 11,
-                                                                    fontWeight: 600,
-                                                                    border: 'none',
-                                                                    cursor: isTogglingThis ? 'wait' : 'pointer',
-                                                                    background: v.is_active ? '#dcfce7' : '#f3f4f6',
-                                                                    color: v.is_active ? '#15803d' : '#6b7280'
+                                                                    justifyContent: 'center',
+                                                                    width: 32,
+                                                                    height: 28,
+                                                                    borderRadius: 6,
+                                                                    border: '1px solid #e5e7eb',
+                                                                    background: '#fff',
+                                                                    cursor: isTogglingThis ? 'wait' : 'pointer'
                                                                 }}
                                                             >
                                                                 {isTogglingThis ? (
-                                                                    <BsArrowClockwise size={10} className="spin" />
+                                                                    <BsArrowClockwise size={12} className="spin" color="#6366f1" />
+                                                                ) : v.is_active ? (
+                                                                    <BsToggleOn size={18} color="#10b981" />
                                                                 ) : (
-                                                                    <span style={{
-                                                                        width: 6,
-                                                                        height: 6,
-                                                                        borderRadius: '50%',
-                                                                        background: v.is_active ? '#22c55e' : '#9ca3af'
-                                                                    }} />
+                                                                    <BsToggleOff size={18} color="#9ca3af" />
                                                                 )}
-                                                                {v.is_active ? 'Active' : 'Inactive'}
                                                             </button>
                                                         </td>
                                                         <td style={{ padding: '10px 14px', textAlign: 'right' }}>
                                                             <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                                                                {/* Status Action: Activate / Deactivate */}
-                                                                <button
-                                                                    type="button"
-                                                                    disabled={isTogglingThis}
-                                                                    onClick={() => handleToggleVariantStatus(v)}
-                                                                    title={v.is_active ? "Deactivate Variant" : "Activate Variant"}
-                                                                    style={{
-                                                                        padding: '4px 8px',
-                                                                        borderRadius: 6,
-                                                                        border: v.is_active ? '1px solid #fecaca' : '1px solid #bbf7d0',
-                                                                        background: v.is_active ? '#fff5f5' : '#f0fdf4',
-                                                                        color: v.is_active ? '#b91c1c' : '#15803d',
-                                                                        fontSize: 11,
-                                                                        fontWeight: 600,
-                                                                        cursor: isTogglingThis ? 'wait' : 'pointer',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: 4
-                                                                    }}
-                                                                >
-                                                                    {isTogglingThis ? (
-                                                                        <BsArrowClockwise size={11} className="spin" />
-                                                                    ) : v.is_active ? (
-                                                                        <BsToggleOn size={14} />
-                                                                    ) : (
-                                                                        <BsToggleOff size={14} />
-                                                                    )}
-                                                                    <span>{v.is_active ? 'Deactivate' : 'Activate'}</span>
-                                                                </button>
-
                                                                 {/* Edit Variant */}
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleOpenEdit(v)}
                                                                     title="Edit Variant"
                                                                     style={{
-                                                                        padding: '5px 8px',
+                                                                        width: 28,
+                                                                        height: 28,
+                                                                        padding: 0,
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
                                                                         borderRadius: 6,
                                                                         border: '1px solid #d1d5db',
                                                                         background: '#ffffff',
@@ -1699,16 +1641,21 @@ export const ProductVariantModal = ({
                                                                         cursor: 'pointer'
                                                                     }}
                                                                 >
-                                                                    <BsPencilFill size={11} />
+                                                                    <BsPencilFill size={12} />
                                                                 </button>
 
                                                                 {/* Delete / Deactivate Variant */}
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => setVariantToDelete(v)}
-                                                                    title="Delete / Deactivate Variant"
+                                                                    title="Delete Variant"
                                                                     style={{
-                                                                        padding: '5px 8px',
+                                                                        width: 28,
+                                                                        height: 28,
+                                                                        padding: 0,
+                                                                        display: 'inline-flex',
+                                                                        alignItems: 'center',
+                                                                        justifyContent: 'center',
                                                                         borderRadius: 6,
                                                                         border: '1px solid #fecaca',
                                                                         background: '#fff5f5',
@@ -1716,7 +1663,7 @@ export const ProductVariantModal = ({
                                                                         cursor: 'pointer'
                                                                     }}
                                                                 >
-                                                                    <BsTrashFill size={11} />
+                                                                    <BsTrashFill size={12} />
                                                                 </button>
                                                             </div>
                                                         </td>
@@ -1728,34 +1675,60 @@ export const ProductVariantModal = ({
                                 </table>
                             </div>
 
-                            {/* Pagination Controls */}
-                            {totalPages > 1 && (
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                            {/* Pagination Controls & Entries Per Page Dropdown (Issue 4) */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, flexWrap: 'wrap', gap: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                     <span style={{ fontSize: 12, color: '#6b7280' }}>
-                                        Page {page} of {totalPages}
+                                        Page {page} of {totalPages} ({totalVariants} variants)
                                     </span>
-                                    <div style={{ display: 'flex', gap: 6 }}>
-                                        <button
-                                            type="button"
-                                            disabled={page <= 1}
-                                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                                            className="adm-btn-secondary"
-                                            style={{ padding: '5px 10px', fontSize: 12, opacity: page <= 1 ? 0.5 : 1, cursor: page <= 1 ? 'not-allowed' : 'pointer' }}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <span style={{ fontSize: 12, color: '#6b7280' }}>Entries per page:</span>
+                                        <select
+                                            value={pageSize}
+                                            onChange={(e) => {
+                                                setPageSize(Number(e.target.value));
+                                                setPage(1);
+                                            }}
+                                            style={{
+                                                padding: '2px 8px',
+                                                borderRadius: 6,
+                                                border: '1px solid #d1d5db',
+                                                background: '#fff',
+                                                fontSize: 12,
+                                                color: '#374151',
+                                                cursor: 'pointer',
+                                                outline: 'none',
+                                                fontWeight: 500
+                                            }}
                                         >
-                                            <BsChevronLeft size={10} /> Prev
-                                        </button>
-                                        <button
-                                            type="button"
-                                            disabled={page >= totalPages}
-                                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                            className="adm-btn-secondary"
-                                            style={{ padding: '5px 10px', fontSize: 12, opacity: page >= totalPages ? 0.5 : 1, cursor: page >= totalPages ? 'not-allowed' : 'pointer' }}
-                                        >
-                                            Next <BsChevronRight size={10} />
-                                        </button>
+                                            <option value={10}>10</option>
+                                            <option value={20}>20</option>
+                                            <option value={50}>50</option>
+                                            <option value={100}>100</option>
+                                        </select>
                                     </div>
                                 </div>
-                            )}
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                    <button
+                                        type="button"
+                                        disabled={page <= 1}
+                                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                                        className="adm-btn-secondary"
+                                        style={{ padding: '5px 10px', fontSize: 12, opacity: page <= 1 ? 0.5 : 1, cursor: page <= 1 ? 'not-allowed' : 'pointer' }}
+                                    >
+                                        <BsChevronLeft size={10} /> Prev
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={page >= totalPages}
+                                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                        className="adm-btn-secondary"
+                                        style={{ padding: '5px 10px', fontSize: 12, opacity: page >= totalPages ? 0.5 : 1, cursor: page >= totalPages ? 'not-allowed' : 'pointer' }}
+                                    >
+                                        Next <BsChevronRight size={10} />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -2791,7 +2764,7 @@ export const ProductVariantModal = ({
                                 </div>
                                 <div>
                                     <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
-                                        Deactivate Variant?
+                                        Delete Variant?
                                     </h4>
                                     <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>
                                         SKU: {variantToDelete.sku}
@@ -2800,8 +2773,8 @@ export const ProductVariantModal = ({
                             </div>
 
                             <p style={{ fontSize: 13, color: '#374151', margin: '0 0 20px', lineHeight: 1.5 }}>
-                                Are you sure you want to deactivate/delete variant <strong>"{variantToDelete.variant_name}"</strong>?
-                                It will be marked inactive and hidden from the active POS scanner catalog.
+                                Are you sure you want to delete variant <strong>"{variantToDelete.variant_name}"</strong>?
+                                This will execute the variant deletion endpoint (HTTP DELETE /api/v1/variants/{variantToDelete.id}) and archive it from active catalogs.
                             </p>
 
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
@@ -2833,7 +2806,7 @@ export const ProductVariantModal = ({
                                     }}
                                 >
                                     {deleting && <BsArrowClockwise size={14} className="spin" />}
-                                    {deleting ? 'Deleting...' : 'Confirm Deactivate'}
+                                    {deleting ? 'Deleting...' : 'Delete Variant'}
                                 </button>
                             </div>
                         </div>

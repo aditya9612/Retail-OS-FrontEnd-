@@ -46,18 +46,40 @@ const category = {
   // GET - Subcategories of a Category
   // =========================================================
   getSubcategories(id) {
-    return axiosInstance.get(`${BASE_URL}/${id}/subcategories`);
+    const cleanId = String(id || "").replace(/^\/+|\/+$/g, "");
+    return axiosInstance.get(`${BASE_URL}/${cleanId}/subcategories`);
   },
 
   // =========================================================
   // GET - Products assigned to a Category
   // =========================================================
   getProducts(id, params = {}) {
-    return axiosInstance.get(`${BASE_URL}/${id}/products`, { params });
+    const cleanId = String(id || "").replace(/^\/+|\/+$/g, "");
+    return axiosInstance.get(`${BASE_URL}/${cleanId}/products`, { params });
   },
 
   getCategoryProducts(id, params = {}) {
-    return axiosInstance.get(`${BASE_URL}/${id}/products`, { params });
+    const cleanId = String(id || "").replace(/^\/+|\/+$/g, "");
+    return axiosInstance.get(`${BASE_URL}/${cleanId}/products`, { params });
+  },
+
+  // =========================================================
+  // GET - Export Categories (Backend API - CSV / Excel / PDF)
+  // =========================================================
+  export(params = {}) {
+    const cleanParams = { format: "csv", ...params };
+    return axiosInstance.get(`${BASE_URL}/export`, {
+      params: cleanParams,
+      responseType: "blob",
+    }).catch((err) => {
+      if (err?.response?.status === 404 || err?.response?.status === 405) {
+        return axiosInstance.get("/api/v1/reports/export", {
+          params: { report_type: "categories", format: cleanParams.format || "csv", ...cleanParams },
+          responseType: "blob",
+        });
+      }
+      throw err;
+    });
   },
 
   // =========================================================
@@ -145,6 +167,7 @@ export const {
   deactivate,
   setActiveStatus,
   delete: deleteCategory,
+  export: exportCategories,
 } = category;
 
 export {

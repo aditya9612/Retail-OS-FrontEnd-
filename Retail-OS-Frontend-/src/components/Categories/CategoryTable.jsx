@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   BsEye,
   BsPencil,
@@ -7,7 +7,12 @@ import {
   BsInbox,
   BsToggleOn,
   BsToggleOff,
+  BsChevronRight,
+  BsChevronDown,
+  BsArrowReturnRight,
+  BsArrowClockwise,
 } from "react-icons/bs";
+import category from "../../services/categoryService";
 
 import "./CategoryTable.css";
 
@@ -170,6 +175,42 @@ const CategoryTable = ({
   onDelete,
   onStatusChange,
 }) => {
+  const [expandedIds, setExpandedIds] = useState({});
+  const [subcategoriesMap, setSubcategoriesMap] = useState({});
+  const [loadingSubcategories, setLoadingSubcategories] = useState({});
+
+  const handleToggleExpand = async (item) => {
+    const isExpanded = !!expandedIds[item.id];
+    if (isExpanded) {
+      setExpandedIds((prev) => ({ ...prev, [item.id]: false }));
+      return;
+    }
+
+    setExpandedIds((prev) => ({ ...prev, [item.id]: true }));
+
+    if (subcategoriesMap[item.id] !== undefined) {
+      return;
+    }
+
+    setLoadingSubcategories((prev) => ({ ...prev, [item.id]: true }));
+    try {
+      const res = await category.getSubcategories(item.id);
+      const data = Array.isArray(res?.data?.data)
+        ? res.data.data
+        : Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res?.data?.items)
+        ? res.data.items
+        : [];
+      setSubcategoriesMap((prev) => ({ ...prev, [item.id]: data }));
+    } catch (err) {
+      console.error(`Failed to fetch subcategories for category ${item.id}:`, err);
+      setSubcategoriesMap((prev) => ({ ...prev, [item.id]: [] }));
+    } finally {
+      setLoadingSubcategories((prev) => ({ ...prev, [item.id]: false }));
+    }
+  };
+
   return (
     <div className="category-table-container">
       <table className="category-table">
@@ -263,8 +304,13 @@ const CategoryTable = ({
                     item.created_at
                 );
 
+              const isExpanded = !!expandedIds[item.id];
+              const isLoadingSubs = !!loadingSubcategories[item.id];
+              const subcategories = subcategoriesMap[item.id];
+
               return (
-                <tr key={item.id}>
+                <React.Fragment key={item.id}>
+                <tr>
 
                   {/* =====================
                       CATEGORY NAME
@@ -272,6 +318,38 @@ const CategoryTable = ({
 
                   <td>
                     <div className="category-name">
+                      <button
+                        type="button"
+                        className="category-expand-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleExpand(item);
+                        }}
+                        title={isExpanded ? "Collapse subcategories" : "Expand subcategories"}
+                        aria-label={isExpanded ? "Collapse subcategories" : "Expand subcategories"}
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          padding: "4px",
+                          marginRight: "2px",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#64748b",
+                          borderRadius: "4px",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {isLoadingSubs ? (
+                          <BsArrowClockwise className="spin" size={13} />
+                        ) : isExpanded ? (
+                          <BsChevronDown size={13} />
+                        ) : (
+                          <BsChevronRight size={13} />
+                        )}
+                      </button>
+
                       <div
                         className="category-icon"
                         aria-hidden="true"
@@ -297,7 +375,7 @@ const CategoryTable = ({
                   </td>
 
                   {/* =====================
-                      STATUS
+                      STATUS (Static Badge - Not Clickable)
                   ===================== */}
 
                   <td>
@@ -311,34 +389,6 @@ const CategoryTable = ({
                           isActive
                             ? "status active"
                             : "status inactive"
-                        }
-                        style={{ cursor: "pointer" }}
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (
-                            typeof onStatusChange ===
-                            "function"
-                          ) {
-                            onStatusChange(
-                              item,
-                              !isActive
-                            );
-                          }
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            if (typeof onStatusChange === "function") {
-                              onStatusChange(item, !isActive);
-                            }
-                          }
-                        }}
-                        title={
-                          isActive
-                            ? "Active status (click to deactivate)"
-                            : "Inactive status (click to activate)"
                         }
                       >
                         <span
@@ -500,6 +550,102 @@ const CategoryTable = ({
                     </div>
                   </td>
                 </tr>
+
+                {/* Subcategories Expansion Rows */}
+                {isExpanded && (
+                  isLoadingSubs ? (
+                    <tr className="subcategory-loading-row" style={{ background: "#f8fafc" }}>
+                      <td colSpan="5" style={{ padding: "10px 48px", fontSize: 12, color: "#64748b" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <BsArrowClockwise className="spin" size={13} /> Loading subcategories...
+                        </span>
+                      </td>
+                    </tr>
+                  ) : Array.isArray(subcategories) && subcategories.length > 0 ? (
+                    subcategories.map((sub) => {
+                      const subStatus = sub.is_active === false || String(sub.status).toLowerCase() === "inactive" ? "Inactive" : "Active";
+                      const subIsActive = subStatus === "Active";
+                      const subProductCount = sub.product_count ?? sub.products_count ?? (sub.is_active === false ? 0 : (sub.products ?? 0));
+                      return (
+                        <tr key={`sub_${sub.id}`} className="subcategory-row" style={{ background: "#fdfefe" }}>
+                          <td style={{ paddingLeft: 42 }}>
+                            <div className="category-name" style={{ gap: 8 }}>
+                              <span style={{ color: "#94a3b8", display: "inline-flex", flexShrink: 0 }}>
+                                <BsArrowReturnRight size={12} />
+                              </span>
+                              <span className="category-name-text" style={{ fontSize: 12, fontWeight: 500 }}>
+                                {formatCategoryName(sub.name)}
+                              </span>
+                              <span style={{ fontSize: 10, background: "#f1f5f9", color: "#64748b", padding: "1px 6px", borderRadius: 4, fontWeight: 600 }}>
+                                Subcategory
+                              </span>
+                            </div>
+                          </td>
+                          <td>
+                            <span className="product-count" style={{ fontSize: 12 }}>
+                              {subProductCount}
+                            </span>
+                          </td>
+                          <td>
+                            <span className={subIsActive ? "status active" : "status inactive"}>
+                              <span className="status-dot" aria-hidden="true" />
+                              {subStatus}
+                            </span>
+                          </td>
+                          <td>
+                            <span className="created-date" style={{ fontSize: 11 }}>
+                              {formatCategoryDate(sub.created_at || sub.created)}
+                            </span>
+                          </td>
+                          <td>
+                            <div className="table-actions">
+                              <button
+                                type="button"
+                                className="view-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (typeof onView === "function") onView(sub);
+                                }}
+                                title="View"
+                              >
+                                <BsEye />
+                              </button>
+                              <button
+                                type="button"
+                                className="edit-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (typeof onEdit === "function") onEdit(sub);
+                                }}
+                                title="Edit"
+                              >
+                                <BsPencil />
+                              </button>
+                              <button
+                                type="button"
+                                className="delete-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (typeof onDelete === "function") onDelete(sub);
+                                }}
+                                title="Delete"
+                              >
+                                <BsTrash />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr className="subcategory-empty-row" style={{ background: "#f8fafc" }}>
+                      <td colSpan="5" style={{ padding: "8px 48px", fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>
+                        No subcategories found under {formatCategoryName(item.name)}.
+                      </td>
+                    </tr>
+                  )
+                )}
+              </React.Fragment>
               );
             })
           )}

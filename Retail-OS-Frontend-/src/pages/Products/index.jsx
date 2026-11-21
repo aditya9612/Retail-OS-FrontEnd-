@@ -2503,6 +2503,7 @@ const Products = () => {
     const [kpiFilter, setKpiFilter] = useState('all'); // 'all' | 'featured' | 'categories' | 'expirySoon'
     const [showSoftDeleted, setShowSoftDeleted] = useState(false);
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
     const [modal, setModal] = useState(null);
     const [viewProduct, setViewProduct] = useState(null);
     const [showVariantModal, setShowVariantModal] = useState(false);
@@ -2642,22 +2643,20 @@ const Products = () => {
     }, [debouncedSearch]);
 
     useEffect(() => {
-        if (kpiFilter === 'expirySoon') {
-            const fetchBackendExpiring = async () => {
-                try {
-                    const u = JSON.parse(localStorage.getItem('user') || '{}');
-                    const storeId = u.store_id || u.storeId || 1;
-                    const res = await productService.getExpiringSoon(storeId, 30);
-                    const list = res?.data ?? res;
-                    if (Array.isArray(list) && list.length > 0) {
-                        setBackendExpiringIds(new Set(list.map(x => x.id)));
-                    }
-                } catch {
-                    // Fall back to client-side date inspection
+        const fetchBackendExpiring = async () => {
+            try {
+                const u = JSON.parse(localStorage.getItem('user') || '{}');
+                const storeId = u.store_id || u.storeId || 1;
+                const res = await productService.getExpiringSoon(storeId, 30);
+                const list = res?.data ?? res;
+                if (Array.isArray(list) && list.length > 0) {
+                    setBackendExpiringIds(new Set(list.map(x => x.id)));
                 }
-            };
-            fetchBackendExpiring();
-        }
+            } catch {
+                // Fall back to client-side date inspection
+            }
+        };
+        fetchBackendExpiring();
     }, [kpiFilter]);
 
     useEffect(() => {
@@ -2757,10 +2756,10 @@ const Products = () => {
         return list;
     }, [products, search, selectedCategory, kpiFilter, showSoftDeleted]);
 
-    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-    const start = (page - 1) * PAGE_SIZE + 1;
-    const end = Math.min(page * PAGE_SIZE, filtered.length);
-    const paginated = filtered.slice(start - 1, end);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const start = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
+    const end = Math.min(page * pageSize, filtered.length);
+    const paginated = filtered.slice(Math.max(0, start - 1), end);
 
     const handleSave = async (payload, id, originalForm, originalProduct) => {
         let savedProduct = null;
@@ -3565,12 +3564,13 @@ const Products = () => {
                 borderRadius: 12,
                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                 overflow: 'hidden',
-                border: '1px solid #edf0f2'
+                border: '1px solid #edf0f2',
+                width: '100%'
             }}>
-                <div className="table-scroll custom-scrollbar">
+                <div className="table-scroll custom-scrollbar" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                     <table style={{
                         width: '100%',
-                        minWidth: 1200,
+                        minWidth: 1100,
                         borderCollapse: 'collapse',
                         fontSize: 13
                     }}>
@@ -3731,7 +3731,7 @@ const Products = () => {
                                             <div>
                                                 <div style={{ fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                                     <span>{p.name}</span>
-                                                    {p.is_expired ? (
+                                                    {p.is_expired && (
                                                         <span style={{
                                                             fontSize: 10,
                                                             background: '#fef2f2',
@@ -3747,23 +3747,7 @@ const Products = () => {
                                                         }}>
                                                             ⚠️ EXPIRED
                                                         </span>
-                                                    ) : !p.status ? (
-                                                        <span style={{
-                                                            fontSize: 10,
-                                                            background: '#f3f4f6',
-                                                            color: '#6b7280',
-                                                            border: '1px solid #e5e7eb',
-                                                            padding: '1px 6px',
-                                                            borderRadius: 12,
-                                                            fontWeight: 700,
-                                                            letterSpacing: '0.03em',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 2
-                                                        }}>
-                                                            INACTIVE
-                                                        </span>
-                                                    ) : null}
+                                                    )}
                                                     {p.featured && (
                                                         <span style={{
                                                             fontSize: 10,
@@ -3875,9 +3859,10 @@ const Products = () => {
                                                     }
                                                 }}
                                                 title="Click to download barcode image"
-                                                style={{ cursor: 'pointer', color: '#4f46e5', textDecoration: 'underline dotted' }}
+                                                style={{ cursor: 'pointer', color: '#4f46e5', textDecoration: 'underline dotted', display: 'inline-flex', alignItems: 'center', gap: 5 }}
                                             >
-                                                {p.barcode}
+                                                <span>{p.barcode}</span>
+                                                <BsDownload size={12} color="#6366f1" title="Download Barcode" />
                                             </span>
                                         ) : (
                                             <button
@@ -3994,8 +3979,8 @@ const Products = () => {
                                         textAlign: 'center'
                                     }}>
                                         <div style={{
-                                            display: 'flex',
-                                            gap: 8,
+                                            display: 'inline-flex',
+                                            gap: 6,
                                             justifyContent: 'center',
                                             alignItems: 'center'
                                         }}>
@@ -4004,7 +3989,12 @@ const Products = () => {
                                                     <button
                                                         className="adm-btn-secondary"
                                                         style={{
-                                                            padding: '6px 8px',
+                                                            width: 28,
+                                                            height: 28,
+                                                            padding: 0,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
                                                             borderRadius: 6,
                                                             border: '1px solid #e5e7eb',
                                                             background: '#fff',
@@ -4013,12 +4003,13 @@ const Products = () => {
                                                         onClick={() => handleOpenViewModal(p)}
                                                         title="View Product Details"
                                                     >
-                                                        <BsEye size={13} color="#4f46e5" />
+                                                        <BsEye size={14} color="#4f46e5" />
                                                     </button>
                                                     <button
                                                         className="adm-btn-secondary"
                                                         style={{
-                                                            padding: '6px 12px',
+                                                            padding: '0 10px',
+                                                            height: 28,
                                                             borderRadius: 6,
                                                             border: '1px solid #10b981',
                                                             background: '#ecfdf5',
@@ -4043,7 +4034,12 @@ const Products = () => {
                                                     <button
                                                         className="adm-btn-secondary"
                                                         style={{
-                                                            padding: '6px 8px',
+                                                            width: 28,
+                                                            height: 28,
+                                                            padding: 0,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
                                                             borderRadius: 6,
                                                             border: '1px solid #e5e7eb',
                                                             background: '#fff',
@@ -4052,13 +4048,18 @@ const Products = () => {
                                                         onClick={() => handleOpenViewModal(p)}
                                                         title="View Product Details"
                                                     >
-                                                        <BsEye size={13} color="#4f46e5" />
+                                                        <BsEye size={14} color="#4f46e5" />
                                                     </button>
 
                                                     <button
                                                         className="adm-btn-secondary"
                                                         style={{
-                                                            padding: '6px 8px',
+                                                            width: 28,
+                                                            height: 28,
+                                                            padding: 0,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
                                                             borderRadius: 6,
                                                             border: '1px solid #e5e7eb',
                                                             background: '#fff',
@@ -4084,7 +4085,18 @@ const Products = () => {
 
                                                     <button
                                                         className="adm-btn-secondary"
-                                                        style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            padding: 0,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#fff',
+                                                            cursor: 'pointer'
+                                                        }}
                                                         onClick={() => handleOpenEditModal(p)}
                                                         title="Edit"
                                                     >
@@ -4094,7 +4106,12 @@ const Products = () => {
                                                     <button
                                                         className="adm-btn-secondary"
                                                         style={{
-                                                            padding: '6px 8px',
+                                                            width: 28,
+                                                            height: 28,
+                                                            padding: 0,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
                                                             borderRadius: 6,
                                                             border: p.is_expired ? '1px solid #fca5a5' : '1px solid #e5e7eb',
                                                             background: p.is_expired ? '#fef2f2' : '#fff',
@@ -4143,13 +4160,43 @@ const Products = () => {
                         flexWrap: 'wrap',
                         gap: 10
                     }}>
-                        <span style={{
-                            fontSize: 12,
-                            color: '#6b7280'
-                        }}>
-                            Showing {start}–{end} of {filtered.length}
-                            &nbsp;|&nbsp; Page {page} of {totalPages}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                            <span style={{
+                                fontSize: 12,
+                                color: '#6b7280'
+                            }}>
+                                Showing {start}–{end} of {filtered.length}
+                                &nbsp;|&nbsp; Page {page} of {totalPages}
+                            </span>
+
+                            {/* Entries Per Page Dropdown */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, color: '#6b7280' }}>Entries per page:</span>
+                                <select
+                                    value={pageSize}
+                                    onChange={(e) => {
+                                        setPageSize(Number(e.target.value));
+                                        setPage(1);
+                                    }}
+                                    style={{
+                                        padding: '3px 8px',
+                                        borderRadius: 6,
+                                        border: '1px solid #d1d5db',
+                                        background: '#fff',
+                                        fontSize: 12,
+                                        color: '#374151',
+                                        cursor: 'pointer',
+                                        outline: 'none',
+                                        fontWeight: 500
+                                    }}
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={20}>20</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
+                            </div>
+                        </div>
 
                         <div style={{
                             display: 'flex',
@@ -4166,34 +4213,47 @@ const Products = () => {
                                 <BsChevronLeft size={12} />
                             </button>
 
-                            {Array.from(
-                                { length: totalPages },
-                                (_, i) => i + 1
-                            ).map(n => (
-                                <button
-                                    key={n}
-                                    onClick={() => setPage(n)}
-                                    style={{
-                                        width: 30,
-                                        height: 30,
-                                        borderRadius: 6,
-                                        border: `1.5px solid ${
-                                            n === page ? '#6366f1' : '#e5e7eb'
-                                        }`,
-                                        background: n === page
-                                            ? '#eef2ff'
-                                            : '#fff',
-                                        color: n === page
-                                            ? '#6366f1'
-                                            : '#6b7280',
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {n}
-                                </button>
-                            ))}
+                            {(() => {
+                                const pages = [];
+                                if (totalPages <= 7) {
+                                    for (let i = 1; i <= totalPages; i++) pages.push(i);
+                                } else {
+                                    pages.push(1);
+                                    let left = Math.max(2, page - 1);
+                                    let right = Math.min(totalPages - 1, page + 1);
+                                    if (left > 2) pages.push('...');
+                                    for (let i = left; i <= right; i++) pages.push(i);
+                                    if (right < totalPages - 1) pages.push('...');
+                                    pages.push(totalPages);
+                                }
+                                return pages.map((n, idx) => n === '...' ? (
+                                    <span key={`ellipsis-${idx}`} style={{ padding: '0 4px', color: '#9ca3af', fontSize: 12 }}>…</span>
+                                ) : (
+                                    <button
+                                        key={n}
+                                        onClick={() => setPage(n)}
+                                        style={{
+                                            width: 30,
+                                            height: 30,
+                                            borderRadius: 6,
+                                            border: `1.5px solid ${
+                                                n === page ? '#6366f1' : '#e5e7eb'
+                                            }`,
+                                            background: n === page
+                                                ? '#eef2ff'
+                                                : '#fff',
+                                            color: n === page
+                                                ? '#6366f1'
+                                                : '#6b7280',
+                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {n}
+                                    </button>
+                                ));
+                            })()}
 
                             <button
                                 className="adm-btn-secondary"
