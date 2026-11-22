@@ -783,6 +783,7 @@ const Customers = () => {
     };
 
     useEffect(() => {
+        document.title = 'Customers | RetailOS';
         if (hasLoadedRef.current) return;
         hasLoadedRef.current = true;
         loadCrmDashboard();
@@ -930,7 +931,7 @@ const Customers = () => {
                         <span style={{ background: '#eef2ff', color: '#6366f1', padding: '8px 12px', borderRadius: 10, fontSize: 20 }}>
                             <BsPeopleFill />
                         </span>
-                        Customer Directory
+                        Customers
                     </h1>
                     <p className="adm-page-sub">Manage customer relationships, loyalty, wallets, engagement and profiles.</p>
                 </div>
