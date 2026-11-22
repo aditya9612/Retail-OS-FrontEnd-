@@ -104,9 +104,9 @@ const COUNTRY_NAMES = new Set([
  * Removes country names, PIN codes, and duplicate location names.
  */
 export const formatLocation = (address = '', city = '', state = '') => {
-    const rawAddr = (address || '').trim();
-    const rawCity = (city || '').trim();
-    const rawState = (state || '').trim();
+    const rawAddr = (typeof address === 'string' ? address : (address?.address || address?.street || address?.city || '')).toString().trim();
+    const rawCity = (typeof city === 'string' ? city : (city?.name || city?.city || '')).toString().trim();
+    const rawState = (typeof state === 'string' ? state : (state?.name || state?.state || '')).toString().trim();
 
     // 1. If only city and state are provided without address
     if (!rawAddr && (rawCity || rawState)) {
@@ -231,6 +231,8 @@ export const setStoredCustomerStatus = (id, status) => {
 };
 
 export const formatCustomerRecord = (customer, ordersInfo = {}) => {
+    if (!customer) return {};
+
     const standardizedLocation = formatLocation(
         customer.address || customer.city || '',
         customer.city || '',
@@ -239,21 +241,27 @@ export const formatCustomerRecord = (customer, ordersInfo = {}) => {
 
     const custId = customer.id;
     const storedStatus = custId ? getStoredCustomerStatus(custId) : null;
-    const rawStatus = (
+    const rawStatus = String(
         storedStatus ||
         customer.status ||
         (customer.is_active === false ? 'inactive' : '') ||
+        (customer.is_active === true ? 'active' : '') ||
         ''
     ).toLowerCase().trim();
 
-    const normalizedStatus = (rawStatus === 'inactive' || rawStatus === 'blocked') ? 'Inactive' : 'Active';
+    const normalizedStatus = (rawStatus === 'inactive' || rawStatus === 'blocked' || rawStatus === 'false' || rawStatus === '0') ? 'Inactive' : 'Active';
+
+    const safePhone = customer.phone != null ? String(customer.phone) : '';
+    const safeName = customer.name || 'Unknown Customer';
+    const safeEmail = customer.email || '';
+    const safeId = `CUS-${String(customer.id || 1).padStart(3, '0')}`;
 
     return {
-        id: `CUS-${String(customer.id || 1).padStart(3, '0')}`,
+        id: safeId,
         backendId: customer.id,
-        name: customer.name || 'Unknown Customer',
-        email: customer.email || '',
-        phone: customer.phone || '',
+        name: safeName,
+        email: safeEmail,
+        phone: safePhone,
         city: standardizedLocation,
         location: standardizedLocation,
         state: customer.state || '',
@@ -269,11 +277,11 @@ export const formatCustomerRecord = (customer, ordersInfo = {}) => {
             : 'Not available',
         status: normalizedStatus,
         type:
-            customer.segment === 'vip' || customer.type === 'VIP'
+            String(customer.segment || customer.type || '').toLowerCase() === 'vip'
                 ? 'VIP'
-                : customer.segment === 'new' || customer.type === 'New'
+                : String(customer.segment || customer.type || '').toLowerCase() === 'new'
                   ? 'New'
-                  : customer.segment === 'wholesale' || customer.type === 'Wholesale'
+                  : String(customer.segment || customer.type || '').toLowerCase() === 'wholesale'
                     ? 'Wholesale'
                     : 'Regular',
         credit: customer.wallet_balance ?? customer.credit_limit ?? customer.credit ?? 0,

@@ -800,8 +800,6 @@ const Customers = () => {
         }
     };
 
-    const hasLoadedRef = useRef(false);
-
     // Initial Load: Loads directory APIs, stats, and customer analytics
     const loadCrmDashboard = async (showLoader = true) => {
         if (showLoader) setLoading(true);
@@ -821,7 +819,28 @@ const Customers = () => {
 
             if (customersRes.status === 'fulfilled') {
                 const list = normalizeApiList(customersRes.value);
-                setCustomers(list.map(c => formatCustomerRecord(c)));
+                setCustomers(list.map(c => {
+                    try {
+                        return formatCustomerRecord(c);
+                    } catch (err) {
+                        console.warn('Error formatting customer record:', c, err);
+                        return {
+                            id: `CUS-${String(c?.id || 1).padStart(3, '0')}`,
+                            backendId: c?.id,
+                            name: c?.name || 'Customer',
+                            email: c?.email || '',
+                            phone: String(c?.phone || ''),
+                            city: c?.city || c?.address || '—',
+                            location: c?.city || c?.address || '—',
+                            orders: c?.orders || c?.orders_count || 0,
+                            totalSpent: c?.total_spend || c?.totalSpent || 0,
+                            status: 'Active',
+                            type: 'Regular',
+                            credit: c?.wallet_balance || c?.credit || 0,
+                            loyaltyPoints: c?.loyalty_points || 0,
+                        };
+                    }
+                }));
             } else {
                 setError('Unable to load customer directory.');
             }
@@ -852,8 +871,6 @@ const Customers = () => {
 
     useEffect(() => {
         document.title = 'Customers | RetailOS';
-        if (hasLoadedRef.current) return;
-        hasLoadedRef.current = true;
         loadCrmDashboard();
     }, []);
 
@@ -922,11 +939,11 @@ const Customers = () => {
         return customers.filter(c => {
             const query = search.trim().toLowerCase();
             const matchesSearch = !query ||
-                c.name.toLowerCase().includes(query) ||
-                c.email.toLowerCase().includes(query) ||
-                c.phone.includes(query) ||
-                c.city.toLowerCase().includes(query) ||
-                c.id.toLowerCase().includes(query);
+                String(c.name || '').toLowerCase().includes(query) ||
+                String(c.email || '').toLowerCase().includes(query) ||
+                String(c.phone || '').includes(query) ||
+                String(c.city || c.location || '').toLowerCase().includes(query) ||
+                String(c.id || '').toLowerCase().includes(query);
 
             const matchesStatus = filterStatus === 'All' || c.status === filterStatus;
             const matchesType = filterType === 'All' || c.type === filterType;
