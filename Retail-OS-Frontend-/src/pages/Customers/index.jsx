@@ -24,14 +24,10 @@ import {
     getTopCustomers,
     getRetentionReport,
     getLifetimeValue,
-    getLoyaltyReport,
-    getCustomerLoyalty,
     getCustomerWallet,
     getWalletTransactions,
-    getLoyaltyHistory,
     getCustomerOrders,
     sendCampaign,
-    earnLoyalty,
     sendCustomerWhatsapp,
 } from '../../services/customer';
 import CustomerDetailPanel from '../../components/customers/CustomerDetailPanel';
@@ -42,6 +38,7 @@ import {
     formatCustomerRecord,
     getApiErrorMessage,
     formatAnalyticsVal,
+    setStoredCustomerStatus,
 } from '../../components/customers/customerHelpers';
 
 const PAGE_SIZE = 10;
@@ -52,7 +49,6 @@ const getTodayDateString = () => new Date().toISOString().split('T')[0];
 const statusCfg = {
     Active: { color: '#10b981', bg: '#ecfdf5', icon: <BsCheckCircleFill size={10} /> },
     Inactive: { color: '#6b7280', bg: '#f3f4f6', icon: null },
-    Blocked: { color: '#ef4444', bg: '#fef2f2', icon: <BsXCircleFill size={10} /> },
 };
 
 const typeCfg = {
@@ -193,7 +189,7 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!form.name.trim() || !form.email.trim() || !form.phone.trim() || !form.state.trim() || !form.city.trim()) {
-            alert('Please fill all required fields (*)');
+            setErrors(prev => ({ ...prev, form: 'Please fill all required fields (*)' }));
             return;
         }
 
@@ -217,12 +213,11 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
                 segment: form.type,
             });
 
-            alert('Customer created successfully!');
             if (onCreated) await onCreated();
             onClose();
         } catch (err) {
             console.error('Create customer error:', err);
-            alert(getApiErrorMessage(err, 'Failed to create customer.'));
+            setErrors(prev => ({ ...prev, form: getApiErrorMessage(err, 'Failed to create customer.') }));
         } finally {
             setSubmitting(false);
         }
@@ -241,6 +236,11 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
 
                 <form onSubmit={handleSubmit} style={{ marginTop: 14 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                        {errors.form && (
+                            <div style={{ gridColumn: '1 / -1', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+                                {errors.form}
+                            </div>
+                        )}
                         <div style={{ gridColumn: '1 / -1' }}>
                             <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Customer Name *</label>
                             <input className="ec-input" type="text" name="name" placeholder="Full Name" value={form.name} onChange={handleChange} required />
@@ -281,8 +281,7 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
                             <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Customer Segment *</label>
                             <select className="ec-input" name="type" value={form.type} onChange={handleChange}>
                                 <option value="regular">Regular</option>
-                                <option value="vip">VIP</option>
-                                {/* <option value="wholesale">Wholesale</option> */}
+                                <option value="wholesale">Wholesale</option>
                                 <option value="new">New</option>
                             </select>
                         </div>
@@ -306,7 +305,7 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
 };
 
 // Edit Customer Modal
-const EditCustomerModal = ({ customer, onClose, onSaved }) => {
+export const EditCustomerModal = ({ customer, onClose, onSaved }) => {
     const [form, setForm] = useState({
         name: customer.name || '',
         email: customer.email || '',
@@ -317,31 +316,67 @@ const EditCustomerModal = ({ customer, onClose, onSaved }) => {
         birthday: customer.birthday || '',
     });
     const [submitting, setSubmitting] = useState(false);
+    const [modalError, setModalError] = useState('');
 
     const handleChange = e => {
         const { name, value } = e.target;
         setForm(prev => ({ ...prev, [name]: value }));
+        if (modalError) setModalError('');
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
+        setModalError('');
         try {
-            await updateCustomer(customer.backendId, {
+            const targetId = customer.backendId ?? customer.id ?? (typeof customer.id === 'string' ? parseInt(customer.id.replace(/\D/g, ''), 10) : null);
+            const normalizedStatus = form.status ? (form.status.charAt(0).toUpperCase() + form.status.slice(1).toLowerCase()) : 'Active';
+
+            // 1. Update customer profile details
+            await updateCustomer(targetId, {
                 name: form.name,
                 email: form.email,
                 phone: form.phone,
                 address: form.city,
-                status: form.status.toLowerCase(),
+                status: normalizedStatus.toLowerCase(),
                 segment: form.type.toLowerCase(),
                 birthday: form.birthday || null,
             });
-            alert('Customer updated successfully!');
-            if (onSaved) await onSaved();
+
+            // 2. Also call dedicated status update endpoint to guarantee backend status persistence
+            try {
+                if (targetId) {
+                    await updateCustomerStatus(targetId, normalizedStatus.toLowerCase());
+                }
+            } catch (statusErr) {
+                console.warn('Status patch update endpoint notice:', statusErr);
+            }
+
+            // 3. Save to client storage override for persistence
+            if (targetId) {
+                setStoredCustomerStatus(targetId, normalizedStatus);
+                if (customer.id && customer.id !== targetId) {
+                    setStoredCustomerStatus(customer.id, normalizedStatus);
+                }
+            }
+
+            const updatedCustomerData = {
+                ...customer,
+                name: form.name,
+                email: form.email,
+                phone: form.phone,
+                city: form.city,
+                location: form.city,
+                status: normalizedStatus,
+                type: form.type,
+                birthday: form.birthday || null,
+            };
+
+            if (onSaved) await onSaved(updatedCustomerData);
             onClose();
         } catch (err) {
             console.error('Update failed:', err);
-            alert(getApiErrorMessage(err, 'Failed to update customer.'));
+            setModalError(getApiErrorMessage(err, 'Failed to update customer.'));
         } finally {
             setSubmitting(false);
         }
@@ -360,6 +395,11 @@ const EditCustomerModal = ({ customer, onClose, onSaved }) => {
 
                 <form onSubmit={handleSubmit} style={{ marginTop: 14 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        {modalError && (
+                            <div style={{ gridColumn: '1 / -1', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+                                {modalError}
+                            </div>
+                        )}
                         <div style={{ gridColumn: '1 / -1' }}>
                             <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Name</label>
                             <input className="ec-input" name="name" value={form.name} onChange={handleChange} required />
@@ -381,7 +421,6 @@ const EditCustomerModal = ({ customer, onClose, onSaved }) => {
                             <select className="ec-input" name="status" value={form.status} onChange={handleChange}>
                                 <option value="Active">Active</option>
                                 <option value="Inactive">Inactive</option>
-                                <option value="Blocked">Blocked</option>
                             </select>
                         </div>
                     </div>
@@ -514,7 +553,6 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
                 communication_type: communicationType,
                 message: message.trim(),
             });
-            alert('Marketing campaign sent successfully!');
             if (onCampaignSent) {
                 onCampaignSent(res, {
                     selectedCustomerIds,
@@ -525,7 +563,7 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
             onClose();
         } catch (err) {
             console.error('Send campaign error:', err);
-            alert(getApiErrorMessage(err, 'Failed to send marketing campaign.'));
+            setErrors(prev => ({ ...prev, submit: getApiErrorMessage(err, 'Failed to send marketing campaign.') }));
         } finally {
             setSubmitting(false);
         }
@@ -544,6 +582,11 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
 
                 <form onSubmit={handleSubmit} noValidate style={{ marginTop: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {errors.submit && (
+                            <div style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+                                {errors.submit}
+                            </div>
+                        )}
                         {/* Select Customers */}
                         <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -563,8 +606,8 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
                                     type="text"
                                     placeholder="Search customers..."
                                     value={customerSearch}
-                                    onChange={e => setCustomerSearch(e.target.value)}
-                                    style={{ fontSize: 12, padding: '6px 10px' }}
+                                    onChange={e => setCustomerSearch(e.target.value.replace(/^\s+/, ''))}
+                                    style={{ fontSize: 12, padding: '6px 10px', flex: 1 }}
                                 />
                                 <button
                                     type="button"
@@ -706,6 +749,7 @@ const Customers = () => {
     const [filterType, setFilterType] = useState('All');
     const [filterCity, setFilterCity] = useState('All');
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
 
     // Modals & Detail States
     const [selectedIds, setSelectedIds] = useState([]);
@@ -718,38 +762,38 @@ const Customers = () => {
     const [detailExtras, setDetailExtras] = useState({});
     const [viewLoading, setViewLoading] = useState(false);
     const [birthdayGifting, setBirthdayGifting] = useState(false);
+    const [notification, setNotification] = useState(null);
 
-    // ── Birthday Bonus Automation (1-Click Gift 100 Points + WhatsApp wishes) ──
+    const showNotification = (message, type = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => {
+            setNotification(prev => (prev?.message === message ? null : prev));
+        }, 4000);
+    };
+
+    // ── Birthday Automation (WhatsApp wishes) ──
     const handleGiftAllBirthdays = async () => {
         if (!birthdayCustomers || birthdayCustomers.length === 0) return;
-        if (!window.confirm(`Gift 100 Birthday Bonus Points & send WhatsApp greetings to all ${birthdayCustomers.length} birthday customers?`)) {
-            return;
-        }
         setBirthdayGifting(true);
         let successCount = 0;
         try {
             for (const b of birthdayCustomers) {
                 const bId = b.id || b.backendId || b.customer_id;
                 try {
-                    await earnLoyalty({
-                        customer_id: bId,
-                        points: 100,
-                        reason: 'Happy Birthday Celebration Gift 🎂'
-                    });
                     if (b.phone) {
                         await sendCustomerWhatsapp({
                             customer_id: bId,
                             channel: 'whatsapp',
                             communication_type: 'WHATSAPP',
-                            message: `🎉 Happy Birthday from Shekru Retail, ${b.name || 'valued customer'}! 🎂 As a special birthday gift, 100 bonus loyalty points (Worth ₹10.00 store credit) have been added to your account. Enjoy your special day! 🎁`
-                        }).catch(() => {});
+                            message: `🎉 Happy Birthday from Shekru Retail, ${b.name || 'valued customer'}! 🎂 Wishing you a wonderful birthday filled with joy and happiness! Have a fantastic day! 🎁`
+                        }).catch(() => { });
                     }
                     successCount++;
                 } catch (err) {
-                    console.warn(`Birthday gift failed for customer ${bId}:`, err);
+                    console.warn(`Birthday greeting failed for customer ${bId}:`, err);
                 }
             }
-            alert(`🎉 Successfully gifted 100 Birthday Bonus Points to ${successCount} shopper${successCount === 1 ? '' : 's'} and sent WhatsApp greetings!`);
+            showNotification(`🎉 Successfully sent birthday greetings to ${successCount} shopper${successCount === 1 ? '' : 's'}!`, 'success');
             await loadCrmDashboard(false);
         } finally {
             setBirthdayGifting(false);
@@ -771,7 +815,6 @@ const Customers = () => {
                     getTopCustomers(),
                     getRetentionReport(),
                     getLifetimeValue(),
-                    getLoyaltyReport(),
                     getBirthdayCustomers(),
                 ])
             ]);
@@ -788,12 +831,11 @@ const Customers = () => {
             }
 
             if (insightsRes.status === 'fulfilled') {
-                const [topRes, retRes, ltvRes, loyRes, bdayRes] = insightsRes.value;
+                const [topRes, retRes, ltvRes, bdayRes] = insightsRes.value;
                 setCustomerInsights({
                     topCustomers: topRes.status === 'fulfilled' ? topRes.value : null,
                     retention: retRes.status === 'fulfilled' ? retRes.value : null,
                     lifetimeValue: ltvRes.status === 'fulfilled' ? ltvRes.value : null,
-                    loyaltyReport: loyRes.status === 'fulfilled' ? loyRes.value : null,
                     birthdays: bdayRes.status === 'fulfilled' ? bdayRes.value : null,
                 });
                 if (bdayRes.status === 'fulfilled') {
@@ -833,11 +875,20 @@ const Customers = () => {
         }
     };
 
-    // Handler for ACTIVE / INACTIVE Toggle Switch (Calls PATCH /api/v1/customers/{customer_id}/status)
-    const handleStatusToggle = async (id, currentStatus) => {
-        const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+    // Handler for ACTIVE / INACTIVE Status updates
+    const handleStatusToggle = async (id, statusArg, isExplicitTarget = false) => {
+        let newStatus;
+        if (isExplicitTarget) {
+            newStatus = statusArg === 'Inactive' ? 'Inactive' : 'Active';
+        } else {
+            newStatus = statusArg === 'Active' ? 'Inactive' : 'Active';
+        }
 
         setUpdatingStatusId(id);
+        if (id) {
+            setStoredCustomerStatus(id, newStatus);
+        }
+
         // Optimistic UI update
         setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: newStatus } : c));
         if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
@@ -851,11 +902,15 @@ const Customers = () => {
         } catch (err) {
             console.error('Failed to update customer status via API:', err);
             // Rollback UI on error
-            setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: currentStatus } : c));
-            if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
-                setSelectedCustomer(prev => prev ? { ...prev, status: currentStatus } : prev);
+            const rollbackStatus = isExplicitTarget ? (statusArg || 'Active') : statusArg;
+            if (id) {
+                setStoredCustomerStatus(id, rollbackStatus);
             }
-            alert(getApiErrorMessage(err, 'Failed to update customer status.'));
+            setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: rollbackStatus } : c));
+            if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
+                setSelectedCustomer(prev => prev ? { ...prev, status: rollbackStatus } : prev);
+            }
+            showNotification(getApiErrorMessage(err, 'Failed to update customer status.'), 'error');
         } finally {
             setUpdatingStatusId(null);
         }
@@ -881,11 +936,11 @@ const Customers = () => {
         });
     }, [customers, search, filterStatus, filterType, filterCity]);
 
-    const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
     const paginatedCustomers = useMemo(() => {
-        const start = (page - 1) * PAGE_SIZE;
-        return filteredCustomers.slice(start, start + PAGE_SIZE);
-    }, [filteredCustomers, page]);
+        const start = (page - 1) * pageSize;
+        return filteredCustomers.slice(start, start + pageSize);
+    }, [filteredCustomers, page, pageSize]);
 
     const hasActiveFilters = Boolean(search.trim() || filterStatus !== 'All' || filterType !== 'All' || filterCity !== 'All');
 
@@ -921,8 +976,7 @@ const Customers = () => {
 
     const totalCustomers = customerStats?.total ?? customers.length;
     const activeCustomers = customerStats?.active ?? customers.filter(c => c.status === 'Active').length;
-    const inactiveCustomers = customers.filter(c => c.status === 'Inactive' || c.status === 'Blocked').length;
-    const vipCustomers = customers.filter(c => c.type === 'VIP').length;
+    const inactiveCustomers = customers.filter(c => c.status === 'Inactive').length;
 
     // Active Buyers: Only customers who are Active AND have actually placed orders or spent money (> 0)
     const activeBuyersCount = useMemo(() => {
@@ -935,33 +989,6 @@ const Customers = () => {
     const zeroSpendCount = useMemo(() => {
         return customers.filter(c => Number(c.orders || 0) === 0 && Number(c.totalSpent || 0) === 0).length;
     }, [customers]);
-
-    // Top Spender: Strictly customers with spend > 0 (prevents 0-spend customers from being labeled Top Spender)
-    const topSpenderObj = useMemo(() => {
-        // 1. Check API topCustomers first if available
-        const apiTopList = normalizeApiList(customerInsights?.topCustomers);
-        const validApiTop = apiTopList.find(c => Number(c.total_spend || c.totalSpent || c.revenue || 0) > 0);
-        if (validApiTop) {
-            return {
-                name: validApiTop.name || validApiTop.customer_name || 'Customer',
-                amount: Number(validApiTop.total_spend || validApiTop.totalSpent || validApiTop.revenue || 0),
-                hasSpender: true,
-            };
-        }
-
-        // 2. Check local customers with spend > 0
-        const customersWithSpend = customers.filter(c => Number(c.totalSpent || c.total_spend || 0) > 0);
-        if (customersWithSpend.length === 0) {
-            return { name: 'No purchases yet', amount: 0, hasSpender: false };
-        }
-
-        const top = [...customersWithSpend].sort((a, b) => Number(b.totalSpent || 0) - Number(a.totalSpent || 0))[0];
-        return {
-            name: top.name || 'Customer',
-            amount: Number(top.totalSpent || 0),
-            hasSpender: true,
-        };
-    }, [customers, customerInsights?.topCustomers]);
 
     const referralsList = normalizeApiList(customerInsights.referrals);
     const commsList = normalizeApiList(customerInsights.communications);
@@ -983,6 +1010,38 @@ const Customers = () => {
 
     return (
         <div className="dash-page" style={{ paddingBottom: 40 }}>
+            {/* ── Toast Notification Banner ── */}
+            {notification && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 24,
+                        right: 24,
+                        zIndex: 9999,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '14px 20px',
+                        borderRadius: 10,
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)',
+                        background: notification.type === 'success' ? '#065f46' : '#991b1b',
+                        color: '#ffffff',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        animation: 'fadeIn 0.2s ease',
+                    }}
+                >
+                    <span>{notification.message}</span>
+                    <button
+                        type="button"
+                        onClick={() => setNotification(null)}
+                        style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer', padding: 0, fontWeight: 700 }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
             {/* Header */}
             <div className="adm-page-header" style={{ marginBottom: 20 }}>
                 <div>
@@ -992,7 +1051,7 @@ const Customers = () => {
                         </span>
                         Customers
                     </h1>
-                    <p className="adm-page-sub">Manage customer relationships, loyalty, wallets, engagement and profiles.</p>
+                    <p className="adm-page-sub">Manage customer relationships, wallets, engagement and directory profiles.</p>
                 </div>
 
                 <div className="adm-header-actions" style={{ display: 'flex', gap: 10 }}>
@@ -1024,12 +1083,10 @@ const Customers = () => {
                 </div>
             </div>
 
-            {/* 5 KPI Cards Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginBottom: 20 }}>
+            {/* KPI Cards Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginBottom: 20 }}>
                 {loading ? (
                     <>
-                        <KpiSkeleton />
-                        <KpiSkeleton />
                         <KpiSkeleton />
                         <KpiSkeleton />
                         <KpiSkeleton />
@@ -1037,7 +1094,7 @@ const Customers = () => {
                 ) : (
                     <>
                         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Total CRM Contacts</p>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Total Customers</p>
                             <p style={{ fontSize: 24, fontWeight: 800, color: '#111827', marginTop: 6, margin: 0 }}>{totalCustomers}</p>
                             <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>Directory profiles</span>
                         </div>
@@ -1049,25 +1106,9 @@ const Customers = () => {
                         </div>
 
                         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Inactive / Blocked</p>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Inactive</p>
                             <p style={{ fontSize: 24, fontWeight: 800, color: '#ef4444', marginTop: 6, margin: 0 }}>{inactiveCustomers}</p>
                             <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>Requires outreach</span>
-                        </div>
-
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>VIP Segment</p>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#d97706', marginTop: 6, margin: 0 }}>{vipCustomers}</p>
-                            <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600 }}>Premium members</span>
-                        </div>
-
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Top Spender</p>
-                            <p style={{ fontSize: 20, fontWeight: 800, color: topSpenderObj.hasSpender ? '#8b5cf6' : '#9ca3af', marginTop: 6, margin: 0 }}>
-                                {topSpenderObj.hasSpender ? fmt(topSpenderObj.amount) : '₹0'}
-                            </p>
-                            <span style={{ fontSize: 11, color: topSpenderObj.hasSpender ? '#6b7280' : '#9ca3af', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-                                {topSpenderObj.name}
-                            </span>
                         </div>
                     </>
                 )}
@@ -1079,7 +1120,7 @@ const Customers = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ fontSize: 24 }}>🎂</span>
                         <div>
-                            <p style={{ fontSize: 13, fontWeight: 700, color: '#92400e', margin: 0 }}>Birthday Reminders & Bonus Rewards</p>
+                            <p style={{ fontSize: 13, fontWeight: 700, color: '#92400e', margin: 0 }}>Birthday Reminders & Greetings</p>
                             <p style={{ fontSize: 12, color: '#b45309', margin: '2px 0 0 0' }}>
                                 {birthdayCustomers.slice(0, 4).map(b => b.name || b.customer_name).join(', ')}
                                 {birthdayCustomers.length > 4 ? ` +${birthdayCustomers.length - 4} more` : ''}
@@ -1110,7 +1151,7 @@ const Customers = () => {
                                 boxShadow: '0 2px 4px rgba(217, 119, 6, 0.2)'
                             }}
                         >
-                            {birthdayGifting ? 'Gifting Points…' : '🎁 Gift 100 Birthday Points to All'}
+                            {birthdayGifting ? 'Sending Wishes…' : '🎉 Send Birthday Wishes to All'}
                         </button>
                     </div>
                 </div>
@@ -1249,35 +1290,33 @@ const Customers = () => {
                         </div>
                     </div>
 
-                    {/* Card 4: Loyalty Summary */}
+                    {/* Card 4: Customer Segments */}
                     <div style={analyticsCardStyle}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                🎁 Loyalty Summary
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#0ea5e9', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                👥 Customer Segments
                             </span>
-                            <span style={{ fontSize: 10, fontWeight: 800, color: '#d97706', background: '#fffbeb', padding: '2px 8px', borderRadius: 10 }}>
-                                Rewards
+                            <span style={{ fontSize: 10, fontWeight: 800, color: '#0ea5e9', background: '#f0f9ff', padding: '2px 8px', borderRadius: 10 }}>
+                                Breakdown
                             </span>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
                             <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Enrolled</span>
-                                <p style={{ fontSize: 16, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
-                                    {customerInsights.loyaltyReport?.enrolled_members ?? customerInsights.loyaltyReport?.total_enrolled ?? customers.filter(c => c.loyaltyPoints > 0).length} members
+                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Regular</span>
+                                <p style={{ fontSize: 16, fontWeight: 800, color: '#6366f1', margin: '2px 0 0 0' }}>
+                                    {customers.filter(c => c.type === 'Regular').length}
                                 </p>
                             </div>
                             <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Points Issued</span>
-                                <p style={{ fontSize: 16, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
-                                    {customerInsights.loyaltyReport?.total_points_issued ? `${customerInsights.loyaltyReport.total_points_issued.toLocaleString('en-IN')} pts` : `${customers.reduce((acc, c) => acc + (c.loyaltyPoints || 0), 0).toLocaleString('en-IN')} pts`}
+                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Wholesale</span>
+                                <p style={{ fontSize: 16, fontWeight: 800, color: '#8b5cf6', margin: '2px 0 0 0' }}>
+                                    {customers.filter(c => c.type === 'Wholesale').length}
                                 </p>
                             </div>
                         </div>
                         <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Redeemed Points</span>
-                            <span style={{ fontWeight: 700, color: '#111827' }}>
-                                {customerInsights.loyaltyReport?.total_points_redeemed ? `${customerInsights.loyaltyReport.total_points_redeemed.toLocaleString('en-IN')} pts` : '0 pts'}
-                            </span>
+                            <span>New: <strong style={{ color: '#0ea5e9' }}>{customers.filter(c => c.type === 'New').length}</strong></span>
+                            <span>Total: <strong style={{ color: '#111827' }}>{customers.length}</strong></span>
                         </div>
                     </div>
                 </div>
@@ -1363,30 +1402,31 @@ const Customers = () => {
                         </div>
                     </div>
 
-                    {/* CRM Card 4: Wallet & Loyalty Quick Stats */}
+                    {/* CRM Card 4: Customer Wallet Quick Stats */}
                     <div style={analyticsCardStyle}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Wallet & Loyalty
+                                Customer Wallet
                             </span>
                             <BsWallet2 size={16} style={{ color: '#8b5cf6' }} />
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
                             <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Total Wallet</span>
+                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Total Balance</span>
                                 <p style={{ fontSize: 15, fontWeight: 800, color: '#8b5cf6', margin: '2px 0 0 0' }}>
                                     {fmt(customers.reduce((acc, c) => acc + (c.credit || 0), 0))}
                                 </p>
                             </div>
                             <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Loyalty Pool</span>
-                                <p style={{ fontSize: 15, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
-                                    {customers.reduce((acc, c) => acc + (c.loyaltyPoints || 0), 0)} pts
+                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Active Credits</span>
+                                <p style={{ fontSize: 15, fontWeight: 800, color: '#10b981', margin: '2px 0 0 0' }}>
+                                    {customers.filter(c => Number(c.credit || 0) > 0).length} users
                                 </p>
                             </div>
                         </div>
                         <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Active rewards</span>
+                            <span>Prepaid store balance</span>
+                            <span style={{ fontWeight: 700, color: '#111827' }}>{customers.length} total</span>
                         </div>
                     </div>
                 </div>
@@ -1397,18 +1437,39 @@ const Customers = () => {
                 {/* Search & Filter Bar */}
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
-                            <div style={{ position: 'relative', flex: 1 }}>
-                                <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14 }} />
-                                <input
-                                    type="text"
-                                    className="ec-input"
-                                    placeholder="Search by customer name, email, phone or city..."
-                                    value={search}
-                                    onChange={e => { setSearch(e.target.value); setPage(1); }}
-                                    style={{ paddingLeft: 34, width: '100%', height: 38 }}
-                                />
-                            </div>
+                        <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
+                            <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14 }} />
+                            <input
+                                type="text"
+                                className="ec-input"
+                                placeholder="Search by customer name, email, phone or city..."
+                                value={search}
+                                onChange={e => { setSearch(e.target.value.replace(/^\s+/, '')); setPage(1); }}
+                                style={{ paddingLeft: 34, paddingRight: search ? 30 : 12, width: '100%', height: 38 }}
+                            />
+                            {search && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setSearch(''); setPage(1); }}
+                                    style={{
+                                        position: 'absolute',
+                                        right: 10,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#9ca3af',
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                        fontSize: 14,
+                                        fontWeight: 700,
+                                        lineHeight: 1
+                                    }}
+                                    title="Clear search"
+                                >
+                                    ✕
+                                </button>
+                            )}
                         </div>
 
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
@@ -1423,7 +1484,6 @@ const Customers = () => {
                                     <option value="All">All Status</option>
                                     <option value="Active">Active</option>
                                     <option value="Inactive">Inactive</option>
-                                    <option value="Blocked">Blocked</option>
                                 </select>
                             </div>
 
@@ -1437,7 +1497,6 @@ const Customers = () => {
                                 >
                                     <option value="All">All Types</option>
                                     <option value="Regular">Regular</option>
-                                    <option value="VIP">VIP</option>
                                     <option value="Wholesale">Wholesale</option>
                                     <option value="New">New</option>
                                 </select>
@@ -1514,14 +1573,14 @@ const Customers = () => {
                                     />
                                 </th>
                                 <th style={{ padding: '12px 16px' }}>Customer Name</th>
-                                <th style={{ padding: '12px 16px' }}>ID & Segment</th>
+                                <th style={{ padding: '12px 16px' }}>Segment</th>
                                 <th style={{ padding: '12px 16px' }}>Phone</th>
                                 <th style={{ padding: '12px 16px' }}>Location</th>
                                 <th style={{ padding: '12px 16px' }}>Orders</th>
                                 <th style={{ padding: '12px 16px' }}>Total Spent</th>
-                                <th style={{ padding: '12px 16px' }}>Wallet / Points</th>
+                                <th style={{ padding: '12px 16px' }}>Wallet</th>
                                 <th style={{ padding: '12px 16px' }}>Status</th>
-                                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
+                                <th style={{ padding: '12px 16px' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1568,12 +1627,9 @@ const Customers = () => {
                                             </td>
 
                                             <td style={{ padding: '14px 16px' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>{cust.id}</span>
-                                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1' }}>
-                                                        {cust.type}
-                                                    </span>
-                                                </div>
+                                                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1', display: 'inline-block' }}>
+                                                    {cust.type}
+                                                </span>
                                             </td>
 
                                             <td style={{ padding: '14px 16px', color: '#374151', fontWeight: 500 }}>
@@ -1581,11 +1637,11 @@ const Customers = () => {
                                             </td>
 
                                             <td style={{ padding: '14px 16px', color: '#374151' }}>
-                                                {cust.city || '—'}
+                                                {cust.location || cust.city || '—'}
                                             </td>
 
                                             <td style={{ padding: '14px 16px', fontWeight: 700, color: '#111827' }}>
-                                                {cust.orders} orders
+                                                {cust.orders ?? 0}
                                             </td>
 
                                             <td style={{ padding: '14px 16px', fontWeight: 800, color: '#10b981' }}>
@@ -1593,41 +1649,51 @@ const Customers = () => {
                                             </td>
 
                                             <td style={{ padding: '14px 16px' }}>
-                                                <div style={{ fontSize: 11 }}>
-                                                    <span style={{ color: '#6366f1', fontWeight: 700, display: 'block' }}>Wallet: {fmt(cust.credit || 0)}</span>
-                                                    <span style={{ color: '#d97706', fontWeight: 600 }}>Points: {cust.loyaltyPoints || 0} pts</span>
-                                                </div>
-                                            </td>
-
-                                            <td style={{ padding: '14px 16px' }}>
-                                                <span
-                                                    style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: 6,
-                                                        fontSize: 12,
-                                                        fontWeight: 700,
-                                                        padding: '3px 10px',
-                                                        borderRadius: 12,
-                                                        background: cust.status === 'Active' ? '#ecfdf5' : '#fef2f2',
-                                                        color: cust.status === 'Active' ? '#059669' : '#dc2626',
-                                                        border: `1px solid ${cust.status === 'Active' ? '#a7f3d0' : '#fecaca'}`,
-                                                    }}
-                                                >
-                                                    <span
-                                                        style={{
-                                                            width: 6,
-                                                            height: 6,
-                                                            borderRadius: '50%',
-                                                            background: cust.status === 'Active' ? '#10b981' : '#ef4444',
-                                                        }}
-                                                    />
-                                                    {cust.status === 'Active' ? 'Active' : (cust.status || 'Inactive')}
+                                                <span style={{ color: '#6366f1', fontWeight: 700, fontSize: 12 }}>
+                                                    {fmt(cust.credit || 0)}
                                                 </span>
                                             </td>
 
-                                            <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                                            <td style={{ padding: '14px 16px' }}>
+                                                {(() => {
+                                                    const isAct = cust.status === 'Active';
+                                                    const bg = isAct ? '#ecfdf5' : '#f3f4f6';
+                                                    const color = isAct ? '#059669' : '#4b5563';
+                                                    const border = isAct ? '#a7f3d0' : '#e5e7eb';
+                                                    const dotBg = isAct ? '#10b981' : '#9ca3af';
+                                                    const label = isAct ? 'Active' : 'Inactive';
+
+                                                    return (
+                                                        <span
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 6,
+                                                                fontSize: 12,
+                                                                fontWeight: 700,
+                                                                padding: '3px 10px',
+                                                                borderRadius: 12,
+                                                                background: bg,
+                                                                color: color,
+                                                                border: `1px solid ${border}`,
+                                                            }}
+                                                        >
+                                                            <span
+                                                                style={{
+                                                                    width: 6,
+                                                                    height: 6,
+                                                                    borderRadius: '50%',
+                                                                    background: dotBg,
+                                                                }}
+                                                            />
+                                                            {label}
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </td>
+
+                                            <td style={{ padding: '14px 16px' }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                                                     <CustomerStatusToggle
                                                         isActive={cust.status === 'Active'}
                                                         loading={updatingStatusId === custId}
@@ -1638,16 +1704,40 @@ const Customers = () => {
                                                         type="button"
                                                         title="View Profile Details"
                                                         onClick={() => handleViewCustomerProfile(custId)}
-                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#6366f1', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                        style={{
+                                                            width: 30,
+                                                            height: 30,
+                                                            borderRadius: 7,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#6366f1',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
                                                     >
-                                                        <BsEye size={14} />
+                                                        <BsEye size={15} />
                                                     </button>
 
                                                     <button
                                                         type="button"
                                                         title="Edit Customer"
                                                         onClick={() => setEditingCustomer(cust)}
-                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                                        style={{
+                                                            width: 30,
+                                                            height: 30,
+                                                            borderRadius: 7,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#374151',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
                                                     >
                                                         <BsPencilSquare size={14} />
                                                     </button>
@@ -1662,35 +1752,87 @@ const Customers = () => {
                 </div>
 
                 {/* Pagination Controls */}
-                <div style={{ padding: '14px 20px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb' }}>
+                <div style={{ padding: '14px 20px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', flexWrap: 'wrap', gap: 12 }}>
                     <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
-                        Showing <strong>{filteredCustomers.length > 0 ? (page - 1) * PAGE_SIZE + 1 : 0}</strong> to <strong>{Math.min(page * PAGE_SIZE, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> customers
+                        Showing <strong>{filteredCustomers.length > 0 ? (page - 1) * pageSize + 1 : 0}</strong> to <strong>{Math.min(page * pageSize, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> customers
                     </p>
 
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            disabled={page === 1}
-                            onClick={() => setPage(prev => Math.max(1, prev - 1))}
-                            style={{ padding: '5px 10px', fontSize: 12 }}
-                        >
-                            <BsChevronLeft size={12} /> Prev
-                        </button>
+                    <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                        {/* Entries per Page Dropdown */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600 }}>Entries per page:</span>
+                            <select
+                                className="ec-input"
+                                value={pageSize}
+                                onChange={e => {
+                                    setPageSize(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                                style={{
+                                    height: 32,
+                                    fontSize: 12,
+                                    padding: '0 8px',
+                                    borderRadius: 6,
+                                    background: '#ffffff',
+                                    border: '1px solid #d1d5db',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    color: '#374151',
+                                }}
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
 
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
-                            Page {page} of {totalPages}
-                        </span>
+                        {/* Navigation Controls: Arrows only */}
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                disabled={page === 1}
+                                onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                                title="Previous Page"
+                                aria-label="Previous Page"
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    padding: 0,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: 6,
+                                }}
+                            >
+                                <BsChevronLeft size={14} />
+                            </button>
 
-                        <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            disabled={page >= totalPages}
-                            onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
-                            style={{ padding: '5px 10px', fontSize: 12 }}
-                        >
-                            Next <BsChevronRight size={12} />
-                        </button>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '0 6px' }}>
+                                Page {page} of {totalPages}
+                            </span>
+
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                disabled={page >= totalPages}
+                                onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                                title="Next Page"
+                                aria-label="Next Page"
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    padding: 0,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: 6,
+                                }}
+                            >
+                                <BsChevronRight size={14} />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1744,7 +1886,11 @@ const Customers = () => {
             {showAddModal && (
                 <AddCustomerModal
                     onClose={() => setShowAddModal(false)}
-                    onCreated={loadCrmDashboard}
+                    onCreated={async () => {
+                        setShowAddModal(false);
+                        showNotification('Customer created successfully!', 'success');
+                        await loadCrmDashboard(false);
+                    }}
                 />
             )}
 
@@ -1752,7 +1898,20 @@ const Customers = () => {
                 <EditCustomerModal
                     customer={editingCustomer}
                     onClose={() => setEditingCustomer(null)}
-                    onSaved={loadCrmDashboard}
+                    onSaved={async (updatedData) => {
+                        if (updatedData) {
+                            setCustomers(prev => prev.map(c => 
+                                (c.backendId === updatedData.backendId || c.id === updatedData.id) 
+                                    ? { ...c, ...updatedData } 
+                                    : c
+                            ));
+                            if (selectedCustomer && (selectedCustomer.backendId === updatedData.backendId || selectedCustomer.id === updatedData.id)) {
+                                setSelectedCustomer(prev => prev ? { ...prev, ...updatedData } : prev);
+                            }
+                            showNotification('Customer updated successfully!', 'success');
+                        }
+                        await loadCrmDashboard(false);
+                    }}
                 />
             )}
 
@@ -1761,6 +1920,10 @@ const Customers = () => {
                     customers={customers}
                     preSelectedIds={selectedIds}
                     onClose={() => setShowCampaignModal(false)}
+                    onCampaignSent={() => {
+                        setShowCampaignModal(false);
+                        showNotification('Marketing campaign sent successfully!', 'success');
+                    }}
                 />
             )}
 
@@ -1781,6 +1944,7 @@ const Customers = () => {
                     onStatusChange={handleStatusToggle}
                     onRefresh={handleViewCustomerProfile}
                     showFeedback={true}
+                    hideLoyalty={true}
                 />
             )}
         </div>

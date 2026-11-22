@@ -27,11 +27,13 @@ import {
     sendCustomerWhatsapp,
 } from '../../services/customer';
 import CustomerDetailPanel from '../../components/customers/CustomerDetailPanel';
+import { EditCustomerModal } from '../Customers';
 import {
     fmt,
     normalizeApiList,
     formatCustomerRecord,
     getApiErrorMessage,
+    setStoredCustomerStatus,
 } from '../../components/customers/customerHelpers';
 
 const PAGE_SIZE = 10;
@@ -40,7 +42,6 @@ const POINTS_TO_INR_RATE = 0.10; // 10 Points = ₹1.00 Store Credit
 const statusCfg = {
     Active: { color: '#10b981', bg: '#ecfdf5', icon: <BsCheckCircleFill size={10} /> },
     Inactive: { color: '#6b7280', bg: '#f3f4f6', icon: null },
-    Blocked: { color: '#ef4444', bg: '#fef2f2', icon: <BsXCircleFill size={10} /> },
 };
 
 const typeCfg = {
@@ -220,11 +221,13 @@ export const CustomerLoyaltyPage = () => {
     const [filterCity, setFilterCity] = useState('All');
     const [sortBy, setSortBy] = useState('points-desc');
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
 
     // ── Selection & Modals ──
     const [selectedIds, setSelectedIds] = useState([]);
     const [updatingStatusId, setUpdatingStatusId] = useState(null);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [editingCustomer, setEditingCustomer] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
 
     // Loyalty Action Modals ('earn' | 'redeem' | 'adjust' | null)
@@ -311,9 +314,18 @@ export const CustomerLoyaltyPage = () => {
     }, [loadLoyaltyDashboard]);
 
     // ── Status Toggle (Synchronized with Customer Directory) ──
-    const handleStatusToggle = async (id, currentStatus) => {
-        const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+    const handleStatusToggle = async (id, statusArg, isExplicitTarget = false) => {
+        let newStatus;
+        if (isExplicitTarget) {
+            newStatus = statusArg === 'Inactive' ? 'Inactive' : 'Active';
+        } else {
+            newStatus = statusArg === 'Active' ? 'Inactive' : 'Active';
+        }
+
         setUpdatingStatusId(id);
+        if (id) {
+            setStoredCustomerStatus(id, newStatus);
+        }
 
         // Optimistic UI update
         setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: newStatus } : c));
@@ -328,11 +340,15 @@ export const CustomerLoyaltyPage = () => {
         } catch (err) {
             console.error('Failed to update customer status via API:', err);
             // Rollback on error
-            setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: currentStatus } : c));
-            if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
-                setSelectedCustomer(prev => prev ? { ...prev, status: currentStatus } : prev);
+            const rollbackStatus = isExplicitTarget ? (statusArg || 'Active') : statusArg;
+            if (id) {
+                setStoredCustomerStatus(id, rollbackStatus);
             }
-            alert(getApiErrorMessage(err, 'Failed to update customer status.'));
+            setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: rollbackStatus } : c));
+            if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
+                setSelectedCustomer(prev => prev ? { ...prev, status: rollbackStatus } : prev);
+            }
+            showNotification(getApiErrorMessage(err, 'Failed to update customer status.'), 'error');
         } finally {
             setUpdatingStatusId(null);
         }
@@ -395,13 +411,13 @@ export const CustomerLoyaltyPage = () => {
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         if (!modalTargetCustomer) {
-            alert('Please select a customer.');
+            showNotification('Please select a customer.', 'error');
             return;
         }
 
         const pts = parseInt(formPoints, 10);
         if (isNaN(pts) || pts <= 0) {
-            alert('Please enter a valid positive points amount.');
+            showNotification('Please enter a valid positive points amount.', 'error');
             return;
         }
 
@@ -410,7 +426,7 @@ export const CustomerLoyaltyPage = () => {
         if (modalMode === 'redeem') {
             const currentBal = Number(modalTargetCustomer.loyaltyPoints) || 0;
             if (pts > currentBal) {
-                alert(`Cannot redeem ${pts} points. Customer only has ${currentBal} points available.`);
+                showNotification(`Cannot redeem ${pts} points. Customer only has ${currentBal} points available.`, 'error');
                 return;
             }
         }
@@ -477,7 +493,7 @@ export const CustomerLoyaltyPage = () => {
             await loadLoyaltyDashboard(false);
         } catch (err) {
             console.error('Loyalty action error:', err);
-            alert(getApiErrorMessage(err, `Failed to ${modalMode} points. Please verify details and try again.`));
+            showNotification(getApiErrorMessage(err, `Failed to ${modalMode} points. Please verify details and try again.`), 'error');
         } finally {
             setActionLoading(false);
         }
@@ -486,9 +502,6 @@ export const CustomerLoyaltyPage = () => {
     // ── Birthday Bonus Automation (1-Click Gift 100 Points + WhatsApp wishes) ──
     const handleGiftAllBirthdays = async () => {
         if (!birthdayCustomers || birthdayCustomers.length === 0) return;
-        if (!window.confirm(`Gift 100 Birthday Bonus Points & send WhatsApp greetings to all ${birthdayCustomers.length} birthday customers?`)) {
-            return;
-        }
         setBirthdayGifting(true);
         let successCount = 0;
         try {
@@ -553,7 +566,7 @@ export const CustomerLoyaltyPage = () => {
             document.body.removeChild(link);
         } catch (err) {
             console.error('Export CSV error:', err);
-            alert('Failed to export CSV.');
+            showNotification('Failed to export CSV.', 'error');
         }
     };
 
@@ -603,11 +616,11 @@ export const CustomerLoyaltyPage = () => {
         });
     }, [customers, search, filterStatus, filterType, filterCity, filterPoints, filterTier, sortBy]);
 
-    const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
     const paginatedCustomers = useMemo(() => {
-        const start = (page - 1) * PAGE_SIZE;
-        return filteredCustomers.slice(start, start + PAGE_SIZE);
-    }, [filteredCustomers, page]);
+        const start = (page - 1) * pageSize;
+        return filteredCustomers.slice(start, start + pageSize);
+    }, [filteredCustomers, page, pageSize]);
 
     const hasActiveFilters = Boolean(
         search.trim() ||
@@ -651,7 +664,7 @@ export const CustomerLoyaltyPage = () => {
     // ── Identical KPI Values to Customer Directory ──
     const totalCustomers = customerStats?.total ?? customers.length;
     const activeCustomers = customerStats?.active ?? customers.filter(c => c.status === 'Active').length;
-    const inactiveCustomers = customers.filter(c => c.status === 'Inactive' || c.status === 'Blocked').length;
+    const inactiveCustomers = customers.filter(c => c.status === 'Inactive').length;
     const vipCustomers = customers.filter(c => c.type === 'VIP').length;
     const totalPointsPool = customers.reduce((acc, c) => acc + (c.loyaltyPoints || 0), 0);
 
@@ -1222,18 +1235,39 @@ export const CustomerLoyaltyPage = () => {
                 {/* Search & Filter Bar */}
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6' }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
-                            <div style={{ position: 'relative', flex: 1 }}>
-                                <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14 }} />
-                                <input
-                                    type="text"
-                                    className="ec-input"
-                                    placeholder="Search by customer name, email, phone, city or ID..."
-                                    value={search}
-                                    onChange={e => { setSearch(e.target.value); setPage(1); }}
-                                    style={{ paddingLeft: 34, width: '100%', height: 38 }}
-                                />
-                            </div>
+                        <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
+                            <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14 }} />
+                            <input
+                                type="text"
+                                className="ec-input"
+                                placeholder="Search by customer name, email, phone, city or ID..."
+                                value={search}
+                                onChange={e => { setSearch(e.target.value.replace(/^\s+/, '')); setPage(1); }}
+                                style={{ paddingLeft: 34, paddingRight: search ? 30 : 12, width: '100%', height: 38 }}
+                            />
+                            {search && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setSearch(''); setPage(1); }}
+                                    style={{
+                                        position: 'absolute',
+                                        right: 10,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#9ca3af',
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                        fontSize: 14,
+                                        fontWeight: 700,
+                                        lineHeight: 1
+                                    }}
+                                    title="Clear search"
+                                >
+                                    ✕
+                                </button>
+                            )}
                         </div>
 
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
@@ -1281,7 +1315,6 @@ export const CustomerLoyaltyPage = () => {
                                     <option value="All">All Status</option>
                                     <option value="Active">Active</option>
                                     <option value="Inactive">Inactive</option>
-                                    <option value="Blocked">Blocked</option>
                                 </select>
                             </div>
 
@@ -1402,14 +1435,14 @@ export const CustomerLoyaltyPage = () => {
                                     />
                                 </th>
                                 <th style={{ padding: '12px 16px' }}>Customer Name</th>
-                                <th style={{ padding: '12px 16px' }}>ID, Segment & Tier</th>
+                                <th style={{ padding: '12px 16px' }}>Segment & Tier</th>
                                 <th style={{ padding: '12px 16px' }}>Phone</th>
                                 <th style={{ padding: '12px 16px' }}>Location</th>
                                 <th style={{ padding: '12px 16px' }}>Orders</th>
                                 <th style={{ padding: '12px 16px' }}>Total Spent</th>
                                 <th style={{ padding: '12px 16px' }}>Loyalty Balance</th>
                                 <th style={{ padding: '12px 16px' }}>Status</th>
-                                <th style={{ padding: '12px 16px', textAlign: 'center', minWidth: 195 }}>Actions</th>
+                                <th style={{ padding: '12px 16px', minWidth: 235 }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1469,30 +1502,27 @@ export const CustomerLoyaltyPage = () => {
 
                                             {/* Refinement 2: Dynamic VIP Tier Badge inside Table Row */}
                                             <td style={{ padding: '14px 16px' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>{cust.id}</span>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                                                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1' }}>
-                                                            {cust.type}
-                                                        </span>
-                                                        <span
-                                                            style={{
-                                                                fontSize: 10,
-                                                                fontWeight: 700,
-                                                                padding: '2px 7px',
-                                                                borderRadius: 12,
-                                                                background: tierInfo.bg,
-                                                                color: tierInfo.color,
-                                                                border: `1px solid ${tierInfo.border}`,
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 3
-                                                            }}
-                                                            title={`Loyalty Tier: ${tierInfo.name}`}
-                                                        >
-                                                            <span>{tierInfo.icon}</span> {tierInfo.badge}
-                                                        </span>
-                                                    </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1' }}>
+                                                        {cust.type}
+                                                    </span>
+                                                    <span
+                                                        style={{
+                                                            fontSize: 10,
+                                                            fontWeight: 700,
+                                                            padding: '2px 7px',
+                                                            borderRadius: 12,
+                                                            background: tierInfo.bg,
+                                                            color: tierInfo.color,
+                                                            border: `1px solid ${tierInfo.border}`,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 3
+                                                        }}
+                                                        title={`Loyalty Tier: ${tierInfo.name}`}
+                                                    >
+                                                        <span>{tierInfo.icon}</span> {tierInfo.badge}
+                                                    </span>
                                                 </div>
                                             </td>
 
@@ -1501,11 +1531,11 @@ export const CustomerLoyaltyPage = () => {
                                             </td>
 
                                             <td style={{ padding: '14px 16px', color: '#374151' }}>
-                                                {cust.city || '—'}
+                                                {cust.location || cust.city || '—'}
                                             </td>
 
                                             <td style={{ padding: '14px 16px', fontWeight: 700, color: '#111827' }}>
-                                                {cust.orders} orders
+                                                {cust.orders ?? 0}
                                             </td>
 
                                             <td style={{ padding: '14px 16px', fontWeight: 800, color: '#10b981' }}>
@@ -1539,42 +1569,98 @@ export const CustomerLoyaltyPage = () => {
 
                                             {/* Status Text Label */}
                                             <td style={{ padding: '14px 16px' }}>
-                                                <span
-                                                    style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: 6,
-                                                        fontSize: 12,
-                                                        fontWeight: 700,
-                                                        padding: '3px 10px',
-                                                        borderRadius: 12,
-                                                        background: cust.status === 'Active' ? '#ecfdf5' : '#fef2f2',
-                                                        color: cust.status === 'Active' ? '#059669' : '#dc2626',
-                                                        border: `1px solid ${cust.status === 'Active' ? '#a7f3d0' : '#fecaca'}`,
-                                                    }}
-                                                >
-                                                    <span
-                                                        style={{
-                                                            width: 6,
-                                                            height: 6,
-                                                            borderRadius: '50%',
-                                                            background: cust.status === 'Active' ? '#10b981' : '#ef4444',
-                                                        }}
-                                                    />
-                                                    {cust.status === 'Active' ? 'Active' : (cust.status || 'Inactive')}
-                                                </span>
+                                                {(() => {
+                                                    const isAct = cust.status === 'Active';
+                                                    const bg = isAct ? '#ecfdf5' : '#f3f4f6';
+                                                    const color = isAct ? '#059669' : '#4b5563';
+                                                    const border = isAct ? '#a7f3d0' : '#e5e7eb';
+                                                    const dotBg = isAct ? '#10b981' : '#9ca3af';
+                                                    const label = isAct ? 'Active' : 'Inactive';
+
+                                                    return (
+                                                        <span
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 6,
+                                                                fontSize: 12,
+                                                                fontWeight: 700,
+                                                                padding: '3px 10px',
+                                                                borderRadius: 12,
+                                                                background: bg,
+                                                                color: color,
+                                                                border: `1px solid ${border}`,
+                                                            }}
+                                                        >
+                                                            <span
+                                                                style={{
+                                                                    width: 6,
+                                                                    height: 6,
+                                                                    borderRadius: '50%',
+                                                                    background: dotBg,
+                                                                }}
+                                                            />
+                                                            {label}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </td>
 
-                                            {/* Refinement 1: Sleek & Compact Icon Pill Buttons (Prevents Table Overflow) */}
-                                            <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                                            {/* Action Buttons: Common buttons (Toggle, View, Edit) matching Customer Directory exactly, followed by Loyalty actions */}
+                                            <td style={{ padding: '14px 16px' }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                                    {/* Common Action 1: Status Toggle */}
                                                     <CustomerStatusToggle
                                                         isActive={cust.status === 'Active'}
                                                         loading={updatingStatusId === custId}
                                                         onToggle={() => handleStatusToggle(custId, cust.status)}
                                                     />
 
-                                                    {/* Earn Button */}
+                                                    {/* Common Action 2: View Profile Details */}
+                                                    <button
+                                                        type="button"
+                                                        title="View Profile Details"
+                                                        onClick={() => handleViewCustomerProfile(custId)}
+                                                        style={{
+                                                            width: 30,
+                                                            height: 30,
+                                                            borderRadius: 7,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#6366f1',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        <BsEye size={15} />
+                                                    </button>
+
+                                                    {/* Common Action 3: Edit Customer */}
+                                                    <button
+                                                        type="button"
+                                                        title="Edit Customer"
+                                                        onClick={() => setEditingCustomer(cust)}
+                                                        style={{
+                                                            width: 30,
+                                                            height: 30,
+                                                            borderRadius: 7,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#374151',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        <BsPencilSquare size={14} />
+                                                    </button>
+
+                                                    {/* Loyalty Action: Earn Points */}
                                                     <button
                                                         type="button"
                                                         title="Credit / Earn Loyalty Points"
@@ -1596,7 +1682,7 @@ export const CustomerLoyaltyPage = () => {
                                                         <BsPlusCircle size={15} />
                                                     </button>
 
-                                                    {/* Redeem Button */}
+                                                    {/* Loyalty Action: Redeem Points */}
                                                     <button
                                                         type="button"
                                                         title={points > 0 ? `Redeem ${points} points for bill discount` : 'No points available to redeem'}
@@ -1619,7 +1705,7 @@ export const CustomerLoyaltyPage = () => {
                                                         <BsGift size={14} />
                                                     </button>
 
-                                                    {/* History Button */}
+                                                    {/* Loyalty Action: History Ledger */}
                                                     <button
                                                         type="button"
                                                         title="View Points Transaction Ledger"
@@ -1640,28 +1726,6 @@ export const CustomerLoyaltyPage = () => {
                                                     >
                                                         <BsClockHistory size={14} />
                                                     </button>
-
-                                                    {/* View Profile Button */}
-                                                    <button
-                                                        type="button"
-                                                        title="View Full Customer CRM Profile"
-                                                        onClick={() => handleViewCustomerProfile(custId)}
-                                                        style={{
-                                                            width: 30,
-                                                            height: 30,
-                                                            borderRadius: 7,
-                                                            border: '1px solid #e5e7eb',
-                                                            background: '#ffffff',
-                                                            color: '#6366f1',
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            transition: 'all 0.15s ease'
-                                                        }}
-                                                    >
-                                                        <BsEye size={15} />
-                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -1673,33 +1737,87 @@ export const CustomerLoyaltyPage = () => {
                 </div>
 
                 {/* Pagination Controls */}
-                <div style={{ padding: '14px 20px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb' }}>
+                <div style={{ padding: '14px 20px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', flexWrap: 'wrap', gap: 12 }}>
                     <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
-                        Showing <strong>{filteredCustomers.length > 0 ? (page - 1) * PAGE_SIZE + 1 : 0}</strong> to <strong>{Math.min(page * PAGE_SIZE, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> customers
+                        Showing <strong>{filteredCustomers.length > 0 ? (page - 1) * pageSize + 1 : 0}</strong> to <strong>{Math.min(page * pageSize, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> customers
                     </p>
 
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            disabled={page === 1}
-                            style={{ padding: '4px 10px', fontSize: 12 }}
-                        >
-                            <BsChevronLeft size={10} /> Prev
-                        </button>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '0 8px' }}>
-                            {page} / {totalPages}
-                        </span>
-                        <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            disabled={page === totalPages}
-                            style={{ padding: '4px 10px', fontSize: 12 }}
-                        >
-                            Next <BsChevronRight size={10} />
-                        </button>
+                    <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                        {/* Entries per Page Dropdown */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600 }}>Entries per page:</span>
+                            <select
+                                className="ec-input"
+                                value={pageSize}
+                                onChange={e => {
+                                    setPageSize(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                                style={{
+                                    height: 32,
+                                    fontSize: 12,
+                                    padding: '0 8px',
+                                    borderRadius: 6,
+                                    background: '#ffffff',
+                                    border: '1px solid #d1d5db',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    color: '#374151',
+                                }}
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
+
+                        {/* Navigation Controls: Arrows only */}
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                title="Previous Page"
+                                aria-label="Previous Page"
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    padding: 0,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: 6,
+                                }}
+                            >
+                                <BsChevronLeft size={14} />
+                            </button>
+
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '0 6px' }}>
+                                Page {page} of {totalPages}
+                            </span>
+
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                title="Next Page"
+                                aria-label="Next Page"
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    padding: 0,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: 6,
+                                }}
+                            >
+                                <BsChevronRight size={14} />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1981,12 +2099,35 @@ export const CustomerLoyaltyPage = () => {
                 </div>
             )}
 
+            {/* ── EDIT CUSTOMER MODAL (Exact same EditCustomerModal as Customer Directory) ── */}
+            {editingCustomer && (
+                <EditCustomerModal
+                    customer={editingCustomer}
+                    onClose={() => setEditingCustomer(null)}
+                    onSaved={async (updatedData) => {
+                        if (updatedData) {
+                            setCustomers(prev => prev.map(c => 
+                                (c.backendId === updatedData.backendId || c.id === updatedData.id) 
+                                    ? { ...c, ...updatedData } 
+                                    : c
+                            ));
+                            if (selectedCustomer && (selectedCustomer.backendId === updatedData.backendId || selectedCustomer.id === updatedData.id)) {
+                                setSelectedCustomer(prev => prev ? { ...prev, ...updatedData } : prev);
+                            }
+                            showNotification('Customer updated successfully!', 'success');
+                        }
+                        await loadLoyaltyDashboard(true);
+                    }}
+                />
+            )}
+
             {/* ── CUSTOMER PROFILE DETAIL DRAWER (Exact same CustomerDetailPanel as Customer Directory) ── */}
             {selectedCustomer && (
                 <CustomerDetailPanel
                     customer={selectedCustomer}
                     detailExtras={customerInsights}
                     onClose={() => setSelectedCustomer(null)}
+                    onStatusChange={handleStatusToggle}
                     onCustomerUpdated={loadLoyaltyDashboard}
                 />
             )}

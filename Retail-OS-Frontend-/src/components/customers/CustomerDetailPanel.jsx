@@ -18,13 +18,12 @@ import {
     createFeedback,
     createReferral,
 } from '../../services/customer';
-import { fmt, normalizeApiList, getApiErrorMessage } from './customerHelpers';
+import { fmt, normalizeApiList, getApiErrorMessage, setStoredCustomerStatus } from './customerHelpers';
 import { BsGift, BsWallet2, BsChatText, BsJournalText, BsEnvelope, BsCheckCircleFill, BsXCircleFill, BsPerson, BsPlus } from 'react-icons/bs';
 
 const statusCfg = {
     Active: { color: '#10b981', bg: '#ecfdf5' },
     Inactive: { color: '#6b7280', bg: '#f3f4f6' },
-    Blocked: { color: '#ef4444', bg: '#fef2f2' },
 };
 
 const typeCfg = {
@@ -95,10 +94,17 @@ const CustomerDetailPanel = ({
     onStatusChange,
     onRefresh,
     showFeedback = false,
+    hideLoyalty = false,
 }) => {
     const [activeTab, setActiveTab] = useState('Overview');
-    const [status, setStatus] = useState(customer.status);
+    const [status, setStatus] = useState(customer.status || 'Active');
     const [actionLoading, setActionLoading] = useState(false);
+
+    useEffect(() => {
+        if (customer?.status) {
+            setStatus(customer.status);
+        }
+    }, [customer?.status]);
 
     // Tab Lazy Loading States & Cache
     const [tabData, setTabData] = useState({
@@ -168,6 +174,7 @@ const CustomerDetailPanel = ({
                 }));
                 setLoadedTabs(prev => ({ ...prev, Wallet: true }));
             } else if (tabName === 'Loyalty') {
+                if (hideLoyalty) return;
                 const [loyaltyRes, loyaltyHistRes] = await Promise.allSettled([
                     getCustomerLoyalty(customer.backendId),
                     getLoyaltyHistory(customer.backendId),
@@ -224,19 +231,27 @@ const CustomerDetailPanel = ({
     const communicationsList = tabData.communications ?? detailExtras.communications;
 
     const hasLoyaltyRecord = Boolean(currentLoyalty && !currentLoyalty.error);
+    const [panelNotice, setPanelNotice] = useState(null);
+
+    const showPanelNotice = (msg, type = 'success') => {
+        setPanelNotice({ msg, type });
+        setTimeout(() => {
+            setPanelNotice(prev => (prev?.msg === msg ? null : prev));
+        }, 3500);
+    };
 
     const runAction = async (action, successMessage, onSuccess) => {
         try {
             setActionLoading(true);
             const res = await action();
-            alert(successMessage);
+            showPanelNotice(successMessage, 'success');
             if (onSuccess) onSuccess(res);
             if (activeTab !== 'Overview') {
                 await fetchTabData(activeTab);
             }
             if (onRefresh) await onRefresh(customer.backendId);
         } catch (error) {
-            alert(getApiErrorMessage(error, 'Action failed. Please try again.'));
+            showPanelNotice(getApiErrorMessage(error, 'Action failed. Please try again.'), 'error');
         } finally {
             setActionLoading(false);
         }
@@ -260,11 +275,38 @@ const CustomerDetailPanel = ({
                     <div>
                         <h3 style={{ fontWeight: 700, fontSize: 17, color: '#111827', margin: 0 }}>{customer.name}</h3>
                         <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 3, margin: 0 }}>
-                            {customer.id} • Registered {customer.registered}
+                            Registered {customer.registered}
                         </p>
                     </div>
                     <button type="button" className="ec-modal-close" onClick={onClose}>✕</button>
                 </div>
+
+                {panelNotice && (
+                    <div
+                        style={{
+                            margin: '12px 20px 0',
+                            padding: '10px 14px',
+                            borderRadius: 8,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: panelNotice.type === 'success' ? '#ecfdf5' : '#fef2f2',
+                            color: panelNotice.type === 'success' ? '#065f46' : '#991b1b',
+                            border: `1px solid ${panelNotice.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
+                        }}
+                    >
+                        <span>{panelNotice.msg}</span>
+                        <button
+                            type="button"
+                            onClick={() => setPanelNotice(null)}
+                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontWeight: 700, color: 'inherit' }}
+                        >
+                            ✕
+                        </button>
+                    </div>
+                )}
 
                 {loading ? (
                     <div style={{ padding: 40, textAlign: 'center', color: '#6366f1' }}>
@@ -289,7 +331,7 @@ const CustomerDetailPanel = ({
 
                         {/* Navigation Tabs */}
                         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 16, paddingBottom: 4 }}>
-                            {TABS.map(tab => (
+                            {(hideLoyalty ? TABS.filter(t => t !== 'Loyalty') : TABS).map(tab => (
                                 <button key={tab} type="button" style={tabBtnStyle(activeTab === tab)} onClick={() => setActiveTab(tab)}>
                                     {tab}
                                 </button>
@@ -311,10 +353,10 @@ const CustomerDetailPanel = ({
                                             {[
                                                 { label: 'Phone', value: customer.phone || 'Not available' },
                                                 { label: 'City', value: customer.city || 'Not specified' },
-                                                { label: 'Total Orders', value: `${customer.orders} orders` },
+                                                { label: 'Total Orders', value: `${customer.orders ?? 0}` },
                                                 { label: 'Total Spent', value: fmt(customer.totalSpent) },
                                                 { label: 'Wallet Balance', value: walletBalance > 0 ? fmt(walletBalance) : '₹0' },
-                                                { label: 'Loyalty Points', value: `${points} pts` },
+                                                ...(!hideLoyalty ? [{ label: 'Loyalty Points', value: `${points} pts` }] : []),
                                                 { label: 'Last Purchase', value: customer.lastOrder },
                                                 { label: 'Birthday', value: customer.birthday || 'Not set' },
                                             ].map((f, i) => (
@@ -331,7 +373,16 @@ const CustomerDetailPanel = ({
                                                     <button
                                                         key={s}
                                                         type="button"
-                                                        onClick={() => { setStatus(s); onStatusChange(customer.id, s); }}
+                                                        onClick={() => {
+                                                            setStatus(s);
+                                                            const targetId = customer.backendId || customer.id;
+                                                            if (targetId) {
+                                                                setStoredCustomerStatus(targetId, s);
+                                                            }
+                                                            if (onStatusChange) {
+                                                                onStatusChange(targetId, s, true);
+                                                            }
+                                                        }}
                                                         style={{ padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${status === s ? statusCfg[s].color : '#e5e7eb'}`, background: status === s ? statusCfg[s].bg : '#fff', color: status === s ? statusCfg[s].color : '#6b7280' }}
                                                     >
                                                         {s}
@@ -448,7 +499,7 @@ const CustomerDetailPanel = ({
                                 )}
 
                                 {/* TAB 4: LOYALTY */}
-                                {activeTab === 'Loyalty' && (
+                                {!hideLoyalty && activeTab === 'Loyalty' && (
                                     <>
                                         {!hasLoyaltyRecord && points === 0 ? (
                                             <EmptyBlock
