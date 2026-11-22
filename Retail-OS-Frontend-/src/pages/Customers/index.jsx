@@ -1441,7 +1441,7 @@ const Customers = () => {
                                 <th style={{ padding: '12px 16px' }}>Orders</th>
                                 <th style={{ padding: '12px 16px' }}>Total Spent</th>
                                 <th style={{ padding: '12px 16px' }}>Wallet / Points</th>
-                                <th style={{ padding: '12px 16px' }}>Status </th>
+                                <th style={{ padding: '12px 16px' }}>Status</th>
                                 <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
                             </tr>
                         </thead>
@@ -1521,20 +1521,45 @@ const Customers = () => {
                                             </td>
 
                                             <td style={{ padding: '14px 16px' }}>
-                                                <CustomerStatusToggle
-                                                    isActive={cust.status === 'Active'}
-                                                    loading={updatingStatusId === custId}
-                                                    onToggle={() => handleStatusToggle(custId, cust.status)}
-                                                />
+                                                <span
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 6,
+                                                        fontSize: 12,
+                                                        fontWeight: 700,
+                                                        padding: '3px 10px',
+                                                        borderRadius: 12,
+                                                        background: cust.status === 'Active' ? '#ecfdf5' : '#fef2f2',
+                                                        color: cust.status === 'Active' ? '#059669' : '#dc2626',
+                                                        border: `1px solid ${cust.status === 'Active' ? '#a7f3d0' : '#fecaca'}`,
+                                                    }}
+                                                >
+                                                    <span
+                                                        style={{
+                                                            width: 6,
+                                                            height: 6,
+                                                            borderRadius: '50%',
+                                                            background: cust.status === 'Active' ? '#10b981' : '#ef4444',
+                                                        }}
+                                                    />
+                                                    {cust.status === 'Active' ? 'Active' : (cust.status || 'Inactive')}
+                                                </span>
                                             </td>
 
                                             <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                                                <div style={{ display: 'inline-flex', gap: 6 }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                                                    <CustomerStatusToggle
+                                                        isActive={cust.status === 'Active'}
+                                                        loading={updatingStatusId === custId}
+                                                        onToggle={() => handleStatusToggle(custId, cust.status)}
+                                                    />
+
                                                     <button
                                                         type="button"
                                                         title="View Profile Details"
                                                         onClick={() => handleViewCustomerProfile(custId)}
-                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#6366f1', cursor: 'pointer' }}
+                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#6366f1', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                                                     >
                                                         <BsEye size={14} />
                                                     </button>
@@ -1543,7 +1568,7 @@ const Customers = () => {
                                                         type="button"
                                                         title="Edit Customer"
                                                         onClick={() => setEditingCustomer(cust)}
-                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer' }}
+                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                                                     >
                                                         <BsPencilSquare size={14} />
                                                     </button>

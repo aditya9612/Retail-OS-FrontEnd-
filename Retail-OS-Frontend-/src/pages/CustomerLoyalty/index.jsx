@@ -1358,7 +1358,7 @@ export const CustomerLoyaltyPage = () => {
                                 <th style={{ padding: '12px 16px' }}>Total Spent</th>
                                 <th style={{ padding: '12px 16px' }}>Loyalty Balance</th>
                                 <th style={{ padding: '12px 16px' }}>Status</th>
-                                <th style={{ padding: '12px 16px', textAlign: 'center', width: 145 }}>Actions</th>
+                                <th style={{ padding: '12px 16px', textAlign: 'center', minWidth: 195 }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1486,18 +1486,43 @@ export const CustomerLoyaltyPage = () => {
                                                 </div>
                                             </td>
 
-                                            {/* Status Switch */}
+                                            {/* Status Text Label */}
                                             <td style={{ padding: '14px 16px' }}>
-                                                <CustomerStatusToggle
-                                                    isActive={cust.status === 'Active'}
-                                                    loading={updatingStatusId === custId}
-                                                    onToggle={() => handleStatusToggle(custId, cust.status)}
-                                                />
+                                                <span
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 6,
+                                                        fontSize: 12,
+                                                        fontWeight: 700,
+                                                        padding: '3px 10px',
+                                                        borderRadius: 12,
+                                                        background: cust.status === 'Active' ? '#ecfdf5' : '#fef2f2',
+                                                        color: cust.status === 'Active' ? '#059669' : '#dc2626',
+                                                        border: `1px solid ${cust.status === 'Active' ? '#a7f3d0' : '#fecaca'}`,
+                                                    }}
+                                                >
+                                                    <span
+                                                        style={{
+                                                            width: 6,
+                                                            height: 6,
+                                                            borderRadius: '50%',
+                                                            background: cust.status === 'Active' ? '#10b981' : '#ef4444',
+                                                        }}
+                                                    />
+                                                    {cust.status === 'Active' ? 'Active' : (cust.status || 'Inactive')}
+                                                </span>
                                             </td>
 
                                             {/* Refinement 1: Sleek & Compact Icon Pill Buttons (Prevents Table Overflow) */}
                                             <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                                                    <CustomerStatusToggle
+                                                        isActive={cust.status === 'Active'}
+                                                        loading={updatingStatusId === custId}
+                                                        onToggle={() => handleStatusToggle(custId, cust.status)}
+                                                    />
+
                                                     {/* Earn Button */}
                                                     <button
                                                         type="button"
