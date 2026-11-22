@@ -655,11 +655,44 @@ export const CustomerLoyaltyPage = () => {
     const vipCustomers = customers.filter(c => c.type === 'VIP').length;
     const totalPointsPool = customers.reduce((acc, c) => acc + (c.loyaltyPoints || 0), 0);
 
-    const topSpenderObj = useMemo(() => {
-        if (customers.length === 0) return { name: '—', amount: 0 };
-        const top = [...customers].sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0))[0];
-        return { name: top.name, amount: top.totalSpent || 0 };
+    // Active Buyers: Only customers who are Active AND have actually placed orders or spent money (> 0)
+    const activeBuyersCount = useMemo(() => {
+        const raw = customerInsights?.retention;
+        if (raw && typeof raw.active_buyers === 'number') return raw.active_buyers;
+        return customers.filter(c => c.status === 'Active' && (Number(c.orders || 0) > 0 || Number(c.totalSpent || 0) > 0)).length;
+    }, [customerInsights?.retention, customers]);
+
+    // Customers who have zero orders and zero spend
+    const zeroSpendCount = useMemo(() => {
+        return customers.filter(c => Number(c.orders || 0) === 0 && Number(c.totalSpent || 0) === 0).length;
     }, [customers]);
+
+    // Top Spender: Strictly customers with spend > 0 (prevents 0-spend customers from being labeled Top Spender)
+    const topSpenderObj = useMemo(() => {
+        // 1. Check API topCustomers first if available
+        const apiTopList = normalizeApiList(customerInsights?.topCustomers);
+        const validApiTop = apiTopList.find(c => Number(c.total_spend || c.totalSpent || c.revenue || 0) > 0);
+        if (validApiTop) {
+            return {
+                name: validApiTop.name || validApiTop.customer_name || 'Customer',
+                amount: Number(validApiTop.total_spend || validApiTop.totalSpent || validApiTop.revenue || 0),
+                hasSpender: true,
+            };
+        }
+
+        // 2. Check local customers with spend > 0
+        const customersWithSpend = customers.filter(c => Number(c.totalSpent || c.total_spend || 0) > 0);
+        if (customersWithSpend.length === 0) {
+            return { name: 'No purchases yet', amount: 0, hasSpender: false };
+        }
+
+        const top = [...customersWithSpend].sort((a, b) => Number(b.totalSpent || 0) - Number(a.totalSpent || 0))[0];
+        return {
+            name: top.name || 'Customer',
+            amount: Number(top.totalSpent || 0),
+            hasSpender: true,
+        };
+    }, [customers, customerInsights?.topCustomers]);
 
     // Uniform analytics card styling (matching Customer Directory exactly: 190px height)
     const analyticsCardStyle = {
@@ -821,8 +854,10 @@ export const CustomerLoyaltyPage = () => {
                         {/* Card 5: Top Spender */}
                         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
                             <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Top Spender</p>
-                            <p style={{ fontSize: 20, fontWeight: 800, color: '#10b981', marginTop: 6, margin: 0 }}>{fmt(topSpenderObj.amount)}</p>
-                            <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <p style={{ fontSize: 20, fontWeight: 800, color: topSpenderObj.hasSpender ? '#10b981' : '#9ca3af', marginTop: 6, margin: 0 }}>
+                                {topSpenderObj.hasSpender ? fmt(topSpenderObj.amount) : '₹0'}
+                            </p>
+                            <span style={{ fontSize: 11, color: topSpenderObj.hasSpender ? '#6b7280' : '#9ca3af', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
                                 {topSpenderObj.name}
                             </span>
                         </div>
@@ -1032,9 +1067,20 @@ export const CustomerLoyaltyPage = () => {
                             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }} className="custom-scrollbar">
                                 {(() => {
                                     const list = normalizeApiList(customerInsights.topCustomers);
-                                    const top5 = list.length > 0
-                                        ? list.slice(0, 5)
-                                        : [...customers].sort((a, b) => (b.loyaltyPoints || 0) - (a.loyaltyPoints || 0)).slice(0, 5);
+                                    const candidateList = list.length > 0 ? list : customers;
+                                    const top5 = candidateList
+                                        .filter(c => (c.loyalty_points ?? c.loyaltyPoints ?? 0) > 0 || Number(c.total_spend || c.totalSpent || 0) > 0)
+                                        .sort((a, b) => (b.loyalty_points ?? b.loyaltyPoints ?? 0) - (a.loyalty_points ?? a.loyaltyPoints ?? 0))
+                                        .slice(0, 5);
+
+                                    if (top5.length === 0) {
+                                        return (
+                                            <div style={{ padding: '28px 12px', textAlign: 'center', color: '#9ca3af', margin: 'auto' }}>
+                                                <p style={{ fontSize: 12, fontWeight: 700, color: '#4b5563', margin: 0 }}>No Champions Yet</p>
+                                                <p style={{ fontSize: 10, margin: '4px 0 0', color: '#9ca3af' }}>Points and spend appear once customer orders are placed.</p>
+                                            </div>
+                                        );
+                                    }
 
                                     return top5.map((c, idx) => (
                                         <div key={c.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, padding: '4px 8px', background: '#f9fafb', borderRadius: 8 }}>
@@ -1065,22 +1111,21 @@ export const CustomerLoyaltyPage = () => {
                                     {(() => {
                                         const raw = customerInsights.retention;
                                         const tot = raw?.total_customers ?? totalCustomers;
-                                        const act = raw?.active_customers ?? activeCustomers;
-                                        return raw?.retention_rate || (tot > 0 ? `${Math.round((act / tot) * 100)}%` : '0%');
+                                        return raw?.retention_rate || (tot > 0 ? `${Math.round((activeBuyersCount / tot) * 100)}%` : '0%');
                                     })()}
                                 </span>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
                                 <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
                                     <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Active Buyers</span>
-                                    <p style={{ fontSize: 16, fontWeight: 800, color: '#10b981', margin: '2px 0 0 0' }}>
-                                        {customerInsights.retention?.active_customers ?? activeCustomers}
+                                    <p style={{ fontSize: 16, fontWeight: 800, color: activeBuyersCount > 0 ? '#10b981' : '#9ca3af', margin: '2px 0 0 0' }}>
+                                        {activeBuyersCount}
                                     </p>
                                 </div>
                                 <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                    <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Inactive Base</span>
-                                    <p style={{ fontSize: 16, fontWeight: 800, color: '#ef4444', margin: '2px 0 0 0' }}>
-                                        {customerInsights.retention?.inactive_customers ?? inactiveCustomers}
+                                    <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Zero Spend</span>
+                                    <p style={{ fontSize: 16, fontWeight: 800, color: '#6b7280', margin: '2px 0 0 0' }}>
+                                        {zeroSpendCount}
                                     </p>
                                 </div>
                             </div>
@@ -1106,12 +1151,18 @@ export const CustomerLoyaltyPage = () => {
                                     else if (rawLtv?.items || rawLtv?.customers || rawLtv?.top_customers) {
                                         ltvList = rawLtv.items || rawLtv.customers || rawLtv.top_customers;
                                     } else {
-                                        ltvList = [...customers].sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0));
+                                        ltvList = customers;
                                     }
-                                    const top5Ltv = ltvList.slice(0, 5);
+                                    const top5Ltv = ltvList
+                                        .filter(c => Number(c.total_spend || c.totalSpent || c.revenue || c.ltv || 0) > 0)
+                                        .sort((a, b) => Number(b.total_spend || b.totalSpent || b.revenue || b.ltv || 0) - Number(a.total_spend || a.totalSpent || a.revenue || a.ltv || 0))
+                                        .slice(0, 5);
 
                                     return top5Ltv.length === 0 ? (
-                                        <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', margin: 'auto' }}>No LTV Data</p>
+                                        <div style={{ padding: '28px 12px', textAlign: 'center', color: '#9ca3af', margin: 'auto' }}>
+                                            <p style={{ fontSize: 12, fontWeight: 700, color: '#4b5563', margin: 0 }}>No LTV Data Yet</p>
+                                            <p style={{ fontSize: 10, margin: '4px 0 0', color: '#9ca3af' }}>Calculated after customer orders are logged.</p>
+                                        </div>
                                     ) : (
                                         top5Ltv.map((c, idx) => (
                                             <div key={c.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, padding: '4px 8px', background: '#f9fafb', borderRadius: 8 }}>
