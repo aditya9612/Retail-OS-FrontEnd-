@@ -9,11 +9,6 @@ import categoryService from "../../services/categoryService";
 import apiClient from "../../api/axios";
 import ProductVariantModal from "./ProductVariantModal";
 import "../../components/Categories/CategoryCards.css";
-import productService from "../../services/product";
-import categoryService from "../../services/categoryService";
-import apiClient from "../../api/axios";
-import ProductVariantModal from "./ProductVariantModal";
-import "../../components/Categories/CategoryCards.css";
 import { resolveProductImage } from "../../utils/productImages";
 import notificationService from "../../utils/notificationService";
 
