@@ -60,37 +60,6 @@ const PAYMENT_MODES = [
 
 export { resolveProductImage };
 
-// Default catalog used solely for offline backup when no local cache is available
-const DEFAULT_OFFLINE_PRODUCTS = [
-    { id: 101, name: 'Cotton Graphic T-Shirt', price: 799, hsn: '6109', gstRate: 5, category: 'Apparel', barcode: '1001', image: LOCAL_PRODUCT_IMAGES.tshirt, discount: 50 },
-    { id: 102, name: 'Parle-G Glucose Biscuits 250g', price: 30, hsn: '1905', gstRate: 18, category: 'Groceries', barcode: '1002', image: LOCAL_PRODUCT_IMAGES.parleG, discount: 0 },
-    { id: 103, name: 'Genuine Leather Wallet', price: 1299, hsn: '4202', gstRate: 18, category: 'Accessories', barcode: '1003', image: LOCAL_PRODUCT_IMAGES.wallet, discount: 100 },
-    { id: 104, name: 'Organic Green Tea (Pack of 25)', price: 249, hsn: '0902', gstRate: 5, category: 'Groceries', barcode: '1004', image: LOCAL_PRODUCT_IMAGES.greenTea, discount: 20 },
-    { id: 105, name: 'Smart Fitness Tracker Band', price: 2499, hsn: '8517', gstRate: 18, category: 'Electronics', barcode: '1005', image: LOCAL_PRODUCT_IMAGES.fitnessTracker, discount: 200 },
-    { id: 106, name: 'Slim Fit Denim Jeans', price: 1899, hsn: '6203', gstRate: 12, category: 'Apparel', barcode: '1006', image: LOCAL_PRODUCT_IMAGES.jeans, discount: 150 },
-    { id: 107, name: 'Fast USB Type-C 65W Charger', price: 899, hsn: '8504', gstRate: 18, category: 'Electronics', barcode: '1007', image: LOCAL_PRODUCT_IMAGES.usbCharger, discount: 50 },
-    { id: 108, name: 'Fresh Dairy Milk 1 Litre', price: 68, hsn: '0401', gstRate: 0, category: 'Groceries', barcode: '1008', image: LOCAL_PRODUCT_IMAGES.milkBottle, discount: 0 },
-    { id: 109, name: 'Marie Light Biscuits 300g', price: 45, hsn: '1905', gstRate: 18, category: 'Groceries', barcode: '1009', image: LOCAL_PRODUCT_IMAGES.marieBiscuits, discount: 5 },
-    { id: 110, name: 'Oreo Choco Creme Cookies', price: 50, hsn: '1905', gstRate: 18, category: 'Groceries', barcode: '1010', image: LOCAL_PRODUCT_IMAGES.oreo, discount: 5 },
-    { id: 111, name: 'Royal Butter Cookies Tin', price: 349, hsn: '1905', gstRate: 18, category: 'Groceries', barcode: '1011', image: LOCAL_PRODUCT_IMAGES.butterCookies, discount: 30 },
-    { id: 112, name: 'Insulated Stainless Steel Bottle 1L', price: 649, hsn: '7323', gstRate: 18, category: 'Accessories', barcode: '1012', image: LOCAL_PRODUCT_IMAGES.steelBottle, discount: 50 },
-];
-
-const getOfflineCachedProducts = () => {
-    try {
-        const raw = localStorage.getItem('retailos_cached_products');
-        if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-                return parsed;
-            }
-        }
-    } catch (e) {
-        console.warn('[Billing] Error reading offline cached products:', e);
-    }
-    return [];
-};
-
 const Billing = () => {
     const [customer, setCustomer] = useState({ name: '', phone: '', gstin: '' });
     const [cart, setCart] = useState([]);
@@ -305,38 +274,14 @@ const Billing = () => {
                     };
                 });
                 setProducts(mapped);
-                // Cache real products locally for 100% offline billing resilience
-                try {
-                    localStorage.setItem('retailos_cached_products', JSON.stringify(mapped));
-                } catch (e) {
-                    // Ignore storage quota errors
-                }
             } else {
-                // If backend returns empty, check offline cache
-                const cached = getOfflineCachedProducts();
-                if (cached.length > 0) {
-                    setProducts(cached);
-                } else {
-                    setProducts([]);
-                }
+                setProducts([]);
             }
         } catch (err) {
             console.error('[Billing] Live products API error:', err);
-            // On network drop or offline mode, automatically fall back to cached real store products
-            const cached = getOfflineCachedProducts();
-            if (cached.length > 0) {
-                console.info('[Billing] Offline mode: loaded', cached.length, 'cached store products');
-                setProducts(cached);
-                setOfflineMode(true);
-            } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
-                // Emergency offline fallback if completely offline with no previous cache
-                setProducts(DEFAULT_OFFLINE_PRODUCTS);
-                setOfflineMode(true);
-            } else {
-                const errMsg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Error connecting to live product catalog';
-                setProductsError(errMsg);
-                setProducts([]);
-            }
+            const errMsg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Error connecting to live product catalog';
+            setProductsError(errMsg);
+            setProducts([]);
         } finally {
             setProductsLoading(false);
         }
