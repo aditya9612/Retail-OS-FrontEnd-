@@ -9,11 +9,7 @@ import categoryService from "../../services/categoryService";
 import apiClient from "../../api/axios";
 import ProductVariantModal from "./ProductVariantModal";
 import "../../components/Categories/CategoryCards.css";
-<<<<<<< Updated upstream
-=======
-import { resolveProductImage } from "../../utils/productImages";
 import notificationService from "../../utils/notificationService";
->>>>>>> Stashed changes
 
 export const fetchDatabaseCategories = async () => {
     try {
