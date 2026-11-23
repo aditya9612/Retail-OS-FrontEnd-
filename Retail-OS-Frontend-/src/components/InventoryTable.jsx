@@ -265,8 +265,8 @@ const InventoryTable = ({
             ===================================================== */
 
             const category =
-              (typeof item.category === "string" && item.category.trim() ? item.category : null) ||
-              item.category?.name ||
+              (typeof item.category === "string" && item.category.trim() && item.category.trim() !== "—" && item.category.trim() !== "-" ? item.category.trim() : null) ||
+              (typeof item.category === "object" ? (item.category?.name || item.category?.category_name) : null) ||
               item.category_name ||
               item.categoryName ||
               (item.category_id ? `Category #${item.category_id}` : "—");
@@ -599,15 +599,15 @@ const isMissingRequiredExpiry =
                 <td>
                   <span
                     style={{
-                      background: "#eef2ff",
-                      color: "#6366f1",
+                      background: category && category !== "—" ? "#eef2ff" : "#f3f4f6",
+                      color: category && category !== "—" ? "#6366f1" : "#9ca3af",
                       padding: "4px 8px",
                       borderRadius: 20,
                       fontSize: 12,
                       fontWeight: 600,
                     }}
                   >
-                    {category}
+                    {category || "—"}
                   </span>
                 </td>
 

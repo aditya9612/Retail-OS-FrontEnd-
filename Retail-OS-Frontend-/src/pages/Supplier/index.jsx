@@ -1699,7 +1699,7 @@ const Supplier = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 10;
+  const [pageSize, setPageSize] = useState(10);
   const [modal, setModal] = useState(null);
   const [historySupplier, setHistorySupplier] = useState(null);
   const [productsSupplier, setProductsSupplier] = useState(null);
@@ -1767,59 +1767,14 @@ const Supplier = () => {
   }, []);
 
   // =========================
-  // GET / SEARCH SUPPLIERS
+  // GET SUPPLIERS
   // =========================
-  const loadSuppliers = async (searchQuery = search, activeFilter = statusFilter) => {
+  const loadSuppliers = async () => {
     try {
       setLoading(true);
       setSuppliersError(null);
-
-      const trimmed = typeof searchQuery === "string" ? searchQuery.trim() : "";
-      const queryParams = {};
-      if (activeFilter === "active") queryParams.is_active = true;
-      if (activeFilter === "inactive") queryParams.is_active = false;
-
-      let response;
-
-      if (trimmed) {
-        try {
-          response = await supplierService.search(trimmed);
-        } catch (searchErr) {
-          console.warn("Backend search failed, falling back to all suppliers:", searchErr);
-          response = await supplierService.getAll({ search: trimmed, ...queryParams });
-        }
-
-        let list = extractSuppliers(response);
-
-        // If backend search returned empty, perform fallback client-side search across all suppliers
-        if (list.length === 0) {
-          try {
-            const allRes = await supplierService.getAll(queryParams);
-            const allList = extractSuppliers(allRes);
-            const q = trimmed.toLowerCase();
-            list = allList.filter((s) => {
-              const name = String(s.name || s.supplier_name || "").toLowerCase();
-              const contact = String(s.contact_person || s.contact_name || "").toLowerCase();
-              const email = String(s.email || s.supplier_email || "").toLowerCase();
-              const phone = String(s.phone || s.phone_number || s.mobile || "").toLowerCase();
-              const address = String(s.address || s.supplier_address || "").toLowerCase();
-              const gstin = String(s.gstin || s.gst_number || s.gst || "").toLowerCase();
-              return (
-                name.includes(q) ||
-                contact.includes(q) ||
-                email.includes(q) ||
-                phone.includes(q) ||
-                address.includes(q) ||
-                gstin.includes(q)
-              );
-            });
-          } catch (_) {}
-        }
-        setSuppliers(list);
-      } else {
-        response = await supplierService.getAll(queryParams);
-        setSuppliers(extractSuppliers(response));
-      }
+      const response = await supplierService.getAll();
+      setSuppliers(extractSuppliers(response));
     } catch (error) {
       console.error("Failed to load suppliers:", error);
 
@@ -1836,18 +1791,8 @@ const Supplier = () => {
   };
 
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      loadSuppliers(search, statusFilter);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      loadSuppliers(search, statusFilter);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [search, statusFilter]);
+    loadSuppliers();
+  }, []);
 
   // =========================
   // UPDATE SUPPLIER STATUS
@@ -1897,20 +1842,67 @@ const Supplier = () => {
   // =========================
   const filteredSuppliers = useMemo(() => {
     let list = Array.isArray(suppliers) ? suppliers : [];
+
+    // 1. Status Filter
     if (statusFilter === "active") {
       list = list.filter(isSupplierActive);
     } else if (statusFilter === "inactive") {
       list = list.filter((s) => !isSupplierActive(s));
     }
-    return list;
-  }, [suppliers, statusFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredSuppliers.length / PAGE_SIZE));
+    // 2. Search Query (Name, Contact Person, Phone, Email, Address, GSTIN)
+    const q = (search || "").trim().toLowerCase();
+    if (q) {
+      list = list.filter((s) => {
+        const name = String(s.name || s.supplier_name || "").toLowerCase();
+        const contact = String(s.contact_person || s.contact_name || s.contact || "").toLowerCase();
+        const phone = String(s.phone || s.phone_number || s.mobile || s.supplier_phone || "").toLowerCase();
+        const email = String(s.email || s.supplier_email || "").toLowerCase();
+        const address = String(s.address || s.supplier_address || "").toLowerCase();
+        const gstin = String(s.gstin || s.gst_number || s.gst || s.supplier_gstin || "").toLowerCase();
+
+        return (
+          name.includes(q) ||
+          contact.includes(q) ||
+          phone.includes(q) ||
+          email.includes(q) ||
+          address.includes(q) ||
+          gstin.includes(q)
+        );
+      });
+    }
+
+    return list;
+  }, [suppliers, statusFilter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSuppliers.length / pageSize));
+
+  useEffect(() => {
+    if (page > totalPages && totalPages > 0) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const paginatedSuppliers = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return filteredSuppliers.slice(start, start + PAGE_SIZE);
-  }, [filteredSuppliers, page, PAGE_SIZE]);
+    const start = (page - 1) * pageSize;
+    return filteredSuppliers.slice(start, start + pageSize);
+  }, [filteredSuppliers, page, pageSize]);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (page <= 3) {
+        pages.push(1, 2, 3, 4, "...", totalPages);
+      } else if (page >= totalPages - 2) {
+        pages.push(1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, "...", page - 1, page, page + 1, "...", totalPages);
+      }
+    }
+    return pages;
+  };
 
   useEffect(() => {
     setPage(1);
@@ -2307,14 +2299,20 @@ const Supplier = () => {
             <BsSearch className="sup-search-icon" size={14} />
             <input
               className="sup-search-input"
-              placeholder="Search suppliers by name, contact, email or phone..."
+              placeholder="Search by name, contact and email..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
             />
             {search && (
               <button
                 className="sup-search-clear"
-                onClick={() => setSearch("")}
+                onClick={() => {
+                  setSearch("");
+                  setPage(1);
+                }}
                 title="Clear search"
                 type="button"
               >
@@ -2358,11 +2356,12 @@ const Supplier = () => {
           <table className="sup-table">
             <thead>
               <tr>
-                <th style={{ width: "26%" }}>Supplier</th>
-                <th style={{ width: "20%" }}>Email</th>
-                <th style={{ width: "16%" }}>Phone</th>
-                <th style={{ width: "22%" }}>Address & GSTIN</th>
-                <th className="text-right" style={{ width: "160px", minWidth: "150px" }}>Actions</th>
+                <th style={{ width: "24%" }}>Supplier</th>
+                <th style={{ width: "18%" }}>Email</th>
+                <th style={{ width: "14%" }}>Phone</th>
+                <th style={{ width: "20%" }}>Address & GSTIN</th>
+                <th style={{ width: "120px", minWidth: "110px" }}>Status</th>
+                <th className="text-right" style={{ width: "150px", minWidth: "140px" }}>Actions</th>
               </tr>
             </thead>
 
@@ -2370,7 +2369,7 @@ const Supplier = () => {
               {/* LOADING */}
               {loading && (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <div className="sup-loading-state">
                       <div className="sup-spinner" />
                       <span>Loading suppliers...</span>
@@ -2394,33 +2393,12 @@ const Supplier = () => {
                     <tr key={supplier.id || supplierName}>
                       <td>
                         <div className="sup-name-cell">
-                          <div className="sup-name-row">
-                            <span
-                              className="sup-primary-name sup-cell-truncate"
-                              title={supplierName}
-                            >
-                              {supplierName}
-                            </span>
-                            <span
-                              className={`sup-badge ${
-                                active ? "sup-badge-active" : "sup-badge-inactive"
-                              } sup-badge-clickable`}
-                              onClick={() => handleToggleStatus(supplier)}
-                              title={`Click to switch status to ${active ? "Inactive" : "Active"}`}
-                              style={{ cursor: "pointer", transition: "all 0.15s ease" }}
-                            >
-                              {togglingStatusId === supplier.id ? (
-                                <span className="sup-spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
-                              ) : (
-                                <span
-                                  className={`sup-status-dot ${
-                                    active ? "sup-dot-active" : "sup-dot-inactive"
-                                  }`}
-                                />
-                              )}
-                              {active ? "Active" : "Inactive"}
-                            </span>
-                          </div>
+                          <span
+                            className="sup-primary-name sup-cell-truncate"
+                            title={supplierName}
+                          >
+                            {supplierName}
+                          </span>
                           {contactPerson && (
                             <div
                               className="sup-contact-sub sup-cell-truncate"
@@ -2468,7 +2446,29 @@ const Supplier = () => {
                         </div>
                       </td>
 
-                      <td style={{ textAlign: "right", width: "160px", minWidth: "150px", whiteSpace: "nowrap" }}>
+                      <td style={{ width: "120px", minWidth: "110px", whiteSpace: "nowrap" }}>
+                        <span
+                          className={`sup-badge ${
+                            active ? "sup-badge-active" : "sup-badge-inactive"
+                          } sup-badge-clickable`}
+                          onClick={() => handleToggleStatus(supplier)}
+                          title={`Click to switch status to ${active ? "Inactive" : "Active"}`}
+                          style={{ cursor: "pointer", transition: "all 0.15s ease" }}
+                        >
+                          {togglingStatusId === supplier.id ? (
+                            <span className="sup-spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
+                          ) : (
+                            <span
+                              className={`sup-status-dot ${
+                                active ? "sup-dot-active" : "sup-dot-inactive"
+                              }`}
+                            />
+                          )}
+                          {active ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+
+                      <td style={{ textAlign: "right", width: "150px", minWidth: "140px", whiteSpace: "nowrap" }}>
                         <div className="sup-actions">
                           {/* PURCHASE HISTORY */}
                           <button
@@ -2526,13 +2526,13 @@ const Supplier = () => {
               {/* ERROR */}
               {!loading && suppliersError && (
                 <tr>
-                  <td colSpan={5}>
+                  <td colSpan={6}>
                     <div className="sup-error-state">
                       <p className="sup-error-title">Failed to load suppliers</p>
                       <p className="sup-error-desc">{suppliersError}</p>
                       <button
                         className="sup-btn-retry"
-                        onClick={() => loadSuppliers(search)}
+                        onClick={() => loadSuppliers()}
                       >
                         Retry
                       </button>
@@ -2546,7 +2546,7 @@ const Supplier = () => {
                 !suppliersError &&
                 filteredSuppliers.length === 0 && (
                   <tr>
-                    <td colSpan={5}>
+                    <td colSpan={6}>
                       <div className="sup-empty-state">
                         <div className="sup-empty-icon">📦</div>
                         <p className="sup-empty-title">No suppliers found</p>
@@ -2573,76 +2573,36 @@ const Supplier = () => {
         </div>
 
         {/* ================= PAGINATION ================= */}
-        {!loading && filteredSuppliers.length > PAGE_SIZE && (
+        {!loading && filteredSuppliers.length > 0 && (
           <div className="sup-pagination">
-            <div className="sup-pagination-info">
-              Showing <strong>{(page - 1) * PAGE_SIZE + 1}</strong> to{" "}
-              <strong>{Math.min(page * PAGE_SIZE, filteredSuppliers.length)}</strong> of{" "}
-              <strong>{filteredSuppliers.length}</strong> suppliers
-            </div>
             <div className="sup-pagination-controls">
-              {(() => {
-                let pages = [];
-                if (totalPages <= 7) {
-                  pages = Array.from({ length: totalPages }, (_, i) => i + 1);
-                } else {
-                  if (page <= 4) {
-                    pages = [1, 2, 3, 4, 5, '...', totalPages];
-                  } else if (page >= totalPages - 3) {
-                    pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
-                  } else {
-                    pages = [1, '...', page - 1, page, page + 1, '...', totalPages];
-                  }
-                }
-                return pages.map((p, idx) => {
-                  if (p === '...') {
-                    return (
-                      <span
-                        key={`ellipsis-${idx}`}
-                        style={{
-                          minWidth: 28,
-                          height: 32,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#9ca3af',
-                          fontSize: 13,
-                          fontWeight: 600
-                        }}
-                      >
-                        …
-                      </span>
-                    );
-                  }
+              {getPageNumbers().map((p, idx) => {
+                if (p === "...") {
                   return (
-                    <button
-                      key={p}
-                      type="button"
-                      className={`sup-page-btn ${p === page ? "sup-page-btn--active" : ""}`}
-                      onClick={() => setPage(p)}
-                      style={{
-                        minWidth: 32,
-                        height: 32,
-                        padding: '0 6px',
-                        borderRadius: 6,
-                        border: p === page ? '1.5px solid #6366f1' : '1px solid #d1d5db',
-                        background: p === page ? '#eef2ff' : '#ffffff',
-                        color: p === page ? '#6366f1' : '#374151',
-                        fontSize: 12.5,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.15s ease'
-                      }}
-                      aria-current={p === page ? 'page' : undefined}
+                    <span
+                      key={`ellipsis-${idx}`}
+                      className="sup-page-ellipsis"
                     >
-                      {p}
-                    </button>
+                      …
+                    </span>
                   );
-                });
-              })()}
+                }
+                const isActive = p === page;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`sup-page-btn sup-page-num-btn ${
+                      isActive ? "sup-page-btn--active" : ""
+                    }`}
+                    onClick={() => setPage(p)}
+                    aria-label={`Page ${p}`}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

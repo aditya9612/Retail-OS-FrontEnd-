@@ -20,6 +20,7 @@ import {
 
 import { getSuppliers, createSupplier } from "../../api/supplierApi";
 import { listStores } from "../../services/inventoryService";
+import storeService from "../../services/storeService";
 import { getWarehouses } from "../../api/warehouseApi";
 import productService from "../../services/product";
 import axiosInstance from "../../api/axios";
@@ -48,6 +49,7 @@ import {
   BsPencilFill,
   BsChevronLeft,
   BsChevronRight,
+  BsChevronDown,
   BsCheckCircleFill,
   BsClockHistory,
   BsXCircleFill,
@@ -58,6 +60,10 @@ import {
   BsSlashCircle,
   BsFileEarmarkPdf,
   BsBoxSeam,
+  BsCashStack,
+  BsFunnel,
+  BsBuildings,
+  BsActivity,
 } from "react-icons/bs";
 
 /* =====================================================
@@ -315,9 +321,6 @@ const PurchaseFormModal = ({
   onSupplierAdded,
 }) => {
   const isNew = !purchase;
-  const [showAddSupplier, setShowAddSupplier] = useState(false);
-  const [newSupplierName, setNewSupplierName] = useState("");
-  const [creatingSupplier, setCreatingSupplier] = useState(false);
 
   const [form, setForm] = useState(() => {
     const defaultSupplierId =
@@ -370,35 +373,6 @@ const PurchaseFormModal = ({
       ...prev,
       [key]: value,
     }));
-  };
-
-  const handleQuickAddSupplier = async () => {
-    const name = newSupplierName.trim() || "New Supplier";
-    try {
-      setCreatingSupplier(true);
-      const created = await createSupplier({
-        name,
-        contact_person: "Procurement Manager",
-        email: "supplier@myretailos.com",
-        phone: "9876543210",
-        address: "Central Warehouse",
-        gstin: "27AAAAA0000A1Z5",
-      });
-      if (created && created.id) {
-        if (onSupplierAdded) {
-          onSupplierAdded(created);
-        }
-        set("supplier", String(created.id));
-        setShowAddSupplier(false);
-        setNewSupplierName("");
-        alert(`Supplier "${name}" created successfully!`);
-      }
-    } catch (err) {
-      console.error("Quick add supplier error:", err);
-      alert("Failed to create supplier on backend: " + (err?.response?.data?.detail || err?.message || "Unknown error"));
-    } finally {
-      setCreatingSupplier(false);
-    }
   };
 
   const handleSubmit = () => {
@@ -481,80 +455,31 @@ const PurchaseFormModal = ({
 
         <div className="ec-form-row">
           <div className="ec-field">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 4,
-              }}
+            <label>Supplier *</label>
+
+            <select
+              className="ec-input"
+              value={form.supplier}
+              onChange={(e) =>
+                set("supplier", e.target.value)
+              }
             >
-              <label style={{ margin: 0 }}>Supplier *</label>
-              <button
-                type="button"
-                onClick={() => setShowAddSupplier((prev) => !prev)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#6366f1",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  padding: 0,
-                }}
-              >
-                {showAddSupplier ? "Cancel" : "+ New Supplier"}
-              </button>
-            </div>
+              <option value="">
+                {suppliers && suppliers.length > 0
+                  ? "Select Supplier"
+                  : "-- No suppliers found --"}
+              </option>
 
-            {showAddSupplier ? (
-              <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-                <input
-                  className="ec-input"
-                  placeholder="Enter new supplier name"
-                  value={newSupplierName}
-                  onChange={(e) => setNewSupplierName(e.target.value)}
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  className="adm-btn-primary"
-                  onClick={handleQuickAddSupplier}
-                  disabled={creatingSupplier}
-                  style={{
-                    padding: "6px 12px",
-                    fontSize: 12,
-                    whiteSpace: "nowrap",
-                  }}
+              {suppliers?.map((supplier) => (
+                <option
+                  key={supplier.id}
+                  value={supplier.id}
                 >
-                  {creatingSupplier ? "Adding..." : "Add"}
-                </button>
-              </div>
-            ) : (
-              <select
-                className="ec-input"
-                value={form.supplier}
-                onChange={(e) =>
-                  set("supplier", e.target.value)
-                }
-              >
-                <option value="">
-                  {suppliers && suppliers.length > 0
-                    ? "Select Supplier"
-                    : "-- No suppliers found --"}
+                  {supplier.name} (Supplier ID:{" "}
+                  {supplier.id})
                 </option>
-
-                {suppliers?.map((supplier) => (
-                  <option
-                    key={supplier.id}
-                    value={supplier.id}
-                  >
-                    {supplier.name} (Supplier ID:{" "}
-                    {supplier.id})
-                  </option>
-                ))}
-              </select>
-            )}
+              ))}
+            </select>
           </div>
 
           <div className="ec-field">
@@ -974,11 +899,24 @@ const PurchaseDetailsModal = ({
             ],
             [
               "Supplier ID",
-              purchase.supplierId,
+              purchase.supplierId ?? "-",
             ],
             [
-              "Store ID",
-              purchase.storeId,
+              "Destination / Store",
+              purchase.storeName ||
+                (purchase.storeId
+                  ? `Store #${purchase.storeId}`
+                  : (purchase.warehouseId
+                      ? `Warehouse #${purchase.warehouseId}`
+                      : "-")),
+            ],
+            [
+              "Destination ID",
+              purchase.storeId
+                ? `Store ID: ${purchase.storeId}`
+                : (purchase.warehouseId
+                    ? `Warehouse ID: ${purchase.warehouseId}`
+                    : "-"),
             ],
             [
               "Purchase Date",
@@ -1354,6 +1292,9 @@ const Purchases = () => {
   const [stores, setStores] =
     useState([]);
 
+  const [warehouses, setWarehouses] =
+    useState([]);
+
   const [products, setProducts] =
     useState([]);
 
@@ -1377,6 +1318,8 @@ const Purchases = () => {
 
   const [page, setPage] =
     useState(1);
+  const [pageSize, setPageSize] =
+    useState(PAGE_SIZE);
 
   const [modal, setModal] =
     useState(null);
@@ -1525,17 +1468,40 @@ const Purchases = () => {
 
             supplierId:
               details?.supplier_id ??
+              details?.supplierId ??
               currentModal.purchase
                 .supplierId,
 
             supplier:
+              details?.supplier_name ||
+              details?.supplierName ||
+              details?.supplier?.name ||
+              details?.vendor_name ||
               currentModal.purchase
                 .supplier,
 
             storeId:
               details?.store_id ??
+              details?.storeId ??
               currentModal.purchase
                 .storeId,
+
+            warehouseId:
+              details?.warehouse_id ??
+              details?.warehouseId ??
+              currentModal.purchase
+                .warehouseId,
+
+            storeName:
+              details?.store_name ||
+              details?.storeName ||
+              details?.store?.name ||
+              details?.store?.store_name ||
+              details?.warehouse_name ||
+              details?.warehouseName ||
+              details?.warehouse?.name ||
+              currentModal.purchase
+                .storeName,
 
             invoiceNumber:
               details?.invoice_number ??
@@ -2066,10 +2032,11 @@ const Purchases = () => {
       setLoading(true);
       setError("");
 
-      const [suppliersData, purchasesData, storesData, productsData] = await Promise.allSettled([
-        getSuppliers(),
+      const [suppliersData, purchasesData, storesData, warehousesData, productsData] = await Promise.allSettled([
+        getSuppliers({ page_size: 100 }).catch(() => getSuppliers()),
         getAllPurchaseOrders(),
-        listStores().catch(() => getWarehouses().catch(() => [])),
+        storeService.listStores({ include_inactive: true }).catch(() => listStores().catch(() => [])),
+        getWarehouses({ page_size: 100 }).catch(() => getWarehouses().catch(() => [])),
         productService.getAll(1, 100).catch(() => ({ data: [] })),
       ]);
 
@@ -2078,10 +2045,27 @@ const Purchases = () => {
       const supplierList = extractSuppliers(rawSuppliers);
       setSuppliers(supplierList);
 
-      // Extract stores
+      // Extract stores safely
       const rawStores = storesData.status === "fulfilled" ? storesData.value : [];
-      const storeList = Array.isArray(rawStores) ? rawStores : rawStores?.data || rawStores?.items || [];
+      const storeList = Array.isArray(rawStores)
+        ? rawStores
+        : (Array.isArray(rawStores?.data)
+            ? rawStores.data
+            : (Array.isArray(rawStores?.items)
+                ? rawStores.items
+                : (Array.isArray(rawStores?.stores) ? rawStores.stores : [])));
       setStores(storeList);
+
+      // Extract warehouses safely
+      const rawWarehouses = warehousesData.status === "fulfilled" ? warehousesData.value : [];
+      const warehouseList = Array.isArray(rawWarehouses)
+        ? rawWarehouses
+        : (Array.isArray(rawWarehouses?.data)
+            ? rawWarehouses.data
+            : (Array.isArray(rawWarehouses?.items)
+                ? rawWarehouses.items
+                : (Array.isArray(rawWarehouses?.warehouses) ? rawWarehouses.warehouses : [])));
+      setWarehouses(warehouseList);
 
       // Extract products
       const rawProducts = productsData.status === "fulfilled" ? productsData.value : [];
@@ -2099,15 +2083,46 @@ const Purchases = () => {
       console.log("Purchase Orders API fetched all records:", purchaseList.length, purchaseList);
 
       const mappedPurchases = purchaseList.map((po) => {
-        const supId = po.supplier_id;
-        const matchedSupplier = supplierList.find(
-          (supplier) => Number(supplier.id) === Number(supId)
-        );
+        // Dynamic supplier mapping strictly from database / API response data
+        const supId = po.supplier_id ?? po.supplierId ?? po.supplier?.id ?? "";
+        const matchedSupplier = supId
+          ? supplierList.find(
+              (supplier) => Number(supplier.id) === Number(supId)
+            )
+          : null;
 
-        const stId = po.store_id ?? po.warehouse_id ?? "";
-        const matchedStore = storeList.find(
-          (store) => Number(store.id) === Number(stId)
-        );
+        const dynamicSupplierName =
+          po.supplier_name ||
+          po.supplierName ||
+          po.supplier?.name ||
+          po.vendor_name ||
+          matchedSupplier?.name ||
+          "";
+
+        // Dynamic store / destination mapping strictly from database / API response data
+        const stId = po.store_id ?? po.storeId ?? "";
+        const whId = po.warehouse_id ?? po.warehouseId ?? "";
+
+        const matchedStore = stId
+          ? storeList.find((store) => Number(store.id) === Number(stId))
+          : null;
+        const matchedWarehouse = whId
+          ? warehouseList.find((wh) => Number(wh.id) === Number(whId))
+          : (!matchedStore && stId ? warehouseList.find((wh) => Number(wh.id) === Number(stId)) : null);
+
+        const dynamicStoreName =
+          po.store_name ||
+          po.storeName ||
+          po.store?.name ||
+          po.store?.store_name ||
+          matchedStore?.name ||
+          matchedStore?.store_name ||
+          po.warehouse_name ||
+          po.warehouseName ||
+          po.warehouse?.name ||
+          matchedWarehouse?.name ||
+          matchedWarehouse?.warehouse_name ||
+          "";
 
         const itemsList = getPurchaseItems(po);
         const totalItemsCount =
@@ -2122,21 +2137,18 @@ const Purchases = () => {
 
           id: po.po_number || po.order_number || `PO-${po.id}`,
 
-          supplierId: supId,
+          supplierId: supId || null,
 
           supplier:
-            po.supplier_name ||
-            matchedSupplier?.name ||
+            dynamicSupplierName ||
             (supId ? `Supplier #${supId}` : "-"),
 
-          storeId: stId,
+          storeId: stId || null,
+          warehouseId: whId || null,
 
           storeName:
-            po.store_name ||
-            po.warehouse_name ||
-            matchedStore?.name ||
-            matchedStore?.store_name ||
-            (stId ? `Store #${stId}` : "-"),
+            dynamicStoreName ||
+            (stId ? `Store #${stId}` : (whId ? `Warehouse #${whId}` : "-")),
 
           invoiceNumber: po.invoice_number || po.invoice_no || "-",
 
@@ -2723,17 +2735,33 @@ const Purchases = () => {
       1,
       Math.ceil(
         filtered.length /
-          PAGE_SIZE
+          pageSize
       )
     );
 
   const paginated =
     filtered.slice(
       (page - 1) *
-        PAGE_SIZE,
+        pageSize,
       page *
-        PAGE_SIZE
+        pageSize
     );
+
+  const getPageNumbers = () => {
+    const pages = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (page <= 3) {
+        pages.push(1, 2, 3, 4, "...", totalPages);
+      } else if (page >= totalPages - 2) {
+        pages.push(1, "...", totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      } else {
+        pages.push(1, "...", page - 1, page, page + 1, "...", totalPages);
+      }
+    }
+    return pages;
+  };
 
   /* =====================================================
      KPI
@@ -2787,32 +2815,44 @@ const Purchases = () => {
     {
       label: "Total Purchases",
       value: purchases.length,
-      color: "#6366f1",
-      icon: "🛒",
+      color: "#4f46e5",
+      icon: <BsCart3 size={17} />,
+      iconBg: "#eef2ff",
+      iconColor: "#4f46e5",
+      sub: "Recorded purchase orders",
       filterStatus: "All",
     },
 
     {
       label: "Received",
       value: receivedCount,
-      color: "#10b981",
-      icon: "✅",
+      color: "#059669",
+      icon: <BsBoxSeam size={17} />,
+      iconBg: "#ecfdf5",
+      iconColor: "#059669",
+      sub: "Inwarded to inventory",
       filterStatus: "Received",
     },
 
     {
       label: "Pending",
       value: pendingCount,
-      color: "#f59e0b",
-      icon: "⏳",
+      color: "#d97706",
+      icon: <BsClockHistory size={17} />,
+      iconBg: "#fffbeb",
+      iconColor: "#d97706",
+      sub: "Awaiting approval / delivery",
       filterStatus: "Pending",
     },
 
     {
       label: "Cancelled",
       value: cancelledCount,
-      color: "#ef4444",
-      icon: "❌",
+      color: "#e11d48",
+      icon: <BsXCircleFill size={17} />,
+      iconBg: "#fff1f2",
+      iconColor: "#e11d48",
+      sub: "Voided or rejected",
       filterStatus: "Cancelled",
     },
 
@@ -2821,8 +2861,11 @@ const Purchases = () => {
       value: fmt(
         totalPurchaseAmount
       ),
-      color: "#0ea5e9",
-      icon: "💰",
+      color: "#7c3aed",
+      icon: <BsCashStack size={17} />,
+      iconBg: "#f5f3ff",
+      iconColor: "#7c3aed",
+      sub: "Cumulative expenditure",
       filterStatus: null,
     },
   ];
@@ -2837,36 +2880,67 @@ const Purchases = () => {
 
         {/* HEADER */}
 
-        <div className="adm-page-header">
+        <div className="adm-page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 14 }}>
           <div>
-            <h1 className="adm-page-title">
-              <BsCart3
-                size={20}
-                style={{
-                  marginRight: 8,
-                  verticalAlign:
-                    "middle",
-                }}
-              />
-              Purchases
+            <h1 className="adm-page-title" style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 22, fontWeight: 800, color: "#111827", margin: 0 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: "#eef2ff", color: "#4f46e5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <BsCart3 size={20} />
+              </div>
+              <span>Purchases</span>
             </h1>
 
-            <p className="adm-page-sub">
-              Manage purchase orders,
-              suppliers and incoming stock
+            <p className="adm-page-sub" style={{ margin: "4px 0 0", color: "#64748b", fontSize: 13 }}>
+              Manage purchase orders, suppliers, inwarding, and incoming stock
             </p>
           </div>
 
-          <div className="adm-header-actions">
+          <div className="adm-header-actions" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              type="button"
+              onClick={fetchPurchases}
+              disabled={loading}
+              title="Refresh purchases"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "9px 14px",
+                borderRadius: 8,
+                fontWeight: 600,
+                fontSize: 13,
+                background: "#ffffff",
+                color: "#374151",
+                border: "1px solid #d1d5db",
+                cursor: loading ? "not-allowed" : "pointer",
+                transition: "all 0.15s ease",
+              }}
+            >
+              <BsArrowRepeat size={15} className={loading ? "animate-spin" : ""} />
+              <span>Refresh</span>
+            </button>
+
             <button
               type="button"
               className="adm-btn-primary"
-              onClick={() =>
-                setModal("new")
-              }
+              onClick={() => setModal("new")}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "9px 16px",
+                borderRadius: 8,
+                fontWeight: 600,
+                fontSize: 13,
+                background: "#4f46e5",
+                color: "#ffffff",
+                border: "none",
+                cursor: "pointer",
+                boxShadow: "0 2px 4px rgba(79, 70, 229, 0.2)",
+                transition: "background-color 0.15s ease",
+              }}
             >
-              <BsPlus size={17} />
-              Add Purchase
+              <BsPlus size={18} />
+              <span>Add Purchase</span>
             </button>
           </div>
         </div>
@@ -2903,14 +2977,14 @@ const Purchases = () => {
           </div>
         )}
 
-        {/* KPI */}
+        {/* KPI SUMMARY CARDS */}
 
         <div
           style={{
             display: "grid",
             gridTemplateColumns:
-              "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: 12,
+              "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: 14,
           }}
         >
           {kpis.map((k, i) => {
@@ -2921,13 +2995,23 @@ const Purchases = () => {
             return (
               <div
                 key={i}
-                className={`adm-kpi-card ${
-                  isClickable ? "adm-kpi-card--clickable" : ""
-                } ${isSelected ? "adm-kpi-card--selected" : ""}`}
+                className={`purchase-stat-card ${
+                  isClickable ? "purchase-stat-card--clickable" : ""
+                } ${isSelected ? "purchase-stat-card--selected" : ""}`}
                 style={{
-                  padding: "12px 16px",
-                  borderRadius: 10,
+                  background: "#ffffff",
+                  borderRadius: 12,
+                  padding: "16px 18px",
+                  border: isSelected ? "1.5px solid #6366f1" : "1px solid #e2e8f0",
+                  boxShadow: isSelected
+                    ? "0 0 0 3px rgba(99, 102, 241, 0.15)"
+                    : "0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02)",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  boxSizing: "border-box",
                   cursor: isClickable ? "pointer" : "default",
+                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
                 onClick={() => {
                   if (k.filterStatus) {
@@ -2946,540 +3030,461 @@ const Purchases = () => {
                 }}
                 title={isClickable ? `Filter by ${k.label}` : undefined}
               >
-                <span
-                  style={{
-                    fontSize: 22,
-                  }}
-                >
-                  {k.icon}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: "#64748b",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                    }}
+                  >
+                    {k.label}
+                  </span>
+                  <div
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      background: k.iconBg,
+                      color: k.iconColor,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {k.icon}
+                  </div>
+                </div>
 
-                <p
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#9ca3af",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    marginTop: 8,
-                  }}
-                >
-                  {k.label}
-                </p>
-
-                <p
-                  style={{
-                    fontSize:
-                      k.label === "Purchase Value"
-                        ? 16
-                        : 26,
-                    fontWeight: 800,
-                    color: k.color,
-                    marginTop: 4,
-                  }}
-                >
-                  {k.value}
-                </p>
+                <div>
+                  <div
+                    style={{
+                      fontSize: k.label === "Purchase Value" ? 22 : 26,
+                      fontWeight: 800,
+                      color: "#0f172a",
+                      lineHeight: 1.15,
+                      letterSpacing: "-0.02em",
+                      marginBottom: 4,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {k.value}
+                  </div>
+                  {k.sub && (
+                    <div
+                      style={{
+                        fontSize: 11.5,
+                        fontWeight: 500,
+                        color: "#64748b",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {k.sub}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
 
-        {/* STATUS TABS (COMPACT & RESPONSIVE) */}
+        {/* SEARCH AND FILTERS TOOLBAR */}
 
-        <div
-          className="purchase-tabs-bar"
-          role="tablist"
-          aria-label="Filter purchases by status"
-        >
-          {STATUS_TABS.map((tab) => {
-            const isActive = filterStatus === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                className={`purchase-tab-btn ${
-                  isActive ? "purchase-tab-btn--active" : ""
-                }`}
-                onClick={() => {
-                  setFilterStatus(tab.key);
-                  setPage(1);
-                }}
-              >
-                <span
-                  className="purchase-tab-dot"
-                  style={{ backgroundColor: tab.dotColor }}
+        <div style={{ background: "#ffffff", borderRadius: 12, border: "1px solid #e2e8f0", boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)", marginBottom: 20, overflow: "hidden" }}>
+          <div className="purchase-toolbar-container">
+            <div className="purchase-toolbar-row">
+              {/* 1. Search Box */}
+              <div className="purchase-search-box">
+                <BsSearch
+                  size={13}
+                  className="purchase-search-icon"
                   aria-hidden="true"
                 />
-                <span className="purchase-tab-text">{tab.label}</span>
-                <span
-                  className={`purchase-tab-count ${
-                    isActive ? "purchase-tab-count--active" : ""
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* REARRANGED FILTER CONTROLS */}
-
-        <div className="purchase-filter-card">
-          {/* SEARCH FIELD */}
-          <div className="purchase-filter-group purchase-filter-search">
-            <label
-              className="purchase-filter-label"
-              htmlFor="purchase-search-input"
-            >
-              Search
-            </label>
-
-            <div className="purchase-search-input-wrap">
-              <BsSearch
-                size={13}
-                className="purchase-search-icon"
-                aria-hidden="true"
-              />
-
-              <input
-                id="purchase-search-input"
-                className="ec-input purchase-search-input"
-                placeholder="Search PO number, supplier, or invoice..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-              />
-
-              {search && (
-                <button
-                  type="button"
-                  className="purchase-search-clear-btn"
-                  onClick={() => {
-                    setSearch("");
+                <input
+                  id="purchase-search-input"
+                  className="purchase-search-input"
+                  placeholder="Search PO number, supplier, or invoice..."
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
                     setPage(1);
                   }}
-                  title="Clear search"
-                  aria-label="Clear search"
+                  aria-label="Search purchases"
+                />
+                {search && (
+                  <button
+                    type="button"
+                    className="purchase-search-clear-btn"
+                    onClick={() => {
+                      setSearch("");
+                      setPage(1);
+                    }}
+                    title="Clear search"
+                    aria-label="Clear search"
+                  >
+                    <BsX size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* 2. Status Filter Dropdown */}
+              <div className="purchase-filter-wrapper purchase-status-wrapper">
+                <BsActivity className="purchase-filter-prefix-icon" size={13} style={{ color: "#6366f1" }} />
+                <select
+                  id="purchase-status-select"
+                  className={`purchase-filter-select ${filterStatus !== "All" ? "is-active" : ""}`}
+                  value={filterStatus}
+                  onChange={(e) => {
+                    setFilterStatus(e.target.value);
+                    setPage(1);
+                  }}
+                  aria-label="Filter by status"
                 >
-                  <BsX size={14} />
-                </button>
+                  <option value="All">All Purchases</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Received">Received</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+                <BsChevronDown size={11} className="purchase-select-icon" />
+              </div>
+
+              {/* 3. Supplier Filter Dropdown */}
+              <div className="purchase-filter-wrapper purchase-supplier-wrapper">
+                <BsBuildings className="purchase-filter-prefix-icon" size={13} style={{ color: "#0ea5e9" }} />
+                <select
+                  id="purchase-supplier-select"
+                  className={`purchase-filter-select ${supplierFilter !== "All" ? "is-active" : ""}`}
+                  value={supplierFilter}
+                  onChange={(e) => {
+                    setSupplierFilter(e.target.value);
+                    setPage(1);
+                  }}
+                  aria-label="Filter by supplier"
+                >
+                  <option value="All">All Suppliers</option>
+                  {suppliers?.map((supplier) => (
+                    <option key={supplier.id} value={String(supplier.id)}>
+                      {supplier.name}
+                    </option>
+                  ))}
+                </select>
+                <BsChevronDown size={11} className="purchase-select-icon" />
+              </div>
+
+              {/* 4. Active Filters Indicator & Reset */}
+              {isFilterActive && (
+                <div className="purchase-filter-actions">
+                  <div className="purchase-active-badge">
+                    <BsFunnel size={11} />
+                    <span>Filters Active</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="purchase-reset-btn"
+                    onClick={handleResetFilters}
+                    title="Reset all filters to default"
+                  >
+                    <BsArrowRepeat size={13} />
+                    <span>Reset</span>
+                  </button>
+                </div>
               )}
             </div>
-          </div>
-
-          {/* STATUS FILTER */}
-          <div className="purchase-filter-group purchase-filter-status">
-            <label
-              className="purchase-filter-label"
-              htmlFor="purchase-status-select"
-            >
-              Status
-            </label>
-
-            <select
-              id="purchase-status-select"
-              className="ec-input purchase-select"
-              value={filterStatus}
-              onChange={(e) => {
-                setFilterStatus(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="All">All Statuses</option>
-              <option value="Pending">⏳ Pending</option>
-              <option value="Approved">✔️ Approved</option>
-              <option value="Received">✅ Received</option>
-              <option value="Cancelled">❌ Cancelled</option>
-            </select>
-          </div>
-
-          {/* SUPPLIER FILTER */}
-          <div className="purchase-filter-group purchase-filter-supplier">
-            <label
-              className="purchase-filter-label"
-              htmlFor="purchase-supplier-select"
-            >
-              Supplier
-            </label>
-
-            <select
-              id="purchase-supplier-select"
-              className="ec-input purchase-select"
-              value={supplierFilter}
-              onChange={(e) => {
-                setSupplierFilter(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="All">All Suppliers</option>
-              {suppliers?.map((supplier) => (
-                <option
-                  key={supplier.id}
-                  value={String(supplier.id)}
-                >
-                  {supplier.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* RESET FILTER BUTTON */}
-          <div className="purchase-filter-group purchase-filter-reset">
-            <button
-              type="button"
-              className="purchase-reset-btn"
-              onClick={handleResetFilters}
-              disabled={!isFilterActive}
-              title="Reset all filters"
-            >
-              <BsArrowRepeat size={13} />
-              <span>Reset</span>
-            </button>
           </div>
         </div>
 
         {/* TABLE */}
-
         <div
           className="chart-card purchase-table-container"
           style={{
             padding: 0,
-            overflowX: "auto",
+            overflow: "hidden",
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            borderRadius: 12,
+            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.04)",
           }}
         >
-          <table
-            style={{
-              width: "100%",
-              minWidth: "1050px",
-              borderCollapse:
-                "collapse",
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  background:
-                    "#f9fafb",
-                  borderBottom:
-                    "1px solid #e8eaf0",
-                }}
-              >
-                {[
-                  "Purchase Order Number",
-                  "Supplier",
-                  "Store ID",
-                  "Invoice",
-                  "Date",
-                  "Items",
-                  "Total",
-                  "Payment",
-                  "Status",
-                  "Actions",
-                ].map(
-                  (heading) => (
+          <div style={{ width: "100%", overflowX: "auto" }}>
+            <table
+              className="purchase-table"
+              style={{
+                width: "100%",
+                minWidth: "1100px",
+                borderCollapse: "collapse",
+                textAlign: "left",
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    background: "#f8fafc",
+                    borderBottom: "1.5px solid #e2e8f0",
+                  }}
+                >
+                  {[
+                    { label: "Purchase Order #", align: "left", minWidth: "180px" },
+                    { label: "Supplier", align: "left", minWidth: "170px" },
+                    { label: "Store / Dest", align: "left", minWidth: "150px" },
+                    { label: "Invoice #", align: "left", minWidth: "110px" },
+                    { label: "Date", align: "left", minWidth: "110px" },
+                    { label: "Items", align: "left", minWidth: "90px" },
+                    { label: "Total", align: "left", minWidth: "110px" },
+                    { label: "Payment", align: "left", minWidth: "100px" },
+                    { label: "Status", align: "left", minWidth: "110px" },
+                    { label: "Actions", align: "right", minWidth: "260px" },
+                  ].map((col) => (
                     <th
-                      key={
-                        heading
-                      }
+                      key={col.label}
                       style={{
-                        padding:
-                          "12px 14px",
-                        textAlign:
-                          heading === "Actions" ? "right" : "left",
-                        minWidth:
-                          heading === "Actions" ? "310px" : undefined,
-                        fontSize: 11,
+                        padding: "13px 16px",
+                        textAlign: col.align,
+                        minWidth: col.minWidth,
+                        fontSize: 11.5,
                         fontWeight: 700,
-                        color:
-                          "#9ca3af",
-                        textTransform:
-                          "uppercase",
-                        letterSpacing:
-                          "0.05em",
-                        whiteSpace:
-                          "nowrap",
+                        color: "#475569",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.06em",
+                        whiteSpace: "nowrap",
                       }}
                     >
-                      {heading}
+                      {col.label}
                     </th>
-                  )
-                )}
-              </tr>
-            </thead>
-
-            <tbody>
-              {paginated.map(
-                (purchase) => {
-                  const displayStatus =
-                    getDisplayStatus(
-                      purchase.status ||
-                        purchase.backendStatus ||
-                        purchase?.rawData?.status
-                    );
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map((purchase) => {
+                  const displayStatus = getDisplayStatus(
+                    purchase.status ||
+                      purchase.backendStatus ||
+                      purchase?.rawData?.status
+                  );
 
                   const sc =
-                    STATUS_CONFIG[
-                      displayStatus
-                    ] ||
+                    STATUS_CONFIG[displayStatus] ||
                     STATUS_CONFIG.Pending;
 
                   return (
                     <tr
-                      key={
-                        purchase.backendId ||
-                        purchase.id
-                      }
+                      key={purchase.backendId || purchase.id}
                       style={{
-                        borderBottom:
-                          "1px solid #f3f4f6",
+                        borderBottom: "1px solid #f1f5f9",
+                        transition: "background-color 0.15s ease",
                       }}
+                      className="purchase-table-row"
                     >
-                      {/* PURCHASE ORDER ID */}
-
-                      <td
-                        style={{
-                          padding:
-                            "12px 14px",
-                        }}
-                      >
-                        <p
+                      {/* PURCHASE ORDER NUMBER */}
+                      <td style={{ padding: "14px 16px", verticalAlign: "middle" }}>
+                        <span
                           style={{
-                            fontFamily:
-                              "monospace",
-                            fontSize: 12,
+                            display: "inline-block",
+                            fontFamily: "'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace",
+                            fontSize: 12.5,
                             fontWeight: 700,
-                            color:
-                              "#374151",
-                            margin: 0,
+                            color: "#4338ca",
+                            background: "#eef2ff",
+                            padding: "3px 8px",
+                            borderRadius: 6,
+                            border: "1px solid #c7d2fe",
+                            letterSpacing: "0.02em",
                           }}
                         >
                           {purchase.id}
-                        </p>
-
-                        <span
+                        </span>
+                        <div
                           style={{
-                            fontSize: 10,
-                            color:
-                              "#9ca3af",
+                            fontSize: 10.5,
+                            color: "#94a3b8",
+                            marginTop: 4,
+                            fontWeight: 500,
                           }}
                         >
-                          Purchase Order Number
-                        </span>
-
-                        <br />
-
-                        <span
-                          style={{
-                            fontSize: 10,
-                            color:
-                              "#9ca3af",
-                          }}
-                        >
-                          Purchase Order ID:{" "}
-                          {purchase.backendId ??
-                            "-"}
-                        </span>
+                          PO ID: #{purchase.backendId ?? "-"}
+                        </div>
                       </td>
 
                       {/* SUPPLIER */}
-
-                      <td
-                        style={{
-                          padding:
-                            "12px 14px",
-                        }}
-                      >
-                        <p
+                      <td style={{ padding: "14px 16px", verticalAlign: "middle" }}>
+                        <div
                           style={{
                             fontSize: 13,
                             fontWeight: 600,
-                            color:
-                              "#111827",
-                            whiteSpace:
-                              "nowrap",
-                            margin: 0,
+                            color: "#0f172a",
+                            whiteSpace: "nowrap",
                           }}
                         >
-                          {
-                            purchase.supplier
-                          }
-                        </p>
-
-                        <span
+                          {purchase.supplier}
+                        </div>
+                        <div
                           style={{
-                            fontSize: 10,
-                            color:
-                              "#9ca3af",
+                            fontSize: 11,
+                            color: "#94a3b8",
+                            marginTop: 3,
                           }}
                         >
-                          Supplier ID:{" "}
-                          {
-                            purchase.supplierId ??
-                            "-"
-                          }
-                        </span>
+                          Supplier ID: {purchase.supplierId ?? "-"}
+                        </div>
                       </td>
 
-                      {/* STORE */}
-
-                      <td
-                        style={{
-                          padding:
-                            "12px 14px",
-                        }}
-                      >
-                        <p
+                      {/* STORE / DESTINATION */}
+                      <td style={{ padding: "14px 16px", verticalAlign: "middle" }}>
+                        <div
                           style={{
                             fontSize: 13,
-                            fontWeight: 600,
-                            color:
-                              "#111827",
-                            whiteSpace:
-                              "nowrap",
-                            margin: 0,
+                            fontWeight: 500,
+                            color: "#1e293b",
+                            whiteSpace: "nowrap",
                           }}
                         >
-                          {purchase.storeName || (purchase.storeId ? `Store #${purchase.storeId}` : "-")}
-                        </p>
-
-                        <span
+                          {purchase.storeName || (purchase.storeId ? `Store #${purchase.storeId}` : (purchase.warehouseId ? `Warehouse #${purchase.warehouseId}` : "-"))}
+                        </div>
+                        <div
                           style={{
-                            fontSize: 10,
-                            color:
-                              "#9ca3af",
+                            fontSize: 10.5,
+                            color: "#94a3b8",
+                            marginTop: 3,
                           }}
                         >
-                          {purchase.storeId ? `Store ID: ${purchase.storeId}` : "Destination"}
-                        </span>
+                          {purchase.storeId
+                            ? `Store ID: ${purchase.storeId}`
+                            : (purchase.warehouseId
+                                ? `Warehouse ID: ${purchase.warehouseId}`
+                                : "Destination")}
+                        </div>
                       </td>
 
                       {/* INVOICE */}
-
                       <td
                         style={{
-                          padding:
-                            "12px 14px",
-                          fontSize: 12,
-                          color:
-                            "#6b7280",
+                          padding: "14px 16px",
+                          fontSize: 12.5,
+                          color: "#475569",
+                          fontWeight: 500,
+                          fontFamily: purchase.invoiceNumber ? "monospace" : "inherit",
+                          verticalAlign: "middle",
                         }}
                       >
-                        {purchase.invoiceNumber ||
-                          "-"}
+                        {purchase.invoiceNumber || "—"}
                       </td>
 
                       {/* DATE */}
-
                       <td
                         style={{
-                          padding:
-                            "12px 14px",
-                          fontSize: 12,
-                          color:
-                            "#6b7280",
+                          padding: "14px 16px",
+                          fontSize: 12.5,
+                          color: "#475569",
+                          whiteSpace: "nowrap",
+                          verticalAlign: "middle",
                         }}
                       >
-                        {formatDisplayDate(
-                          purchase.purchaseDate
-                        )}
+                        {formatDisplayDate(purchase.purchaseDate)}
                       </td>
 
                       {/* ITEMS */}
-
-                      <td
-                        style={{
-                          padding:
-                            "12px 14px",
-                          fontSize: 13,
-                          color:
-                            "#374151",
-                        }}
-                      >
-                        {purchase.items}{" "}
-                        items
+                      <td style={{ padding: "14px 16px", verticalAlign: "middle" }}>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: "#334155",
+                            background: "#f1f5f9",
+                            padding: "3px 8px",
+                            borderRadius: 6,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {purchase.items} {purchase.items === 1 ? "item" : "items"}
+                        </span>
                       </td>
 
                       {/* TOTAL */}
-
                       <td
                         style={{
-                          padding:
-                            "12px 14px",
-                          fontSize: 13,
+                          padding: "14px 16px",
+                          fontSize: 13.5,
                           fontWeight: 700,
-                          color:
-                            "#111827",
+                          color: "#0f172a",
+                          whiteSpace: "nowrap",
+                          verticalAlign: "middle",
                         }}
                       >
-                        {fmt(
-                          purchase.total
-                        )}
+                        {fmt(purchase.total)}
                       </td>
 
                       {/* PAYMENT */}
-
-                      <td
-                        style={{
-                          padding:
-                            "12px 14px",
-                        }}
-                      >
-                        <span className="adm-mode-tag">
-                          {
-                            purchase.paymentStatus
-                          }
+                      <td style={{ padding: "14px 16px", verticalAlign: "middle" }}>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            padding: "3px 9px",
+                            borderRadius: 12,
+                            whiteSpace: "nowrap",
+                            background:
+                              purchase.paymentStatus?.toLowerCase() === "paid"
+                                ? "#ecfdf5"
+                                : purchase.paymentStatus?.toLowerCase() === "partial"
+                                ? "#fffbeb"
+                                : "#fef2f2",
+                            color:
+                              purchase.paymentStatus?.toLowerCase() === "paid"
+                                ? "#065f46"
+                                : purchase.paymentStatus?.toLowerCase() === "partial"
+                                ? "#92400e"
+                                : "#991b1b",
+                            border: `1px solid ${
+                              purchase.paymentStatus?.toLowerCase() === "paid"
+                                ? "#a7f3d0"
+                                : purchase.paymentStatus?.toLowerCase() === "partial"
+                                ? "#fde68a"
+                                : "#fecaca"
+                            }`,
+                          }}
+                        >
+                          {purchase.paymentStatus || "Unpaid"}
                         </span>
                       </td>
 
                       {/* STATUS */}
-
-                      <td
-                        style={{
-                          padding:
-                            "12px 14px",
-                        }}
-                      >
+                      <td style={{ padding: "14px 16px", verticalAlign: "middle" }}>
                         <span
                           style={{
-                            display:
-                              "inline-flex",
-                            alignItems:
-                              "center",
-                            gap: 4,
-                            padding:
-                              "4px 10px",
-                            borderRadius:
-                              20,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            background:
-                              sc.bg,
-                            color:
-                              sc.color,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 5,
+                            padding: "4px 10px",
+                            borderRadius: 20,
+                            fontSize: 11.5,
+                            fontWeight: 600,
+                            background: sc.bg,
+                            color: sc.color,
+                            border: `1px solid ${sc.color}25`,
+                            whiteSpace: "nowrap",
                           }}
                         >
                           {sc.icon}
-                          &nbsp;
-                          {
-                            purchase.status
-                          }
+                          <span>{purchase.status}</span>
                         </span>
                       </td>
 
                       {/* ACTIONS */}
-
                       <td
                         style={{
-                          padding:
-                            "12px 14px",
-                          minWidth: "310px",
+                          padding: "14px 16px",
+                          minWidth: "260px",
                           textAlign: "right",
+                          verticalAlign: "middle",
                         }}
                       >
                         {(() => {
@@ -3524,9 +3529,9 @@ const Purchases = () => {
                               {showView && (
                                 <button
                                   type="button"
-                                  className="adm-btn-secondary"
-                                  title="View Purchase Order"
-                                  aria-label="View"
+                                  className="adm-btn-action adm-btn-view"
+                                  data-tooltip="View Purchase Order"
+                                  aria-label="View Purchase Order"
                                   onClick={() =>
                                     handleViewPurchase(purchase)
                                   }
@@ -3539,14 +3544,14 @@ const Purchases = () => {
                               {showEdit && (
                                 <button
                                   type="button"
-                                  className="adm-btn-secondary"
-                                  title="Edit Purchase Order"
-                                  aria-label="Edit"
+                                  className="adm-btn-action adm-btn-edit"
+                                  data-tooltip="Edit Purchase Order"
+                                  aria-label="Edit Purchase Order"
                                   onClick={() =>
                                     handleEditPurchase(purchase)
                                   }
                                 >
-                                  <BsPencilFill size={14} />
+                                  <BsPencilFill size={13} />
                                 </button>
                               )}
 
@@ -3554,9 +3559,9 @@ const Purchases = () => {
                               {showApprove && (
                                 <button
                                   type="button"
-                                  className="adm-btn-secondary adm-btn-approve"
-                                  title="Approve Purchase Order"
-                                  aria-label="Approve"
+                                  className="adm-btn-action adm-btn-approve"
+                                  data-tooltip="Approve Purchase Order"
+                                  aria-label="Approve Purchase Order"
                                   disabled={approvingId === pKey}
                                   onClick={() =>
                                     handleApproveClick(purchase)
@@ -3577,9 +3582,9 @@ const Purchases = () => {
                               {showReceive && (
                                 <button
                                   type="button"
-                                  className="adm-btn-secondary adm-btn-receive"
-                                  title="Receive Purchase Order"
-                                  aria-label="Receive"
+                                  className="adm-btn-action adm-btn-receive"
+                                  data-tooltip="Receive Purchase Order"
+                                  aria-label="Receive Purchase Order"
                                   disabled={receivingId === pKey}
                                   onClick={() =>
                                     handleReceiveClick(purchase)
@@ -3591,7 +3596,7 @@ const Purchases = () => {
                                       size={14}
                                     />
                                   ) : (
-                                    <BsBoxSeam size={14} />
+                                    <BsBoxSeam size={13} />
                                   )}
                                 </button>
                               )}
@@ -3600,9 +3605,9 @@ const Purchases = () => {
                               {showCancel && (
                                 <button
                                   type="button"
-                                  className="adm-btn-secondary adm-btn-cancel"
-                                  title="Cancel Purchase Order"
-                                  aria-label="Cancel"
+                                  className="adm-btn-action adm-btn-cancel"
+                                  data-tooltip="Cancel Purchase Order"
+                                  aria-label="Cancel Purchase Order"
                                   disabled={cancellingId === pKey}
                                   onClick={() =>
                                     handleCancelClick(purchase)
@@ -3614,7 +3619,7 @@ const Purchases = () => {
                                       size={14}
                                     />
                                   ) : (
-                                    <BsSlashCircle size={14} />
+                                    <BsSlashCircle size={13} />
                                   )}
                                 </button>
                               )}
@@ -3623,9 +3628,9 @@ const Purchases = () => {
                               {showDownload && (
                                 <button
                                   type="button"
-                                  className="adm-btn-secondary adm-btn-pdf"
-                                  title="Download Purchase Order PDF"
-                                  aria-label="PDF"
+                                  className="adm-btn-action adm-btn-pdf"
+                                  data-tooltip="Download Purchase Order PDF"
+                                  aria-label="Download Purchase Order PDF"
                                   disabled={downloadingId === pKey}
                                   onClick={() =>
                                     handleDownloadPdf(purchase)
@@ -3646,9 +3651,9 @@ const Purchases = () => {
                               {showDelete && (
                                 <button
                                   type="button"
-                                  className="adm-btn-secondary adm-btn-delete"
-                                  title="Delete Purchase Order"
-                                  aria-label="Delete"
+                                  className="adm-btn-action adm-btn-delete"
+                                  data-tooltip="Delete Purchase Order"
+                                  aria-label="Delete Purchase Order"
                                   disabled={deletingId === pKey}
                                   onClick={() =>
                                     handleDeleteClick(purchase)
@@ -3660,7 +3665,7 @@ const Purchases = () => {
                                       size={14}
                                     />
                                   ) : (
-                                    <BsTrash size={14} />
+                                    <BsTrash size={13} />
                                   )}
                                 </button>
                               )}
@@ -3670,28 +3675,40 @@ const Purchases = () => {
                       </td>
                     </tr>
                   );
-                }
-              )}
+                })}
 
-              {!loading &&
-                paginated.length ===
-                  0 && (
+                {!loading && paginated.length === 0 && (
                   <tr>
                     <td
                       colSpan={10}
                       style={{
-                        padding: "36px 20px",
+                        padding: "48px 20px",
                         textAlign: "center",
                         color: "#6b7280",
                         fontSize: 13,
                       }}
                     >
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          width: 48,
+                          height: 48,
+                          borderRadius: 24,
+                          background: "#f1f5f9",
+                          color: "#64748b",
+                          marginBottom: 12,
+                        }}
+                      >
+                        <BsCart3 size={22} />
+                      </div>
                       <p
                         style={{
                           margin: "0 0 6px",
-                          fontWeight: 600,
-                          color: "#374151",
-                          fontSize: 14,
+                          fontWeight: 700,
+                          color: "#1e293b",
+                          fontSize: 15,
                         }}
                       >
                         No purchase orders found
@@ -3699,13 +3716,13 @@ const Purchases = () => {
                       <p
                         style={{
                           margin: 0,
-                          fontSize: 12,
-                          color: "#9ca3af",
+                          fontSize: 13,
+                          color: "#64748b",
                         }}
                       >
                         {isFilterActive
                           ? "Try adjusting your search query, status, or supplier filters."
-                          : "No purchases available."}
+                          : "No purchase orders recorded yet in Retail OS."}
                       </p>
                       {isFilterActive && (
                         <button
@@ -3713,7 +3730,7 @@ const Purchases = () => {
                           className="purchase-reset-btn"
                           onClick={handleResetFilters}
                           style={{
-                            margin: "12px auto 0",
+                            margin: "14px auto 0",
                             display: "inline-flex",
                           }}
                         >
@@ -3724,137 +3741,116 @@ const Purchases = () => {
                     </td>
                   </tr>
                 )}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
 
           {/* PAGINATION */}
-
-          {totalPages > 1 && (
+          {!loading && filtered.length > 0 && (
             <div
               style={{
-                display:
-                  "flex",
-                alignItems:
-                  "center",
-                justifyContent:
-                  "space-between",
-                padding:
-                  "12px 16px",
-                borderTop:
-                  "1px solid #f3f4f6",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "14px 20px",
+                borderTop: "1px solid #e2e8f0",
+                background: "#ffffff",
+                flexWrap: "wrap",
+                gap: 12,
               }}
             >
-              <span
-                style={{
-                  fontSize: 12,
-                  color:
-                    "#6b7280",
-                }}
-              >
-                Showing{" "}
-                {(page - 1) *
-                  PAGE_SIZE +
-                  1}
-                –
-                {Math.min(
-                  page *
-                    PAGE_SIZE,
-                  filtered.length
-                )}{" "}
-                of{" "}
-                {filtered.length}
-              </span>
+              {/* Left: Page-Size Dropdown */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12.5, color: "#64748b", fontWeight: 600 }}>
+                  Rows per page:
+                </span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  style={{
+                    height: 32,
+                    padding: "0 10px",
+                    border: "1.5px solid #e2e8f0",
+                    borderRadius: 7,
+                    fontSize: 12.5,
+                    background: "#ffffff",
+                    color: "#1e293b",
+                    outline: "none",
+                    cursor: "pointer",
+                    fontWeight: 500,
+                  }}
+                  aria-label="Select rows per page"
+                >
+                  <option value={8}>8</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
 
+              {/* Right: Page Numbers */}
               <div
                 style={{
-                  display:
-                    "flex",
+                  display: "flex",
+                  alignItems: "center",
                   gap: 6,
                 }}
               >
-                <button
-                  type="button"
-                  className="adm-btn-secondary"
-                  style={{
-                    padding:
-                      "5px 10px",
-                  }}
-                  disabled={
-                    page === 1
+                {getPageNumbers().map((p, idx) => {
+                  if (p === "...") {
+                    return (
+                      <span
+                        key={`ellipsis-${idx}`}
+                        style={{
+                          minWidth: 28,
+                          height: 34,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#94a3b8",
+                          fontSize: 13,
+                          fontWeight: 600,
+                        }}
+                      >
+                        …
+                      </span>
+                    );
                   }
-                  onClick={() =>
-                    setPage(
-                      (p) => p - 1
-                    )
-                  }
-                >
-                  <BsChevronLeft
-                    size={12}
-                  />
-                </button>
-
-                {Array.from(
-                  {
-                    length:
-                      totalPages,
-                  },
-                  (_, i) =>
-                    i + 1
-                ).map((p) => (
-                  <button
-                    type="button"
-                    key={p}
-                    onClick={() =>
-                      setPage(p)
-                    }
-                    style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: 6,
-                      border: `1.5px solid ${
-                        p === page
-                          ? "#6366f1"
-                          : "#e5e7eb"
-                      }`,
-                      background:
-                        p === page
-                          ? "#eef2ff"
-                          : "#fff",
-                      color:
-                        p === page
-                          ? "#6366f1"
-                          : "#6b7280",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      cursor:
-                        "pointer",
-                    }}
-                  >
-                    {p}
-                  </button>
-                ))}
-
-                <button
-                  type="button"
-                  className="adm-btn-secondary"
-                  style={{
-                    padding:
-                      "5px 10px",
-                  }}
-                  disabled={
-                    page ===
-                    totalPages
-                  }
-                  onClick={() =>
-                    setPage(
-                      (p) => p + 1
-                    )
-                  }
-                >
-                  <BsChevronRight
-                    size={12}
-                  />
-                </button>
+                  const isActive = p === page;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setPage(p)}
+                      style={{
+                        minWidth: 34,
+                        height: 34,
+                        padding: "0 8px",
+                        borderRadius: 8,
+                        border: isActive
+                          ? "1.5px solid #4f46e5"
+                          : "1.5px solid #cbd5e1",
+                        background: isActive ? "#4f46e5" : "#ffffff",
+                        color: isActive ? "#ffffff" : "#334155",
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
+                        boxShadow: isActive
+                          ? "0 1px 3px rgba(79, 70, 229, 0.3)"
+                          : "none",
+                      }}
+                      aria-label={`Page ${p}`}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      {p}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

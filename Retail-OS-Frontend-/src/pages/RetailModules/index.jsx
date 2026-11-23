@@ -20,7 +20,8 @@ import {
     BsStars, BsPlug, BsDisplay, BsCashStack, BsArrowReturnLeft, BsReceiptCutoff,
     BsCreditCard2Front, BsBoxSeam, BsSend, BsGear, BsTag, BsExclamationTriangle,
     BsTrash, BsShop, BsChevronLeft, BsChevronRight, BsX, BsEye, BsCheckCircle, BsXCircle,
-    BsChevronDown, BsChevronUp, BsActivity, BsTable, BsPencilFill, BsTrashFill, BsPlusCircle
+    BsChevronDown, BsChevronUp, BsActivity, BsTable, BsPencilFill, BsTrashFill, BsPlusCircle,
+    BsFileEarmarkPdf, BsShieldCheck, BsClipboardData, BsCalendarCheck, BsFunnel
 } from 'react-icons/bs';
 
 
@@ -68,25 +69,68 @@ const ModuleContainer = ({ title, subtitle, icon, actionBtn, children }) => (
     </div>
 );
 
-const StatCard = ({ label, value, sub, color = '#6366f1' }) => (
-    <div style={{
-        background: '#fff',
-        borderRadius: 12,
-        padding: '16px 20px',
-        border: '1px solid #e5e7eb',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        flex: 1,
-        minWidth: 180
-    }}>
-        <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-            {label}
-        </p>
-        <p style={{ fontSize: 24, fontWeight: 800, color: '#111827', margin: 0 }}>
-            {value}
-        </p>
-        {sub && <p style={{ fontSize: 12, color, margin: '4px 0 0 0', fontWeight: 600 }}>{sub}</p>}
-    </div>
-);
+const StatCard = ({ label, value, sub, color = '#6366f1' }) => {
+    const isValueBox = label === "Total Stock Value" || (typeof value === "string" && value.includes("₹"));
+    return (
+        <div style={{
+            background: '#fff',
+            borderRadius: 12,
+            padding: '16px 20px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            flex: 1,
+            minWidth: 180,
+            maxWidth: '100%',
+            overflow: 'hidden',
+            boxSizing: 'border-box'
+        }}>
+            <p style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#6b7280',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: 6,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+            }}>
+                {label}
+            </p>
+            <p
+                title={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
+                style={{
+                    fontSize: isValueBox
+                        ? (String(value).length >= 14 ? 18 : String(value).length >= 11 ? 20 : 22)
+                        : 24,
+                    fontWeight: 800,
+                    color: '#111827',
+                    margin: 0,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box'
+                }}
+            >
+                {value}
+            </p>
+            {sub && (
+                <p style={{
+                    fontSize: 12,
+                    color,
+                    margin: '4px 0 0 0',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                }}>
+                    {sub}
+                </p>
+            )}
+        </div>
+    );
+};
 
 /* ─────────────────────────────────────────────────────────────
    1. BILLING & GST: Returns & Refunds
@@ -417,7 +461,16 @@ export const WarehousesPage = () => {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [viewMode, setViewMode] = useState("table");
-    const [warehouseTab, setWarehouseTab] = useState("status"); // "status" | "details"
+    const [togglingStatusId, setTogglingStatusId] = useState(null);
+    const [statusToast, setStatusToast] = useState(null);
+
+    useEffect(() => {
+        if (!statusToast) return;
+        const timer = setTimeout(() => {
+            setStatusToast(null);
+        }, 4000);
+        return () => clearTimeout(timer);
+    }, [statusToast]);
 
     const hasFetchedRef = useRef(false);
 
@@ -485,8 +538,9 @@ export const WarehousesPage = () => {
             if (!wh) return false;
 
             // Status filter
-            if (statusFilter === "active" && wh.is_active === false) return false;
-            if (statusFilter === "inactive" && wh.is_active !== false) return false;
+            const isWhActive = wh.is_active === true || wh.status === "Active" || wh.status === "active";
+            if (statusFilter === "active" && !isWhActive) return false;
+            if (statusFilter === "inactive" && isWhActive) return false;
 
             // Store filter
             if (storeFilter && storeFilter !== "all") {
@@ -539,6 +593,44 @@ export const WarehousesPage = () => {
         const startIndex = (page - 1) * pageSize;
         return filteredWarehouses.slice(startIndex, startIndex + pageSize);
     }, [filteredWarehouses, page, pageSize]);
+
+    const hasActiveFilters = Boolean(
+        (search && search.trim() !== '') ||
+        (statusFilter && statusFilter !== 'all') ||
+        (storeFilter && storeFilter !== 'all')
+    );
+
+    const getPageNumbers = () => {
+        const pages = [];
+        if (totalPages <= 5) {
+            for (let i = 1; i <= totalPages; i++) pages.push(i);
+        } else {
+            if (page <= 3) {
+                pages.push(1, 2, 3, 4, '...', totalPages);
+            } else if (page >= totalPages - 2) {
+                pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+            } else {
+                pages.push(1, '...', page - 1, page, page + 1, '...', totalPages);
+            }
+        }
+        return pages;
+    };
+
+    const storeOptions = useMemo(() => {
+        const map = new Map();
+        (availableStores || []).forEach(st => {
+            if (st && st.id) {
+                map.set(String(st.id), st.name || `Store #${st.id}`);
+            }
+        });
+        (rawWarehouses || []).forEach(wh => {
+            const sId = wh.store_id ?? wh.storeId;
+            if (sId && !map.has(String(sId))) {
+                map.set(String(sId), wh.store_name || wh.storeName || `Store #${sId}`);
+            }
+        });
+        return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    }, [availableStores, rawWarehouses]);
 
     const handleSearchSubmit = (e) => {
         if (e) e.preventDefault();
@@ -724,6 +816,58 @@ export const WarehousesPage = () => {
         }
     };
 
+    const handleToggleStatus = async (warehouse) => {
+        if (!warehouse || !warehouse.id || togglingStatusId) return;
+        const currentActive = warehouse.is_active === true || warehouse.status === 'Active' || warehouse.status === 'active';
+        const newActive = !currentActive;
+        const whName = warehouse.name || warehouse.warehouse_name || `Warehouse #${warehouse.id}`;
+
+        const confirmed = window.confirm(
+            `Are you sure you want to change status of "${whName}" to ${newActive ? 'Active' : 'Inactive'}?`
+        );
+        if (!confirmed) return;
+
+        try {
+            setTogglingStatusId(warehouse.id);
+            setStatusToast(null);
+
+            // Optimistic update in UI
+            setRawWarehouses(prev => prev.map(w => w.id === warehouse.id ? { ...w, is_active: newActive, status: newActive ? 'Active' : 'Inactive' } : w));
+            setWarehouses(prev => prev.map(w => w.id === warehouse.id ? { ...w, is_active: newActive, status: newActive ? 'Active' : 'Inactive' } : w));
+
+            // Call existing PATCH /api/v1/warehouses/{id}
+            const res = await updateWarehouse(warehouse.id, { is_active: newActive });
+
+            const successMsg = res?.message || `Warehouse "${whName}" status changed to ${newActive ? 'Active' : 'Inactive'} successfully.`;
+            setStatusToast({
+                type: 'success',
+                message: successMsg
+            });
+
+            // Re-fetch to ensure fresh server sync
+            await Promise.allSettled([fetchWarehouses(), fetchDashboard()]);
+        } catch (err) {
+            console.error("Failed to update warehouse status:", err);
+            // Rollback optimistic state
+            setRawWarehouses(prev => prev.map(w => w.id === warehouse.id ? { ...w, is_active: currentActive, status: currentActive ? 'Active' : 'Inactive' } : w));
+            setWarehouses(prev => prev.map(w => w.id === warehouse.id ? { ...w, is_active: currentActive, status: currentActive ? 'Active' : 'Inactive' } : w));
+
+            const errMsg =
+                err?.response?.data?.detail?.message ||
+                (typeof err?.response?.data?.detail === "string" ? err.response.data.detail : null) ||
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to update warehouse status.";
+
+            setStatusToast({
+                type: 'error',
+                message: errMsg
+            });
+        } finally {
+            setTogglingStatusId(null);
+        }
+    };
+
 
     const handleRefresh = () => {
         fetchWarehouses();
@@ -735,6 +879,15 @@ export const WarehousesPage = () => {
         hasFetchedRef.current = true;
         fetchWarehouses();
         fetchDashboard();
+        // Load available stores on mount for store filter dropdown
+        listStores()
+            .then((res) => {
+                const list = res?.data?.data || res?.data || (Array.isArray(res) ? res : []);
+                setAvailableStores(list);
+            })
+            .catch((err) => {
+                console.error("Failed to load stores for warehouse filters:", err);
+            });
     }, []);
 
     useEffect(() => {
@@ -1116,6 +1269,72 @@ export const WarehousesPage = () => {
             ? formatWarehouseStockValue(dashboardData.total_stock_value)
             : "₹0.00";
 
+    const WarehouseStatCard = ({ label, value, sub, icon, iconBg, iconColor }) => (
+        <div className="wh-stat-card" style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '18px 20px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            boxSizing: 'border-box'
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: '#64748b',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em'
+                }}>
+                    {label}
+                </span>
+                <div style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    background: iconBg,
+                    color: iconColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                }}>
+                    {icon}
+                </div>
+            </div>
+            <div>
+                <div style={{
+                    fontSize: 26,
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    lineHeight: 1.15,
+                    letterSpacing: '-0.02em',
+                    marginBottom: 5,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                }}>
+                    {value}
+                </div>
+                {sub && (
+                    <div style={{
+                        fontSize: 11.5,
+                        fontWeight: 500,
+                        color: '#64748b',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                    }}>
+                        {sub}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
     return (
         <div className="warehouse-page-root" style={{ width: '100%', minHeight: '100%' }}>
             <style>{`
@@ -1204,6 +1423,238 @@ export const WarehousesPage = () => {
                     background: #f1f5f9 !important;
                 }
 
+                /* Warehouse Stat Card Hover Interaction */
+                .wh-stat-card {
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                }
+                .wh-stat-card:hover {
+                    transform: translateY(-2px) !important;
+                    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08) !important;
+                    border-color: #cbd5e1 !important;
+                }
+
+                /* Professional SaaS Search Bar & Filters Styling - Unified Single Row */
+                .warehouse-page-root .wh-toolbar-container {
+                    padding: 14px 18px !important;
+                    background: #ffffff !important;
+                }
+
+                .warehouse-page-root .wh-toolbar-row {
+                    display: flex !important;
+                    align-items: center !important;
+                    flex-wrap: wrap !important;
+                    gap: 12px !important;
+                    width: 100% !important;
+                }
+
+                .warehouse-page-root .wh-search-form {
+                    display: flex !important;
+                    align-items: center !important;
+                    margin: 0 !important;
+                    flex: 1 1 280px !important;
+                    max-width: 360px !important;
+                    min-width: 240px !important;
+                }
+
+                .warehouse-page-root .wh-search-box {
+                    position: relative !important;
+                    width: 100% !important;
+                    display: flex !important;
+                    align-items: center !important;
+                }
+
+                .warehouse-page-root .wh-search-icon {
+                    position: absolute !important;
+                    left: 12px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    color: #64748b !important;
+                    pointer-events: none !important;
+                }
+
+                .warehouse-page-root .wh-search-input {
+                    width: 100% !important;
+                    height: 38px !important;
+                    padding: 0 32px 0 34px !important;
+                    border: 1.5px solid #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    font-size: 13px !important;
+                    font-weight: 500 !important;
+                    background: #f8fafc !important;
+                    color: #0f172a !important;
+                    outline: none !important;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                }
+                .warehouse-page-root .wh-search-input::placeholder {
+                    color: #64748b !important;
+                    opacity: 1 !important;
+                    font-weight: 400 !important;
+                }
+                .warehouse-page-root .wh-search-input:hover {
+                    border-color: #94a3b8 !important;
+                    background: #ffffff !important;
+                }
+                .warehouse-page-root .wh-search-input:focus {
+                    background: #ffffff !important;
+                    border-color: #6366f1 !important;
+                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+                }
+
+                .warehouse-page-root .wh-search-clear-btn {
+                    position: absolute !important;
+                    right: 8px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    background: #e2e8f0 !important;
+                    border: none !important;
+                    border-radius: 50% !important;
+                    width: 20px !important;
+                    height: 20px !important;
+                    cursor: pointer !important;
+                    color: #475569 !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    padding: 0 !important;
+                    transition: all 0.15s ease !important;
+                }
+                .warehouse-page-root .wh-search-clear-btn:hover {
+                    background: #cbd5e1 !important;
+                    color: #0f172a !important;
+                }
+
+                /* Filter Dropdown Wrappers in Single Row */
+                .warehouse-page-root .wh-filter-wrapper {
+                    position: relative !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    height: 38px !important;
+                    flex: 0 1 auto !important;
+                }
+
+                .warehouse-page-root .wh-store-filter-wrapper {
+                    min-width: 200px !important;
+                    max-width: 260px !important;
+                    flex: 1 1 220px !important;
+                }
+
+                .warehouse-page-root .wh-status-filter-wrapper {
+                    min-width: 150px !important;
+                    max-width: 180px !important;
+                    flex: 1 1 160px !important;
+                }
+
+                .warehouse-page-root .wh-filter-prefix-icon {
+                    position: absolute !important;
+                    left: 11px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    pointer-events: none !important;
+                    z-index: 2 !important;
+                }
+
+                .warehouse-page-root .wh-store-filter-wrapper .wh-filter-prefix-icon {
+                    color: #10b981 !important;
+                }
+
+                .warehouse-page-root .wh-status-filter-wrapper .wh-filter-prefix-icon {
+                    color: #6366f1 !important;
+                }
+
+                .warehouse-page-root .wh-filter-select {
+                    width: 100% !important;
+                    height: 38px !important;
+                    padding: 0 28px 0 32px !important;
+                    border: 1.5px solid #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    font-size: 13px !important;
+                    font-weight: 500 !important;
+                    background: #ffffff !important;
+                    color: #0f172a !important;
+                    outline: none !important;
+                    cursor: pointer !important;
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    -moz-appearance: none !important;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                    text-overflow: ellipsis !important;
+                    white-space: nowrap !important;
+                }
+                .warehouse-page-root .wh-filter-select:hover {
+                    border-color: #94a3b8 !important;
+                    background: #f8fafc !important;
+                }
+                .warehouse-page-root .wh-filter-select:focus {
+                    background: #ffffff !important;
+                    border-color: #6366f1 !important;
+                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+                }
+                .warehouse-page-root .wh-filter-select.is-active {
+                    background: #eef2ff !important;
+                    border-color: #6366f1 !important;
+                    color: #3730a3 !important;
+                    font-weight: 600 !important;
+                }
+                .warehouse-page-root .wh-filter-select-icon {
+                    position: absolute !important;
+                    right: 10px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    color: #64748b !important;
+                    pointer-events: none !important;
+                    z-index: 2 !important;
+                }
+
+                /* Active Filter Badge & Reset Button Group */
+                .warehouse-page-root .wh-filter-actions-group {
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 8px !important;
+                    margin-left: auto !important;
+                    flex-wrap: wrap !important;
+                }
+
+                .warehouse-page-root .wh-active-filter-badge {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    gap: 5px !important;
+                    padding: 0 11px !important;
+                    height: 36px !important;
+                    background: #eef2ff !important;
+                    color: #4338ca !important;
+                    border: 1px solid #c7d2fe !important;
+                    border-radius: 20px !important;
+                    font-size: 12px !important;
+                    font-weight: 600 !important;
+                    white-space: nowrap !important;
+                }
+
+                .warehouse-page-root .wh-clear-btn {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    gap: 4px !important;
+                    padding: 0 12px !important;
+                    height: 36px !important;
+                    font-size: 12.5px !important;
+                    font-weight: 600 !important;
+                    color: #b91c1c !important;
+                    background: #fef2f2 !important;
+                    border: 1px solid #fecaca !important;
+                    border-radius: 8px !important;
+                    cursor: pointer !important;
+                    transition: all 0.15s ease !important;
+                    white-space: nowrap !important;
+                }
+                .warehouse-page-root .wh-clear-btn:hover {
+                    background: #dc2626 !important;
+                    color: #ffffff !important;
+                    border-color: #dc2626 !important;
+                    transform: translateY(-1px) !important;
+                    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.2) !important;
+                }
+
                 /* Action Button & Tooltip Styles */
                 .wh-actions {
                     display: inline-flex;
@@ -1233,46 +1684,50 @@ export const WarehousesPage = () => {
                 .wh-btn-view {
                     background: #eef2ff;
                     color: #4f46e5;
-                    border-color: #c7d2fe;
+                    border: 1.5px solid #c7d2fe;
                 }
                 .wh-btn-view:hover {
-                    background: #e0e7ff;
-                    color: #4338ca;
-                    border-color: #a5b4fc;
+                    background: #4f46e5;
+                    color: #ffffff;
+                    border-color: #4f46e5;
                     transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
                 }
                 .wh-btn-create {
                     background: #ecfdf5;
                     color: #059669;
-                    border-color: #a7f3d0;
+                    border: 1.5px solid #a7f3d0;
                 }
                 .wh-btn-create:hover {
-                    background: #d1fae5;
-                    color: #047857;
-                    border-color: #6ee7b7;
+                    background: #059669;
+                    color: #ffffff;
+                    border-color: #059669;
                     transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
                 }
                 .wh-btn-edit {
                     background: #f8fafc;
                     color: #334155;
-                    border-color: #cbd5e1;
+                    border: 1.5px solid #cbd5e1;
                 }
                 .wh-btn-edit:hover {
-                    background: #f1f5f9;
-                    color: #0f172a;
-                    border-color: #94a3b8;
+                    background: #0284c7;
+                    color: #ffffff;
+                    border-color: #0284c7;
                     transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
                 }
                 .wh-btn-delete {
                     background: #fef2f2;
                     color: #dc2626;
-                    border-color: #fee2e2;
+                    border: 1.5px solid #fecaca;
                 }
                 .wh-btn-delete:hover:not(:disabled) {
-                    background: #fee2e2;
-                    color: #b91c1c;
-                    border-color: #fca5a5;
+                    background: #dc2626;
+                    color: #ffffff;
+                    border-color: #dc2626;
                     transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
                 }
                 .wh-btn-delete:disabled {
                     cursor: not-allowed;
@@ -1470,6 +1925,11 @@ export const WarehousesPage = () => {
                     border-width: 5px 5px 0 5px;
                     border-color: #0f172a transparent transparent transparent;
                 }
+
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
             `}</style>
             <ModuleContainer
                 className="warehouse-page-container"
@@ -1480,65 +1940,6 @@ export const WarehousesPage = () => {
                 style={{ width: '100%', maxWidth: '100%', margin: 0, padding: '16px 24px 20px 24px', boxSizing: 'border-box' }}
                 actionBtn={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <div
-                        className="warehouse-segmented-tabs"
-                        style={{
-                            display: 'inline-flex',
-                            borderRadius: 8,
-                            border: '1px solid #d1d5db',
-                            background: '#f3f4f6',
-                            padding: 2
-                        }}
-                    >
-                        <button
-                            type="button"
-                            id="tab-wh-status-header"
-                            onClick={() => setWarehouseTab('status')}
-                            title="Warehouse Status"
-                            style={{
-                                padding: '6px 14px',
-                                borderRadius: 6,
-                                border: 'none',
-                                fontSize: 12.5,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                background: warehouseTab === 'status' ? '#ffffff' : 'transparent',
-                                color: warehouseTab === 'status' ? '#4f46e5' : '#6b7280',
-                                boxShadow: warehouseTab === 'status' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                                transition: 'all 0.15s ease',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6
-                            }}
-                        >
-                            <BsActivity size={13} style={{ color: warehouseTab === 'status' ? '#4f46e5' : '#9ca3af' }} />
-                            Warehouse Status
-                        </button>
-                        <button
-                            type="button"
-                            id="tab-wh-details-header"
-                            onClick={() => setWarehouseTab('details')}
-                            title="Warehouse Details"
-                            style={{
-                                padding: '6px 14px',
-                                borderRadius: 6,
-                                border: 'none',
-                                fontSize: 12.5,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                background: warehouseTab === 'details' ? '#ffffff' : 'transparent',
-                                color: warehouseTab === 'details' ? '#4f46e5' : '#6b7280',
-                                boxShadow: warehouseTab === 'details' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                                transition: 'all 0.15s ease',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6
-                            }}
-                        >
-                            <BsTable size={13} style={{ color: warehouseTab === 'details' ? '#4f46e5' : '#9ca3af' }} />
-                            Warehouse Details
-                        </button>
-                    </div>
                     <button
                         onClick={handleRefresh}
                         disabled={loading || dashboardLoading}
@@ -1565,37 +1966,47 @@ export const WarehousesPage = () => {
                 </div>
             }
         >
-            {/* Dashboard Stat Cards */}
-            <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-                <StatCard
+            {/* Authoritative Warehouse SaaS KPI Summary Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 24 }}>
+                <WarehouseStatCard
                     label="Total Warehouses"
-                    value={totalWarehouses}
+                    value={dashboardLoading ? '...' : totalWarehouses}
                     sub="Registered stock locations"
-                    color="#6366f1"
+                    icon={<BsBuildings size={17} />}
+                    iconBg="#eef2ff"
+                    iconColor="#4f46e5"
                 />
-                <StatCard
+                <WarehouseStatCard
                     label="Active Warehouses"
-                    value={activeWarehouses}
+                    value={dashboardLoading ? '...' : activeWarehouses}
                     sub="Operational & ready"
-                    color="#10b981"
+                    icon={<BsCheckCircleFill size={17} />}
+                    iconBg="#ecfdf5"
+                    iconColor="#059669"
                 />
-                <StatCard
+                <WarehouseStatCard
                     label="Inactive Warehouses"
-                    value={inactiveWarehouses}
+                    value={dashboardLoading ? '...' : inactiveWarehouses}
                     sub={Number(inactiveWarehouses) > 0 ? "Requires attention" : "All operational"}
-                    color={Number(inactiveWarehouses) > 0 ? "#ef4444" : "#6b7280"}
+                    icon={<BsExclamationTriangle size={17} />}
+                    iconBg={Number(inactiveWarehouses) > 0 ? "#fff1f2" : "#f8fafc"}
+                    iconColor={Number(inactiveWarehouses) > 0 ? "#e11d48" : "#64748b"}
                 />
-                <StatCard
+                <WarehouseStatCard
                     label="Total Stock Units"
-                    value={totalStockUnits}
+                    value={dashboardLoading ? '...' : totalStockUnits}
                     sub="Units in warehouses"
-                    color="#0ea5e9"
+                    icon={<BsBoxSeam size={17} />}
+                    iconBg="#f0f9ff"
+                    iconColor="#0284c7"
                 />
-                <StatCard
+                <WarehouseStatCard
                     label="Total Stock Value"
-                    value={totalStockValue}
+                    value={dashboardLoading ? '...' : totalStockValue}
                     sub="Inventory valuation"
-                    color="#8b5cf6"
+                    icon={<BsCashStack size={17} />}
+                    iconBg="#f5f3ff"
+                    iconColor="#7c3aed"
                 />
             </div>
 
@@ -1681,663 +2092,153 @@ export const WarehousesPage = () => {
                 </div>
             )}
 
-            {/* Segmented Tab Navigation: Warehouse Status / Warehouse Details */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: 12,
-                marginBottom: 14
-            }}>
-                <div
-                    className="warehouse-segmented-tabs"
-                    style={{
-                        display: 'inline-flex',
-                        borderRadius: 8,
-                        border: '1px solid #d1d5db',
-                        background: '#f3f4f6',
-                        padding: 3,
-                        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.03)'
-                    }}
-                >
-                    <button
-                        type="button"
-                        id="tab-warehouse-status"
-                        onClick={() => setWarehouseTab('status')}
-                        style={{
-                            padding: '7px 18px',
-                            borderRadius: 6,
-                            border: 'none',
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            background: warehouseTab === 'status' ? '#ffffff' : 'transparent',
-                            color: warehouseTab === 'status' ? '#4f46e5' : '#6b7280',
-                            boxShadow: warehouseTab === 'status' ? '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)' : 'none',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 7,
-                            transition: 'all 0.15s ease'
-                        }}
-                    >
-                        <BsActivity size={15} style={{ color: warehouseTab === 'status' ? '#4f46e5' : '#9ca3af' }} />
-                        <span>Warehouse Status</span>
-                    </button>
-                    <button
-                        type="button"
-                        id="tab-warehouse-details"
-                        onClick={() => setWarehouseTab('details')}
-                        style={{
-                            padding: '7px 18px',
-                            borderRadius: 6,
-                            border: 'none',
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            background: warehouseTab === 'details' ? '#ffffff' : 'transparent',
-                            color: warehouseTab === 'details' ? '#4f46e5' : '#6b7280',
-                            boxShadow: warehouseTab === 'details' ? '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)' : 'none',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 7,
-                            transition: 'all 0.15s ease'
-                        }}
-                    >
-                        <BsTable size={15} style={{ color: warehouseTab === 'details' ? '#4f46e5' : '#9ca3af' }} />
-                        <span>Warehouse Details</span>
-                    </button>
-                </div>
-            </div>
-
-            {/* TAB 1: WAREHOUSE STATUS VIEW */}
-            {warehouseTab === 'status' ? (
-                loading ? (
-                    <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280' }}>
-                        <div style={{
-                            display: 'inline-block',
-                            width: 32,
-                            height: 32,
-                            border: '3px solid #e5e7eb',
-                            borderTopColor: '#6366f1',
-                            borderRadius: '50%',
-                            animation: 'spin 1s linear infinite',
-                            marginBottom: 12
-                        }} />
-                        <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>Loading warehouse status...</p>
-                    </div>
-                ) : error ? (
-                    <div style={{
-                        background: '#fef2f2',
-                        border: '1px solid #fee2e2',
-                        borderRadius: 12,
-                        padding: '20px 24px',
-                        color: '#dc2626',
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: 14
-                    }}>
-                        <BsExclamationTriangle size={22} style={{ marginTop: 2, flexShrink: 0 }} />
-                        <div style={{ flex: 1 }}>
-                            <strong style={{ display: 'block', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
-                                Unable to load warehouse status
-                            </strong>
-                            <p style={{ fontSize: 13, color: '#b91c1c', margin: '0 0 12px 0' }}>{error}</p>
-                            <button
-                                onClick={() => fetchWarehouses()}
-                                style={{
-                                    background: '#dc2626',
-                                    color: '#ffffff',
-                                    border: 'none',
-                                    padding: '6px 14px',
-                                    borderRadius: 6,
-                                    fontSize: 12.5,
-                                    fontWeight: 600,
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                Try Again
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                <div className="warehouse-status-view">
-                    {/* Status KPI Summary Cards */}
-                    <div style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                        gap: 14,
-                        marginBottom: 16
-                    }}>
-                        {/* Active Warehouses Card */}
-                        <div style={{
-                            background: '#ffffff',
-                            border: '1px solid #e5e7eb',
-                            borderLeft: '4px solid #10b981',
-                            borderRadius: 10,
-                            padding: '16px 20px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                    Active Stock Locations
-                                </span>
-                                <span style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    padding: '2px 8px',
-                                    borderRadius: 12,
-                                    background: '#ecfdf5',
-                                    color: '#059669',
-                                    border: '1px solid #a7f3d0'
-                                }}>
-                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                                    Active
-                                </span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                                <span style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>
-                                    {rawWarehouses.filter(w => w.is_active === true || w.status === 'Active' || w.status === 'active').length}
-                                </span>
-                                <span style={{ fontSize: 13, color: '#6b7280' }}>
-                                    of {rawWarehouses.length} locations operational
-                                </span>
-                            </div>
-                            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
-                                Fully operational depots actively accepting purchase orders, inwards, and stock dispatches.
-                            </p>
-                        </div>
-
-                        {/* Inactive Warehouses Card */}
-                        <div style={{
-                            background: '#ffffff',
-                            border: '1px solid #e5e7eb',
-                            borderLeft: '4px solid ' + (rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#ef4444' : '#9ca3af'),
-                            borderRadius: 10,
-                            padding: '16px 20px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                <span style={{ fontSize: 11.5, fontWeight: 700, color: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#dc2626' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                    Inactive Stock Locations
-                                </span>
-                                <span style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    padding: '2px 8px',
-                                    borderRadius: 12,
-                                    background: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#fef2f2' : '#f3f4f6',
-                                    color: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#dc2626' : '#6b7280',
-                                    border: '1px solid ' + (rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#fecaca' : '#e5e7eb')
-                                }}>
-                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#ef4444' : '#9ca3af' }} />
-                                    {rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? 'Requires Attention' : 'All Operational'}
-                                </span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                                <span style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>
-                                    {rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length}
-                                </span>
-                                <span style={{ fontSize: 13, color: '#6b7280' }}>
-                                    decommissioned or restricted
-                                </span>
-                            </div>
-                            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
-                                Stock locations with paused activities. Movements and transfers are disabled until reactivated.
-                            </p>
-                        </div>
-
-                        {/* Network Availability Rate Card */}
-                        <div style={{
-                            background: '#ffffff',
-                            border: '1px solid #e5e7eb',
-                            borderLeft: '4px solid #6366f1',
-                            borderRadius: 10,
-                            padding: '16px 20px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                <span style={{ fontSize: 11.5, fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                    Operational Availability
-                                </span>
-                                <span style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    padding: '2px 8px',
-                                    borderRadius: 12,
-                                    background: '#eef2ff',
-                                    color: '#4f46e5',
-                                    border: '1px solid #c7d2fe'
-                                }}>
-                                    Live Network
-                                </span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                                <span style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>
-                                    {rawWarehouses.length > 0
-                                        ? Math.round((rawWarehouses.filter(w => w.is_active === true || w.status === 'Active' || w.status === 'active').length / rawWarehouses.length) * 100)
-                                        : 100}%
-                                </span>
-                                <span style={{ fontSize: 13, color: '#6b7280' }}>
-                                    system readiness rate
-                                </span>
-                            </div>
-                            <p style={{ margin: '6px 0 0', fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
-                                Ratio of active stock locations available for immediate retail fulfillment and inventory distribution.
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Operational Status Table */}
-                    <div style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        border: '1px solid #e5e7eb',
-                        overflow: 'hidden',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                    }}>
-                        <div style={{
-                            padding: '14px 18px',
-                            background: '#f9fafb',
-                            borderBottom: '1px solid #e5e7eb',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            flexWrap: 'wrap',
-                            gap: 10
-                        }}>
-                            <div>
-                                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#111827' }}>
-                                    Warehouse Operational Status
-                                </h3>
-                                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>
-                                    Real-time active and inactive warehouse operational statuses fetched from registered warehouse data
-                                </p>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#059669',
-                                    background: '#ecfdf5',
-                                    padding: '3px 10px',
-                                    borderRadius: 12,
-                                    border: '1px solid #a7f3d0'
-                                }}>
-                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                                    {rawWarehouses.filter(w => w.is_active === true || w.status === 'Active' || w.status === 'active').length} Active
-                                </span>
-                                <span style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#dc2626',
-                                    background: '#fef2f2',
-                                    padding: '3px 10px',
-                                    borderRadius: 12,
-                                    border: '1px solid #fecaca'
-                                }}>
-                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }} />
-                                    {rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length} Inactive
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="warehouse-table-scroll custom-scrollbar" style={{ maxHeight: '480px', overflowY: 'auto', overflowX: 'auto' }}>
-                            <table className="warehouse-table" style={{ width: '100%', minWidth: '1150px', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: 13 }}>
-                                <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
-                                    <tr>
-                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Warehouse Code</th>
-                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Warehouse Name</th>
-                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Store</th>
-                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, minWidth: 240, whiteSpace: 'nowrap' }}>Address / Location</th>
-                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Operational Status</th>
-                                        <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Readiness Note</th>
-                                        <th style={{
-                                            position: 'sticky',
-                                            top: 0,
-                                            right: 0,
-                                            zIndex: 25,
-                                            background: '#f9fafb',
-                                            padding: '8px 14px',
-                                            borderBottom: '1px solid #e5e7eb',
-                                            color: '#4b5563',
-                                            fontWeight: 600,
-                                            textAlign: 'center',
-                                            whiteSpace: 'nowrap',
-                                            minWidth: 155,
-                                            width: 155,
-                                            boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                        }}>
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                                <span>Action</span>
-                                                <button
-                                                    type="button"
-                                                    className="wh-action-btn wh-btn-create"
-                                                    data-tooltip="Add Warehouse"
-                                                    title="Add Warehouse"
-                                                    aria-label="Add Warehouse"
-                                                    onClick={handleOpenAddModal}
-                                                    style={{ width: 26, height: 26, borderRadius: 6 }}
-                                                >
-                                                    <BsPlus size={18} />
-                                                </button>
-                                            </div>
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {rawWarehouses.map((wh, idx) => {
-                                        const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
-                                        const code = (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "")
-                                            ? String(rawCode).trim()
-                                            : "—";
-                                        const name = wh.name || ('Warehouse #' + (wh.id || (idx + 1)));
-                                        const address = wh.address || wh.location || "Address not provided";
-                                        const storeId = wh.store_id ?? wh.storeId;
-                                        const storeName = wh.store_name || wh.storeName;
-                                        const isActive = wh.is_active === true || wh.status === "active" || wh.status === "Active";
-
-                                        return (
-                                            <tr
-                                                key={wh.id || idx}
-                                                style={{ borderBottom: '1px solid #f3f4f6', transition: 'background-color 0.15s ease' }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                            >
-                                                <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
-                                                    {code !== "—" ? (
-                                                        <span style={{
-                                                            fontSize: 12,
-                                                            fontWeight: 700,
-                                                            color: '#4f46e5',
-                                                            background: '#eef2ff',
-                                                            padding: '3px 8px',
-                                                            borderRadius: 6,
-                                                            display: 'inline-block',
-                                                            letterSpacing: '0.02em'
-                                                        }}>
-                                                            {code}
-                                                        </span>
-                                                    ) : (
-                                                        <span style={{ color: '#9ca3af', fontSize: 13 }}>—</span>
-                                                    )}
-                                                </td>
-                                                <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
-                                                    <strong style={{ color: '#111827', fontWeight: 600, display: 'block' }}>{name}</strong>
-                                                    <span style={{ fontSize: 11.5, color: '#9ca3af' }}>ID: #{wh.id || (idx + 1)}</span>
-                                                </td>
-                                                <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
-                                                    {storeName ? (
-                                                        <div>
-                                                            <strong style={{ color: '#111827', fontWeight: 600, display: 'block' }}>{storeName}</strong>
-                                                            {storeId != null && <span style={{ fontSize: 11.5, color: '#6b7280' }}>Store #{storeId}</span>}
-                                                        </div>
-                                                    ) : storeId != null ? (
-                                                        <span style={{ fontWeight: 600, color: '#111827' }}>Store #{storeId}</span>
-                                                    ) : (
-                                                        <span style={{ color: '#9ca3af' }}>—</span>
-                                                    )}
-                                                </td>
-                                                <td style={{ padding: '11px 16px', color: '#4b5563', minWidth: 240, whiteSpace: 'nowrap' }}>
-                                                    <span title={address}>{address}</span>
-                                                </td>
-                                                <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
-                                                    <span style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: 6,
-                                                        padding: '4px 12px',
-                                                        borderRadius: 20,
-                                                        fontSize: 12,
-                                                        fontWeight: 700,
-                                                        background: isActive ? '#ecfdf5' : '#fef2f2',
-                                                        color: isActive ? '#059669' : '#dc2626',
-                                                        border: '1px solid ' + (isActive ? '#a7f3d0' : '#fecaca')
-                                                    }}>
-                                                        <span style={{
-                                                            width: 7,
-                                                            height: 7,
-                                                            borderRadius: '50%',
-                                                            background: isActive ? '#10b981' : '#ef4444',
-                                                            boxShadow: isActive ? '0 0 0 2px rgba(16, 185, 129, 0.25)' : '0 0 0 2px rgba(239, 68, 68, 0.25)'
-                                                        }} />
-                                                        {isActive ? 'Active' : 'Inactive'}
-                                                    </span>
-                                                </td>
-                                                <td style={{ padding: '11px 16px', fontSize: 12, color: isActive ? '#059669' : '#dc2626', whiteSpace: 'nowrap' }}>
-                                                    {isActive
-                                                        ? 'Ready for Inward & Dispatch'
-                                                        : 'Stock Inward Paused'}
-                                                </td>
-                                                <td style={{
-                                                    position: 'sticky',
-                                                    right: 0,
-                                                    zIndex: 10,
-                                                    background: '#ffffff',
-                                                    padding: '11px 16px',
-                                                    textAlign: 'center',
-                                                    whiteSpace: 'nowrap',
-                                                    minWidth: 155,
-                                                    width: 155,
-                                                    boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                                }}>
-                                                    <div className="wh-actions">
-                                                        {/* VIEW */}
-                                                        <button
-                                                            type="button"
-                                                            className="wh-action-btn wh-btn-view"
-                                                            data-tooltip="View Warehouse"
-                                                            title="View Warehouse"
-                                                            aria-label="View Warehouse"
-                                                            onClick={() => handleViewWarehouse(wh.id)}
-                                                        >
-                                                            <BsEye size={14} />
-                                                        </button>
-
-                                                        {/* EDIT */}
-                                                        <button
-                                                            type="button"
-                                                            className="wh-action-btn wh-btn-edit"
-                                                            data-tooltip="Edit Warehouse"
-                                                            title="Edit Warehouse"
-                                                            aria-label="Edit Warehouse"
-                                                            onClick={() => handleOpenEditModal(wh)}
-                                                        >
-                                                            <BsPencilFill size={13} />
-                                                        </button>
-
-                                                        {/* DELETE */}
-                                                        <button
-                                                            type="button"
-                                                            className="wh-action-btn wh-btn-delete"
-                                                            data-tooltip="Delete Warehouse"
-                                                            title="Delete Warehouse"
-                                                            aria-label="Delete Warehouse"
-                                                            disabled={deletingId !== null}
-                                                            onClick={() => handleRequestDelete(wh)}
-                                                        >
-                                                            <BsTrashFill size={13} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                )
-            ) : (
-                /* TAB 2: WAREHOUSE DETAILS VIEW */
-                <>
-{/* Warehouse Search and Filter Controls */}
-            <form
-                onSubmit={handleSearchSubmit}
-                style={{
-                    background: '#ffffff',
-                    border: '1px solid #e5e7eb',
-                    borderRadius: 12,
-                    padding: '14px 18px',
-                    marginBottom: 20,
+            {/* Status Update Toast Notification */}
+            {statusToast && (
+                <div style={{
+                    borderRadius: 10,
+                    padding: '12px 18px',
+                    marginBottom: 18,
                     display: 'flex',
                     alignItems: 'center',
+                    justifyContent: 'space-between',
                     gap: 12,
-                    flexWrap: 'wrap',
-                }}
-            >
-                <div style={{ position: 'relative', flex: '1 1 240px' }}>
-                    <BsSearch style={{ position: 'absolute', left: 12, top: 11, color: '#9ca3af', pointerEvents: 'none' }} />
-                    <input
-                        type="text"
-                        placeholder="Search by name, code, location, ID..."
-                        value={search}
-                        onChange={(e) => {
-                            setSearch(e.target.value);
-                            setPage(1);
-                        }}
-                        style={{
-                            width: '100%',
-                            padding: search ? '8px 32px 8px 36px' : '8px 12px 8px 36px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: 8,
-                            fontSize: 13.5,
-                            outline: 'none',
-                            color: '#111827',
-                            boxSizing: 'border-box'
-                        }}
-                    />
-                    {search && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setSearch("");
-                                setPage(1);
-                                if (allWarehousesRef.current && allWarehousesRef.current.length > 0) {
-                                    setRawWarehouses(allWarehousesRef.current);
-                                }
-                            }}
-                            style={{
-                                position: 'absolute',
-                                right: 10,
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#9ca3af',
-                                cursor: 'pointer',
-                                padding: 2,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}
-                            title="Clear search"
-                        >
-                            <BsX size={18} />
-                        </button>
-                    )}
-                </div>
-
-                <div style={{ flex: '0 0 auto', minWidth: 140 }}>
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setStatusFilter(val);
-                            fetchWarehouses({ statusFilter: val, page: 1 });
-                        }}
-                        style={{
-                            width: '100%',
-                            padding: '8px 12px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            color: '#374151',
-                            background: '#fff',
-                            cursor: 'pointer',
-                        }}
-                    >
-                        <option value="all">All Status</option>
-                        <option value="active">Active Only</option>
-                        <option value="inactive">Inactive Only</option>
-                    </select>
-                </div>
-
-                <div style={{ flex: '0 0 auto', minWidth: 140 }}>
-                    <input
-                        type="number"
-                        placeholder="Store ID (e.g. 2)"
-                        value={storeFilter === 'all' ? '' : storeFilter}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setStoreFilter(val === '' ? 'all' : val);
-                        }}
-                        style={{
-                            width: '100%',
-                            padding: '8px 12px',
-                            border: '1px solid #d1d5db',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            color: '#374151',
-                            boxSizing: 'border-box'
-                        }}
-                    />
-                </div>
-
-                <button
-                    type="submit"
-                    disabled={loading}
-                    style={{
-                        background: '#6366f1',
-                        color: '#fff',
-                        border: 'none',
-                        padding: '8px 16px',
-                        borderRadius: 8,
-                        fontWeight: 600,
-                        fontSize: 13,
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                    }}
-                >
-                    <BsSearch size={13} /> Filter
-                </button>
-
-                {(search.trim() || statusFilter !== 'all' || storeFilter !== 'all') && (
+                    background: statusToast.type === 'success' ? '#ecfdf5' : '#fef2f2',
+                    border: `1px solid ${statusToast.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
+                    color: statusToast.type === 'success' ? '#065f46' : '#991b1b',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {statusToast.type === 'success' ? (
+                            <BsCheckCircleFill size={18} style={{ color: '#059669', flexShrink: 0 }} />
+                        ) : (
+                            <BsExclamationTriangle size={18} style={{ color: '#dc2626', flexShrink: 0 }} />
+                        )}
+                        <span style={{ fontSize: 13.5, fontWeight: 600 }}>
+                            {statusToast.message}
+                        </span>
+                    </div>
                     <button
                         type="button"
-                        onClick={handleResetFilters}
+                        onClick={() => setStatusToast(null)}
                         style={{
-                            background: '#f3f4f6',
-                            color: '#4b5563',
-                            border: '1px solid #d1d5db',
-                            padding: '8px 14px',
-                            borderRadius: 8,
-                            fontWeight: 600,
-                            fontSize: 13,
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'currentColor',
+                            opacity: 0.7,
+                            fontSize: 16,
+                            lineHeight: 1,
                             cursor: 'pointer',
+                            padding: '2px 6px'
                         }}
+                        title="Dismiss"
                     >
-                        Clear
+                        ✕
                     </button>
-                )}
-            </form>
+                </div>
+            )}
+
+
+
+            {/* Search and Filters Toolbar Container - Unified Single Horizontal Row */}
+            <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)', marginBottom: 20 }}>
+                <div className="wh-toolbar-container">
+                    <div className="wh-toolbar-row">
+                        {/* 1. Search Input: compact & balanced */}
+                        <form onSubmit={handleSearchSubmit} className="wh-search-form">
+                            <div className="wh-search-box">
+                                <BsSearch className="wh-search-icon" size={13} />
+                                <input
+                                    type="text"
+                                    className="wh-search-input"
+                                    placeholder="Search by name, code, location, ID..."
+                                    value={search}
+                                    onChange={(e) => {
+                                        setSearch(e.target.value);
+                                        setPage(1);
+                                    }}
+                                />
+                                {search && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSearch("");
+                                            setPage(1);
+                                            if (allWarehousesRef.current && allWarehousesRef.current.length > 0) {
+                                                setRawWarehouses(allWarehousesRef.current);
+                                            }
+                                        }}
+                                        title="Clear search"
+                                        className="wh-search-clear-btn"
+                                    >
+                                        <BsX size={14} />
+                                    </button>
+                                )}
+                            </div>
+                        </form>
+
+                        {/* 2. Store Filter Dropdown */}
+                        <div className="wh-filter-wrapper wh-store-filter-wrapper">
+                            <BsShop className="wh-filter-prefix-icon" size={13} />
+                            <select
+                                className={`wh-filter-select ${storeFilter !== 'all' ? 'is-active' : ''}`}
+                                value={storeFilter}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setStoreFilter(val);
+                                    fetchWarehouses({ storeFilter: val, page: 1 });
+                                }}
+                                aria-label="Filter by store"
+                            >
+                                <option value="all">All Stores</option>
+                                {storeOptions.map(st => (
+                                    <option key={st.id} value={st.id}>
+                                        Store #{st.id} {st.name && st.name !== `Store #${st.id}` ? `(${st.name})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            <BsChevronDown size={11} className="wh-filter-select-icon" />
+                        </div>
+
+                        {/* 3. Status Filter Dropdown */}
+                        <div className="wh-filter-wrapper wh-status-filter-wrapper">
+                            <BsActivity className="wh-filter-prefix-icon" size={13} />
+                            <select
+                                className={`wh-filter-select ${statusFilter !== 'all' ? 'is-active' : ''}`}
+                                value={statusFilter}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setStatusFilter(val);
+                                    fetchWarehouses({ statusFilter: val, page: 1 });
+                                }}
+                                aria-label="Filter by status"
+                            >
+                                <option value="all">All Status</option>
+                                <option value="active">Active Only</option>
+                                <option value="inactive">Inactive Only</option>
+                            </select>
+                            <BsChevronDown size={11} className="wh-filter-select-icon" />
+                        </div>
+
+                        {/* 4. Active Filters Indicator & Reset Button */}
+                        {hasActiveFilters && (
+                            <div className="wh-filter-actions-group">
+                                <div className="wh-active-filter-badge">
+                                    <BsFunnel size={11} />
+                                    <span>Filters Active</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleResetFilters}
+                                    className="wh-clear-btn"
+                                    title="Reset all filters to default"
+                                >
+                                    <BsX size={15} /> Reset Filters
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
 
             {loading ? (
                 <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280' }}>
@@ -2522,7 +2423,7 @@ export const WarehousesPage = () => {
                                         const storeId = wh.store_id ?? wh.storeId;
                                         const storeName = wh.store_name || wh.storeName;
                                         const tenantId = wh.tenant_id ?? wh.tenantId;
-                                        const isActive = wh.is_active !== false;
+                                        const isActive = wh.is_active === true || wh.status === "Active" || wh.status === "active";
 
                                         return (
                                             <tr
@@ -2567,17 +2468,65 @@ export const WarehousesPage = () => {
                                                 <td style={{ padding: '14px 18px', color: '#6b7280', fontSize: 12.5 }}>
                                                     {wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '—'}
                                                 </td>
-                                                <td style={{ padding: '14px 18px' }}>
-                                                    <span style={{
-                                                        padding: '3px 8px',
-                                                        borderRadius: 10,
-                                                        fontSize: 11.5,
-                                                        fontWeight: 700,
-                                                        background: isActive ? '#ecfdf5' : '#fef2f2',
-                                                        color: isActive ? '#059669' : '#dc2626'
-                                                    }}>
-                                                        {isActive ? (wh.status || 'Active') : 'Inactive'}
-                                                    </span>
+                                                <td style={{ padding: '14px 18px', whiteSpace: 'nowrap' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleStatus(wh)}
+                                                        disabled={togglingStatusId === wh.id}
+                                                        title={togglingStatusId === wh.id ? "Updating status..." : `Click to change status to ${isActive ? 'Inactive' : 'Active'}`}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 6,
+                                                            padding: '4px 12px',
+                                                            borderRadius: 20,
+                                                            fontSize: 12,
+                                                            fontWeight: 700,
+                                                            background: isActive ? '#ecfdf5' : '#fef2f2',
+                                                            color: isActive ? '#059669' : '#dc2626',
+                                                            border: '1px solid ' + (isActive ? '#a7f3d0' : '#fecaca'),
+                                                            cursor: togglingStatusId === wh.id ? 'wait' : 'pointer',
+                                                            transition: 'all 0.15s ease',
+                                                            outline: 'none',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            if (togglingStatusId !== wh.id) {
+                                                                e.currentTarget.style.transform = 'scale(1.02)';
+                                                                e.currentTarget.style.boxShadow = '0 2px 5px rgba(0,0,0,0.08)';
+                                                            }
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.transform = 'scale(1)';
+                                                            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.03)';
+                                                        }}
+                                                    >
+                                                        {togglingStatusId === wh.id ? (
+                                                            <>
+                                                                <span style={{
+                                                                    display: 'inline-block',
+                                                                    width: 10,
+                                                                    height: 10,
+                                                                    border: '2px solid currentColor',
+                                                                    borderTopColor: 'transparent',
+                                                                    borderRadius: '50%',
+                                                                    animation: 'spin 0.8s linear infinite'
+                                                                }} />
+                                                                <span>Updating...</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span style={{
+                                                                    width: 7,
+                                                                    height: 7,
+                                                                    borderRadius: '50%',
+                                                                    background: isActive ? '#10b981' : '#ef4444',
+                                                                    boxShadow: isActive ? '0 0 0 2px rgba(16, 185, 129, 0.25)' : '0 0 0 2px rgba(239, 68, 68, 0.25)'
+                                                                }} />
+                                                                <span>{isActive ? 'Active' : 'Inactive'}</span>
+                                                            </>
+                                                        )}
+                                                    </button>
                                                 </td>
                                                 <td style={{
                                                     position: 'sticky',
@@ -2644,7 +2593,7 @@ export const WarehousesPage = () => {
                             const code = (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "")
                                 ? String(rawCode).trim()
                                 : "—";
-                            const isActive = wh.is_active !== false;
+                            const isActive = wh.is_active === true || wh.status === "Active" || wh.status === "active";
                             const name = wh.name || `Warehouse #${wh.id || (i + 1)}`;
                             const address = wh.address || wh.location || "Address not provided";
                             const storeId = wh.store_id ?? wh.storeId;
@@ -2681,16 +2630,51 @@ export const WarehousesPage = () => {
                                                 {address}
                                             </p>
                                         </div>
-                                        <span style={{
-                                            background: isActive ? '#ecfdf5' : '#fef2f2',
-                                            color: isActive ? '#059669' : '#dc2626',
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            padding: '3px 8px',
-                                            borderRadius: 10
-                                        }}>
-                                            {isActive ? (wh.status || 'Active') : 'Inactive'}
-                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleToggleStatus(wh)}
+                                            disabled={togglingStatusId === wh.id}
+                                            title={togglingStatusId === wh.id ? "Updating status..." : `Click to change status to ${isActive ? 'Inactive' : 'Active'}`}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 5,
+                                                background: isActive ? '#ecfdf5' : '#fef2f2',
+                                                color: isActive ? '#059669' : '#dc2626',
+                                                border: '1px solid ' + (isActive ? '#a7f3d0' : '#fecaca'),
+                                                fontSize: 11,
+                                                fontWeight: 700,
+                                                padding: '3px 10px',
+                                                borderRadius: 12,
+                                                cursor: togglingStatusId === wh.id ? 'wait' : 'pointer',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                        >
+                                            {togglingStatusId === wh.id ? (
+                                                <>
+                                                    <span style={{
+                                                        display: 'inline-block',
+                                                        width: 9,
+                                                        height: 9,
+                                                        border: '2px solid currentColor',
+                                                        borderTopColor: 'transparent',
+                                                        borderRadius: '50%',
+                                                        animation: 'spin 0.8s linear infinite'
+                                                    }} />
+                                                    <span>Updating...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span style={{
+                                                        width: 6,
+                                                        height: 6,
+                                                        borderRadius: '50%',
+                                                        background: isActive ? '#10b981' : '#ef4444'
+                                                    }} />
+                                                    <span>{isActive ? 'Active' : 'Inactive'}</span>
+                                                </>
+                                            )}
+                                        </button>
                                     </div>
                                     <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                                         <div>
@@ -2763,68 +2747,80 @@ export const WarehousesPage = () => {
                     </div>
                 )}
                 
-                {filteredWarehouses.length > 0 && (
+                {/* Warehouse Table Pagination Controls */}
+                {!loading && filteredWarehouses.length > 0 && (
                     <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'space-between',
-                        marginTop: 20,
-                        padding: '12px 4px',
-                        borderTop: '1px solid #e5e7eb',
+                        justifyContent: totalPages > 1 ? 'space-between' : 'flex-start',
+                        padding: '14px 20px',
+                        borderTop: '1px solid #e2e8f0',
+                        background: '#ffffff',
                         flexWrap: 'wrap',
                         gap: 12
                     }}>
-                        <span style={{ fontSize: 13, color: '#6b7280' }}>
-                            Showing {Math.min(filteredWarehouses.length, (page - 1) * pageSize + 1)} to {Math.min(filteredWarehouses.length, page * pageSize)} of {filteredWarehouses.length} {filteredWarehouses.length === 1 ? 'warehouse' : 'warehouses'}
+                        {/* Warehouse Showing Info */}
+                        <div style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>
+                            Showing <strong>{filteredWarehouses.length === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to <strong>{Math.min(filteredWarehouses.length, page * pageSize)}</strong> of <strong>{filteredWarehouses.length}</strong> {filteredWarehouses.length === 1 ? 'warehouse' : 'warehouses'}
                             {search.trim() ? ` matching "${search.trim()}"` : ''}
-                        </span>
+                        </div>
+
+                        {/* Page Numbers only (Rows per page & Previous/Next removed as requested) */}
                         {totalPages > 1 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <button
-                                    type="button"
-                                    disabled={page <= 1}
-                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                    style={{
-                                        background: page <= 1 ? '#f3f4f6' : '#fff',
-                                        color: page <= 1 ? '#9ca3af' : '#374151',
-                                        border: '1px solid #d1d5db',
-                                        padding: '6px 12px',
-                                        borderRadius: 6,
-                                        fontSize: 12.5,
-                                        fontWeight: 600,
-                                        cursor: page <= 1 ? 'not-allowed' : 'pointer'
-                                    }}
-                                >
-                                    Previous
-                                </button>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
-                                    Page {page} of {totalPages}
-                                </span>
-                                <button
-                                    type="button"
-                                    disabled={page >= totalPages}
-                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                    style={{
-                                        background: page >= totalPages ? '#f3f4f6' : '#fff',
-                                        color: page >= totalPages ? '#9ca3af' : '#374151',
-                                        border: '1px solid #d1d5db',
-                                        padding: '6px 12px',
-                                        borderRadius: 6,
-                                        fontSize: 12.5,
-                                        fontWeight: 600,
-                                        cursor: page >= totalPages ? 'not-allowed' : 'pointer'
-                                    }}
-                                >
-                                    Next
-                                </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {getPageNumbers().map((p, idx) => {
+                                    if (p === '...') {
+                                        return (
+                                            <span
+                                                key={`ellipsis-${idx}`}
+                                                style={{
+                                                    minWidth: 28,
+                                                    height: 34,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: '#94a3b8',
+                                                    fontSize: 13,
+                                                    fontWeight: 600
+                                                }}
+                                            >
+                                                …
+                                            </span>
+                                        );
+                                    }
+                                    const isActive = p === page;
+                                    return (
+                                        <button
+                                            key={p}
+                                            type="button"
+                                            onClick={() => setPage(p)}
+                                            style={{
+                                                minWidth: 34,
+                                                height: 34,
+                                                padding: '0 8px',
+                                                borderRadius: 8,
+                                                border: isActive ? '1.5px solid #4f46e5' : '1.5px solid #cbd5e1',
+                                                background: isActive ? '#4f46e5' : '#ffffff',
+                                                color: isActive ? '#ffffff' : '#334155',
+                                                fontSize: 12.5,
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s ease',
+                                                boxShadow: isActive ? '0 1px 3px rgba(79, 70, 229, 0.3)' : 'none'
+                                            }}
+                                            aria-label={`Page ${p}`}
+                                            aria-current={isActive ? 'page' : undefined}
+                                        >
+                                            {p}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
                 )}
             </>
         )}
-                </>
-            )}
 
             {/* Warehouse Details Modal (GET /api/v1/warehouses/{id}) */}
             {selectedWarehouseId && (
@@ -3644,7 +3640,7 @@ export const WarehousesPage = () => {
                                             <option value="">-- None (Central / Independent Depot) --</option>
                                             {availableStores.map(st => (
                                                 <option key={st.id} value={st.id}>
-                                                    {st.name} {st.code ? `(${st.code})` : `(Store #${st.id})`}
+                                                    {st.name || st.store_name || "Store"}
                                                 </option>
                                             ))}
                                         </select>
@@ -3746,13 +3742,10 @@ export const WarehousesPage = () => {
                                                 borderRadius: '50%',
                                                 animation: 'spin 1s linear infinite'
                                             }} />
-                                            <span>Creating...</span>
+                                            <span>Saving...</span>
                                         </>
                                     ) : (
-                                        <>
-                                            <BsPlus size={18} />
-                                            <span>Create Warehouse</span>
-                                        </>
+                                        <span>Save Warehouse</span>
                                     )}
                                 </button>
                             </div>
@@ -3987,7 +3980,7 @@ export const WarehousesPage = () => {
                                             <option value="">-- None (Central / Independent Depot) --</option>
                                             {availableStores.map(st => (
                                                 <option key={st.id} value={st.id}>
-                                                    {st.name} {st.code ? `(${st.code})` : `(Store #${st.id})`}
+                                                    {st.name || st.store_name || "Store"}
                                                 </option>
                                             ))}
                                         </select>
@@ -6268,9 +6261,6 @@ export const GRNPage = () => {
         return grns.slice(startIndex, startIndex + pageSize);
     }, [grns, currentPage, pageSize]);
 
-    const rangeStart = grns.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-    const rangeEnd = Math.min(currentPage * pageSize, grns.length);
-
     const getPageNumbers = () => {
         const total = totalPages;
         if (total <= 7) {
@@ -6309,33 +6299,117 @@ export const GRNPage = () => {
 
     const renderStatusBadge = (statusStr) => {
         const s = String(statusStr || '').toLowerCase();
-        let bg = '#eff6ff';
-        let color = '#2563eb';
+        let bg = '#ecfdf5';
+        let border = '#a7f3d0';
+        let color = '#065f46';
+        let dot = '#10b981';
         let label = statusStr || 'Pending';
 
         if (s === 'received') {
             bg = '#ecfdf5';
-            color = '#059669';
+            border = '#a7f3d0';
+            color = '#065f46';
+            dot = '#10b981';
             label = 'Received';
         } else if (s === 'rejected' || s.includes('damage') || s.includes('discrepancy')) {
-            bg = '#fef2f2';
-            color = '#dc2626';
+            bg = '#fff1f2';
+            border = '#fecdd3';
+            color = '#9f1239';
+            dot = '#ef4444';
             label = 'Rejected';
         } else if (s === 'pending' || s === 'draft') {
             bg = '#fffbeb';
-            color = '#d97706';
+            border = '#fde68a';
+            color = '#92400e';
+            dot = '#f59e0b';
             label = 'Pending';
         }
 
         return (
             <span style={{
-                padding: '3px 10px', borderRadius: 12, fontSize: 11.5, fontWeight: 700,
-                background: bg, color: color, textTransform: 'capitalize', display: 'inline-block'
+                padding: '4px 10px',
+                borderRadius: 9999,
+                fontSize: 12,
+                fontWeight: 700,
+                background: bg,
+                border: `1px solid ${border}`,
+                color: color,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                letterSpacing: '0.01em'
             }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot }} />
                 {label}
             </span>
         );
     };
+
+    const GrnStatCard = ({ label, value, sub, icon, iconBg, iconColor }) => (
+        <div className="grn-stat-card" style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '18px 20px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            boxSizing: 'border-box'
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: '#64748b',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em'
+                }}>
+                    {label}
+                </span>
+                <div style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    background: iconBg,
+                    color: iconColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                }}>
+                    {icon}
+                </div>
+            </div>
+            <div>
+                <div style={{
+                    fontSize: 26,
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    lineHeight: 1.15,
+                    letterSpacing: '-0.02em',
+                    marginBottom: 5,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                }}>
+                    {value}
+                </div>
+                {sub && (
+                    <div style={{
+                        fontSize: 11.5,
+                        fontWeight: 500,
+                        color: '#64748b',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                    }}>
+                        {sub}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 
     return (
         <div className="grn-page-root" style={{ width: '100%', minHeight: '100%' }}>
@@ -6394,6 +6468,516 @@ export const GRNPage = () => {
                         grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important;
                         gap: 12px !important;
                     }
+                }
+
+                /* Modern Stat Card Hover Micro-interactions */
+                .grn-page-root .grn-stat-card {
+                    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease !important;
+                }
+                .grn-page-root .grn-stat-card:hover {
+                    transform: translateY(-2px) !important;
+                    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08) !important;
+                    border-color: #cbd5e1 !important;
+                }
+
+                /* Professional SaaS Search Bar & Filters Styling */
+                .grn-page-root .grn-toolbar-container {
+                    padding: 14px 18px !important;
+                    border-bottom: 1px solid #e2e8f0 !important;
+                    background: #ffffff !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 13px !important;
+                }
+
+                .grn-page-root .grn-search-input {
+                    width: 100% !important;
+                    height: 36px !important;
+                    padding: 0 30px 0 34px !important;
+                    border: 1.5px solid #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    font-size: 13px !important;
+                    font-weight: 500 !important;
+                    background: #f8fafc !important;
+                    color: #0f172a !important;
+                    outline: none !important;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                }
+                .grn-page-root .grn-search-input::placeholder {
+                    color: #64748b !important;
+                    opacity: 1 !important;
+                    font-weight: 400 !important;
+                }
+                .grn-page-root .grn-search-input:hover {
+                    border-color: #94a3b8 !important;
+                    background: #ffffff !important;
+                }
+                .grn-page-root .grn-search-input:focus {
+                    background: #ffffff !important;
+                    border-color: #6366f1 !important;
+                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+                }
+
+                /* Filters Grid */
+                .grn-page-root .grn-filters-grid {
+                    display: grid !important;
+                    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+                    gap: 12px !important;
+                    padding-top: 13px !important;
+                    border-top: 1px solid #f1f5f9 !important;
+                }
+                @media (max-width: 1100px) {
+                    .grn-page-root .grn-filters-grid {
+                        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    }
+                }
+                @media (max-width: 680px) {
+                    .grn-page-root .grn-filters-grid {
+                        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                    }
+                }
+                @media (max-width: 480px) {
+                    .grn-page-root .grn-filters-grid {
+                        grid-template-columns: 1fr !important;
+                    }
+                }
+
+                .grn-page-root .grn-filter-item {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 4px !important;
+                    min-width: 0 !important;
+                }
+                .grn-page-root .grn-filter-label {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    gap: 5px !important;
+                    font-size: 11px !important;
+                    font-weight: 700 !important;
+                    color: #475569 !important;
+                    letter-spacing: 0.05em !important;
+                    text-transform: uppercase !important;
+                    margin-bottom: 2px !important;
+                    white-space: nowrap !important;
+                    overflow: hidden !important;
+                    text-overflow: ellipsis !important;
+                }
+                .grn-page-root .grn-filter-select-wrapper {
+                    position: relative !important;
+                    width: 100% !important;
+                }
+                .grn-page-root .grn-filter-select {
+                    width: 100% !important;
+                    height: 36px !important;
+                    padding: 0 28px 0 10px !important;
+                    border: 1.5px solid #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    font-size: 12.5px !important;
+                    font-weight: 500 !important;
+                    background: #ffffff !important;
+                    color: #0f172a !important;
+                    outline: none !important;
+                    cursor: pointer !important;
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    -moz-appearance: none !important;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                    text-overflow: ellipsis !important;
+                    white-space: nowrap !important;
+                }
+                .grn-page-root .grn-filter-select:hover {
+                    border-color: #94a3b8 !important;
+                    background: #f8fafc !important;
+                }
+                .grn-page-root .grn-filter-select:focus {
+                    background: #ffffff !important;
+                    border-color: #6366f1 !important;
+                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+                }
+                .grn-page-root .grn-filter-select.is-active {
+                    background: #eef2ff !important;
+                    border-color: #6366f1 !important;
+                    color: #3730a3 !important;
+                    font-weight: 600 !important;
+                }
+                .grn-page-root .grn-filter-select-icon {
+                    position: absolute !important;
+                    right: 10px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    pointer-events: none !important;
+                    color: #64748b !important;
+                    transition: transform 0.2s ease, color 0.2s ease !important;
+                }
+                .grn-page-root .grn-filter-select-wrapper:hover .grn-filter-select-icon {
+                    color: #0f172a !important;
+                }
+
+                .grn-page-root .grn-clear-btn {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    gap: 5px !important;
+                    padding: 6px 12px !important;
+                    height: 36px !important;
+                    background: #fee2e2 !important;
+                    color: #b91c1c !important;
+                    border: 1.5px solid #fca5a5 !important;
+                    border-radius: 8px !important;
+                    font-size: 12px !important;
+                    font-weight: 600 !important;
+                    cursor: pointer !important;
+                    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                }
+                .grn-page-root .grn-clear-btn:hover {
+                    background: #dc2626 !important;
+                    color: #ffffff !important;
+                    border-color: #b91c1c !important;
+                    box-shadow: 0 4px 10px rgba(220, 38, 38, 0.25) !important;
+                    transform: translateY(-1px) !important;
+                }
+
+                /* Modern Table Row Hover */
+                .grn-page-root .grn-table tbody tr {
+                    transition: background-color 0.15s ease;
+                }
+                .grn-page-root .grn-table tbody tr:hover {
+                    background-color: #f8fafc !important;
+                }
+                /* GRN Action Buttons & Rich Tooltips */
+                .grn-page-root .grn-actions-row {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 6px !important;
+                    flex-wrap: nowrap !important;
+                    position: relative !important;
+                    z-index: 2 !important;
+                }
+                .grn-page-root .grn-action-btn {
+                    position: relative !important;
+                    width: 32px !important;
+                    height: 32px !important;
+                    min-width: 32px !important;
+                    padding: 0 !important;
+                    border-radius: 8px !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    cursor: pointer !important;
+                    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                    flex-shrink: 0 !important;
+                    border: 1.5px solid transparent !important;
+                }
+                .grn-page-root .grn-action-btn svg {
+                    width: 15px !important;
+                    height: 15px !important;
+                    flex-shrink: 0 !important;
+                    stroke: currentColor !important;
+                    stroke-width: 0.3px !important;
+                    transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                }
+                .grn-page-root .grn-action-btn:hover:not(:disabled) svg {
+                    transform: scale(1.15) !important;
+                }
+                .grn-page-root .grn-action-btn:active:not(:disabled) {
+                    transform: translateY(0) scale(0.95) !important;
+                }
+                .grn-page-root .grn-action-btn:disabled {
+                    cursor: not-allowed !important;
+                    opacity: 0.9 !important;
+                    box-shadow: none !important;
+                    transform: none !important;
+                    pointer-events: auto !important;
+                }
+                .grn-page-root .grn-action-btn:disabled:hover {
+                    box-shadow: none !important;
+                    transform: none !important;
+                }
+                .grn-page-root .grn-action-btn:disabled svg {
+                    transform: none !important;
+                }
+
+                /* Delicate visual divider between document and workflow actions */
+                .grn-page-root .grn-action-divider {
+                    width: 1.5px !important;
+                    height: 18px !important;
+                    background: #cbd5e1 !important;
+                    margin: 0 2px !important;
+                    flex-shrink: 0 !important;
+                }
+
+                /* Individual Color Themes & High-Contrast Visual Balance */
+                /* 1. View Note: Royal Blue */
+                .grn-page-root .grn-btn-view {
+                    background: #dbeafe !important;
+                    color: #1d4ed8 !important;
+                    border-color: #93c5fd !important;
+                }
+                .grn-page-root .grn-btn-view:hover:not(:disabled) {
+                    background: #1d4ed8 !important;
+                    color: #ffffff !important;
+                    border-color: #1e40af !important;
+                    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-view:disabled {
+                    background: #eff6ff !important;
+                    color: #2563eb !important;
+                    border-color: #93c5fd !important;
+                }
+
+                /* 2. History: Slate / Charcoal */
+                .grn-page-root .grn-btn-history {
+                    background: #f1f5f9 !important;
+                    color: #1e293b !important;
+                    border-color: #cbd5e1 !important;
+                }
+                .grn-page-root .grn-btn-history:hover:not(:disabled) {
+                    background: #1e293b !important;
+                    color: #ffffff !important;
+                    border-color: #0f172a !important;
+                    box-shadow: 0 4px 12px rgba(30, 41, 59, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-history:disabled {
+                    background: #f8fafc !important;
+                    color: #475569 !important;
+                    border-color: #cbd5e1 !important;
+                }
+
+                /* 3. PDF: Red / Rose */
+                .grn-page-root .grn-btn-pdf {
+                    background: #fee2e2 !important;
+                    color: #b91c1c !important;
+                    border-color: #fca5a5 !important;
+                }
+                .grn-page-root .grn-btn-pdf:hover:not(:disabled) {
+                    background: #dc2626 !important;
+                    color: #ffffff !important;
+                    border-color: #b91c1c !important;
+                    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-pdf:disabled {
+                    background: #fef2f2 !important;
+                    color: #dc2626 !important;
+                    border-color: #fca5a5 !important;
+                }
+
+                /* 4. Print Slip: Teal */
+                .grn-page-root .grn-btn-slip {
+                    background: #ccfbf1 !important;
+                    color: #0f766e !important;
+                    border-color: #5eead4 !important;
+                }
+                .grn-page-root .grn-btn-slip:hover:not(:disabled) {
+                    background: #0f766e !important;
+                    color: #ffffff !important;
+                    border-color: #115e59 !important;
+                    box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-slip:disabled {
+                    background: #f0fdfa !important;
+                    color: #0d9488 !important;
+                    border-color: #5eead4 !important;
+                }
+
+                /* 5. Quality Check: Professional Blue */
+                .grn-page-root .grn-btn-qc {
+                    background: #dbeafe !important;
+                    color: #1d4ed8 !important;
+                    border-color: #93c5fd !important;
+                }
+                .grn-page-root .grn-btn-qc:hover:not(:disabled) {
+                    background: #1d4ed8 !important;
+                    color: #ffffff !important;
+                    border-color: #1e40af !important;
+                    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-qc:disabled {
+                    background: #eff6ff !important;
+                    color: #2563eb !important;
+                    border-color: #93c5fd !important;
+                }
+
+                /* 6. Result: Professional Purple */
+                .grn-page-root .grn-btn-result {
+                    background: #f3e8ff !important;
+                    color: #7c3aed !important;
+                    border-color: #c4b5fd !important;
+                }
+                .grn-page-root .grn-btn-result:hover:not(:disabled) {
+                    background: #7c3aed !important;
+                    color: #ffffff !important;
+                    border-color: #6d28d9 !important;
+                    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-result:disabled {
+                    background: #faf5ff !important;
+                    color: #7c3aed !important;
+                    border-color: #c4b5fd !important;
+                }
+
+                /* 7. Received: Professional Green */
+                .grn-page-root .grn-btn-receive {
+                    background: #dcfce7 !important;
+                    color: #15803d !important;
+                    border-color: #86efac !important;
+                }
+                .grn-page-root .grn-btn-receive:hover:not(:disabled) {
+                    background: #16a34a !important;
+                    color: #ffffff !important;
+                    border-color: #15803d !important;
+                    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-receive:disabled {
+                    background: #f0fdf4 !important;
+                    color: #16a34a !important;
+                    border-color: #86efac !important;
+                }
+
+                /* 8. Delete: Professional Red */
+                .grn-page-root .grn-btn-delete {
+                    background: #fee2e2 !important;
+                    color: #b91c1c !important;
+                    border-color: #fca5a5 !important;
+                }
+                .grn-page-root .grn-btn-delete:hover:not(:disabled) {
+                    background: #dc2626 !important;
+                    color: #ffffff !important;
+                    border-color: #b91c1c !important;
+                    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-delete:disabled {
+                    background: #fef2f2 !important;
+                    color: #dc2626 !important;
+                    border-color: #fca5a5 !important;
+                }
+
+                /* Row hover highlighting & Tooltip Stacking */
+                .grn-page-root table tbody tr:hover {
+                    position: relative;
+                    z-index: 10;
+                }
+                .grn-page-root table tbody tr:hover td {
+                    position: relative;
+                    z-index: 10;
+                }
+                .grn-page-root .grn-action-btn:hover,
+                .grn-page-root .grn-action-btn:focus-visible {
+                    z-index: 99999 !important;
+                }
+
+                /* Custom Rich Tooltip [data-tooltip] */
+                .grn-page-root .grn-action-btn[data-tooltip]::after {
+                    content: attr(data-tooltip);
+                    position: absolute;
+                    bottom: calc(100% + 7px);
+                    left: 50%;
+                    transform: translateX(-50%) translateY(3px);
+                    padding: 6px 10px;
+                    background: #0f172a;
+                    color: #ffffff;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                    font-size: 11px;
+                    font-weight: 600;
+                    line-height: 1.25;
+                    white-space: nowrap;
+                    border-radius: 6px;
+                    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.32);
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    z-index: 999999;
+                    transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+                }
+
+                .grn-page-root .grn-action-btn[data-tooltip]::before {
+                    content: "";
+                    position: absolute;
+                    bottom: calc(100% + 2px);
+                    left: 50%;
+                    transform: translateX(-50%);
+                    border-width: 5px 5px 0 5px;
+                    border-style: solid;
+                    border-color: #0f172a transparent transparent transparent;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    z-index: 999999;
+                    transition: opacity 0.15s ease, visibility 0.15s ease;
+                }
+
+                .grn-page-root .grn-action-btn[data-tooltip]:hover::after,
+                .grn-page-root .grn-action-btn[data-tooltip]:hover::before,
+                .grn-page-root .grn-action-btn[data-tooltip]:focus-visible::after,
+                .grn-page-root .grn-action-btn[data-tooltip]:focus-visible::before {
+                    opacity: 1;
+                    visibility: visible;
+                }
+
+                .grn-page-root .grn-action-btn[data-tooltip]:hover::after,
+                .grn-page-root .grn-action-btn[data-tooltip]:focus-visible::after {
+                    transform: translateX(-50%) translateY(0);
+                }
+
+                /* First 2 rows: tooltip opens downward so sticky headers or table top won't clip it */
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-action-btn[data-tooltip]::after {
+                    bottom: auto;
+                    top: calc(100% + 7px);
+                    transform: translateX(-50%) translateY(-3px);
+                }
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-action-btn[data-tooltip]:hover::after,
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-action-btn[data-tooltip]:focus-visible::after {
+                    transform: translateX(-50%) translateY(0);
+                }
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-action-btn[data-tooltip]::before {
+                    bottom: auto;
+                    top: calc(100% + 2px);
+                    border-width: 0 5px 5px 5px;
+                    border-color: transparent transparent #0f172a transparent;
+                }
+
+                /* Rightmost buttons alignment (prevent right screen clipping) */
+                .grn-page-root .grn-actions-row .grn-action-btn:last-child[data-tooltip]::after,
+                .grn-page-root .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]::after {
+                    left: auto;
+                    right: 0;
+                    transform: translateY(3px);
+                }
+                .grn-page-root .grn-actions-row .grn-action-btn:last-child[data-tooltip]:hover::after,
+                .grn-page-root .grn-actions-row .grn-action-btn:last-child[data-tooltip]:focus-visible::after,
+                .grn-page-root .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]:hover::after,
+                .grn-page-root .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
+                }
+                .grn-page-root .grn-actions-row .grn-action-btn:last-child[data-tooltip]::before,
+                .grn-page-root .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]::before {
+                    left: auto;
+                    right: 11px;
+                    transform: none;
+                }
+
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:last-child[data-tooltip]::after,
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]::after {
+                    left: auto;
+                    right: 0;
+                    transform: translateY(-3px);
+                }
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:last-child[data-tooltip]:hover::after,
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:last-child[data-tooltip]:focus-visible::after,
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]:hover::after,
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
                 }
             `}</style>
             <ModuleContainer
@@ -6595,37 +7179,47 @@ export const GRNPage = () => {
 
             {/* Stat Cards strictly mapped from GET /api/v1/grn/stats */}
             <div className="grn-stat-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 24 }}>
-                <StatCard
+                <GrnStatCard
                     label="Total GRNs"
                     value={statsLoading ? '...' : String(stats?.total_grns ?? 0)}
                     sub="Recorded in Retail OS"
-                    color="#6366f1"
+                    icon={<BsTruck size={17} />}
+                    iconBg="#eef2ff"
+                    iconColor="#4f46e5"
                 />
-                <StatCard
+                <GrnStatCard
                     label="Pending GRNs"
                     value={statsLoading ? '...' : String(stats?.pending_grns ?? 0)}
                     sub="Awaiting inspection"
-                    color="#f59e0b"
+                    icon={<BsClockHistory size={17} />}
+                    iconBg="#fffbeb"
+                    iconColor="#d97706"
                 />
-                <StatCard
+                <GrnStatCard
                     label="Received GRNs"
                     value={statsLoading ? '...' : String(stats?.received_grns ?? 0)}
                     sub="Inwarded to stock"
-                    color="#10b981"
+                    icon={<BsCheckCircle size={17} />}
+                    iconBg="#ecfdf5"
+                    iconColor="#059669"
                 />
-                <StatCard
+                <GrnStatCard
                     label="Rejected GRNs"
                     value={statsLoading ? '...' : String(stats?.rejected_grns ?? 0)}
                     sub="Discrepancies / damages"
-                    color="#ef4444"
+                    icon={<BsXCircle size={17} />}
+                    iconBg="#fff1f2"
+                    iconColor="#e11d48"
                 />
-                <StatCard
+                <GrnStatCard
                     label="Received Today"
                     value={statsLoading ? '...' : String(stats?.received_today ?? 0)}
                     sub="Shipments arrived today"
-                    color="#0ea5e9"
+                    icon={<BsCalendarCheck size={17} />}
+                    iconBg="#f0f9ff"
+                    iconColor="#0284c7"
                 />
-                <StatCard
+                <GrnStatCard
                     label="Total Inward Value"
                     value={statsLoading ? '...' : (
                         stats?.total_inward_value != null
@@ -6633,7 +7227,9 @@ export const GRNPage = () => {
                             : '₹0.00'
                     )}
                     sub="Cumulative inventory cost"
-                    color="#8b5cf6"
+                    icon={<BsCashStack size={17} />}
+                    iconBg="#f5f3ff"
+                    iconColor="#7c3aed"
                 />
             </div>
 
@@ -6692,20 +7288,20 @@ export const GRNPage = () => {
             )}
 
             {/* Main GRN Table Container */}
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+            <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)', overflow: 'hidden' }}>
                 {/* Filter Bar with search and supported query parameters */}
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', background: '#ffffff', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="grn-toolbar-container">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                         {/* Search Input: query param `search` */}
-                        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: 8, width: 340, maxWidth: '100%' }}>
+                        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: 8, width: 320, maxWidth: '100%', margin: 0 }}>
                             <div style={{ position: 'relative', width: '100%' }}>
-                                <BsSearch style={{ position: 'absolute', left: 12, top: 11, color: '#9ca3af' }} />
+                                <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b', pointerEvents: 'none' }} size={13} />
                                 <input
                                     type="text"
-                                    placeholder="Search by GRN #, invoice, PO #..."
+                                    className="grn-search-input"
+                                    placeholder="Search GRN #, invoice, PO #..."
                                     value={search}
                                     onChange={e => setSearch(e.target.value)}
-                                    style={{ width: '100%', padding: '8px 30px 8px 36px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
                                 />
                                 {search && (
                                     <button
@@ -6714,117 +7310,190 @@ export const GRNPage = () => {
                                             setSearch('');
                                             fetchGrnData({ search: '' });
                                         }}
-                                        style={{ position: 'absolute', right: 8, top: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: 2 }}
+                                        title="Clear search"
+                                        style={{
+                                            position: 'absolute',
+                                            right: 8,
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            background: '#e2e8f0',
+                                            border: 'none',
+                                            borderRadius: '50%',
+                                            width: 18,
+                                            height: 18,
+                                            cursor: 'pointer',
+                                            color: '#475569',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: 0,
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = '#cbd5e1'; e.currentTarget.style.color = '#0f172a'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#475569'; }}
                                     >
-                                        <BsX size={16} />
+                                        <BsX size={14} />
                                     </button>
                                 )}
                             </div>
                         </form>
 
-                        {hasActiveFilters && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                                <button
-                                    onClick={handleResetFilters}
-                                    style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
-                                >
-                                    <BsX size={16} /> Clear Filters
-                                </button>
-                            </div>
-                        )}
+                        {/* Active Filters Summary & Clear Filters */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            {hasActiveFilters && (
+                                <>
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        padding: '5px 12px',
+                                        background: '#eef2ff',
+                                        color: '#4338ca',
+                                        border: '1px solid #c7d2fe',
+                                        borderRadius: 20,
+                                        fontSize: 12,
+                                        fontWeight: 600
+                                    }}>
+                                        <BsFunnel size={12} />
+                                        <span>Filters Active</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleResetFilters}
+                                        className="grn-clear-btn"
+                                        title="Reset all filters to default"
+                                    >
+                                        <BsX size={16} /> Reset Filters
+                                    </button>
+                                </>
+                            )}
+                        </div>
                     </div>
 
                     {/* Dropdown Filters corresponding to backend query parameters */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, paddingTop: 4 }}>
-                        {/* purchase_order_id */}
-                        <div>
-                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Purchase Order</label>
-                            <select
-                                value={filterPoId}
-                                onChange={e => handleFilterChange('purchase_order_id', e.target.value)}
-                                style={{ width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12.5, background: '#fff', outline: 'none' }}
-                            >
-                                <option value="">All Purchase Orders</option>
-                                {purchaseOrders.map(po => (
-                                    <option key={po.id} value={po.id}>
-                                        #{po.po_number || po.id} {po.supplier_name ? `(${po.supplier_name})` : ''}
-                                    </option>
-                                ))}
-                            </select>
+                    <div className="grn-filters-grid">
+                        {/* 1. purchase_order_id */}
+                        <div className="grn-filter-item">
+                            <label className="grn-filter-label">
+                                <BsReceiptCutoff size={11} style={{ color: '#6366f1' }} />
+                                <span>Purchase Order</span>
+                            </label>
+                            <div className="grn-filter-select-wrapper">
+                                <select
+                                    className={`grn-filter-select ${filterPoId && filterPoId !== 'all' ? 'is-active' : ''}`}
+                                    value={filterPoId}
+                                    onChange={e => handleFilterChange('purchase_order_id', e.target.value)}
+                                >
+                                    <option value="">All Purchase Orders</option>
+                                    {purchaseOrders.map(po => (
+                                        <option key={po.id} value={po.id}>
+                                            #{po.po_number || po.id} {po.supplier_name ? `(${po.supplier_name})` : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                                <BsChevronDown size={11} className="grn-filter-select-icon" />
+                            </div>
                         </div>
 
-                        {/* warehouse_id */}
-                        <div>
-                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Warehouse</label>
-                            <select
-                                value={filterWarehouseId}
-                                onChange={e => handleFilterChange('warehouse_id', e.target.value)}
-                                style={{ width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12.5, background: '#fff', outline: 'none' }}
-                            >
-                                <option value="">All Warehouses</option>
-                                {warehouses.map(wh => (
-                                    <option key={wh.id} value={wh.id}>{wh.name || `Warehouse #${wh.id}`}</option>
-                                ))}
-                            </select>
+                        {/* 2. warehouse_id */}
+                        <div className="grn-filter-item">
+                            <label className="grn-filter-label">
+                                <BsBuildings size={11} style={{ color: '#0ea5e9' }} />
+                                <span>Warehouse</span>
+                            </label>
+                            <div className="grn-filter-select-wrapper">
+                                <select
+                                    className={`grn-filter-select ${filterWarehouseId && filterWarehouseId !== 'all' ? 'is-active' : ''}`}
+                                    value={filterWarehouseId}
+                                    onChange={e => handleFilterChange('warehouse_id', e.target.value)}
+                                >
+                                    <option value="">All Warehouses</option>
+                                    {warehouses.map(wh => (
+                                        <option key={wh.id} value={wh.id}>{wh.name || `Warehouse #${wh.id}`}</option>
+                                    ))}
+                                </select>
+                                <BsChevronDown size={11} className="grn-filter-select-icon" />
+                            </div>
                         </div>
 
-                        {/* store_id */}
-                        <div>
-                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Store</label>
-                            <select
-                                value={filterStoreId}
-                                onChange={e => handleFilterChange('store_id', e.target.value)}
-                                style={{ width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12.5, background: '#fff', outline: 'none' }}
-                            >
-                                <option value="">All Stores</option>
-                                {stores.map(st => (
-                                    <option key={st.id} value={st.id}>{st.name || `Store #${st.id}`}</option>
-                                ))}
-                            </select>
+                        {/* 3. store_id */}
+                        <div className="grn-filter-item">
+                            <label className="grn-filter-label">
+                                <BsShop size={11} style={{ color: '#10b981' }} />
+                                <span>Store</span>
+                            </label>
+                            <div className="grn-filter-select-wrapper">
+                                <select
+                                    className={`grn-filter-select ${filterStoreId && filterStoreId !== 'all' ? 'is-active' : ''}`}
+                                    value={filterStoreId}
+                                    onChange={e => handleFilterChange('store_id', e.target.value)}
+                                >
+                                    <option value="">All Stores</option>
+                                    {stores.map(st => (
+                                        <option key={st.id} value={st.id}>{st.name || `Store #${st.id}`}</option>
+                                    ))}
+                                </select>
+                                <BsChevronDown size={11} className="grn-filter-select-icon" />
+                            </div>
                         </div>
 
-                        {/* supplier_id */}
-                        <div>
-                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Supplier</label>
-                            <select
-                                value={filterSupplierId}
-                                onChange={e => handleFilterChange('supplier_id', e.target.value)}
-                                style={{ width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12.5, background: '#fff', outline: 'none' }}
-                            >
-                                <option value="">All Suppliers</option>
-                                {availableSuppliers.map(sup => (
-                                    <option key={sup.id} value={sup.id}>{sup.name || `Supplier #${sup.id}`}</option>
-                                ))}
-                            </select>
+                        {/* 4. supplier_id */}
+                        <div className="grn-filter-item">
+                            <label className="grn-filter-label">
+                                <BsTruck size={11} style={{ color: '#f59e0b' }} />
+                                <span>Supplier</span>
+                            </label>
+                            <div className="grn-filter-select-wrapper">
+                                <select
+                                    className={`grn-filter-select ${filterSupplierId && filterSupplierId !== 'all' ? 'is-active' : ''}`}
+                                    value={filterSupplierId}
+                                    onChange={e => handleFilterChange('supplier_id', e.target.value)}
+                                >
+                                    <option value="">All Suppliers</option>
+                                    {availableSuppliers.map(sup => (
+                                        <option key={sup.id} value={sup.id}>{sup.name || `Supplier #${sup.id}`}</option>
+                                    ))}
+                                </select>
+                                <BsChevronDown size={11} className="grn-filter-select-icon" />
+                            </div>
                         </div>
 
-                        {/* status: Exact supported backend statuses: pending, received, rejected */}
-                        <div>
-                            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Status</label>
-                            <select
-                                value={filterStatus}
-                                onChange={e => handleFilterChange('status', e.target.value)}
-                                style={{ width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12.5, background: '#fff', outline: 'none' }}
-                            >
-                                <option value="">All Statuses</option>
-                                <option value="pending">Pending</option>
-                                <option value="received">Received</option>
-                                <option value="rejected">Rejected</option>
-                            </select>
+                        {/* 5. status */}
+                        <div className="grn-filter-item">
+                            <label className="grn-filter-label">
+                                <BsTag size={11} style={{ color: '#8b5cf6' }} />
+                                <span>Status</span>
+                            </label>
+                            <div className="grn-filter-select-wrapper">
+                                <select
+                                    className={`grn-filter-select ${filterStatus && filterStatus !== 'all' ? 'is-active' : ''}`}
+                                    value={filterStatus}
+                                    onChange={e => handleFilterChange('status', e.target.value)}
+                                >
+                                    <option value="">All Statuses</option>
+                                    <option value="pending">Pending</option>
+                                    <option value="received">Received</option>
+                                    <option value="rejected">Rejected</option>
+                                </select>
+                                <BsChevronDown size={11} className="grn-filter-select-icon" />
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 {loading ? (
-                    <div style={{ padding: '48px 20px', textAlign: 'center', color: '#6b7280' }}>
-                        <BsClockHistory size={24} style={{ animation: 'spin 1.5s linear infinite', marginBottom: 8, color: '#6366f1' }} />
-                        <p style={{ margin: 0, fontSize: 14 }}>Loading Goods Received Notes from backend...</p>
+                    <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
+                        <BsClockHistory size={28} style={{ animation: 'spin 1.2s linear infinite', marginBottom: 12, color: '#6366f1' }} />
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#334155' }}>Loading Goods Received Notes...</p>
+                        <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#94a3b8' }}>Fetching real-time inventory records</p>
                     </div>
                 ) : grns.length === 0 ? (
-                    <div style={{ padding: '48px 20px', textAlign: 'center', color: '#6b7280' }}>
-                        <BsTruck size={36} style={{ color: '#cbd5e1', marginBottom: 12 }} />
-                        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#374151' }}>No GRN records found</p>
-                        <p style={{ margin: '6px 0 16px 0', fontSize: 13, color: '#6b7280' }}>
+                    <div style={{ padding: '56px 20px', textAlign: 'center', color: '#64748b' }}>
+                        <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#f1f5f9', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, color: '#94a3b8' }}>
+                            <BsTruck size={28} />
+                        </div>
+                        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>No GRN records found</p>
+                        <p style={{ margin: '6px 0 16px 0', fontSize: 13, color: '#64748b', maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>
                             {hasActiveFilters
                                 ? 'No GRN records match your selected filter criteria. Try adjusting or clearing your filters.'
                                 : 'No Goods Received Notes have been recorded yet.'}
@@ -6833,8 +7502,9 @@ export const GRNPage = () => {
                             <button
                                 onClick={handleResetFilters}
                                 style={{
-                                    background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', padding: '8px 16px',
-                                    borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6
+                                    background: '#f8fafc', color: '#334155', border: '1px solid #d1d5db', padding: '8px 18px',
+                                    borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
                                 }}
                             >
                                 <BsX size={16} /> Clear Filters
@@ -6843,8 +7513,9 @@ export const GRNPage = () => {
                             <button
                                 onClick={handleOpenCreateModal}
                                 style={{
-                                    background: '#6366f1', color: '#fff', border: 'none', padding: '8px 16px',
-                                    borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6
+                                    background: '#6366f1', color: '#fff', border: 'none', padding: '9px 18px',
+                                    borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    boxShadow: '0 2px 5px rgba(99, 102, 241, 0.25)'
                                 }}
                             >
                                 <BsPlus size={16} /> Create Inward GRN
@@ -6853,19 +7524,19 @@ export const GRNPage = () => {
                     </div>
                 ) : (
                     <div className="grn-table-container" style={{ overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                            <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
+                        <table className="grn-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                            <thead style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', color: '#475569' }}>
                                 <tr>
-                                    <th style={{ padding: '12px 16px' }}>GRN #</th>
-                                    <th style={{ padding: '12px 16px' }}>PO Reference</th>
-                                    <th style={{ padding: '12px 16px' }}>Supplier</th>
-                                    <th style={{ padding: '12px 16px' }}>Warehouse / Store</th>
-                                    <th style={{ padding: '12px 16px' }}>Invoice</th>
-                                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Items / Quantities</th>
-                                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Total Value</th>
-                                    <th style={{ padding: '12px 16px' }}>Status</th>
-                                    <th style={{ padding: '12px 16px' }}>Date</th>
-                                    <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>GRN #</th>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PO Reference</th>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Supplier</th>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Warehouse / Store</th>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Invoice</th>
+                                    <th style={{ padding: '13px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Items / Quantities</th>
+                                    <th style={{ padding: '13px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Value</th>
+                                    <th style={{ padding: '13px 16px', textAlign: 'center', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</th>
+                                    <th style={{ padding: '13px 16px', textAlign: 'center', minWidth: 335, whiteSpace: 'nowrap', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -6899,234 +7570,208 @@ export const GRNPage = () => {
                                     const createdAt = row.created_at;
 
                                     return (
-                                        <tr key={grnId || i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                            <td style={{ padding: '14px 16px' }}>
-                                                <div style={{ fontWeight: 700, color: '#6366f1' }}>{grnLabel}</div>
-                                                <div style={{ fontSize: 11, color: '#9ca3af' }}>ID: #{grnId ?? '-'}</div>
+                                        <tr key={grnId || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                <div style={{ fontWeight: 700, color: '#4f46e5', fontSize: 13 }}>{grnLabel}</div>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10.5, color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, fontWeight: 600, marginTop: 4 }}>
+                                                    ID: #{grnId ?? '-'}
+                                                </div>
                                             </td>
-                                            <td style={{ padding: '14px 16px', color: '#374151', fontWeight: 500 }}>
+                                            <td style={{ padding: '14px 16px', color: '#1e293b', fontWeight: 600, fontSize: 13, verticalAlign: 'middle' }}>
                                                 {poLabel}
                                             </td>
-                                            <td style={{ padding: '14px 16px', fontWeight: 600, color: '#1f2937' }}>
-                                                {supplierName}
+                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 13 }}>{supplierName}</div>
                                             </td>
-                                            <td style={{ padding: '14px 16px' }}>
-                                                <div style={{ fontWeight: 500 }}>{warehouseName}</div>
-                                                {storeName && <div style={{ fontSize: 11, color: '#6b7280' }}>{storeName}</div>}
+                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{warehouseName}</div>
+                                                {storeName && <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>{storeName}</div>}
                                             </td>
-                                            <td style={{ padding: '14px 16px', color: '#4b5563' }}>
-                                                <div>{invoiceNo}</div>
-                                                {invoiceDate && <div style={{ fontSize: 11, color: '#9ca3af' }}>{invoiceDate}</div>}
+                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{invoiceNo}</div>
+                                                {invoiceDate && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{invoiceDate}</div>}
                                             </td>
-                                            <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                                                <div style={{ fontWeight: 700, color: '#111827' }}>
-                                                    {receivedQty} pcs <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 400 }}>({itemsCount} items)</span>
+                                            <td style={{ padding: '14px 16px', textAlign: 'right', verticalAlign: 'middle' }}>
+                                                <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>
+                                                    {itemsCount} {itemsCount === 1 ? 'item' : 'items'} <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 500 }}>({receivedQty} pcs)</span>
                                                 </div>
-                                                <div style={{ fontSize: 11, color: '#6b7280' }}>
-                                                    <span style={{ color: '#059669' }}>Acc: {acceptedQty}</span>
-                                                    {Number(rejectedQty) > 0 && <span style={{ color: '#dc2626', marginLeft: 6 }}>Rej: {rejectedQty}</span>}
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                                                    <span style={{ fontSize: 11, color: '#15803d', fontWeight: 700, background: '#ecfdf5', padding: '1px 6px', borderRadius: 4 }}>
+                                                        Acc: {acceptedQty}
+                                                    </span>
+                                                    {Number(rejectedQty) > 0 && (
+                                                        <span style={{ fontSize: 11, color: '#b91c1c', fontWeight: 700, background: '#fef2f2', padding: '1px 6px', borderRadius: 4 }}>
+                                                            Rej: {rejectedQty}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </td>
-                                            <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: '#111827' }}>
+                                            <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: '#0f172a', fontSize: 13.5, verticalAlign: 'middle' }}>
                                                 {totalCostValue ? `₹${Number(totalCostValue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00'}
                                             </td>
-                                            <td style={{ padding: '14px 16px' }}>
-                                                {renderStatusBadge(grnStatus)}
+                                            <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                                    {renderStatusBadge(grnStatus)}
+                                                </div>
                                             </td>
-                                            <td style={{ padding: '14px 16px', color: '#4b5563', fontSize: 12 }}>
-                                                <div>{receivedAt ? new Date(receivedAt).toLocaleDateString() : (createdAt ? new Date(createdAt).toLocaleDateString() : '-')}</div>
-                                                <div style={{ fontSize: 11, color: '#9ca3af' }}>{receivedAt ? 'Received' : (createdAt ? 'Created' : '')}</div>
+                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                <div style={{ color: '#1e293b', fontWeight: 600, fontSize: 12.5 }}>
+                                                    {receivedAt ? new Date(receivedAt).toLocaleDateString() : (createdAt ? new Date(createdAt).toLocaleDateString() : '-')}
+                                                </div>
+                                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                                                    {receivedAt ? 'Received' : (createdAt ? 'Created' : '')}
+                                                </div>
                                             </td>
-                                            <td style={{ padding: '14px 16px', textAlign: 'right', pointerEvents: 'auto', position: 'relative', zIndex: 1 }}>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, pointerEvents: 'auto', position: 'relative', zIndex: 1 }}>
+                                            <td style={{ padding: '10px 16px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', minWidth: 335, pointerEvents: 'auto', position: 'relative', zIndex: 1 }}>
+                                                <div className="grn-actions-row" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'nowrap', pointerEvents: 'auto', position: 'relative', zIndex: 2 }}>
+                                                    {/* 1. View Note */}
                                                     <button
                                                         type="button"
+                                                        className="grn-action-btn grn-btn-view"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleViewGrn(row);
                                                         }}
-                                                        style={{ background: '#f3f4f6', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, pointerEvents: 'auto', position: 'relative', zIndex: 2 }}
-                                                        title={`View Note for ${grnLabel}`}
+                                                        data-tooltip="View Note"
+                                                        title="View Note"
+                                                        aria-label="View Note"
                                                     >
-                                                        <BsEye size={12} /> View Note
+                                                        <BsEye size={15} />
                                                     </button>
+
+                                                    {/* 2. History */}
                                                     <button
                                                         type="button"
+                                                        className="grn-action-btn grn-btn-history"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleViewHistory(row);
                                                         }}
-                                                        style={{ background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, pointerEvents: 'auto', position: 'relative', zIndex: 2 }}
-                                                        title={`View History Timeline for ${grnLabel}`}
+                                                        data-tooltip="History"
+                                                        title="History"
+                                                        aria-label="History"
                                                     >
-                                                        <BsClockHistory size={12} /> History
+                                                        <BsClockHistory size={15} />
                                                     </button>
+
+                                                    {/* 3. PDF */}
                                                     <button
                                                         type="button"
+                                                        className="grn-action-btn grn-btn-pdf"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleDownloadPdf(row);
                                                         }}
                                                         disabled={downloadingPdfGrnId === grnId}
-                                                        title={`Download PDF for ${grnLabel}`}
-                                                        style={{
-                                                            background: '#f8fafc',
-                                                            color: '#475569',
-                                                            border: '1px solid #cbd5e1',
-                                                            borderRadius: 6,
-                                                            padding: '6px 12px',
-                                                            fontSize: 12,
-                                                            fontWeight: 600,
-                                                            cursor: downloadingPdfGrnId === grnId ? 'not-allowed' : 'pointer',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 4,
-                                                            pointerEvents: 'auto',
-                                                            position: 'relative',
-                                                            zIndex: 2
-                                                        }}
+                                                        data-tooltip={downloadingPdfGrnId === grnId ? "Downloading PDF..." : "PDF"}
+                                                        title={downloadingPdfGrnId === grnId ? "Downloading PDF..." : "PDF"}
+                                                        aria-label="PDF"
                                                     >
-                                                        <BsDownload size={12} /> {downloadingPdfGrnId === grnId ? 'Downloading...' : 'PDF'}
+                                                        {downloadingPdfGrnId === grnId ? (
+                                                            <div style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                                        ) : (
+                                                            <BsFileEarmarkPdf size={15} />
+                                                        )}
                                                     </button>
+
+                                                    {/* 4. Print Slip */}
                                                     <button
                                                         type="button"
+                                                        className="grn-action-btn grn-btn-slip"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleOpenPrintSlip(row);
                                                         }}
                                                         disabled={fetchingSlipGrnId === grnId}
-                                                        title={`Print Slip for ${grnLabel}`}
-                                                        style={{
-                                                            background: '#f8fafc',
-                                                            color: '#475569',
-                                                            border: '1px solid #cbd5e1',
-                                                            borderRadius: 6,
-                                                            padding: '6px 12px',
-                                                            fontSize: 12,
-                                                            fontWeight: 600,
-                                                            cursor: fetchingSlipGrnId === grnId ? 'not-allowed' : 'pointer',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 4,
-                                                            pointerEvents: 'auto',
-                                                            position: 'relative',
-                                                            zIndex: 2
-                                                        }}
+                                                        data-tooltip={fetchingSlipGrnId === grnId ? "Loading Print Slip..." : "Print Slip"}
+                                                        title={fetchingSlipGrnId === grnId ? "Loading Print Slip..." : "Print Slip"}
+                                                        aria-label="Print Slip"
                                                     >
-                                                        <BsPrinter size={12} /> {fetchingSlipGrnId === grnId ? 'Loading...' : 'Print Slip'}
+                                                        {fetchingSlipGrnId === grnId ? (
+                                                            <div style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                                        ) : (
+                                                            <BsPrinter size={15} />
+                                                        )}
                                                     </button>
+
+                                                    {/* Delicate visual divider between document and workflow actions */}
+                                                    <span className="grn-action-divider" style={{ width: 1.5, height: 18, background: '#cbd5e1', margin: '0 2px', flexShrink: 0 }} />
+
+                                                    {/* 5. Quality Check */}
                                                     <button
                                                         type="button"
+                                                        className="grn-action-btn grn-btn-qc"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleOpenQcModal(row);
                                                         }}
                                                         disabled={!isGrnQcEligible(grnStatus)}
-                                                        title={!isGrnQcEligible(grnStatus) ? "Quality check can only be performed on pending GRN shipments" : `Perform Quality Check for ${grnLabel}`}
-                                                        style={{
-                                                            background: !isGrnQcEligible(grnStatus) ? '#f8fafc' : '#eff6ff',
-                                                            color: !isGrnQcEligible(grnStatus) ? '#94a3b8' : '#2563eb',
-                                                            border: !isGrnQcEligible(grnStatus) ? '1px solid #e2e8f0' : '1px solid #bfdbfe',
-                                                            borderRadius: 6,
-                                                            padding: '6px 10px',
-                                                            fontSize: 12,
-                                                            fontWeight: 600,
-                                                            cursor: !isGrnQcEligible(grnStatus) ? 'not-allowed' : 'pointer',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 4,
-                                                            opacity: !isGrnQcEligible(grnStatus) ? 0.6 : 1,
-                                                            pointerEvents: 'auto',
-                                                            position: 'relative',
-                                                            zIndex: 2
-                                                        }}
+                                                        data-tooltip="Quality Check"
+                                                        title="Quality Check"
+                                                        aria-label="Quality Check"
                                                     >
-                                                        <BsShieldLock size={12} /> Quality Check
+                                                        <BsShieldCheck size={15} />
                                                     </button>
+
+                                                    {/* 6. Result */}
                                                     <button
                                                         type="button"
+                                                        className="grn-action-btn grn-btn-result"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleRequestRejectGrn(row);
+                                                        }}
+                                                        disabled={!isGrnRejectEligible(grnStatus) || Boolean(rejectingGrnId)}
+                                                        data-tooltip={rejectingGrnId === grnId ? "Rejecting..." : "Result"}
+                                                        title={rejectingGrnId === grnId ? "Rejecting..." : "Result"}
+                                                        aria-label="Result"
+                                                    >
+                                                        {rejectingGrnId === grnId ? (
+                                                            <div style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                                        ) : (
+                                                            <BsClipboardData size={15} />
+                                                        )}
+                                                    </button>
+
+                                                    {/* 7. Received */}
+                                                    <button
+                                                        type="button"
+                                                        className="grn-action-btn grn-btn-receive"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             console.log('[GRN Receive Button Click] Clicked Receive on Main GRN table row:', row);
                                                             handleReceiveGrn(row);
                                                         }}
                                                         disabled={isReceiveDisabled}
-                                                        title={!eligible ? (isGrnReceived(grnStatus) ? "This GRN has already been received and inventory has been updated" : "Cannot receive a rejected GRN") : `Receive ${grnLabel} into inventory`}
-                                                        style={{
-                                                            background: !eligible ? '#f8fafc' : '#ecfdf5',
-                                                            color: !eligible ? '#94a3b8' : '#059669',
-                                                            border: !eligible ? '1px solid #e2e8f0' : '1px solid #a7f3d0',
-                                                            borderRadius: 6,
-                                                            padding: '6px 10px',
-                                                            fontSize: 12,
-                                                            fontWeight: 600,
-                                                            cursor: isReceiveDisabled ? 'not-allowed' : 'pointer',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 4,
-                                                            opacity: !eligible ? 0.6 : 1,
-                                                            pointerEvents: 'auto',
-                                                            position: 'relative',
-                                                            zIndex: 2
-                                                        }}
+                                                        data-tooltip={receivingGrnId === grnId ? "Receiving..." : "Received"}
+                                                        title={receivingGrnId === grnId ? "Receiving..." : "Received"}
+                                                        aria-label="Received"
                                                     >
-                                                        <BsBoxSeam size={12} /> {receivingGrnId === grnId ? 'Receiving...' : 'Receive'}
+                                                        {receivingGrnId === grnId ? (
+                                                            <div style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                                        ) : (
+                                                            <BsBoxSeam size={15} />
+                                                        )}
                                                     </button>
+
+                                                    {/* 8. Delete */}
                                                     <button
                                                         type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleRequestRejectGrn(row);
-                                                        }}
-                                                        disabled={!isGrnRejectEligible(grnStatus) || Boolean(rejectingGrnId)}
-                                                        title={!isGrnRejectEligible(grnStatus) ? (isGrnReceived(grnStatus) ? "Cannot reject a GRN that has already been received into inventory" : "This GRN has already been rejected") : `Reject ${grnLabel}`}
-                                                        style={{
-                                                            background: !isGrnRejectEligible(grnStatus) ? '#f8fafc' : '#fff1f2',
-                                                            color: !isGrnRejectEligible(grnStatus) ? '#94a3b8' : '#e11d48',
-                                                            border: !isGrnRejectEligible(grnStatus) ? '1px solid #e2e8f0' : '1px solid #fecdd3',
-                                                            borderRadius: 6,
-                                                            padding: '6px 10px',
-                                                            fontSize: 12,
-                                                            fontWeight: 600,
-                                                            cursor: (!isGrnRejectEligible(grnStatus) || Boolean(rejectingGrnId)) ? 'not-allowed' : 'pointer',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 4,
-                                                            opacity: !isGrnRejectEligible(grnStatus) ? 0.6 : 1,
-                                                            pointerEvents: 'auto',
-                                                            position: 'relative',
-                                                            zIndex: 2
-                                                        }}
-                                                    >
-                                                        <BsXCircle size={12} /> {rejectingGrnId === grnId ? 'Rejecting...' : 'Reject'}
-                                                    </button>
-                                                    <button
-                                                        type="button"
+                                                        className="grn-action-btn grn-btn-delete"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             handleRequestDeleteGrn(row);
                                                         }}
                                                         disabled={isGrnReceived(row.status) || deletingGrnId === row.id}
-                                                        title={isGrnReceived(row.status) ? "Cannot delete a GRN that has already been received into inventory" : `Delete ${grnLabel}`}
-                                                        style={{
-                                                            background: isGrnReceived(row.status) ? '#f3f4f6' : '#fef2f2',
-                                                            color: isGrnReceived(row.status) ? '#9ca3af' : '#dc2626',
-                                                            border: isGrnReceived(row.status) ? '1px solid #e5e7eb' : '1px solid #fecaca',
-                                                            borderRadius: 6,
-                                                            padding: '6px 10px',
-                                                            fontSize: 12,
-                                                            fontWeight: 600,
-                                                            cursor: (isGrnReceived(row.status) || deletingGrnId === row.id) ? 'not-allowed' : 'pointer',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 4,
-                                                            opacity: isGrnReceived(row.status) ? 0.6 : 1,
-                                                            pointerEvents: 'auto',
-                                                            position: 'relative',
-                                                            zIndex: 2
-                                                        }}
+                                                        data-tooltip={deletingGrnId === row.id ? "Deleting..." : "Delete"}
+                                                        title={deletingGrnId === row.id ? "Deleting..." : "Delete"}
+                                                        aria-label="Delete"
                                                     >
-                                                        <BsTrash size={12} /> {deletingGrnId === row.id ? 'Deleting...' : 'Delete'}
+                                                        {deletingGrnId === row.id ? (
+                                                            <div style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                                        ) : (
+                                                            <BsTrash size={15} />
+                                                        )}
                                                     </button>
                                                 </div>
                                             </td>
@@ -7144,15 +7789,15 @@ export const GRNPage = () => {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        padding: '12px 20px',
-                        borderTop: '1px solid #e5e7eb',
+                        padding: '14px 20px',
+                        borderTop: '1px solid #e2e8f0',
                         background: '#ffffff',
                         flexWrap: 'wrap',
                         gap: 12
                     }}>
                         {/* Left: Rows Per Page Selector */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>Rows per page:</span>
+                            <span style={{ fontSize: 12.5, color: '#64748b', fontWeight: 600 }}>Rows per page:</span>
                             <select
                                 value={pageSize}
                                 onChange={(e) => {
@@ -7160,33 +7805,25 @@ export const GRNPage = () => {
                                     setCurrentPage(1);
                                 }}
                                 style={{
-                                    padding: '5px 10px',
-                                    border: '1px solid #d1d5db',
-                                    borderRadius: 6,
+                                    height: 32,
+                                    padding: '0 10px',
+                                    border: '1.5px solid #e2e8f0',
+                                    borderRadius: 7,
                                     fontSize: 12.5,
                                     background: '#ffffff',
-                                    color: '#374151',
+                                    color: '#1e293b',
                                     outline: 'none',
-                                    cursor: 'pointer'
+                                    cursor: 'pointer',
+                                    fontWeight: 500
                                 }}
                                 aria-label="Select rows per page"
                             >
-                                <option value={2}>2</option>
                                 <option value={5}>5</option>
                                 <option value={10}>10</option>
                                 <option value={20}>20</option>
                                 <option value={50}>50</option>
+                                <option value={100}>100</option>
                             </select>
-                        </div>
-
-                        {/* Center: Record count info */}
-                        <div style={{ fontSize: 13, color: '#64748b' }}>
-                            Showing <strong>{rangeStart}</strong> to <strong>{rangeEnd}</strong> of <strong>{grns.length}</strong> {grns.length === 1 ? 'record' : 'records'}
-                            {totalPages > 1 && (
-                                <span style={{ marginLeft: 6, color: '#94a3b8' }}>
-                                    (Page {currentPage} of {totalPages})
-                                </span>
-                            )}
                         </div>
 
                         {/* Right: Page Navigation Controls */}
@@ -7198,12 +7835,13 @@ export const GRNPage = () => {
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: 4,
-                                    padding: '6px 12px',
-                                    borderRadius: 6,
-                                    border: '1px solid #d1d5db',
-                                    background: currentPage <= 1 ? '#f3f4f6' : '#ffffff',
-                                    color: currentPage <= 1 ? '#9ca3af' : '#374151',
+                                    gap: 5,
+                                    height: 34,
+                                    padding: '0 12px',
+                                    borderRadius: 8,
+                                    border: '1.5px solid #cbd5e1',
+                                    background: currentPage <= 1 ? '#f8fafc' : '#ffffff',
+                                    color: currentPage <= 1 ? '#94a3b8' : '#334155',
                                     fontSize: 12.5,
                                     fontWeight: 600,
                                     cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
@@ -7221,11 +7859,11 @@ export const GRNPage = () => {
                                             key={`ellipsis-${idx}`}
                                             style={{
                                                 minWidth: 28,
-                                                height: 32,
+                                                height: 34,
                                                 display: 'inline-flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
-                                                color: '#9ca3af',
+                                                color: '#94a3b8',
                                                 fontSize: 13,
                                                 fontWeight: 600
                                             }}
@@ -7241,19 +7879,20 @@ export const GRNPage = () => {
                                         type="button"
                                         onClick={() => setCurrentPage(p)}
                                         style={{
-                                            minWidth: 32,
-                                            height: 32,
-                                            padding: '0 6px',
-                                            borderRadius: 6,
-                                            border: isActive ? '1.5px solid #6366f1' : '1px solid #d1d5db',
-                                            background: isActive ? '#eef2ff' : '#ffffff',
-                                            color: isActive ? '#6366f1' : '#374151',
+                                            minWidth: 34,
+                                            height: 34,
+                                            padding: '0 8px',
+                                            borderRadius: 8,
+                                            border: isActive ? '1.5px solid #4f46e5' : '1.5px solid #cbd5e1',
+                                            background: isActive ? '#4f46e5' : '#ffffff',
+                                            color: isActive ? '#ffffff' : '#334155',
                                             fontSize: 12.5,
-                                            fontWeight: 600,
+                                            fontWeight: 700,
                                             cursor: 'pointer',
                                             display: 'inline-flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
+                                            boxShadow: isActive ? '0 2px 6px rgba(79, 70, 229, 0.28)' : 'none',
                                             transition: 'all 0.15s ease'
                                         }}
                                         aria-current={isActive ? 'page' : undefined}
@@ -7270,12 +7909,13 @@ export const GRNPage = () => {
                                 style={{
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: 4,
-                                    padding: '6px 12px',
-                                    borderRadius: 6,
-                                    border: '1px solid #d1d5db',
-                                    background: currentPage >= totalPages ? '#f3f4f6' : '#ffffff',
-                                    color: currentPage >= totalPages ? '#9ca3af' : '#374151',
+                                    gap: 5,
+                                    height: 34,
+                                    padding: '0 12px',
+                                    borderRadius: 8,
+                                    border: '1.5px solid #cbd5e1',
+                                    background: currentPage >= totalPages ? '#f8fafc' : '#ffffff',
+                                    color: currentPage >= totalPages ? '#94a3b8' : '#334155',
                                     fontSize: 12.5,
                                     fontWeight: 600,
                                     cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
