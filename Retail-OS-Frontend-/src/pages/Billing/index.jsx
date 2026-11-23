@@ -47,9 +47,8 @@ import {
     BsCalculator,
     BsHash,
     BsDownload,
+    BsExclamationTriangle,
 } from 'react-icons/bs';
-
-const CATEGORIES = ['All', 'Apparel', 'Electronics', 'Accessories', 'Groceries'];
 
 const MAX_QTY = 50; // Maximum quantity allowed per item in cart
 
@@ -60,141 +59,6 @@ const PAYMENT_MODES = [
 ];
 
 export { resolveProductImage };
-
-const DEFAULT_PRODUCTS = [
-    {
-        id: 101,
-        name: 'Cotton Graphic T-Shirt',
-        price: 799,
-        hsn: '6109',
-        gstRate: 5,
-        category: 'Apparel',
-        barcode: '1001',
-        image: LOCAL_PRODUCT_IMAGES.tshirt,
-        discount: 50,
-    },
-    {
-        id: 102,
-        name: 'Parle-G Glucose Biscuits 250g',
-        price: 30,
-        hsn: '1905',
-        gstRate: 18,
-        category: 'Groceries',
-        barcode: '1002',
-        image: LOCAL_PRODUCT_IMAGES.parleG,
-        discount: 0,
-    },
-    {
-        id: 103,
-        name: 'Genuine Leather Wallet',
-        price: 1299,
-        hsn: '4202',
-        gstRate: 18,
-        category: 'Accessories',
-        barcode: '1003',
-        image: LOCAL_PRODUCT_IMAGES.wallet,
-        discount: 100,
-    },
-    {
-        id: 104,
-        name: 'Organic Green Tea (Pack of 25)',
-        price: 249,
-        hsn: '0902',
-        gstRate: 5,
-        category: 'Groceries',
-        barcode: '1004',
-        image: LOCAL_PRODUCT_IMAGES.greenTea,
-        discount: 20,
-    },
-    {
-        id: 105,
-        name: 'Smart Fitness Tracker Band',
-        price: 2499,
-        hsn: '8517',
-        gstRate: 18,
-        category: 'Electronics',
-        barcode: '1005',
-        image: LOCAL_PRODUCT_IMAGES.fitnessTracker,
-        discount: 200,
-    },
-    {
-        id: 106,
-        name: 'Slim Fit Denim Jeans',
-        price: 1899,
-        hsn: '6203',
-        gstRate: 12,
-        category: 'Apparel',
-        barcode: '1006',
-        image: LOCAL_PRODUCT_IMAGES.jeans,
-        discount: 150,
-    },
-    {
-        id: 107,
-        name: 'Fast USB Type-C 65W Charger',
-        price: 899,
-        hsn: '8504',
-        gstRate: 18,
-        category: 'Electronics',
-        barcode: '1007',
-        image: LOCAL_PRODUCT_IMAGES.usbCharger,
-        discount: 50,
-    },
-    {
-        id: 108,
-        name: 'Fresh Dairy Milk 1 Litre',
-        price: 68,
-        hsn: '0401',
-        gstRate: 0,
-        category: 'Groceries',
-        barcode: '1008',
-        image: LOCAL_PRODUCT_IMAGES.milkBottle,
-        discount: 0,
-    },
-    {
-        id: 109,
-        name: 'Marie Light Biscuits 300g',
-        price: 45,
-        hsn: '1905',
-        gstRate: 18,
-        category: 'Groceries',
-        barcode: '1009',
-        image: LOCAL_PRODUCT_IMAGES.marieBiscuits,
-        discount: 5,
-    },
-    {
-        id: 110,
-        name: 'Oreo Choco Creme Cookies',
-        price: 50,
-        hsn: '1905',
-        gstRate: 18,
-        category: 'Groceries',
-        barcode: '1010',
-        image: LOCAL_PRODUCT_IMAGES.oreo,
-        discount: 5,
-    },
-    {
-        id: 111,
-        name: 'Royal Butter Cookies Tin',
-        price: 349,
-        hsn: '1905',
-        gstRate: 18,
-        category: 'Groceries',
-        barcode: '1011',
-        image: LOCAL_PRODUCT_IMAGES.butterCookies,
-        discount: 30,
-    },
-    {
-        id: 112,
-        name: 'Insulated Stainless Steel Bottle 1L',
-        price: 649,
-        hsn: '7323',
-        gstRate: 18,
-        category: 'Accessories',
-        barcode: '1012',
-        image: LOCAL_PRODUCT_IMAGES.steelBottle,
-        discount: 50,
-    },
-];
 
 const Billing = () => {
     const [customer, setCustomer] = useState({ name: '', phone: '', gstin: '' });
@@ -315,49 +179,140 @@ const Billing = () => {
         }
     }, [showPreview]);
 
-    // Live product catalog fetched from backend with DEFAULT_PRODUCTS fallback
-    const [products, setProducts] = useState(DEFAULT_PRODUCTS);
-    const [productsLoading, setProductsLoading] = useState(false);
+    // Live product catalog fetched directly from backend
+    const [products, setProducts] = useState([]);
+    const [productsLoading, setProductsLoading] = useState(true);
+    const [productsError, setProductsError] = useState(null);
 
-    useEffect(() => {
-        let isMounted = true;
-        const loadProducts = async () => {
-            try {
-                const res = await productService.getAll();
-                const rawList = Array.isArray(res) ? res : (res?.data || res?.items || []);
-                if (isMounted && rawList && rawList.length > 0) {
-                    const mapped = rawList.map(p => ({
-                        id: p.id,
-                        name: p.name || p.title || 'Product #' + p.id,
-                        price: Number(p.sale_price ?? p.price ?? p.unit_price ?? 0),
-                        hsn: p.hsn_code || p.hsn || '',
-                        gstRate: Number(p.gst_rate ?? p.tax_rate ?? 18),
-                        category: p.category_name || p.category?.name || p.category || 'General',
-                        barcode: String(p.barcode || p.sku || p.id),
-                        image: resolveProductImage(p),
-                        discount: Number(p.discount || 0),
-                    }));
-                    setProducts(mapped);
-                }
-            } catch (err) {
-                console.warn('[Billing] Live products API unavailable, retaining default catalog:', err?.message || err);
-            } finally {
-                if (isMounted) setProductsLoading(false);
+    const loadProducts = useCallback(async () => {
+        setProductsLoading(true);
+        setProductsError(null);
+        try {
+            // Fetch categories and products in parallel
+            const [prodRes, catRes] = await Promise.allSettled([
+                productService.getAll(1, 100, true),
+                productService.getCategories(),
+            ]);
+
+            // Build category lookup map (id -> name)
+            const categoryMap = {};
+            if (catRes.status === 'fulfilled') {
+                const catBody = catRes.value?.data ?? catRes.value;
+                const catList = Array.isArray(catBody)
+                    ? catBody
+                    : Array.isArray(catBody?.items)
+                        ? catBody.items
+                        : Array.isArray(catBody?.data)
+                            ? catBody.data
+                            : [];
+                catList.forEach(c => {
+                    const id = c.id ?? c.category_id;
+                    const name = c.name ?? c.category_name;
+                    if (id != null && name) {
+                        categoryMap[String(id)] = String(name).trim();
+                    }
+                });
             }
-        };
-        loadProducts();
-        return () => { isMounted = false; };
+
+            // Extract products array safely across all backend response shapes
+            let rawList = [];
+            if (prodRes.status === 'fulfilled') {
+                const resVal = prodRes.value;
+                const body = resVal?.data ?? resVal;
+                if (Array.isArray(body?.items)) {
+                    rawList = body.items;
+                } else if (Array.isArray(body)) {
+                    rawList = body;
+                } else if (Array.isArray(body?.data)) {
+                    rawList = body.data;
+                } else if (Array.isArray(body?.products)) {
+                    rawList = body.products;
+                } else if (Array.isArray(resVal?.items)) {
+                    rawList = resVal.items;
+                }
+            } else {
+                throw prodRes.reason || new Error('Failed to connect to backend product catalog');
+            }
+
+            if (rawList && rawList.length > 0) {
+                const mapped = rawList.map(p => {
+                    const resolvedCatId = p.category_id != null
+                        ? String(p.category_id)
+                        : (typeof p.category === 'object' && p.category?.id != null ? String(p.category.id) : null);
+
+                    let catName = '';
+                    if (p.category_name && typeof p.category_name === 'string') {
+                        catName = p.category_name.trim();
+                    } else if (typeof p.category === 'object' && p.category?.name) {
+                        catName = String(p.category.name).trim();
+                    } else if (typeof p.category === 'string' && !/^\d+$/.test(p.category.trim()) && p.category.trim()) {
+                        catName = p.category.trim();
+                    } else if (resolvedCatId && categoryMap[resolvedCatId]) {
+                        catName = categoryMap[resolvedCatId];
+                    } else {
+                        catName = 'General';
+                    }
+
+                    const priceVal = Number(p.selling_price ?? p.sale_price ?? p.price ?? p.unit_price ?? 0);
+                    const gstVal = Number(p.gst_rate ?? p.tax_rate ?? p.gstRate ?? p.taxRate ?? (p.variants?.gst_rate || 0));
+                    const barcodeVal = p.barcode || p.barcode_number || p.barcodeNumber || p.sku || String(p.id);
+
+                    return {
+                        id: p.id,
+                        name: p.name || p.title || p.product_name || `Product #${p.id}`,
+                        price: isNaN(priceVal) ? 0 : priceVal,
+                        hsn: p.hsn_code || p.hsnCode || p.hsn || '',
+                        gstRate: isNaN(gstVal) ? 0 : gstVal,
+                        category: catName,
+                        barcode: String(barcodeVal),
+                        image: resolveProductImage({
+                            ...p,
+                            name: p.name || p.title,
+                            category: catName,
+                        }),
+                        discount: Number(p.discount || p.discount_amount || 0),
+                    };
+                });
+                setProducts(mapped);
+            } else {
+                setProducts([]);
+            }
+        } catch (err) {
+            console.error('[Billing] Live products API error:', err);
+            const errMsg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Error connecting to live product catalog';
+            setProductsError(errMsg);
+            setProducts([]);
+        } finally {
+            setProductsLoading(false);
+        }
     }, []);
 
-    const filteredProducts = products.filter(p =>
-        (selectedCategory === 'All' || p.category === selectedCategory) &&
-        (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.barcode.includes(searchQuery))
-    );
+    useEffect(() => {
+        loadProducts();
+    }, [loadProducts]);
 
     const dynamicCategories = useMemo(() => {
-        const cats = new Set(products.map(p => p.category).filter(Boolean));
-        return cats.size > 0 ? ['All', ...Array.from(cats)] : CATEGORIES;
+        const cats = new Set(
+            products
+                .map(p => p.category)
+                .filter(Boolean)
+                .map(c => c.trim())
+        );
+        return ['All', ...Array.from(cats)];
     }, [products]);
+
+    const filteredProducts = useMemo(() => {
+        const query = (searchQuery || '').trim().toLowerCase();
+        const selCat = (selectedCategory || 'All').trim().toLowerCase();
+
+        return products.filter(p => {
+            const catMatches = selCat === 'all' || (p.category && p.category.trim().toLowerCase() === selCat);
+            const nameMatches = p.name && p.name.toLowerCase().includes(query);
+            const barcodeMatches = p.barcode && String(p.barcode).toLowerCase().includes(query);
+            const idMatches = p.id && String(p.id).includes(query);
+            return catMatches && (!query || nameMatches || barcodeMatches || idMatches);
+        });
+    }, [products, selectedCategory, searchQuery]);
 
     const handleScanner = (e) => {
         const val = e.target.value;
@@ -1339,11 +1294,11 @@ const Billing = () => {
 
                 {/* Category pills */}
                 <div className="pos-category-bar">
-                    {(dynamicCategories || CATEGORIES).map(cat => (
+                    {dynamicCategories.map(cat => (
                         <button
                             key={cat}
                             onClick={() => setSelectedCategory(cat)}
-                            className={`pos-cat-pill${selectedCategory === cat ? ' pos-cat-pill--active' : ''}`}
+                            className={`pos-cat-pill${selectedCategory.toLowerCase() === cat.toLowerCase() ? ' pos-cat-pill--active' : ''}`}
                         >
                             {cat}
                         </button>
@@ -1353,15 +1308,36 @@ const Billing = () => {
                 {/* Product grid */}
                 <div className="pos-product-grid custom-scrollbar">
                     {productsLoading ? (
-                        <div className="pos-empty-state" style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center' }}>
+                        <div className="pos-empty-state" style={{ gridColumn: '1 / -1', padding: '60px 20px', textAlign: 'center' }}>
                             <BsBoxSeam size={36} color="#6366f1" />
-                            <p style={{ marginTop: 12, fontWeight: 600, color: '#4b5563' }}>Loading products from server...</p>
+                            <p style={{ marginTop: 12, fontWeight: 600, color: '#4b5563', fontSize: 14 }}>Connecting to backend catalog...</p>
+                            <span style={{ fontSize: 12, color: '#9ca3af' }}>Loading live products and categories from server</span>
+                        </div>
+                    ) : productsError && products.length === 0 ? (
+                        <div className="pos-empty-state" style={{ gridColumn: '1 / -1', padding: '50px 20px', textAlign: 'center' }}>
+                            <BsExclamationTriangle size={36} color="#ef4444" style={{ margin: '0 auto 12px' }} />
+                            <p style={{ fontWeight: 600, color: '#1f2937', fontSize: 14 }}>Unable to load live backend products</p>
+                            <span style={{ fontSize: 12, color: '#6b7280', display: 'block', maxWidth: 450, margin: '6px auto 16px' }}>{productsError}</span>
+                            <button
+                                type="button"
+                                onClick={() => loadProducts()}
+                                style={{
+                                    background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 6,
+                                    padding: '7px 18px', fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                                }}
+                            >
+                                Retry Connection
+                            </button>
                         </div>
                     ) : filteredProducts.length === 0 ? (
-                        <div className="pos-empty-state" style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center' }}>
-                            <BsBoxSeam size={40} />
-                            <p style={{ marginTop: 12, fontWeight: 600, color: '#4b5563' }}>No products found</p>
-                            <span style={{ fontSize: 12, color: '#9ca3af' }}>Add products via Product Catalog to see them here</span>
+                        <div className="pos-empty-state" style={{ gridColumn: '1 / -1', padding: '50px 20px', textAlign: 'center' }}>
+                            <BsBoxSeam size={40} color="#9ca3af" />
+                            <p style={{ marginTop: 12, fontWeight: 600, color: '#4b5563', fontSize: 14 }}>
+                                {searchQuery || selectedCategory !== 'All' ? 'No matching products found' : 'No products found in backend catalog'}
+                            </p>
+                            <span style={{ fontSize: 12, color: '#9ca3af' }}>
+                                {searchQuery || selectedCategory !== 'All' ? 'Try adjusting your search or category filter' : 'Add products via Product Master to see them here'}
+                            </span>
                         </div>
                     ) : (
                         filteredProducts.map(product => {

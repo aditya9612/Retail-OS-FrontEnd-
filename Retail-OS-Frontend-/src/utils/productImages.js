@@ -72,6 +72,8 @@ export const resolveProductImage = (product) => {
         product.product_image ||
         product.product_image_url ||
         product.thumbnail ||
+        product.variants?.image_url ||
+        product.variant?.image_url ||
         (Array.isArray(product.images) && product.images[0]
             ? (typeof product.images[0] === 'string' ? product.images[0] : product.images[0]?.url || product.images[0]?.image_url)
             : null)
@@ -107,8 +109,14 @@ export const resolveProductImage = (product) => {
             if (trimmed.includes('butter-cookies')) return butterCookiesImg;
             if (trimmed.includes('steel-bottle')) return steelBottleImg;
 
-            // Backend uploaded files
-            if (trimmed.startsWith('/uploads/') || trimmed.startsWith('uploads/') || trimmed.startsWith('media/') || trimmed.startsWith('static/')) {
+            // Backend uploaded files & relative paths
+            if (
+                trimmed.startsWith('/') ||
+                trimmed.startsWith('uploads/') ||
+                trimmed.startsWith('media/') ||
+                trimmed.startsWith('static/') ||
+                trimmed.startsWith('images/')
+            ) {
                 const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
                 return `https://api-testing.myretailos.com${cleanPath}`;
             }
