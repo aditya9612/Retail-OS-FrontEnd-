@@ -27,11 +27,13 @@ import {
     sendCustomerWhatsapp,
 } from '../../services/customer';
 import CustomerDetailPanel from '../../components/customers/CustomerDetailPanel';
+import { EditCustomerModal } from '../Customers';
 import {
     fmt,
     normalizeApiList,
     formatCustomerRecord,
     getApiErrorMessage,
+    setStoredCustomerStatus,
 } from '../../components/customers/customerHelpers';
 
 const PAGE_SIZE = 10;
@@ -40,7 +42,6 @@ const POINTS_TO_INR_RATE = 0.10; // 10 Points = ₹1.00 Store Credit
 const statusCfg = {
     Active: { color: '#10b981', bg: '#ecfdf5', icon: <BsCheckCircleFill size={10} /> },
     Inactive: { color: '#6b7280', bg: '#f3f4f6', icon: null },
-    Blocked: { color: '#ef4444', bg: '#fef2f2', icon: <BsXCircleFill size={10} /> },
 };
 
 const typeCfg = {
@@ -139,8 +140,7 @@ const CustomerStatusToggle = ({ isActive, onToggle, loading = false }) => {
             style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 8,
-                padding: '4px 10px 4px 4px',
+                padding: '2px',
                 borderRadius: 999,
                 border: `1px solid ${isActive ? '#a7f3d0' : '#fecaca'}`,
                 background: isActive ? '#ecfdf5' : '#fef2f2',
@@ -175,24 +175,22 @@ const CustomerStatusToggle = ({ isActive, onToggle, loading = false }) => {
                     }}
                 />
             </span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: isActive ? '#065f46' : '#991b1b' }}>
-                {isActive ? 'Active' : 'Inactive'}
-            </span>
         </button>
     );
 };
 
 const KpiSkeleton = () => (
-    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', minHeight: 88 }}>
-        <div style={{ width: '50%', height: 12, background: '#f3f4f6', borderRadius: 4, marginBottom: 12 }} />
-        <div style={{ width: '40%', height: 24, background: '#eef2ff', borderRadius: 6 }} />
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '18px 20px', minHeight: 104, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div style={{ width: '50%', height: 12, background: '#f3f4f6', borderRadius: 4 }} />
+        <div style={{ width: '40%', height: 26, background: '#eef2ff', borderRadius: 6, margin: '6px 0' }} />
+        <div style={{ width: '60%', height: 11, background: '#f3f4f6', borderRadius: 4 }} />
     </div>
 );
 
 const TableRowSkeleton = () => (
     <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-        {Array.from({ length: 9 }).map((_, i) => (
-            <td key={i} style={{ padding: '14px 16px' }}>
+        {Array.from({ length: 12 }).map((_, i) => (
+            <td key={i} style={{ padding: '12px 14px' }}>
                 <div style={{ height: 16, background: '#f3f4f6', borderRadius: 4, width: '80%' }} />
             </td>
         ))}
@@ -220,11 +218,13 @@ export const CustomerLoyaltyPage = () => {
     const [filterCity, setFilterCity] = useState('All');
     const [sortBy, setSortBy] = useState('points-desc');
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
 
     // ── Selection & Modals ──
     const [selectedIds, setSelectedIds] = useState([]);
     const [updatingStatusId, setUpdatingStatusId] = useState(null);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [editingCustomer, setEditingCustomer] = useState(null);
     const [actionLoading, setActionLoading] = useState(false);
 
     // Loyalty Action Modals ('earn' | 'redeem' | 'adjust' | null)
@@ -311,9 +311,18 @@ export const CustomerLoyaltyPage = () => {
     }, [loadLoyaltyDashboard]);
 
     // ── Status Toggle (Synchronized with Customer Directory) ──
-    const handleStatusToggle = async (id, currentStatus) => {
-        const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+    const handleStatusToggle = async (id, statusArg, isExplicitTarget = false) => {
+        let newStatus;
+        if (isExplicitTarget) {
+            newStatus = statusArg === 'Inactive' ? 'Inactive' : 'Active';
+        } else {
+            newStatus = statusArg === 'Active' ? 'Inactive' : 'Active';
+        }
+
         setUpdatingStatusId(id);
+        if (id) {
+            setStoredCustomerStatus(id, newStatus);
+        }
 
         // Optimistic UI update
         setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: newStatus } : c));
@@ -328,11 +337,15 @@ export const CustomerLoyaltyPage = () => {
         } catch (err) {
             console.error('Failed to update customer status via API:', err);
             // Rollback on error
-            setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: currentStatus } : c));
-            if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
-                setSelectedCustomer(prev => prev ? { ...prev, status: currentStatus } : prev);
+            const rollbackStatus = isExplicitTarget ? (statusArg || 'Active') : statusArg;
+            if (id) {
+                setStoredCustomerStatus(id, rollbackStatus);
             }
-            alert(getApiErrorMessage(err, 'Failed to update customer status.'));
+            setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: rollbackStatus } : c));
+            if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
+                setSelectedCustomer(prev => prev ? { ...prev, status: rollbackStatus } : prev);
+            }
+            showNotification(getApiErrorMessage(err, 'Failed to update customer status.'), 'error');
         } finally {
             setUpdatingStatusId(null);
         }
@@ -395,13 +408,13 @@ export const CustomerLoyaltyPage = () => {
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         if (!modalTargetCustomer) {
-            alert('Please select a customer.');
+            showNotification('Please select a customer.', 'error');
             return;
         }
 
         const pts = parseInt(formPoints, 10);
         if (isNaN(pts) || pts <= 0) {
-            alert('Please enter a valid positive points amount.');
+            showNotification('Please enter a valid positive points amount.', 'error');
             return;
         }
 
@@ -410,7 +423,7 @@ export const CustomerLoyaltyPage = () => {
         if (modalMode === 'redeem') {
             const currentBal = Number(modalTargetCustomer.loyaltyPoints) || 0;
             if (pts > currentBal) {
-                alert(`Cannot redeem ${pts} points. Customer only has ${currentBal} points available.`);
+                showNotification(`Cannot redeem ${pts} points. Customer only has ${currentBal} points available.`, 'error');
                 return;
             }
         }
@@ -452,15 +465,15 @@ export const CustomerLoyaltyPage = () => {
                     const actionTxt = modalMode === 'earn'
                         ? `credited with ${pts} bonus loyalty points`
                         : modalMode === 'redeem'
-                        ? `redeemed ${pts} loyalty points (-${fmt(pts * POINTS_TO_INR_RATE)})`
-                        : `adjusted by ${pts} points`;
+                            ? `redeemed ${pts} loyalty points (-${fmt(pts * POINTS_TO_INR_RATE)})`
+                            : `adjusted by ${pts} points`;
 
                     const oldBal = Number(modalTargetCustomer.loyaltyPoints) || 0;
                     const newBal = modalMode === 'earn'
                         ? oldBal + pts
                         : modalMode === 'redeem'
-                        ? Math.max(0, oldBal - pts)
-                        : oldBal + pts;
+                            ? Math.max(0, oldBal - pts)
+                            : oldBal + pts;
 
                     await sendCustomerWhatsapp({
                         customer_id: targetBackendId,
@@ -477,7 +490,7 @@ export const CustomerLoyaltyPage = () => {
             await loadLoyaltyDashboard(false);
         } catch (err) {
             console.error('Loyalty action error:', err);
-            alert(getApiErrorMessage(err, `Failed to ${modalMode} points. Please verify details and try again.`));
+            showNotification(getApiErrorMessage(err, `Failed to ${modalMode} points. Please verify details and try again.`), 'error');
         } finally {
             setActionLoading(false);
         }
@@ -486,9 +499,6 @@ export const CustomerLoyaltyPage = () => {
     // ── Birthday Bonus Automation (1-Click Gift 100 Points + WhatsApp wishes) ──
     const handleGiftAllBirthdays = async () => {
         if (!birthdayCustomers || birthdayCustomers.length === 0) return;
-        if (!window.confirm(`Gift 100 Birthday Bonus Points & send WhatsApp greetings to all ${birthdayCustomers.length} birthday customers?`)) {
-            return;
-        }
         setBirthdayGifting(true);
         let successCount = 0;
         try {
@@ -506,7 +516,7 @@ export const CustomerLoyaltyPage = () => {
                             channel: 'whatsapp',
                             communication_type: 'WHATSAPP',
                             message: `🎉 Happy Birthday from Shekru Retail, ${b.name || 'valued customer'}! 🎂 As a special birthday gift, 100 bonus loyalty points (Worth ₹10.00 store credit) have been added to your account. Enjoy your special day! 🎁`
-                        }).catch(() => {});
+                        }).catch(() => { });
                     }
                     successCount++;
                 } catch (err) {
@@ -553,37 +563,60 @@ export const CustomerLoyaltyPage = () => {
             document.body.removeChild(link);
         } catch (err) {
             console.error('Export CSV error:', err);
-            alert('Failed to export CSV.');
+            showNotification('Failed to export CSV.', 'error');
         }
     };
 
-    // ── Available Cities ──
-    const availableCities = useMemo(() => Array.from(new Set(customers.map(c => c.city).filter(Boolean))), [customers]);
+    // ── Available Cities (Dynamically extracted from real customer data) ──
+    const availableCities = useMemo(() => {
+        const set = new Set();
+        customers.forEach(c => {
+            const loc = c.city || c.location;
+            if (loc && loc.trim() && loc !== '—') set.add(loc.trim());
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [customers]);
 
     // ── Filtered & Sorted Customers ──
     const filteredCustomers = useMemo(() => {
         return customers.filter(c => {
             const query = search.trim().toLowerCase();
+            const nameStr = (c.name || '').toLowerCase();
+            const emailStr = (c.email || '').toLowerCase();
+            const phoneStr = String(c.phone || '');
+            const cityStr = (c.city || c.location || '').toLowerCase();
+            const customerIdStr = String(c.id || '').toLowerCase();
+            const backendIdStr = String(c.backendId || '').toLowerCase();
+
+            // 1. Search filter: Name, Email, Phone, City, ID
             const matchesSearch = !query ||
-                c.name.toLowerCase().includes(query) ||
-                c.email.toLowerCase().includes(query) ||
-                c.phone.includes(query) ||
-                c.city.toLowerCase().includes(query) ||
-                c.id.toLowerCase().includes(query);
+                nameStr.includes(query) ||
+                emailStr.includes(query) ||
+                phoneStr.includes(query) ||
+                cityStr.includes(query) ||
+                customerIdStr.includes(query) ||
+                backendIdStr.includes(query);
 
+            // 2. Status filter: All, Active, Inactive
             const matchesStatus = filterStatus === 'All' || c.status === filterStatus;
-            const matchesType = filterType === 'All' || c.type === filterType;
-            const matchesCity = filterCity === 'All' || c.city === filterCity;
 
+            // 3. Segment filter: All, New, Regular, VIP, Wholesale
+            const matchesType = filterType === 'All' || (c.type || '').toLowerCase() === filterType.toLowerCase();
+
+            // 4. City filter: dynamically matched against city or location
+            const matchesCity = filterCity === 'All' || (c.city === filterCity) || (c.location === filterCity);
+
+            // 5. Points filter: All, With Points (> 0), Zero Points (0 pts)
             let matchesPoints = true;
-            if (filterPoints === 'has_points') {
+            if (filterPoints === 'with_points' || filterPoints === 'has_points') {
                 matchesPoints = (Number(c.loyaltyPoints) || 0) > 0;
-            } else if (filterPoints === 'high_points') {
-                matchesPoints = (Number(c.loyaltyPoints) || 0) >= 100;
             } else if (filterPoints === 'zero_points') {
                 matchesPoints = (Number(c.loyaltyPoints) || 0) === 0;
+            } else if (filterPoints === 'high_points') {
+                matchesPoints = (Number(c.loyaltyPoints) || 0) >= 100;
             }
 
+            // 6. VIP Tier filter: All, Silver, Gold, Platinum
             let matchesTier = true;
             if (filterTier !== 'All') {
                 const tier = resolveCustomerTier(c).badge;
@@ -594,20 +627,33 @@ export const CustomerLoyaltyPage = () => {
         }).sort((a, b) => {
             const ptsA = Number(a.loyaltyPoints) || 0;
             const ptsB = Number(b.loyaltyPoints) || 0;
+            const spendA = Number(a.totalSpent) || 0;
+            const spendB = Number(b.totalSpent) || 0;
+
             if (sortBy === 'points-desc') return ptsB - ptsA;
             if (sortBy === 'points-asc') return ptsA - ptsB;
-            if (sortBy === 'spend-desc') return (b.totalSpent || 0) - (a.totalSpent || 0);
             if (sortBy === 'name-asc') return (a.name || '').localeCompare(b.name || '');
             if (sortBy === 'name-desc') return (b.name || '').localeCompare(a.name || '');
+            if (sortBy === 'spend-desc') return spendB - spendA;
+            if (sortBy === 'newest') {
+                const dateA = a.created_at ? new Date(a.created_at).getTime() : (a.backendId || 0);
+                const dateB = b.created_at ? new Date(b.created_at).getTime() : (b.backendId || 0);
+                return dateB - dateA;
+            }
             return (b.backendId || 0) - (a.backendId || 0);
         });
     }, [customers, search, filterStatus, filterType, filterCity, filterPoints, filterTier, sortBy]);
 
-    const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE));
+    // Reset pagination to first page whenever search or any filter changes
+    useEffect(() => {
+        setPage(1);
+    }, [search, filterStatus, filterType, filterCity, filterPoints, filterTier, sortBy]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
     const paginatedCustomers = useMemo(() => {
-        const start = (page - 1) * PAGE_SIZE;
-        return filteredCustomers.slice(start, start + PAGE_SIZE);
-    }, [filteredCustomers, page]);
+        const start = (page - 1) * pageSize;
+        return filteredCustomers.slice(start, start + pageSize);
+    }, [filteredCustomers, page, pageSize]);
 
     const hasActiveFilters = Boolean(
         search.trim() ||
@@ -651,15 +697,48 @@ export const CustomerLoyaltyPage = () => {
     // ── Identical KPI Values to Customer Directory ──
     const totalCustomers = customerStats?.total ?? customers.length;
     const activeCustomers = customerStats?.active ?? customers.filter(c => c.status === 'Active').length;
-    const inactiveCustomers = customers.filter(c => c.status === 'Inactive' || c.status === 'Blocked').length;
+    const inactiveCustomers = customers.filter(c => c.status === 'Inactive').length;
     const vipCustomers = customers.filter(c => c.type === 'VIP').length;
     const totalPointsPool = customers.reduce((acc, c) => acc + (c.loyaltyPoints || 0), 0);
 
-    const topSpenderObj = useMemo(() => {
-        if (customers.length === 0) return { name: '—', amount: 0 };
-        const top = [...customers].sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0))[0];
-        return { name: top.name, amount: top.totalSpent || 0 };
+    // Active Buyers: Only customers who are Active AND have actually placed orders or spent money (> 0)
+    const activeBuyersCount = useMemo(() => {
+        const raw = customerInsights?.retention;
+        if (raw && typeof raw.active_buyers === 'number') return raw.active_buyers;
+        return customers.filter(c => c.status === 'Active' && (Number(c.orders || 0) > 0 || Number(c.totalSpent || 0) > 0)).length;
+    }, [customerInsights?.retention, customers]);
+
+    // Customers who have zero orders and zero spend
+    const zeroSpendCount = useMemo(() => {
+        return customers.filter(c => Number(c.orders || 0) === 0 && Number(c.totalSpent || 0) === 0).length;
     }, [customers]);
+
+    // Top Spender: Strictly customers with spend > 0 (prevents 0-spend customers from being labeled Top Spender)
+    const topSpenderObj = useMemo(() => {
+        // 1. Check API topCustomers first if available
+        const apiTopList = normalizeApiList(customerInsights?.topCustomers);
+        const validApiTop = apiTopList.find(c => Number(c.total_spend || c.totalSpent || c.revenue || 0) > 0);
+        if (validApiTop) {
+            return {
+                name: validApiTop.name || validApiTop.customer_name || 'Customer',
+                amount: Number(validApiTop.total_spend || validApiTop.totalSpent || validApiTop.revenue || 0),
+                hasSpender: true,
+            };
+        }
+
+        // 2. Check local customers with spend > 0
+        const customersWithSpend = customers.filter(c => Number(c.totalSpent || c.total_spend || 0) > 0);
+        if (customersWithSpend.length === 0) {
+            return { name: 'No purchases yet', amount: 0, hasSpender: false };
+        }
+
+        const top = [...customersWithSpend].sort((a, b) => Number(b.totalSpent || 0) - Number(a.totalSpent || 0))[0];
+        return {
+            name: top.name || 'Customer',
+            amount: Number(top.totalSpent || 0),
+            hasSpender: true,
+        };
+    }, [customers, customerInsights?.topCustomers]);
 
     // Uniform analytics card styling (matching Customer Directory exactly: 190px height)
     const analyticsCardStyle = {
@@ -774,11 +853,10 @@ export const CustomerLoyaltyPage = () => {
                 </div>
             </div>
 
-            {/* ── 5 KPI Cards Grid (Identical Layout & Data to Customer Directory) ── */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginBottom: 20 }}>
+            {/* ── 4 Equal Width & Consistent Height KPI Cards ── */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-5" style={{ width: '100%' }}>
                 {loading ? (
                     <>
-                        <KpiSkeleton />
                         <KpiSkeleton />
                         <KpiSkeleton />
                         <KpiSkeleton />
@@ -786,45 +864,36 @@ export const CustomerLoyaltyPage = () => {
                     </>
                 ) : (
                     <>
-                        {/* Card 1: Total CRM Contacts */}
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Total CRM Contacts</p>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#111827', marginTop: 6, margin: 0 }}>{totalCustomers}</p>
-                            <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>Directory profiles</span>
+                        {/* Card 1: Total Customers */}
+                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 104, height: '100%' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>Total Customers</p>
+                            <p style={{ fontSize: 26, fontWeight: 800, color: '#111827', margin: '6px 0 0 0' }}>{totalCustomers}</p>
+                            <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600, marginTop: 4 }}>All registered shoppers</span>
                         </div>
 
                         {/* Card 2: Active Customers */}
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Active Customers</p>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#10b981', marginTop: 6, margin: 0 }}>{activeCustomers}</p>
-                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>Enrolled in rewards</span>
+                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 104, height: '100%' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>Active Customers</p>
+                            <p style={{ fontSize: 26, fontWeight: 800, color: '#10b981', margin: '6px 0 0 0' }}>{activeCustomers}</p>
+                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 4 }}>Enrolled in rewards</span>
                         </div>
 
                         {/* Card 3: Points In Circulation */}
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Points In Circulation</p>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#d97706', marginTop: 6, margin: 0 }}>
+                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 104, height: '100%' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>Points In Circulation</p>
+                            <p style={{ fontSize: 26, fontWeight: 800, color: '#d97706', margin: '6px 0 0 0' }}>
                                 {totalPointsPool.toLocaleString('en-IN')}
                             </p>
-                            <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600 }}>
+                            <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, marginTop: 4 }}>
                                 Liability: ~{fmt(totalPointsPool * POINTS_TO_INR_RATE)}
                             </span>
                         </div>
 
                         {/* Card 4: VIP Segment */}
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>VIP Segment</p>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#8b5cf6', marginTop: 6, margin: 0 }}>{vipCustomers}</p>
-                            <span style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600 }}>Platinum tier shoppers</span>
-                        </div>
-
-                        {/* Card 5: Top Spender */}
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Top Spender</p>
-                            <p style={{ fontSize: 20, fontWeight: 800, color: '#10b981', marginTop: 6, margin: 0 }}>{fmt(topSpenderObj.amount)}</p>
-                            <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {topSpenderObj.name}
-                            </span>
+                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '18px 20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 104, height: '100%' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', margin: 0 }}>VIP Segment</p>
+                            <p style={{ fontSize: 26, fontWeight: 800, color: '#8b5cf6', margin: '6px 0 0 0' }}>{vipCustomers}</p>
+                            <span style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 600, marginTop: 4 }}>Platinum tier shoppers</span>
                         </div>
                     </>
                 )}
@@ -955,61 +1024,78 @@ export const CustomerLoyaltyPage = () => {
             {/* ── VIEW A: VIP Membership Tiers Configuration Cards ── */}
             {(middleView === 'tiers' || middleView === 'all') && (
                 <div style={{ marginBottom: 20 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4" style={{ width: '100%' }}>
                         {TIER_CONFIG.map((tier) => (
                             <div
                                 key={tier.slug}
                                 style={{
-                                    background: '#fff',
+                                    background: '#ffffff',
                                     borderRadius: 14,
                                     border: '1px solid #e5e7eb',
                                     borderTop: `4px solid ${tier.color}`,
-                                    padding: '16px 18px',
-                                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                                    padding: '20px 22px',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
                                     display: 'flex',
                                     flexDirection: 'column',
-                                    justifyContent: 'space-between'
+                                    justifyContent: 'space-between',
+                                    minHeight: 195,
+                                    height: '100%'
                                 }}
                             >
                                 <div>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <span style={{ fontSize: 16 }}>{tier.icon}</span>
-                                            <h4 style={{ fontSize: 15, fontWeight: 800, color: '#111827', margin: 0 }}>
-                                                {tier.tier}
-                                            </h4>
+                                    {/* Header: Icon + Tier Name + Spending Threshold Badge */}
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 14 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ fontSize: 22, lineHeight: 1 }}>{tier.icon}</span>
+                                            <div>
+                                                <h4 style={{ fontSize: 16, fontWeight: 800, color: '#111827', margin: 0, letterSpacing: '-0.01em' }}>
+                                                    {tier.tier}
+                                                </h4>
+                                            </div>
                                         </div>
                                         <span
                                             style={{
-                                                fontSize: 10.5,
+                                                fontSize: 11,
                                                 fontWeight: 700,
-                                                padding: '2px 8px',
-                                                borderRadius: 6,
+                                                padding: '4px 10px',
+                                                borderRadius: 20,
                                                 background: tier.bgColor,
                                                 color: tier.color,
-                                                border: `1px solid ${tier.borderColor}`
+                                                border: `1px solid ${tier.borderColor}`,
+                                                whiteSpace: 'nowrap'
                                             }}
+                                            title="Required spending threshold for this membership tier"
                                         >
-                                            {tier.maxSpend ? `Spend ${fmt(tier.minSpend)} - ${fmt(tier.maxSpend)}` : `Spend ${fmt(tier.minSpend)}+`}
+                                            {tier.maxSpend ? `Spend ${fmt(tier.minSpend)} – ${fmt(tier.maxSpend)}` : `Spend ${fmt(tier.minSpend)}+`}
                                         </span>
                                     </div>
 
+                                    {/* Highlighted Earning Rate Box */}
                                     <div
                                         style={{
-                                            marginTop: 10,
-                                            padding: '8px 10px',
-                                            borderRadius: 8,
-                                            background: '#f9fafb',
-                                            fontSize: 12.5,
-                                            color: '#374151'
+                                            marginBottom: 12,
+                                            padding: '10px 14px',
+                                            borderRadius: 10,
+                                            background: '#f8fafc',
+                                            border: '1px solid #f1f5f9',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between'
                                         }}
                                     >
-                                        <strong>Earn Rate:</strong> {tier.rate}
+                                        <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                            Earning Rate
+                                        </span>
+                                        <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>
+                                            ⚡ {tier.rate}
+                                        </span>
                                     </div>
 
-                                    <p style={{ fontSize: 12, color: '#6b7280', margin: '8px 0 0 0', lineHeight: 1.4 }}>
-                                        <strong>Perks:</strong> {tier.perks}
-                                    </p>
+                                    {/* Perks & Benefits */}
+                                    <div style={{ fontSize: 12.5, color: '#4b5563', lineHeight: 1.5 }}>
+                                        <span style={{ fontWeight: 700, color: '#1f2937' }}>Perks: </span>
+                                        <span>{tier.perks}</span>
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -1032,9 +1118,20 @@ export const CustomerLoyaltyPage = () => {
                             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }} className="custom-scrollbar">
                                 {(() => {
                                     const list = normalizeApiList(customerInsights.topCustomers);
-                                    const top5 = list.length > 0
-                                        ? list.slice(0, 5)
-                                        : [...customers].sort((a, b) => (b.loyaltyPoints || 0) - (a.loyaltyPoints || 0)).slice(0, 5);
+                                    const candidateList = list.length > 0 ? list : customers;
+                                    const top5 = candidateList
+                                        .filter(c => (c.loyalty_points ?? c.loyaltyPoints ?? 0) > 0 || Number(c.total_spend || c.totalSpent || 0) > 0)
+                                        .sort((a, b) => (b.loyalty_points ?? b.loyaltyPoints ?? 0) - (a.loyalty_points ?? a.loyaltyPoints ?? 0))
+                                        .slice(0, 5);
+
+                                    if (top5.length === 0) {
+                                        return (
+                                            <div style={{ padding: '28px 12px', textAlign: 'center', color: '#9ca3af', margin: 'auto' }}>
+                                                <p style={{ fontSize: 12, fontWeight: 700, color: '#4b5563', margin: 0 }}>No Champions Yet</p>
+                                                <p style={{ fontSize: 10, margin: '4px 0 0', color: '#9ca3af' }}>Points and spend appear once customer orders are placed.</p>
+                                            </div>
+                                        );
+                                    }
 
                                     return top5.map((c, idx) => (
                                         <div key={c.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, padding: '4px 8px', background: '#f9fafb', borderRadius: 8 }}>
@@ -1065,22 +1162,21 @@ export const CustomerLoyaltyPage = () => {
                                     {(() => {
                                         const raw = customerInsights.retention;
                                         const tot = raw?.total_customers ?? totalCustomers;
-                                        const act = raw?.active_customers ?? activeCustomers;
-                                        return raw?.retention_rate || (tot > 0 ? `${Math.round((act / tot) * 100)}%` : '0%');
+                                        return raw?.retention_rate || (tot > 0 ? `${Math.round((activeBuyersCount / tot) * 100)}%` : '0%');
                                     })()}
                                 </span>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
                                 <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
                                     <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Active Buyers</span>
-                                    <p style={{ fontSize: 16, fontWeight: 800, color: '#10b981', margin: '2px 0 0 0' }}>
-                                        {customerInsights.retention?.active_customers ?? activeCustomers}
+                                    <p style={{ fontSize: 16, fontWeight: 800, color: activeBuyersCount > 0 ? '#10b981' : '#9ca3af', margin: '2px 0 0 0' }}>
+                                        {activeBuyersCount}
                                     </p>
                                 </div>
                                 <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                    <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Inactive Base</span>
-                                    <p style={{ fontSize: 16, fontWeight: 800, color: '#ef4444', margin: '2px 0 0 0' }}>
-                                        {customerInsights.retention?.inactive_customers ?? inactiveCustomers}
+                                    <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Zero Spend</span>
+                                    <p style={{ fontSize: 16, fontWeight: 800, color: '#6b7280', margin: '2px 0 0 0' }}>
+                                        {zeroSpendCount}
                                     </p>
                                 </div>
                             </div>
@@ -1106,12 +1202,18 @@ export const CustomerLoyaltyPage = () => {
                                     else if (rawLtv?.items || rawLtv?.customers || rawLtv?.top_customers) {
                                         ltvList = rawLtv.items || rawLtv.customers || rawLtv.top_customers;
                                     } else {
-                                        ltvList = [...customers].sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0));
+                                        ltvList = customers;
                                     }
-                                    const top5Ltv = ltvList.slice(0, 5);
+                                    const top5Ltv = ltvList
+                                        .filter(c => Number(c.total_spend || c.totalSpent || c.revenue || c.ltv || 0) > 0)
+                                        .sort((a, b) => Number(b.total_spend || b.totalSpent || b.revenue || b.ltv || 0) - Number(a.total_spend || a.totalSpent || a.revenue || a.ltv || 0))
+                                        .slice(0, 5);
 
                                     return top5Ltv.length === 0 ? (
-                                        <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', margin: 'auto' }}>No LTV Data</p>
+                                        <div style={{ padding: '28px 12px', textAlign: 'center', color: '#9ca3af', margin: 'auto' }}>
+                                            <p style={{ fontSize: 12, fontWeight: 700, color: '#4b5563', margin: 0 }}>No LTV Data Yet</p>
+                                            <p style={{ fontSize: 10, margin: '4px 0 0', color: '#9ca3af' }}>Calculated after customer orders are logged.</p>
+                                        </div>
                                     ) : (
                                         top5Ltv.map((c, idx) => (
                                             <div key={c.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, padding: '4px 8px', background: '#f9fafb', borderRadius: 8 }}>
@@ -1169,142 +1271,164 @@ export const CustomerLoyaltyPage = () => {
             {/* ── Main Customer Loyalty Table Card (Identical Design & Font to Customer Directory) ── */}
             <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                 {/* Search & Filter Bar */}
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6' }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
-                            <div style={{ position: 'relative', flex: 1 }}>
-                                <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14 }} />
-                                <input
-                                    type="text"
-                                    className="ec-input"
-                                    placeholder="Search by customer name, email, phone, city or ID..."
-                                    value={search}
-                                    onChange={e => { setSearch(e.target.value); setPage(1); }}
-                                    style={{ paddingLeft: 34, width: '100%', height: 38 }}
-                                />
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-                            {/* Points Filter */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>Points:</span>
-                                <select
-                                    className="ec-input"
-                                    value={filterPoints}
-                                    onChange={e => { setFilterPoints(e.target.value); setPage(1); }}
-                                    style={{ height: 38, fontSize: 12, padding: '0 10px' }}
+                <div style={{ padding: '18px 20px', borderBottom: '1px solid #f3f4f6', background: '#ffffff' }}>
+                    {/* Row 1: Search input + Sorter */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                        <div style={{ position: 'relative', width: '100%', maxWidth: 460, flex: '1 1 320px' }}>
+                            <BsSearch style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14 }} />
+                            <input
+                                type="text"
+                                className="ec-input"
+                                placeholder="Search by customer name, email, phone, city or ID..."
+                                value={search}
+                                onChange={e => { setSearch(e.target.value.replace(/^\s+/, '')); setPage(1); }}
+                                style={{ paddingLeft: 38, paddingRight: search ? 34 : 14, width: '100%', height: 40, fontSize: 13, borderRadius: 8 }}
+                            />
+                            {search && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setSearch(''); setPage(1); }}
+                                    style={{
+                                        position: 'absolute',
+                                        right: 12,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#9ca3af',
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                        fontSize: 14,
+                                        fontWeight: 700,
+                                        lineHeight: 1
+                                    }}
+                                    title="Clear search"
                                 >
-                                    <option value="All">All Points</option>
-                                    <option value="has_points">Has Points (&gt; 0)</option>
-                                    <option value="high_points">High Balance (100+ Pts)</option>
-                                    <option value="zero_points">Zero Balance</option>
-                                </select>
-                            </div>
-
-                            {/* VIP Tier Filter */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>VIP Tier:</span>
-                                <select
-                                    className="ec-input"
-                                    value={filterTier}
-                                    onChange={e => { setFilterTier(e.target.value); setPage(1); }}
-                                    style={{ height: 38, fontSize: 12, padding: '0 10px' }}
-                                >
-                                    <option value="All">All Tiers</option>
-                                    <option value="Silver">🥈 Silver Member</option>
-                                    <option value="Gold">🥇 Gold Member</option>
-                                    <option value="Platinum">💎 Platinum VIP</option>
-                                </select>
-                            </div>
-
-                            {/* Status Filter */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>Status:</span>
-                                <select
-                                    className="ec-input"
-                                    value={filterStatus}
-                                    onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
-                                    style={{ height: 38, fontSize: 12, padding: '0 10px' }}
-                                >
-                                    <option value="All">All Status</option>
-                                    <option value="Active">Active</option>
-                                    <option value="Inactive">Inactive</option>
-                                    <option value="Blocked">Blocked</option>
-                                </select>
-                            </div>
-
-                            {/* Segment Filter */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>Segment:</span>
-                                <select
-                                    className="ec-input"
-                                    value={filterType}
-                                    onChange={e => { setFilterType(e.target.value); setPage(1); }}
-                                    style={{ height: 38, fontSize: 12, padding: '0 10px' }}
-                                >
-                                    <option value="All">All Types</option>
-                                    <option value="Regular">Regular</option>
-                                    <option value="VIP">VIP</option>
-                                    <option value="Wholesale">Wholesale</option>
-                                    <option value="New">New</option>
-                                </select>
-                            </div>
-
-                            {/* Sorter */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>Sort:</span>
-                                <select
-                                    className="ec-input"
-                                    value={sortBy}
-                                    onChange={e => setSortBy(e.target.value)}
-                                    style={{ height: 38, fontSize: 12, padding: '0 10px' }}
-                                >
-                                    <option value="points-desc">Highest Points First</option>
-                                    <option value="points-asc">Lowest Points First</option>
-                                    <option value="spend-desc">Highest Spent First</option>
-                                    <option value="name-asc">Name (A-Z)</option>
-                                </select>
-                            </div>
-
-                            {/* City Filter */}
-                            {availableCities.length > 0 && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 12, color: '#000000', fontWeight: 700 }}>City:</span>
-                                    <select
-                                        className="ec-input"
-                                        value={filterCity}
-                                        onChange={e => { setFilterCity(e.target.value); setPage(1); }}
-                                        style={{ height: 38, fontSize: 12, padding: '0 10px' }}
-                                    >
-                                        <option value="All">All Cities</option>
-                                        {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                </div>
+                                    ✕
+                                </button>
                             )}
                         </div>
+
+                        {/* Sorter on Row 1 */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 700, whiteSpace: 'nowrap' }}>Sort By:</span>
+                            <select
+                                className="ec-input"
+                                value={sortBy}
+                                onChange={e => { setSortBy(e.target.value); setPage(1); }}
+                                style={{ height: 40, fontSize: 12.5, padding: '0 12px', minWidth: 185, borderRadius: 8 }}
+                            >
+                                <option value="points-desc">Highest Points First</option>
+                                <option value="points-asc">Lowest Points First</option>
+                                <option value="name-asc">Name A–Z</option>
+                                <option value="name-desc">Name Z–A</option>
+                                <option value="spend-desc">Highest Spending</option>
+                                <option value="newest">Newest Customers</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Row 2: Filter Dropdowns */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+                        {/* Status Filter */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Status:</span>
+                            <select
+                                className="ec-input"
+                                value={filterStatus}
+                                onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+                                style={{ height: 36, fontSize: 12, padding: '0 10px', borderRadius: 7 }}
+                            >
+                                <option value="All">All Status</option>
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                            </select>
+                        </div>
+
+                        {/* Segment Filter */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Segment:</span>
+                            <select
+                                className="ec-input"
+                                value={filterType}
+                                onChange={e => { setFilterType(e.target.value); setPage(1); }}
+                                style={{ height: 36, fontSize: 12, padding: '0 10px', borderRadius: 7 }}
+                            >
+                                <option value="All">All Segments</option>
+                                <option value="New">New</option>
+                                <option value="Regular">Regular</option>
+                                <option value="VIP">VIP</option>
+                                <option value="Wholesale">Wholesale</option>
+                            </select>
+                        </div>
+
+                        {/* VIP Tier Filter */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>VIP Tier:</span>
+                            <select
+                                className="ec-input"
+                                value={filterTier}
+                                onChange={e => { setFilterTier(e.target.value); setPage(1); }}
+                                style={{ height: 36, fontSize: 12, padding: '0 10px', borderRadius: 7 }}
+                            >
+                                <option value="All">All Tiers</option>
+                                <option value="Silver">🥈 Silver</option>
+                                <option value="Gold">🥇 Gold</option>
+                                <option value="Platinum">💎 Platinum</option>
+                            </select>
+                        </div>
+
+                        {/* Points Filter */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Points:</span>
+                            <select
+                                className="ec-input"
+                                value={filterPoints}
+                                onChange={e => { setFilterPoints(e.target.value); setPage(1); }}
+                                style={{ height: 36, fontSize: 12, padding: '0 10px', borderRadius: 7 }}
+                            >
+                                <option value="All">All Points</option>
+                                <option value="with_points">With Points (&gt; 0)</option>
+                                <option value="zero_points">Zero Points (0 pts)</option>
+                            </select>
+                        </div>
+
+                        {/* City Filter (populated dynamically from actual customer data) */}
+                        {availableCities.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>City:</span>
+                                <select
+                                    className="ec-input"
+                                    value={filterCity}
+                                    onChange={e => { setFilterCity(e.target.value); setPage(1); }}
+                                    style={{ height: 36, fontSize: 12, padding: '0 10px', borderRadius: 7 }}
+                                >
+                                    <option value="All">All Cities</option>
+                                    {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                        )}
+
+                        {hasActiveFilters && (
+                            <button
+                                type="button"
+                                onClick={handleClearFilters}
+                                style={{ border: 'none', background: '#fee2e2', color: '#b91c1c', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', padding: '6px 12px', borderRadius: 6, transition: 'all 0.15s ease', marginLeft: 'auto' }}
+                                title="Reset all search, sorting and category filters"
+                            >
+                                Reset Filters ✕
+                            </button>
+                        )}
                     </div>
 
                     {/* Active Filter Chips */}
                     {hasActiveFilters && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12, paddingTop: 10, borderTop: '1px solid #f8fafc' }}>
                             <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Active Filters:</span>
                             {search && (
                                 <span style={{ fontSize: 11, background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
                                     Search: "{search}"
                                     <button type="button" onClick={() => setSearch('')} style={{ border: 'none', background: 'transparent', color: '#6366f1', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
-                                </span>
-                            )}
-                            {filterPoints !== 'All' && (
-                                <span style={{ fontSize: 11, background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                                    Points: {filterPoints}
-                                    <button type="button" onClick={() => setFilterPoints('All')} style={{ border: 'none', background: 'transparent', color: '#d97706', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
-                                </span>
-                            )}
-                            {filterTier !== 'All' && (
-                                <span style={{ fontSize: 11, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                                    Tier: {filterTier}
-                                    <button type="button" onClick={() => setFilterTier('All')} style={{ border: 'none', background: 'transparent', color: '#7c3aed', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
                                 </span>
                             )}
                             {filterStatus !== 'All' && (
@@ -1317,6 +1441,18 @@ export const CustomerLoyaltyPage = () => {
                                 <span style={{ fontSize: 11, background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
                                     Segment: {filterType}
                                     <button type="button" onClick={() => setFilterType('All')} style={{ border: 'none', background: 'transparent', color: '#d97706', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
+                                </span>
+                            )}
+                            {filterTier !== 'All' && (
+                                <span style={{ fontSize: 11, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                    Tier: {filterTier}
+                                    <button type="button" onClick={() => setFilterTier('All')} style={{ border: 'none', background: 'transparent', color: '#7c3aed', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
+                                </span>
+                            )}
+                            {filterPoints !== 'All' && (
+                                <span style={{ fontSize: 11, background: '#fffbeb', color: '#d97706', border: '1px solid #fde68a', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                                    Points: {filterPoints === 'with_points' ? 'With Points' : filterPoints === 'zero_points' ? 'Zero Points' : filterPoints}
+                                    <button type="button" onClick={() => setFilterPoints('All')} style={{ border: 'none', background: 'transparent', color: '#d97706', cursor: 'pointer', padding: 0, fontWeight: 800 }}>✕</button>
                                 </span>
                             )}
                             {filterCity !== 'All' && (
@@ -1336,29 +1472,31 @@ export const CustomerLoyaltyPage = () => {
                     )}
                 </div>
 
-                {/* Directory Table */}
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                {/* Directory Table with Smooth Horizontal Scrolling and Sticky Headers */}
+                <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 270px)', minHeight: 400, position: 'relative', scrollBehavior: 'smooth' }} className="custom-scrollbar">
+                    <table style={{ width: '100%', minWidth: 1360, borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: 13.5 }}>
                         <thead>
-                            <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                <th style={{ padding: '12px 14px', width: 38 }}>
+                            <tr style={{ color: '#374151', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 10px', width: 44, minWidth: 44, textAlign: 'center' }}>
                                     <input
                                         type="checkbox"
                                         checked={isAllPageSelected}
                                         onChange={handleToggleSelectAllPage}
-                                        title="Select all on this page"
+                                        title="Select all customers on this page"
                                         style={{ cursor: 'pointer', accentColor: '#6366f1' }}
                                     />
                                 </th>
-                                <th style={{ padding: '12px 16px' }}>Customer Name</th>
-                                <th style={{ padding: '12px 16px' }}>ID, Segment & Tier</th>
-                                <th style={{ padding: '12px 16px' }}>Phone</th>
-                                <th style={{ padding: '12px 16px' }}>Location</th>
-                                <th style={{ padding: '12px 16px' }}>Orders</th>
-                                <th style={{ padding: '12px 16px' }}>Total Spent</th>
-                                <th style={{ padding: '12px 16px' }}>Loyalty Balance</th>
-                                <th style={{ padding: '12px 16px' }}>Status</th>
-                                <th style={{ padding: '12px 16px', textAlign: 'center', width: 145 }}>Actions</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 8px', width: 60, minWidth: 60, textAlign: 'center' }}>Sr. No.</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', minWidth: 250, width: 270 }}>Customer Name</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 14px', minWidth: 175, whiteSpace: 'nowrap' }}>Segment & Tier</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 14px', minWidth: 135, whiteSpace: 'nowrap' }}>Phone</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', minWidth: 170, width: 180 }}>Address</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 12px', width: 80, minWidth: 80, textAlign: 'center', whiteSpace: 'nowrap' }}>Orders</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', minWidth: 125, textAlign: 'right', whiteSpace: 'nowrap' }}>Total Spent</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', minWidth: 165, textAlign: 'left', whiteSpace: 'nowrap' }}>Loyalty Balance</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', minWidth: 140, textAlign: 'left', whiteSpace: 'nowrap' }}>Wallet Balance</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 14px', width: 110, minWidth: 110, textAlign: 'center', whiteSpace: 'nowrap' }}>Status</th>
+                                <th style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', boxShadow: '0 1px 0 #e5e7eb', padding: '12px 16px', width: 240, minWidth: 240, textAlign: 'center', whiteSpace: 'nowrap' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1372,30 +1510,32 @@ export const CustomerLoyaltyPage = () => {
                                 </>
                             ) : paginatedCustomers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={10} style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
+                                    <td colSpan={12} style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
                                         <p style={{ fontSize: 15, fontWeight: 700, color: '#374151', margin: 0 }}>No Customers Found</p>
-                                        <p style={{ fontSize: 12, marginTop: 4 }}>Try adjusting your search filter or add a new customer.</p>
+                                        <p style={{ fontSize: 12.5, marginTop: 4 }}>Try adjusting your search filter or add a new customer.</p>
                                     </td>
                                 </tr>
                             ) : (
-                                paginatedCustomers.map((cust) => {
+                                paginatedCustomers.map((cust, idx) => {
                                     const custId = cust.backendId || cust.id;
                                     const isRowSelected = selectedIds.includes(custId);
+                                    const serialNumber = (page - 1) * pageSize + idx + 1;
                                     const points = Number(cust.loyaltyPoints) || 0;
                                     const rupeeVal = points * POINTS_TO_INR_RATE;
                                     const tierInfo = resolveCustomerTier(cust);
+                                    const locationText = cust.location || cust.city || '—';
 
                                     return (
                                         <tr
                                             key={cust.id}
                                             style={{
                                                 borderBottom: '1px solid #f3f4f6',
-                                                background: isRowSelected ? '#f5f3ff' : 'transparent',
+                                                background: isRowSelected ? '#f5f3ff' : '#ffffff',
                                                 transition: 'background 0.15s ease'
                                             }}
                                             className="table-row-hover"
                                         >
-                                            <td style={{ padding: '14px 14px', width: 38 }}>
+                                            <td style={{ padding: '12px 10px', textAlign: 'center', borderBottom: '1px solid #f3f4f6' }}>
                                                 <input
                                                     type="checkbox"
                                                     checked={isRowSelected}
@@ -1404,104 +1544,213 @@ export const CustomerLoyaltyPage = () => {
                                                 />
                                             </td>
 
-                                            <td style={{ padding: '14px 16px' }}>
+                                            <td style={{ padding: '12px 8px', textAlign: 'center', color: '#6b7280', fontWeight: 600, fontSize: 12.5, borderBottom: '1px solid #f3f4f6' }}>
+                                                {serialNumber}
+                                            </td>
+
+                                            <td style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6' }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                     <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff', fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                                         {cust.name?.[0]?.toUpperCase() || '?'}
                                                     </div>
-                                                    <div>
-                                                        <p style={{ fontWeight: 700, color: '#111827', margin: 0, fontSize: 13 }}>{cust.name}</p>
-                                                        <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0 0' }}>{cust.email || 'No email'}</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-
-                                            {/* Refinement 2: Dynamic VIP Tier Badge inside Table Row */}
-                                            <td style={{ padding: '14px 16px' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>{cust.id}</span>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                                                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1' }}>
-                                                            {cust.type}
-                                                        </span>
-                                                        <span
-                                                            style={{
-                                                                fontSize: 10,
-                                                                fontWeight: 700,
-                                                                padding: '2px 7px',
-                                                                borderRadius: 12,
-                                                                background: tierInfo.bg,
-                                                                color: tierInfo.color,
-                                                                border: `1px solid ${tierInfo.border}`,
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 3
-                                                            }}
-                                                            title={`Loyalty Tier: ${tierInfo.name}`}
+                                                    <div style={{ minWidth: 0 }}>
+                                                        <p
+                                                            style={{ fontWeight: 700, color: '#111827', margin: 0, fontSize: 14, lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}
+                                                            title={cust.name}
                                                         >
-                                                            <span>{tierInfo.icon}</span> {tierInfo.badge}
-                                                        </span>
+                                                            {cust.name}
+                                                        </p>
+                                                        <p
+                                                            style={{ fontSize: 12, color: '#6b7280', margin: '2px 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 200 }}
+                                                            title={cust.email || 'No email registered'}
+                                                        >
+                                                            {cust.email || 'No email'}
+                                                        </p>
                                                     </div>
                                                 </div>
                                             </td>
 
-                                            <td style={{ padding: '14px 16px', color: '#374151', fontWeight: 500 }}>
+                                            {/* Segment & Tier */}
+                                            <td style={{ padding: '12px 14px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap' }}>
+                                                    <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1', textTransform: 'capitalize' }}>
+                                                        {cust.type}
+                                                    </span>
+                                                    <span
+                                                        style={{
+                                                            fontSize: 11,
+                                                            fontWeight: 700,
+                                                            padding: '3px 8px',
+                                                            borderRadius: 12,
+                                                            background: tierInfo.bg,
+                                                            color: tierInfo.color,
+                                                            border: `1px solid ${tierInfo.border}`,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 4
+                                                        }}
+                                                        title={`Loyalty Tier: ${tierInfo.name}`}
+                                                    >
+                                                        <span>{tierInfo.icon}</span> {tierInfo.badge}
+                                                    </span>
+                                                </div>
+                                            </td>
+
+                                            <td style={{ padding: '12px 14px', color: '#374151', fontWeight: 500, fontSize: 13, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f4f6' }}>
                                                 {cust.phone || '—'}
                                             </td>
 
-                                            <td style={{ padding: '14px 16px', color: '#374151' }}>
-                                                {cust.city || '—'}
+                                            <td style={{ padding: '12px 16px', color: '#374151', fontSize: 13, borderBottom: '1px solid #f3f4f6' }}>
+                                                <span
+                                                    style={{ display: 'inline-block', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: locationText !== '—' ? 'help' : 'default' }}
+                                                    title={`Full Location: ${locationText}`}
+                                                >
+                                                    {locationText}
+                                                </span>
                                             </td>
 
-                                            <td style={{ padding: '14px 16px', fontWeight: 700, color: '#111827' }}>
-                                                {cust.orders} orders
+                                            <td style={{ padding: '12px 12px', textAlign: 'center', fontWeight: 700, color: '#111827', fontSize: 13.5, whiteSpace: 'nowrap', borderBottom: '1px solid #f3f4f6' }}>
+                                                {cust.orders ?? 0}
                                             </td>
 
-                                            <td style={{ padding: '14px 16px', fontWeight: 800, color: '#10b981' }}>
+                                            <td style={{ padding: '12px 16px', fontWeight: 800, color: '#10b981', fontSize: 13.5, textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '1px solid #f3f4f6' }}>
                                                 {fmt(cust.totalSpent)}
                                             </td>
 
-                                            {/* Refinement 4: Visual Color-Coded Loyalty Points Badges */}
-                                            <td style={{ padding: '14px 16px' }}>
-                                                <div style={{ fontSize: 12 }}>
+                                            {/* Loyalty Points Balance */}
+                                            <td style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                                                <div style={{ fontSize: 12.5 }}>
                                                     {points === 0 ? (
-                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: '#f3f4f6', color: '#9ca3af', fontWeight: 600 }}>
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: '#f3f4f6', color: '#9ca3af', fontWeight: 600, fontSize: 11.5 }}>
                                                             <BsCoin size={12} color="#cbd5e1" />
                                                             <span>0 pts</span>
                                                         </div>
                                                     ) : points >= 100 ? (
-                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', fontWeight: 800 }}>
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', fontWeight: 800, fontSize: 11.5 }}>
                                                             <BsCoin size={13} color="#d97706" />
                                                             <span>{points.toLocaleString('en-IN')} pts</span>
                                                         </div>
                                                     ) : (
-                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 700 }}>
+                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 700, fontSize: 11.5 }}>
                                                             <BsCoin size={13} color="#10b981" />
                                                             <span>{points.toLocaleString('en-IN')} pts</span>
                                                         </div>
                                                     )}
-                                                    <div style={{ fontSize: 11, color: points > 0 ? '#059669' : '#9ca3af', fontWeight: 600, marginTop: 3 }}>
+                                                    <div style={{ fontSize: 11, color: points > 0 ? '#059669' : '#9ca3af', fontWeight: 600, marginTop: 2 }}>
                                                         {points > 0 ? `Worth ${fmt(rupeeVal)}` : 'No points yet'}
                                                     </div>
                                                 </div>
                                             </td>
 
-                                            {/* Status Switch */}
-                                            <td style={{ padding: '14px 16px' }}>
-                                                <CustomerStatusToggle
-                                                    isActive={cust.status === 'Active'}
-                                                    loading={updatingStatusId === custId}
-                                                    onToggle={() => handleStatusToggle(custId, cust.status)}
-                                                />
+                                            {/* Wallet Balance Column */}
+                                            <td style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                                    <BsWallet2 size={13} style={{ color: '#6366f1' }} />
+                                                    <span style={{ fontWeight: 700, color: '#111827', fontSize: 13.5 }}>
+                                                        {fmt(cust.credit || cust.wallet_balance || 0)}
+                                                    </span>
+                                                </div>
                                             </td>
 
-                                            {/* Refinement 1: Sleek & Compact Icon Pill Buttons (Prevents Table Overflow) */}
-                                            <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                                    {/* Earn Button */}
+                                            {/* Status Badge */}
+                                            <td style={{ padding: '12px 14px', textAlign: 'center', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                                                {(() => {
+                                                    const isAct = cust.status === 'Active';
+                                                    const bg = isAct ? '#ecfdf5' : '#f3f4f6';
+                                                    const color = isAct ? '#059669' : '#4b5563';
+                                                    const border = isAct ? '#a7f3d0' : '#e5e7eb';
+                                                    const dotBg = isAct ? '#10b981' : '#9ca3af';
+                                                    const label = isAct ? 'Active' : 'Inactive';
+
+                                                    return (
+                                                        <span
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 5,
+                                                                fontSize: 11.5,
+                                                                fontWeight: 700,
+                                                                padding: '3px 9px',
+                                                                borderRadius: 12,
+                                                                background: bg,
+                                                                color: color,
+                                                                border: `1px solid ${border}`,
+                                                            }}
+                                                        >
+                                                            <span
+                                                                style={{
+                                                                    width: 5,
+                                                                    height: 5,
+                                                                    borderRadius: '50%',
+                                                                    background: dotBg,
+                                                                }}
+                                                            />
+                                                            {label}
+                                                        </span>
+                                                    );
+                                                })()}
+                                            </td>
+
+                                            {/* Actions Column */}
+                                            <td style={{ padding: '12px 16px', textAlign: 'center', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                                    {/* Status Toggle */}
+                                                    <span title={cust.status === 'Active' ? 'Deactivate customer account' : 'Activate customer account'}>
+                                                        <CustomerStatusToggle
+                                                            isActive={cust.status === 'Active'}
+                                                            loading={updatingStatusId === custId}
+                                                            onToggle={() => handleStatusToggle(custId, cust.status)}
+                                                        />
+                                                    </span>
+
+                                                    {/* View Profile Details */}
                                                     <button
                                                         type="button"
-                                                        title="Credit / Earn Loyalty Points"
+                                                        title="View customer profile and loyalty details"
+                                                        onClick={() => handleViewCustomerProfile(custId)}
+                                                        style={{
+                                                            width: 30,
+                                                            height: 30,
+                                                            borderRadius: 7,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#6366f1',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        <BsEye size={14} />
+                                                    </button>
+
+                                                    {/* Edit Customer */}
+                                                    <button
+                                                        type="button"
+                                                        title="Edit customer information"
+                                                        onClick={() => setEditingCustomer(cust)}
+                                                        style={{
+                                                            width: 30,
+                                                            height: 30,
+                                                            borderRadius: 7,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#374151',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                    >
+                                                        <BsPencilSquare size={13} />
+                                                    </button>
+
+                                                    {/* Earn Loyalty Points */}
+                                                    <button
+                                                        type="button"
+                                                        title="Credit / Add loyalty points to customer"
                                                         onClick={() => handleOpenModal('earn', cust)}
                                                         style={{
                                                             width: 30,
@@ -1511,19 +1760,19 @@ export const CustomerLoyaltyPage = () => {
                                                             background: '#ecfdf5',
                                                             color: '#059669',
                                                             cursor: 'pointer',
-                                                            display: 'flex',
+                                                            display: 'inline-flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
                                                             transition: 'all 0.15s ease'
                                                         }}
                                                     >
-                                                        <BsPlusCircle size={15} />
+                                                        <BsPlusCircle size={14} />
                                                     </button>
 
-                                                    {/* Redeem Button */}
+                                                    {/* Redeem Loyalty Points */}
                                                     <button
                                                         type="button"
-                                                        title={points > 0 ? `Redeem ${points} points for bill discount` : 'No points available to redeem'}
+                                                        title={points > 0 ? `Redeem ${points.toLocaleString('en-IN')} loyalty points` : 'No loyalty points available to redeem'}
                                                         onClick={() => handleOpenModal('redeem', cust)}
                                                         disabled={points <= 0}
                                                         style={{
@@ -1534,19 +1783,19 @@ export const CustomerLoyaltyPage = () => {
                                                             background: points > 0 ? '#eef2ff' : '#f9fafb',
                                                             color: points > 0 ? '#4f46e5' : '#cbd5e1',
                                                             cursor: points > 0 ? 'pointer' : 'not-allowed',
-                                                            display: 'flex',
+                                                            display: 'inline-flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
                                                             transition: 'all 0.15s ease'
                                                         }}
                                                     >
-                                                        <BsGift size={14} />
+                                                        <BsGift size={13} />
                                                     </button>
 
-                                                    {/* History Button */}
+                                                    {/* Points Transaction Ledger */}
                                                     <button
                                                         type="button"
-                                                        title="View Points Transaction Ledger"
+                                                        title="View loyalty points transaction history"
                                                         onClick={() => handleOpenHistory(cust)}
                                                         style={{
                                                             width: 30,
@@ -1556,35 +1805,13 @@ export const CustomerLoyaltyPage = () => {
                                                             background: '#ffffff',
                                                             color: '#475569',
                                                             cursor: 'pointer',
-                                                            display: 'flex',
+                                                            display: 'inline-flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
                                                             transition: 'all 0.15s ease'
                                                         }}
                                                     >
-                                                        <BsClockHistory size={14} />
-                                                    </button>
-
-                                                    {/* View Profile Button */}
-                                                    <button
-                                                        type="button"
-                                                        title="View Full Customer CRM Profile"
-                                                        onClick={() => handleViewCustomerProfile(custId)}
-                                                        style={{
-                                                            width: 30,
-                                                            height: 30,
-                                                            borderRadius: 7,
-                                                            border: '1px solid #e5e7eb',
-                                                            background: '#ffffff',
-                                                            color: '#6366f1',
-                                                            cursor: 'pointer',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            transition: 'all 0.15s ease'
-                                                        }}
-                                                    >
-                                                        <BsEye size={15} />
+                                                        <BsClockHistory size={13} />
                                                     </button>
                                                 </div>
                                             </td>
@@ -1597,33 +1824,87 @@ export const CustomerLoyaltyPage = () => {
                 </div>
 
                 {/* Pagination Controls */}
-                <div style={{ padding: '14px 20px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb' }}>
+                <div style={{ padding: '14px 20px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', flexWrap: 'wrap', gap: 12 }}>
                     <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
-                        Showing <strong>{filteredCustomers.length > 0 ? (page - 1) * PAGE_SIZE + 1 : 0}</strong> to <strong>{Math.min(page * PAGE_SIZE, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> customers
+                        Showing <strong>{filteredCustomers.length > 0 ? (page - 1) * pageSize + 1 : 0}</strong> to <strong>{Math.min(page * pageSize, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> customers
                     </p>
 
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            disabled={page === 1}
-                            style={{ padding: '4px 10px', fontSize: 12 }}
-                        >
-                            <BsChevronLeft size={10} /> Prev
-                        </button>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '0 8px' }}>
-                            {page} / {totalPages}
-                        </span>
-                        <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            disabled={page === totalPages}
-                            style={{ padding: '4px 10px', fontSize: 12 }}
-                        >
-                            Next <BsChevronRight size={10} />
-                        </button>
+                    <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                        {/* Entries per Page Dropdown */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600 }}>Entries per page:</span>
+                            <select
+                                className="ec-input"
+                                value={pageSize}
+                                onChange={e => {
+                                    setPageSize(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                                style={{
+                                    height: 32,
+                                    fontSize: 12,
+                                    padding: '0 8px',
+                                    borderRadius: 6,
+                                    background: '#ffffff',
+                                    border: '1px solid #d1d5db',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    color: '#374151',
+                                }}
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
+
+                        {/* Navigation Controls: Arrows only */}
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                title="Previous Page"
+                                aria-label="Previous Page"
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    padding: 0,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: 6,
+                                }}
+                            >
+                                <BsChevronLeft size={14} />
+                            </button>
+
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '0 6px' }}>
+                                Page {page} of {totalPages}
+                            </span>
+
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                title="Next Page"
+                                aria-label="Next Page"
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    padding: 0,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: 6,
+                                }}
+                            >
+                                <BsChevronRight size={14} />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1641,8 +1922,8 @@ export const CustomerLoyaltyPage = () => {
                                     {modalMode === 'earn'
                                         ? 'Credit points against shopping invoices or promotional bonuses'
                                         : modalMode === 'redeem'
-                                        ? 'Convert points into instant invoice discounts'
-                                        : 'Update customer point ledger'}
+                                            ? 'Convert points into instant invoice discounts'
+                                            : 'Update customer point ledger'}
                                 </p>
                             </div>
                             <button type="button" className="ec-modal-close" onClick={handleCloseModal}>✕</button>
@@ -1905,13 +2186,41 @@ export const CustomerLoyaltyPage = () => {
                 </div>
             )}
 
-            {/* ── CUSTOMER PROFILE DETAIL DRAWER (Exact same CustomerDetailPanel as Customer Directory) ── */}
+            {/* ── EDIT CUSTOMER MODAL (Exact same EditCustomerModal as Customer Directory) ── */}
+            {editingCustomer && (
+                <EditCustomerModal
+                    customer={editingCustomer}
+                    onClose={() => setEditingCustomer(null)}
+                    onSaved={async (updatedData) => {
+                        if (updatedData) {
+                            setCustomers(prev => prev.map(c =>
+                                (c.backendId === updatedData.backendId || c.id === updatedData.id)
+                                    ? { ...c, ...updatedData }
+                                    : c
+                            ));
+                            if (selectedCustomer && (selectedCustomer.backendId === updatedData.backendId || selectedCustomer.id === updatedData.id)) {
+                                setSelectedCustomer(prev => prev ? { ...prev, ...updatedData } : prev);
+                            }
+                            showNotification('Customer updated successfully!', 'success');
+                        }
+                        await loadLoyaltyDashboard(true);
+                    }}
+                />
+            )}
+
+            {/* ── CUSTOMER PROFILE DETAIL DRAWER (Loyalty & Rewards Focus) ── */}
             {selectedCustomer && (
                 <CustomerDetailPanel
                     customer={selectedCustomer}
                     detailExtras={customerInsights}
                     onClose={() => setSelectedCustomer(null)}
+                    onStatusChange={handleStatusToggle}
+                    onRefresh={handleViewCustomerProfile}
                     onCustomerUpdated={loadLoyaltyDashboard}
+                    showFeedback={true}
+                    allowedTabs={['Overview', 'Loyalty', 'Wallet', 'Orders', 'Actions']}
+                    hideLoyalty={false}
+                    hideWallet={false}
                 />
             )}
         </div>

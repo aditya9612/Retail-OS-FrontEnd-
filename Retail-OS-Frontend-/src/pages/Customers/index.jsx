@@ -5,7 +5,7 @@ import {
     BsSearch, BsDownload, BsPeopleFill, BsPhone, BsGeoAlt,
     BsCalendar, BsCurrencyRupee, BsStarFill, BsPlus, BsEye, BsPencilSquare,
     BsChevronLeft, BsChevronRight, BsCheckCircleFill, BsXCircleFill,
-    BsWallet2, BsChatText, BsJournalText, BsShare,
+    BsChatText,
     BsFunnel, BsGift, BsTrophy, BsGraphUp,
     BsTrash,
 } from 'react-icons/bs';
@@ -22,16 +22,10 @@ import {
     getCommunications,
     getNotes,
     getTopCustomers,
-    getRetentionReport,
     getLifetimeValue,
-    getLoyaltyReport,
-    getCustomerLoyalty,
-    getCustomerWallet,
-    getWalletTransactions,
-    getLoyaltyHistory,
+    getRetentionReport,
     getCustomerOrders,
     sendCampaign,
-    earnLoyalty,
     sendCustomerWhatsapp,
 } from '../../services/customer';
 import CustomerDetailPanel from '../../components/customers/CustomerDetailPanel';
@@ -42,6 +36,7 @@ import {
     formatCustomerRecord,
     getApiErrorMessage,
     formatAnalyticsVal,
+    setStoredCustomerStatus,
 } from '../../components/customers/customerHelpers';
 
 const PAGE_SIZE = 10;
@@ -52,7 +47,6 @@ const getTodayDateString = () => new Date().toISOString().split('T')[0];
 const statusCfg = {
     Active: { color: '#10b981', bg: '#ecfdf5', icon: <BsCheckCircleFill size={10} /> },
     Inactive: { color: '#6b7280', bg: '#f3f4f6', icon: null },
-    Blocked: { color: '#ef4444', bg: '#fef2f2', icon: <BsXCircleFill size={10} /> },
 };
 
 const typeCfg = {
@@ -78,8 +72,7 @@ const CustomerStatusToggle = ({ isActive, onToggle, loading = false }) => {
             style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 8,
-                padding: '4px 10px 4px 4px',
+                padding: '2px',
                 borderRadius: 999,
                 border: `1px solid ${isActive ? '#a7f3d0' : '#fecaca'}`,
                 background: isActive ? '#ecfdf5' : '#fef2f2',
@@ -127,8 +120,8 @@ const KpiSkeleton = () => (
 
 const TableRowSkeleton = () => (
     <tr style={{ borderBottom: '1px solid #f3f4f6' }}>
-        {Array.from({ length: 9 }).map((_, i) => (
-            <td key={i} style={{ padding: '14px 16px' }}>
+        {Array.from({ length: 10 }).map((_, i) => (
+            <td key={i} style={{ padding: '9px 14px' }}>
                 <div style={{ height: 16, background: '#f3f4f6', borderRadius: 4, width: '80%' }} />
             </td>
         ))}
@@ -164,7 +157,6 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
         state: '',
         stateCode: '',
         type: 'regular',
-        credit: '',
         birthday: '',
     });
     const [errors, setErrors] = useState({});
@@ -193,7 +185,7 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!form.name.trim() || !form.email.trim() || !form.phone.trim() || !form.state.trim() || !form.city.trim()) {
-            alert('Please fill all required fields (*)');
+            setErrors(prev => ({ ...prev, form: 'Please fill all required fields (*)' }));
             return;
         }
 
@@ -217,12 +209,11 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
                 segment: form.type,
             });
 
-            alert('Customer created successfully!');
             if (onCreated) await onCreated();
             onClose();
         } catch (err) {
             console.error('Create customer error:', err);
-            alert(getApiErrorMessage(err, 'Failed to create customer.'));
+            setErrors(prev => ({ ...prev, form: getApiErrorMessage(err, 'Failed to create customer.') }));
         } finally {
             setSubmitting(false);
         }
@@ -241,6 +232,11 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
 
                 <form onSubmit={handleSubmit} style={{ marginTop: 14 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                        {errors.form && (
+                            <div style={{ gridColumn: '1 / -1', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+                                {errors.form}
+                            </div>
+                        )}
                         <div style={{ gridColumn: '1 / -1' }}>
                             <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Customer Name *</label>
                             <input className="ec-input" type="text" name="name" placeholder="Full Name" value={form.name} onChange={handleChange} required />
@@ -281,8 +277,7 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
                             <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Customer Segment *</label>
                             <select className="ec-input" name="type" value={form.type} onChange={handleChange}>
                                 <option value="regular">Regular</option>
-                                <option value="vip">VIP</option>
-                                {/* <option value="wholesale">Wholesale</option> */}
+                                <option value="wholesale">Wholesale</option>
                                 <option value="new">New</option>
                             </select>
                         </div>
@@ -306,7 +301,7 @@ const AddCustomerModal = ({ onClose, onCreated }) => {
 };
 
 // Edit Customer Modal
-const EditCustomerModal = ({ customer, onClose, onSaved }) => {
+export const EditCustomerModal = ({ customer, onClose, onSaved }) => {
     const [form, setForm] = useState({
         name: customer.name || '',
         email: customer.email || '',
@@ -317,31 +312,67 @@ const EditCustomerModal = ({ customer, onClose, onSaved }) => {
         birthday: customer.birthday || '',
     });
     const [submitting, setSubmitting] = useState(false);
+    const [modalError, setModalError] = useState('');
 
     const handleChange = e => {
         const { name, value } = e.target;
         setForm(prev => ({ ...prev, [name]: value }));
+        if (modalError) setModalError('');
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
+        setModalError('');
         try {
-            await updateCustomer(customer.backendId, {
+            const targetId = customer.backendId ?? customer.id ?? (typeof customer.id === 'string' ? parseInt(customer.id.replace(/\D/g, ''), 10) : null);
+            const normalizedStatus = form.status ? (form.status.charAt(0).toUpperCase() + form.status.slice(1).toLowerCase()) : 'Active';
+
+            // 1. Update customer profile details
+            await updateCustomer(targetId, {
                 name: form.name,
                 email: form.email,
                 phone: form.phone,
                 address: form.city,
-                status: form.status.toLowerCase(),
+                status: normalizedStatus.toLowerCase(),
                 segment: form.type.toLowerCase(),
                 birthday: form.birthday || null,
             });
-            alert('Customer updated successfully!');
-            if (onSaved) await onSaved();
+
+            // 2. Also call dedicated status update endpoint to guarantee backend status persistence
+            try {
+                if (targetId) {
+                    await updateCustomerStatus(targetId, normalizedStatus.toLowerCase());
+                }
+            } catch (statusErr) {
+                console.warn('Status patch update endpoint notice:', statusErr);
+            }
+
+            // 3. Save to client storage override for persistence
+            if (targetId) {
+                setStoredCustomerStatus(targetId, normalizedStatus);
+                if (customer.id && customer.id !== targetId) {
+                    setStoredCustomerStatus(customer.id, normalizedStatus);
+                }
+            }
+
+            const updatedCustomerData = {
+                ...customer,
+                name: form.name,
+                email: form.email,
+                phone: form.phone,
+                city: form.city,
+                location: form.city,
+                status: normalizedStatus,
+                type: form.type,
+                birthday: form.birthday || null,
+            };
+
+            if (onSaved) await onSaved(updatedCustomerData);
             onClose();
         } catch (err) {
             console.error('Update failed:', err);
-            alert(getApiErrorMessage(err, 'Failed to update customer.'));
+            setModalError(getApiErrorMessage(err, 'Failed to update customer.'));
         } finally {
             setSubmitting(false);
         }
@@ -360,6 +391,11 @@ const EditCustomerModal = ({ customer, onClose, onSaved }) => {
 
                 <form onSubmit={handleSubmit} style={{ marginTop: 14 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        {modalError && (
+                            <div style={{ gridColumn: '1 / -1', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+                                {modalError}
+                            </div>
+                        )}
                         <div style={{ gridColumn: '1 / -1' }}>
                             <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 4, display: 'block' }}>Name</label>
                             <input className="ec-input" name="name" value={form.name} onChange={handleChange} required />
@@ -381,7 +417,6 @@ const EditCustomerModal = ({ customer, onClose, onSaved }) => {
                             <select className="ec-input" name="status" value={form.status} onChange={handleChange}>
                                 <option value="Active">Active</option>
                                 <option value="Inactive">Inactive</option>
-                                <option value="Blocked">Blocked</option>
                             </select>
                         </div>
                     </div>
@@ -514,7 +549,6 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
                 communication_type: communicationType,
                 message: message.trim(),
             });
-            alert('Marketing campaign sent successfully!');
             if (onCampaignSent) {
                 onCampaignSent(res, {
                     selectedCustomerIds,
@@ -525,7 +559,7 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
             onClose();
         } catch (err) {
             console.error('Send campaign error:', err);
-            alert(getApiErrorMessage(err, 'Failed to send marketing campaign.'));
+            setErrors(prev => ({ ...prev, submit: getApiErrorMessage(err, 'Failed to send marketing campaign.') }));
         } finally {
             setSubmitting(false);
         }
@@ -544,6 +578,11 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
 
                 <form onSubmit={handleSubmit} noValidate style={{ marginTop: 14 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {errors.submit && (
+                            <div style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: 12 }}>
+                                {errors.submit}
+                            </div>
+                        )}
                         {/* Select Customers */}
                         <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -563,8 +602,8 @@ const SendCampaignModal = ({ customers = [], preSelectedIds = [], onClose, onCam
                                     type="text"
                                     placeholder="Search customers..."
                                     value={customerSearch}
-                                    onChange={e => setCustomerSearch(e.target.value)}
-                                    style={{ fontSize: 12, padding: '6px 10px' }}
+                                    onChange={e => setCustomerSearch(e.target.value.replace(/^\s+/, ''))}
+                                    style={{ fontSize: 12, padding: '6px 10px', flex: 1 }}
                                 />
                                 <button
                                     type="button"
@@ -706,6 +745,7 @@ const Customers = () => {
     const [filterType, setFilterType] = useState('All');
     const [filterCity, setFilterCity] = useState('All');
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
 
     // Modals & Detail States
     const [selectedIds, setSelectedIds] = useState([]);
@@ -718,73 +758,115 @@ const Customers = () => {
     const [detailExtras, setDetailExtras] = useState({});
     const [viewLoading, setViewLoading] = useState(false);
     const [birthdayGifting, setBirthdayGifting] = useState(false);
+    const [notification, setNotification] = useState(null);
 
-    // ── Birthday Bonus Automation (1-Click Gift 100 Points + WhatsApp wishes) ──
+    const showNotification = (message, type = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => {
+            setNotification(prev => (prev?.message === message ? null : prev));
+        }, 4000);
+    };
+
+    // ── Birthday Automation (WhatsApp wishes) ──
     const handleGiftAllBirthdays = async () => {
         if (!birthdayCustomers || birthdayCustomers.length === 0) return;
-        if (!window.confirm(`Gift 100 Birthday Bonus Points & send WhatsApp greetings to all ${birthdayCustomers.length} birthday customers?`)) {
-            return;
-        }
         setBirthdayGifting(true);
         let successCount = 0;
         try {
             for (const b of birthdayCustomers) {
                 const bId = b.id || b.backendId || b.customer_id;
                 try {
-                    await earnLoyalty({
-                        customer_id: bId,
-                        points: 100,
-                        reason: 'Happy Birthday Celebration Gift 🎂'
-                    });
                     if (b.phone) {
                         await sendCustomerWhatsapp({
                             customer_id: bId,
                             channel: 'whatsapp',
                             communication_type: 'WHATSAPP',
-                            message: `🎉 Happy Birthday from Shekru Retail, ${b.name || 'valued customer'}! 🎂 As a special birthday gift, 100 bonus loyalty points (Worth ₹10.00 store credit) have been added to your account. Enjoy your special day! 🎁`
-                        }).catch(() => {});
+                            message: `🎉 Happy Birthday from Shekru Retail, ${b.name || 'valued customer'}! 🎂 Wishing you a wonderful birthday filled with joy and happiness! Have a fantastic day! 🎁`
+                        }).catch(() => { });
                     }
                     successCount++;
                 } catch (err) {
-                    console.warn(`Birthday gift failed for customer ${bId}:`, err);
+                    console.warn(`Birthday greeting failed for customer ${bId}:`, err);
                 }
             }
-            alert(`🎉 Successfully gifted 100 Birthday Bonus Points to ${successCount} shopper${successCount === 1 ? '' : 's'} and sent WhatsApp greetings!`);
+            showNotification(`🎉 Successfully sent birthday greetings to ${successCount} shopper${successCount === 1 ? '' : 's'}!`, 'success');
             await loadCrmDashboard(false);
         } finally {
             setBirthdayGifting(false);
         }
     };
 
-    const hasLoadedRef = useRef(false);
-
-    // Initial Load: Loads ONLY directory APIs (customers & stats) once on page mount
+    // Initial Load: Loads directory APIs, stats, and customer analytics
     const loadCrmDashboard = async (showLoader = true) => {
         if (showLoader) setLoading(true);
         setError('');
 
-        const [customersRes, statsRes] = await Promise.allSettled([
-            getCustomers(),
-            getCustomerStats(),
-        ]);
+        try {
+            const [customersRes, statsRes, insightsRes] = await Promise.allSettled([
+                getCustomers(),
+                getCustomerStats(),
+                Promise.allSettled([
+                    getTopCustomers(),
+                    getLifetimeValue(),
+                    getRetentionReport(),
+                    getBirthdayCustomers(),
+                ])
+            ]);
 
-        if (customersRes.status === 'fulfilled') {
-            const list = normalizeApiList(customersRes.value);
-            setCustomers(list.map(c => formatCustomerRecord(c)));
-        } else {
-            setError('Unable to load customer directory.');
+            if (customersRes.status === 'fulfilled') {
+                const list = normalizeApiList(customersRes.value);
+                setCustomers(list.map(c => {
+                    try {
+                        return formatCustomerRecord(c);
+                    } catch (err) {
+                        console.warn('Error formatting customer record:', c, err);
+                        return {
+                            id: `CUS-${String(c?.id || 1).padStart(3, '0')}`,
+                            backendId: c?.id,
+                            name: c?.name || 'Customer',
+                            email: c?.email || '',
+                            phone: String(c?.phone || ''),
+                            city: c?.city || c?.address || '—',
+                            location: c?.city || c?.address || '—',
+                            orders: c?.orders || c?.orders_count || 0,
+                            totalSpent: c?.total_spend || c?.totalSpent || 0,
+                            status: 'Active',
+                            type: 'Regular',
+                            credit: c?.wallet_balance || c?.credit || 0,
+                            loyaltyPoints: c?.loyalty_points || 0,
+                        };
+                    }
+                }));
+            } else {
+                setError('Unable to load customer directory.');
+            }
+
+            if (statsRes.status === 'fulfilled') {
+                setCustomerStats(statsRes.value);
+            }
+
+            if (insightsRes.status === 'fulfilled') {
+                const [topRes, ltvRes, retRes, bdayRes] = insightsRes.value;
+                setCustomerInsights({
+                    topCustomers: topRes.status === 'fulfilled' ? topRes.value : null,
+                    lifetimeValue: ltvRes.status === 'fulfilled' ? ltvRes.value : null,
+                    retention: retRes.status === 'fulfilled' ? retRes.value : null,
+                    birthdays: bdayRes.status === 'fulfilled' ? bdayRes.value : null,
+                });
+                if (bdayRes.status === 'fulfilled') {
+                    setBirthdayCustomers(normalizeApiList(bdayRes.value));
+                }
+            }
+        } catch (err) {
+            console.error('Error loading CRM dashboard data:', err);
+            setError(getApiErrorMessage(err, 'Failed to fetch customer data.'));
+        } finally {
+            if (showLoader) setLoading(false);
         }
-
-        if (statsRes.status === 'fulfilled') {
-            setCustomerStats(statsRes.value);
-        }
-
-        if (showLoader) setLoading(false);
     };
 
     useEffect(() => {
-        if (hasLoadedRef.current) return;
-        hasLoadedRef.current = true;
+        document.title = 'Customers | RetailOS';
         loadCrmDashboard();
     }, []);
 
@@ -806,11 +888,20 @@ const Customers = () => {
         }
     };
 
-    // Handler for ACTIVE / INACTIVE Toggle Switch (Calls PATCH /api/v1/customers/{customer_id}/status)
-    const handleStatusToggle = async (id, currentStatus) => {
-        const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+    // Handler for ACTIVE / INACTIVE Status updates
+    const handleStatusToggle = async (id, statusArg, isExplicitTarget = false) => {
+        let newStatus;
+        if (isExplicitTarget) {
+            newStatus = statusArg === 'Inactive' ? 'Inactive' : 'Active';
+        } else {
+            newStatus = statusArg === 'Active' ? 'Inactive' : 'Active';
+        }
 
         setUpdatingStatusId(id);
+        if (id) {
+            setStoredCustomerStatus(id, newStatus);
+        }
+
         // Optimistic UI update
         setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: newStatus } : c));
         if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
@@ -824,11 +915,15 @@ const Customers = () => {
         } catch (err) {
             console.error('Failed to update customer status via API:', err);
             // Rollback UI on error
-            setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: currentStatus } : c));
-            if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
-                setSelectedCustomer(prev => prev ? { ...prev, status: currentStatus } : prev);
+            const rollbackStatus = isExplicitTarget ? (statusArg || 'Active') : statusArg;
+            if (id) {
+                setStoredCustomerStatus(id, rollbackStatus);
             }
-            alert(getApiErrorMessage(err, 'Failed to update customer status.'));
+            setCustomers(prev => prev.map(c => (c.backendId === id || c.id === id) ? { ...c, status: rollbackStatus } : c));
+            if (selectedCustomer?.backendId === id || selectedCustomer?.id === id) {
+                setSelectedCustomer(prev => prev ? { ...prev, status: rollbackStatus } : prev);
+            }
+            showNotification(getApiErrorMessage(err, 'Failed to update customer status.'), 'error');
         } finally {
             setUpdatingStatusId(null);
         }
@@ -840,11 +935,11 @@ const Customers = () => {
         return customers.filter(c => {
             const query = search.trim().toLowerCase();
             const matchesSearch = !query ||
-                c.name.toLowerCase().includes(query) ||
-                c.email.toLowerCase().includes(query) ||
-                c.phone.includes(query) ||
-                c.city.toLowerCase().includes(query) ||
-                c.id.toLowerCase().includes(query);
+                String(c.name || '').toLowerCase().includes(query) ||
+                String(c.email || '').toLowerCase().includes(query) ||
+                String(c.phone || '').includes(query) ||
+                String(c.city || c.location || '').toLowerCase().includes(query) ||
+                String(c.id || '').toLowerCase().includes(query);
 
             const matchesStatus = filterStatus === 'All' || c.status === filterStatus;
             const matchesType = filterType === 'All' || c.type === filterType;
@@ -854,11 +949,11 @@ const Customers = () => {
         });
     }, [customers, search, filterStatus, filterType, filterCity]);
 
-    const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / PAGE_SIZE));
+    const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
     const paginatedCustomers = useMemo(() => {
-        const start = (page - 1) * PAGE_SIZE;
-        return filteredCustomers.slice(start, start + PAGE_SIZE);
-    }, [filteredCustomers, page]);
+        const start = (page - 1) * pageSize;
+        return filteredCustomers.slice(start, start + pageSize);
+    }, [filteredCustomers, page, pageSize]);
 
     const hasActiveFilters = Boolean(search.trim() || filterStatus !== 'All' || filterType !== 'All' || filterCity !== 'All');
 
@@ -894,53 +989,74 @@ const Customers = () => {
 
     const totalCustomers = customerStats?.total ?? customers.length;
     const activeCustomers = customerStats?.active ?? customers.filter(c => c.status === 'Active').length;
-    const inactiveCustomers = customers.filter(c => c.status === 'Inactive' || c.status === 'Blocked').length;
-    const vipCustomers = customers.filter(c => c.type === 'VIP').length;
+    const inactiveCustomers = customers.filter(c => c.status === 'Inactive').length;
 
-    const topSpenderObj = useMemo(() => {
-        if (customers.length === 0) return { name: '—', amount: 0 };
-        const top = [...customers].sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0))[0];
-        return { name: top.name, amount: top.totalSpent || 0 };
-    }, [customers]);
-
-    const referralsList = normalizeApiList(customerInsights.referrals);
-    const commsList = normalizeApiList(customerInsights.communications);
-    const notesList = normalizeApiList(customerInsights.notes);
-
-    // Uniform analytics card styling (Fixed 190px height, no vertical expansion)
+    // Uniform analytics card styling (Compact height, optimized padding)
     const analyticsCardStyle = {
         background: '#ffffff',
         border: '1px solid #e5e7eb',
-        borderRadius: 14,
-        padding: '14px 16px',
-        height: 190,
+        borderRadius: 10,
+        padding: '8px 12px',
+        height: 130,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
         overflow: 'hidden',
     };
 
     return (
-        <div className="dash-page" style={{ paddingBottom: 40 }}>
+        <div className="dash-page" style={{ paddingBottom: 24 }}>
+            {/* ── Toast Notification Banner ── */}
+            {notification && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 24,
+                        right: 24,
+                        zIndex: 9999,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '14px 20px',
+                        borderRadius: 10,
+                        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)',
+                        background: notification.type === 'success' ? '#065f46' : '#991b1b',
+                        color: '#ffffff',
+                        fontSize: 14,
+                        fontWeight: 600,
+                        animation: 'fadeIn 0.2s ease',
+                    }}
+                >
+                    <span>{notification.message}</span>
+                    <button
+                        type="button"
+                        onClick={() => setNotification(null)}
+                        style={{ background: 'transparent', border: 'none', color: '#ffffff', cursor: 'pointer', padding: 0, fontWeight: 700 }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
             {/* Header */}
-            <div className="adm-page-header" style={{ marginBottom: 20 }}>
+            <div className="adm-page-header" style={{ marginBottom: 12 }}>
                 <div>
-                    <h1 className="adm-page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ background: '#eef2ff', color: '#6366f1', padding: '8px 12px', borderRadius: 10, fontSize: 20 }}>
+                    <h1 className="adm-page-title" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 20 }}>
+                        <span style={{ background: '#eef2ff', color: '#6366f1', padding: '6px 10px', borderRadius: 8, fontSize: 18 }}>
                             <BsPeopleFill />
                         </span>
-                        Customer Directory
+                        Customers
                     </h1>
-                    <p className="adm-page-sub">Manage customer relationships, loyalty, wallets, engagement and profiles.</p>
+                    <p className="adm-page-sub" style={{ marginTop: 2 }}>Manage customer relationships, directory profiles, and engagement.</p>
                 </div>
 
-                <div className="adm-header-actions" style={{ display: 'flex', gap: 10 }}>
+                <div className="adm-header-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button
                         type="button"
                         className="adm-btn-secondary"
                         onClick={() => setShowCampaignModal(true)}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: 12 }}
                     >
                         <BsChatText size={14} /> Send Campaign
                     </button>
@@ -949,6 +1065,7 @@ const Customers = () => {
                         type="button"
                         className="adm-btn-secondary"
                         onClick={() => setShowExportModal(true)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', fontSize: 12 }}
                     >
                         <BsDownload size={14} /> Export Directory
                     </button>
@@ -957,53 +1074,39 @@ const Customers = () => {
                         type="button"
                         className="adm-btn-primary"
                         onClick={() => setShowAddModal(true)}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 12 }}
                     >
                         <BsPlus size={18} /> Add Customer
                     </button>
                 </div>
             </div>
 
-            {/* 5 KPI Cards Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginBottom: 20 }}>
+            {/* KPI Cards Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, marginBottom: 12 }}>
                 {loading ? (
                     <>
-                        <KpiSkeleton />
-                        <KpiSkeleton />
                         <KpiSkeleton />
                         <KpiSkeleton />
                         <KpiSkeleton />
                     </>
                 ) : (
                     <>
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Total CRM Contacts</p>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#111827', marginTop: 6, margin: 0 }}>{totalCustomers}</p>
-                            <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>Directory profiles</span>
+                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 14px', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Total Customers</p>
+                            <p style={{ fontSize: 22, fontWeight: 800, color: '#111827', margin: '2px 0 0 0' }}>{totalCustomers}</p>
+                            <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}></span>
                         </div>
 
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
+                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 14px', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
                             <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Active Customers</p>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#10b981', marginTop: 6, margin: 0 }}>{activeCustomers}</p>
-                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}>High engagement</span>
+                            <p style={{ fontSize: 22, fontWeight: 800, color: '#10b981', margin: '2px 0 0 0' }}>{activeCustomers}</p>
+                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600 }}></span>
                         </div>
 
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Inactive / Blocked</p>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#ef4444', marginTop: 6, margin: 0 }}>{inactiveCustomers}</p>
-                            <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>Requires outreach</span>
-                        </div>
-
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>VIP Segment</p>
-                            <p style={{ fontSize: 24, fontWeight: 800, color: '#d97706', marginTop: 6, margin: 0 }}>{vipCustomers}</p>
-                            <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600 }}>Premium members</span>
-                        </div>
-
-                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', transition: 'transform 0.2s ease' }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Top Spender</p>
-                            <p style={{ fontSize: 20, fontWeight: 800, color: '#8b5cf6', marginTop: 6, margin: 0 }}>{fmt(topSpenderObj.amount)}</p>
-                            <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{topSpenderObj.name}</span>
+                        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '10px 14px', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', margin: 0 }}>Inactive Customers</p>
+                            <p style={{ fontSize: 22, fontWeight: 800, color: '#ef4444', margin: '2px 0 0 0' }}>{inactiveCustomers}</p>
+                            <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}></span>
                         </div>
                     </>
                 )}
@@ -1011,19 +1114,19 @@ const Customers = () => {
 
             {/* Birthday Reminders Banner */}
             {birthdayCustomers.length > 0 && (
-                <div style={{ background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', border: '1px solid #fde68a', borderRadius: 14, padding: '12px 18px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 24 }}>🎂</span>
+                <div style={{ background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', border: '1px solid #fde68a', borderRadius: 10, padding: '8px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 20 }}>🎂</span>
                         <div>
-                            <p style={{ fontSize: 13, fontWeight: 700, color: '#92400e', margin: 0 }}>Birthday Reminders & Bonus Rewards</p>
-                            <p style={{ fontSize: 12, color: '#b45309', margin: '2px 0 0 0' }}>
+                            <p style={{ fontSize: 12, fontWeight: 700, color: '#92400e', margin: 0 }}>Birthday Reminders & Greetings</p>
+                            <p style={{ fontSize: 11, color: '#b45309', margin: '1px 0 0 0' }}>
                                 {birthdayCustomers.slice(0, 4).map(b => b.name || b.customer_name).join(', ')}
                                 {birthdayCustomers.length > 4 ? ` +${birthdayCustomers.length - 4} more` : ''}
                             </p>
                         </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#92400e', background: '#fef3c7', padding: '4px 10px', borderRadius: 16, border: '1px solid #fde68a' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#92400e', background: '#fef3c7', padding: '3px 8px', borderRadius: 12, border: '1px solid #fde68a' }}>
                             {birthdayCustomers.length} Birthdays
                         </span>
                         <button
@@ -1037,55 +1140,71 @@ const Customers = () => {
                                 background: '#d97706',
                                 color: '#fff',
                                 border: 'none',
-                                borderRadius: 8,
-                                padding: '6px 14px',
-                                fontSize: 12,
+                                borderRadius: 6,
+                                padding: '5px 12px',
+                                fontSize: 11,
                                 fontWeight: 700,
                                 cursor: birthdayGifting ? 'not-allowed' : 'pointer',
                                 transition: 'all 0.2s',
-                                boxShadow: '0 2px 4px rgba(217, 119, 6, 0.2)'
+                                boxShadow: '0 1px 3px rgba(217, 119, 6, 0.2)'
                             }}
                         >
-                            {birthdayGifting ? 'Gifting Points…' : '🎁 Gift 100 Birthday Points to All'}
+                            {birthdayGifting ? 'Sending Wishes…' : '🎉 Send Birthday Wishes to All'}
                         </button>
                     </div>
                 </div>
             )}
 
             {/* Customer Intelligence & Analytics Grid */}
-            <div style={{ marginBottom: 20 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ marginBottom: 10 }}>
+                <h3 style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <BsStarFill style={{ color: '#6366f1' }} /> Customer Intelligence & Analytics
                 </h3>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 10 }}>
                     {/* Card 1: Top Customers */}
                     <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 🏆 Top Customers
                             </span>
-                            <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>By spend</span>
+                            <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>By Spend</span>
                         </div>
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }} className="custom-scrollbar">
+                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }} className="custom-scrollbar">
                             {(() => {
                                 const list = normalizeApiList(customerInsights.topCustomers);
-                                const top5 = list.length > 0
-                                    ? list.slice(0, 5)
-                                    : [...customers].sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0)).slice(0, 5);
+                                const candidateList = list.length > 0 ? list : customers;
+                                const top5 = candidateList
+                                    .map(c => ({
+                                        id: c.customer_id || c.backendId || c.id,
+                                        name: c.customer_name || c.name || 'Customer',
+                                        spend: Number(c.total_spend ?? c.totalSpent ?? c.revenue ?? 0),
+                                    }))
+                                    .filter(c => c.spend > 0)
+                                    .sort((a, b) => b.spend - a.spend)
+                                    .slice(0, 5);
+
+                                if (top5.length === 0) {
+                                    return (
+                                        <div style={{ padding: '10px 8px', textAlign: 'center', color: '#9ca3af', margin: 'auto' }}>
+                                            <p style={{ fontSize: 11, fontWeight: 700, color: '#4b5563', margin: 0 }}>No Purchases Yet</p>
+                                            <p style={{ fontSize: 10, margin: '2px 0 0', color: '#9ca3af' }}>Top spenders appear once customer orders are logged.</p>
+                                        </div>
+                                    );
+                                }
 
                                 return top5.map((c, idx) => (
-                                    <div key={c.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, padding: '4px 8px', background: '#f9fafb', borderRadius: 8 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <span style={{ fontSize: 10, fontWeight: 800, color: idx === 0 ? '#d97706' : '#6b7280', background: idx === 0 ? '#fffbeb' : '#e5e7eb', width: 18, height: 18, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <div key={c.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, padding: '3px 6px', background: '#f9fafb', borderRadius: 6 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                            <span style={{ fontSize: 9, fontWeight: 800, color: idx === 0 ? '#d97706' : '#6b7280', background: idx === 0 ? '#fffbeb' : '#e5e7eb', width: 16, height: 16, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                                 {idx + 1}
                                             </span>
-                                            <span style={{ fontWeight: 600, color: '#111827', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                {c.name || c.customer_name || 'Customer'}
+                                            <span style={{ fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.name}>
+                                                {c.name}
                                             </span>
                                         </div>
-                                        <span style={{ fontWeight: 700, color: '#10b981' }}>
-                                            {fmt(c.total_spend || c.revenue || c.totalSpent || 0)}
+                                        <span style={{ fontWeight: 700, color: '#10b981', flexShrink: 0, marginLeft: 6 }}>
+                                            {fmt(c.spend)}
                                         </span>
                                     </div>
                                 ));
@@ -1093,242 +1212,227 @@ const Customers = () => {
                         </div>
                     </div>
 
-                    {/* Card 2: Retention Report */}
+                    {/* Card 2: Lifetime Value (LTV) */}
                     <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                📈 Retention Report
-                            </span>
-                            <span style={{ fontSize: 10, fontWeight: 800, color: '#10b981', background: '#ecfdf5', padding: '2px 8px', borderRadius: 10 }}>
-                                {(() => {
-                                    const raw = customerInsights.retention;
-                                    const tot = raw?.total_customers ?? customerStats?.total ?? customers.length;
-                                    const act = raw?.active_customers ?? customerStats?.active ?? customers.filter(c => c.status === 'Active').length;
-                                    return raw?.retention_rate || (tot > 0 ? `${Math.round((act / tot) * 100)}%` : '0%');
-                                })()}
-                            </span>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
-                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Active Buyers</span>
-                                <p style={{ fontSize: 16, fontWeight: 800, color: '#10b981', margin: '2px 0 0 0' }}>
-                                    {customerInsights.retention?.active_customers ?? customerStats?.active ?? customers.filter(c => c.status === 'Active').length}
-                                </p>
-                            </div>
-                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Inactive Base</span>
-                                <p style={{ fontSize: 16, fontWeight: 800, color: '#ef4444', margin: '2px 0 0 0' }}>
-                                    {customerInsights.retention?.inactive_customers ?? customers.filter(c => c.status !== 'Active').length}
-                                </p>
-                            </div>
-                        </div>
-                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Tracked User Base</span>
-                            <span style={{ fontWeight: 700, color: '#111827' }}>{totalCustomers} customers</span>
-                        </div>
-                    </div>
-
-                    {/* Card 3: Lifetime Value (LTV) */}
-                    <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                             <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                 💎 Lifetime Value (LTV)
                             </span>
                             <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Top 5 LTV</span>
                         </div>
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 5 }} className="custom-scrollbar">
+                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }} className="custom-scrollbar">
                             {(() => {
                                 const rawLtv = customerInsights.lifetimeValue;
-                                let ltvList = [];
-                                if (Array.isArray(rawLtv)) ltvList = rawLtv;
-                                else if (rawLtv?.items || rawLtv?.customers || rawLtv?.top_customers) {
-                                    ltvList = rawLtv.items || rawLtv.customers || rawLtv.top_customers;
-                                } else {
-                                    ltvList = [...customers].sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0));
-                                }
-                                const top5Ltv = ltvList.slice(0, 5);
+                                const ltvItems = normalizeApiList(rawLtv);
+                                let candidates = [];
 
-                                return top5Ltv.length === 0 ? (
-                                    <p style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', margin: 'auto' }}>No LTV Data</p>
-                                ) : (
-                                    top5Ltv.map((c, idx) => (
-                                        <div key={c.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, padding: '4px 8px', background: '#f9fafb', borderRadius: 8 }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                <span style={{ fontSize: 10, fontWeight: 700, color: '#8b5cf6' }}>#{idx + 1}</span>
-                                                <span style={{ fontWeight: 600, color: '#111827', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {c.name || c.customer_name || 'Customer'}
-                                                </span>
-                                            </div>
-                                            <span style={{ fontWeight: 700, color: '#8b5cf6' }}>
-                                                {fmt(c.ltv || c.lifetime_value || c.total_spend || c.totalSpent || 0)}
+                                if (ltvItems.length > 0) {
+                                    // Use genuine LTV API data from /customer-analytics/lifetime-value
+                                    candidates = ltvItems
+                                        .map(c => {
+                                            const val = c.lifetime_value !== null && c.lifetime_value !== undefined && c.lifetime_value !== ''
+                                                ? Number(c.lifetime_value)
+                                                : Number(c.ltv ?? c.total_spend ?? 0);
+                                            return {
+                                                id: c.customer_id || c.id,
+                                                name: c.customer_name || c.name || 'Customer',
+                                                ltv: val,
+                                            };
+                                        })
+                                        .filter(c => !isNaN(c.ltv) && c.ltv > 0);
+                                } else {
+                                    // Only include if customers have an explicit ltv / lifetime_value property; avoid mirroring top spenders
+                                    candidates = customers
+                                        .filter(c => c.ltv !== undefined || c.lifetime_value !== undefined)
+                                        .map(c => ({
+                                            id: c.backendId || c.id,
+                                            name: c.name || 'Customer',
+                                            ltv: Number(c.lifetime_value ?? c.ltv ?? 0),
+                                        }))
+                                        .filter(c => !isNaN(c.ltv) && c.ltv > 0);
+                                }
+
+                                const top5Ltv = candidates
+                                    .sort((a, b) => b.ltv - a.ltv)
+                                    .slice(0, 5);
+
+                                if (top5Ltv.length === 0) {
+                                    return (
+                                        <div style={{ padding: '10px 8px', textAlign: 'center', color: '#9ca3af', margin: 'auto' }}>
+                                            <p style={{ fontSize: 11, fontWeight: 700, color: '#4b5563', margin: 0 }}>No LTV Data Available</p>
+                                            <p style={{ fontSize: 10, margin: '2px 0 0', color: '#9ca3af' }}>LTV metrics will appear once calculated by the analytics engine.</p>
+                                        </div>
+                                    );
+                                }
+
+                                return top5Ltv.map((c, idx) => (
+                                    <div key={c.id || idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, padding: '3px 6px', background: '#f9fafb', borderRadius: 6 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                            <span style={{ fontSize: 9, fontWeight: 700, color: '#8b5cf6', background: '#f5f3ff', width: 16, height: 16, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                                #{idx + 1}
+                                            </span>
+                                            <span style={{ fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.name}>
+                                                {c.name}
                                             </span>
                                         </div>
-                                    ))
-                                );
+                                        <span style={{ fontWeight: 700, color: '#8b5cf6', flexShrink: 0, marginLeft: 6 }}>
+                                            {fmt(c.ltv)}
+                                        </span>
+                                    </div>
+                                ));
                             })()}
                         </div>
                     </div>
 
-                    {/* Card 4: Loyalty Summary */}
+                    {/* Card 3: Customer Segments */}
                     <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                🎁 Loyalty Summary
-                            </span>
-                            <span style={{ fontSize: 10, fontWeight: 800, color: '#d97706', background: '#fffbeb', padding: '2px 8px', borderRadius: 10 }}>
-                                Rewards
-                            </span>
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
-                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Enrolled</span>
-                                <p style={{ fontSize: 16, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
-                                    {customerInsights.loyaltyReport?.enrolled_members ?? customerInsights.loyaltyReport?.total_enrolled ?? customers.filter(c => c.loyaltyPoints > 0).length} members
-                                </p>
-                            </div>
-                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Points Issued</span>
-                                <p style={{ fontSize: 16, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
-                                    {customerInsights.loyaltyReport?.total_points_issued ? `${customerInsights.loyaltyReport.total_points_issued.toLocaleString('en-IN')} pts` : `${customers.reduce((acc, c) => acc + (c.loyaltyPoints || 0), 0).toLocaleString('en-IN')} pts`}
-                                </p>
-                            </div>
-                        </div>
-                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Redeemed Points</span>
-                            <span style={{ fontWeight: 700, color: '#111827' }}>
-                                {customerInsights.loyaltyReport?.total_points_redeemed ? `${customerInsights.loyaltyReport.total_points_redeemed.toLocaleString('en-IN')} pts` : '0 pts'}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                        {(() => {
+                            const total = customers.length;
+                            const newCount = customers.filter(c => (c.type || c.segment || '').toLowerCase() === 'new').length;
+                            const wholesaleCount = customers.filter(c => (c.type || c.segment || '').toLowerCase() === 'wholesale').length;
+                            // Reconcile Regular so sum of counts exactly equals total:
+                            const regularCount = Math.max(0, total - newCount - wholesaleCount);
 
-            {/* CRM Relationship Hub (Fixed 190px uniform height cards, NO raw object output) */}
-            <div style={{ marginBottom: 20 }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <BsJournalText style={{ color: '#6366f1' }} /> CRM Relationship Hub
-                </h3>
+                            // Reconcile Percentages so sum of percentages exactly equals 100% when total > 0:
+                            let newPct = 0;
+                            let wholesalePct = 0;
+                            let regularPct = 0;
+                            if (total > 0) {
+                                newPct = Math.round((newCount / total) * 100);
+                                wholesalePct = Math.round((wholesaleCount / total) * 100);
+                                regularPct = Math.max(0, 100 - newPct - wholesalePct);
+                            }
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-                    {/* CRM Card 1: Recent Notes */}
-                    <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Recent Notes
-                            </span>
-                            <BsJournalText size={16} style={{ color: '#3b82f6' }} />
-                        </div>
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }} className="custom-scrollbar">
-                            {notesList.length === 0 ? (
-                                <div style={{ margin: 'auto', textAlign: 'center' }}>
-                                    <p style={{ fontSize: 14, fontWeight: 800, color: '#111827', margin: 0 }}>0 notes logged</p>
-                                </div>
-                            ) : (
-                                notesList.slice(0, 4).map((n, i) => (
-                                    <div key={n.id || i} style={{ fontSize: 11, padding: '4px 8px', background: '#f9fafb', borderRadius: 6, border: '1px solid #f3f4f6' }}>
-                                        <p style={{ margin: 0, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            {n.content || n.note || n.text || 'Interaction note'}
-                                        </p>
+                            const segments = [
+                                { label: 'New', count: newCount, pct: newPct, color: '#0ea5e9' },
+                                { label: 'Regular', count: regularCount, pct: regularPct, color: '#6366f1' },
+                                { label: 'Wholesale', count: wholesaleCount, pct: wholesalePct, color: '#8b5cf6' },
+                            ];
+
+                            return (
+                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#0ea5e9', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            👥 Customer Segments
+                                        </span>
+                                        <span style={{ fontSize: 10, fontWeight: 800, color: '#0ea5e9', background: '#f0f9ff', padding: '2px 6px', borderRadius: 10 }}>
+                                            Total: {total}
+                                        </span>
                                     </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-
-                    {/* CRM Card 2: Communications */}
-                    <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#06b6d4', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Communications
-                            </span>
-                            <BsChatText size={16} style={{ color: '#06b6d4' }} />
-                        </div>
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }} className="custom-scrollbar">
-                            {commsList.length === 0 ? (
-                                <div style={{ margin: 'auto', textAlign: 'center' }}>
-                                    <p style={{ fontSize: 14, fontWeight: 800, color: '#111827', margin: 0 }}>0 touchpoints</p>
-                                </div>
-                            ) : (
-                                commsList.slice(0, 4).map((m, i) => (
-                                    <div key={m.id || i} style={{ fontSize: 11, padding: '4px 8px', background: '#f9fafb', borderRadius: 6, border: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between' }}>
-                                        <span style={{ fontWeight: 700, color: '#06b6d4', textTransform: 'uppercase' }}>{m.channel || m.type || 'SMS'}</span>
-                                        <span style={{ color: '#6b7280', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.message || m.content || 'Sent'}</span>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 4, margin: '2px 0' }}>
+                                        {segments.map(s => (
+                                            <div key={s.label} style={{ background: '#f9fafb', padding: '4px 6px', borderRadius: 6, border: '1px solid #f3f4f6', textAlign: 'center' }}>
+                                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600, display: 'block' }}>{s.label}</span>
+                                                <p style={{ fontSize: 14, fontWeight: 800, color: s.color, margin: '1px 0 0 0' }}>
+                                                    {s.count}
+                                                </p>
+                                                <span style={{ fontSize: 9, color: '#6b7280', fontWeight: 700 }}>
+                                                    {s.pct}%
+                                                </span>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-
-                    {/* CRM Card 3: Referrals */}
-                    <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Referrals
-                            </span>
-                            <BsShare size={16} style={{ color: '#10b981' }} />
-                        </div>
-                        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }} className="custom-scrollbar">
-                            {referralsList.length === 0 ? (
-                                <div style={{ margin: 'auto', textAlign: 'center' }}>
-                                    <p style={{ fontSize: 14, fontWeight: 800, color: '#111827', margin: 0 }}>0 referrals</p>
-                                </div>
-                            ) : (
-                                referralsList.slice(0, 4).map((r, i) => (
-                                    <div key={r.id || i} style={{ fontSize: 11, padding: '4px 8px', background: '#f9fafb', borderRadius: 6, border: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between' }}>
-                                        <span style={{ fontWeight: 600, color: '#111827' }}>{r.email || r.code || 'Referral'}</span>
-                                        <span style={{ fontWeight: 700, color: '#10b981' }}>{r.status || 'Active'}</span>
+                                    <div style={{ fontSize: 10, color: '#6b7280', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f3f4f6', paddingTop: 3, marginTop: 2 }}>
+                                        <span>Reconciled</span>
+                                        <span style={{ fontWeight: 700, color: '#10b981' }}>{newCount + regularCount + wholesaleCount} / {total} (100%)</span>
                                     </div>
-                                ))
-                            )}
-                        </div>
+                                </div>
+                            );
+                        })()}
                     </div>
 
-                    {/* CRM Card 4: Wallet & Loyalty Quick Stats */}
+                    {/* Card 4: Retention Report */}
                     <div style={analyticsCardStyle}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                Wallet & Loyalty
-                            </span>
-                            <BsWallet2 size={16} style={{ color: '#8b5cf6' }} />
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
-                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Total Wallet</span>
-                                <p style={{ fontSize: 15, fontWeight: 800, color: '#8b5cf6', margin: '2px 0 0 0' }}>
-                                    {fmt(customers.reduce((acc, c) => acc + (c.credit || 0), 0))}
-                                </p>
-                            </div>
-                            <div style={{ background: '#f9fafb', padding: '8px 10px', borderRadius: 8, border: '1px solid #f3f4f6' }}>
-                                <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Loyalty Pool</span>
-                                <p style={{ fontSize: 15, fontWeight: 800, color: '#d97706', margin: '2px 0 0 0' }}>
-                                    {customers.reduce((acc, c) => acc + (c.loyaltyPoints || 0), 0)} pts
-                                </p>
-                            </div>
-                        </div>
-                        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
-                            <span>Active rewards</span>
-                        </div>
+                        {(() => {
+                            const raw = customerInsights.retention;
+                            const tot = typeof raw?.total_customers === 'number' ? raw.total_customers : totalCustomers;
+                            const active = typeof raw?.active_customers === 'number' ? raw.active_customers : activeCustomers;
+                            const inactive = typeof raw?.inactive_customers === 'number' ? raw.inactive_customers : inactiveCustomers;
+                            const retained = typeof raw?.retained_customers === 'number'
+                                ? raw.retained_customers
+                                : customers.filter(c => Number(c.orders || 0) > 1).length;
+
+                            let ratePct = 0;
+                            if (typeof raw?.retention_rate === 'number') {
+                                const r = raw.retention_rate;
+                                ratePct = r <= 1 && r > 0 ? Math.round(r * 100) : Math.round(r);
+                            } else if (tot > 0) {
+                                ratePct = Math.round((retained / tot) * 100);
+                            }
+
+                            return (
+                                <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                                            📈 Retention Report
+                                        </span>
+                                        <span style={{ fontSize: 10, fontWeight: 800, color: '#10b981', background: '#ecfdf5', padding: '2px 6px', borderRadius: 10 }}>
+                                            {ratePct}% Rate
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, margin: '2px 0' }}>
+                                        <div style={{ background: '#f9fafb', padding: '4px 6px', borderRadius: 6, border: '1px solid #f3f4f6' }}>
+                                            <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Retained</span>
+                                            <p style={{ fontSize: 14, fontWeight: 800, color: '#10b981', margin: '1px 0 0 0' }}>
+                                                {retained}
+                                            </p>
+                                        </div>
+                                        <div style={{ background: '#f9fafb', padding: '4px 6px', borderRadius: 6, border: '1px solid #f3f4f6' }}>
+                                            <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>Active</span>
+                                            <p style={{ fontSize: 14, fontWeight: 800, color: '#6366f1', margin: '1px 0 0 0' }}>
+                                                {active}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div style={{ fontSize: 10, color: '#6b7280', display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #f3f4f6', paddingTop: 3, marginTop: 2 }}>
+                                        <span>Inactive: <strong style={{ color: '#ef4444' }}>{inactive}</strong></span>
+                                        <span>Cohort: <strong style={{ color: '#111827' }}>{tot} users</strong></span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
             </div>
 
             {/* Main Customer Table Card */}
-            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                 {/* Search & Filter Bar */}
-                <div style={{ padding: '16px 20px', borderBottom: '1px solid #f3f4f6' }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
-                            <div style={{ position: 'relative', flex: 1 }}>
-                                <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14 }} />
-                                <input
-                                    type="text"
-                                    className="ec-input"
-                                    placeholder="Search by customer name, email, phone or city..."
-                                    value={search}
-                                    onChange={e => { setSearch(e.target.value); setPage(1); }}
-                                    style={{ paddingLeft: 34, width: '100%', height: 38 }}
-                                />
-                            </div>
+                <div style={{ padding: '10px 16px', borderBottom: '1px solid #f3f4f6' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ position: 'relative', width: '100%', maxWidth: 360 }}>
+                            <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14 }} />
+                            <input
+                                type="text"
+                                className="ec-input"
+                                placeholder="Search by customer name, email, phone or city..."
+                                value={search}
+                                onChange={e => { setSearch(e.target.value.replace(/^\s+/, '')); setPage(1); }}
+                                style={{ paddingLeft: 34, paddingRight: search ? 30 : 12, width: '100%', height: 35 }}
+                            />
+                            {search && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setSearch(''); setPage(1); }}
+                                    style={{
+                                        position: 'absolute',
+                                        right: 10,
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#9ca3af',
+                                        cursor: 'pointer',
+                                        padding: 0,
+                                        fontSize: 14,
+                                        fontWeight: 700,
+                                        lineHeight: 1
+                                    }}
+                                    title="Clear search"
+                                >
+                                    ✕
+                                </button>
+                            )}
                         </div>
 
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
@@ -1338,12 +1442,11 @@ const Customers = () => {
                                     className="ec-input"
                                     value={filterStatus}
                                     onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
-                                    style={{ height: 38, fontSize: 12, padding: '0 10px' }}
+                                    style={{ height: 35, fontSize: 12, padding: '0 10px' }}
                                 >
                                     <option value="All">All Status</option>
                                     <option value="Active">Active</option>
                                     <option value="Inactive">Inactive</option>
-                                    <option value="Blocked">Blocked</option>
                                 </select>
                             </div>
 
@@ -1353,11 +1456,10 @@ const Customers = () => {
                                     className="ec-input"
                                     value={filterType}
                                     onChange={e => { setFilterType(e.target.value); setPage(1); }}
-                                    style={{ height: 38, fontSize: 12, padding: '0 10px' }}
+                                    style={{ height: 35, fontSize: 12, padding: '0 10px' }}
                                 >
                                     <option value="All">All Types</option>
                                     <option value="Regular">Regular</option>
-                                    <option value="VIP">VIP</option>
                                     <option value="Wholesale">Wholesale</option>
                                     <option value="New">New</option>
                                 </select>
@@ -1370,7 +1472,7 @@ const Customers = () => {
                                         className="ec-input"
                                         value={filterCity}
                                         onChange={e => { setFilterCity(e.target.value); setPage(1); }}
-                                        style={{ height: 38, fontSize: 12, padding: '0 10px' }}
+                                        style={{ height: 35, fontSize: 12, padding: '0 10px' }}
                                     >
                                         <option value="All">All Cities</option>
                                         {availableCities.map(c => <option key={c} value={c}>{c}</option>)}
@@ -1382,7 +1484,7 @@ const Customers = () => {
 
                     {/* Active Filter Chips & Reset Button */}
                     {hasActiveFilters && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12, pt: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 8, pt: 6 }}>
                             <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 700 }}>Active Filters:</span>
                             {search && (
                                 <span style={{ fontSize: 11, background: '#eef2ff', color: '#6366f1', border: '1px solid #c7d2fe', padding: '2px 8px', borderRadius: 12, display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
@@ -1424,7 +1526,7 @@ const Customers = () => {
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                         <thead>
                             <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                <th style={{ padding: '12px 14px', width: 38 }}>
+                                <th style={{ padding: '9px 10px', width: 36, textAlign: 'center' }}>
                                     <input
                                         type="checkbox"
                                         checked={isAllPageSelected}
@@ -1433,15 +1535,15 @@ const Customers = () => {
                                         style={{ cursor: 'pointer', accentColor: '#6366f1' }}
                                     />
                                 </th>
-                                <th style={{ padding: '12px 16px' }}>Customer Name</th>
-                                <th style={{ padding: '12px 16px' }}>ID & Segment</th>
-                                <th style={{ padding: '12px 16px' }}>Phone</th>
-                                <th style={{ padding: '12px 16px' }}>Location</th>
-                                <th style={{ padding: '12px 16px' }}>Orders</th>
-                                <th style={{ padding: '12px 16px' }}>Total Spent</th>
-                                <th style={{ padding: '12px 16px' }}>Wallet / Points</th>
-                                <th style={{ padding: '12px 16px' }}>Status </th>
-                                <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
+                                <th style={{ padding: '9px 8px', width: 55, textAlign: 'center' }}>Sr. No.</th>
+                                <th style={{ padding: '9px 14px' }}>Customer Name</th>
+                                <th style={{ padding: '9px 14px' }}>Segment</th>
+                                <th style={{ padding: '9px 14px' }}>Phone</th>
+                                <th style={{ padding: '9px 14px' }}>Address</th>
+                                <th style={{ padding: '9px 14px', textAlign: 'center' }}>Orders</th>
+                                <th style={{ padding: '9px 14px' }}>Total Spent</th>
+                                <th style={{ padding: '9px 14px' }}>Status</th>
+                                <th style={{ padding: '9px 14px', textAlign: 'center' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1455,18 +1557,19 @@ const Customers = () => {
                                 </>
                             ) : paginatedCustomers.length === 0 ? (
                                 <tr>
-                                    <td colSpan={10} style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
-                                        <p style={{ fontSize: 15, fontWeight: 700, color: '#374151', margin: 0 }}>No Customers Found</p>
+                                    <td colSpan={10} style={{ textAlign: 'center', padding: '32px 20px', color: '#9ca3af' }}>
+                                        <p style={{ fontSize: 14, fontWeight: 700, color: '#374151', margin: 0 }}>No Customers Found</p>
                                         <p style={{ fontSize: 12, marginTop: 4 }}>Try adjusting your search filter or add a new customer.</p>
                                     </td>
                                 </tr>
                             ) : (
-                                paginatedCustomers.map((cust) => {
+                                paginatedCustomers.map((cust, idx) => {
                                     const custId = cust.backendId || cust.id;
                                     const isRowSelected = selectedIds.includes(custId);
+                                    const serialNumber = (page - 1) * pageSize + idx + 1;
                                     return (
                                         <tr key={cust.id} style={{ borderBottom: '1px solid #f3f4f6', background: isRowSelected ? '#f5f3ff' : 'transparent', transition: 'background 0.15s ease' }} className="table-row-hover">
-                                            <td style={{ padding: '14px 14px', width: 38 }}>
+                                            <td style={{ padding: '9px 10px', width: 36, textAlign: 'center' }}>
                                                 <input
                                                     type="checkbox"
                                                     checked={isRowSelected}
@@ -1475,65 +1578,107 @@ const Customers = () => {
                                                 />
                                             </td>
 
-                                            <td style={{ padding: '14px 16px' }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff', fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                            <td style={{ padding: '9px 8px', textAlign: 'center', color: '#6b7280', fontWeight: 600, fontSize: 12, width: 55 }}>
+                                                {serialNumber}
+                                            </td>
+
+                                            <td style={{ padding: '9px 14px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                                                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #818cf8)', color: '#fff', fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                                         {cust.name?.[0]?.toUpperCase() || '?'}
                                                     </div>
                                                     <div>
                                                         <p style={{ fontWeight: 700, color: '#111827', margin: 0, fontSize: 13 }}>{cust.name}</p>
-                                                        <p style={{ fontSize: 11, color: '#6b7280', margin: '2px 0 0 0' }}>{cust.email}</p>
+                                                        <p style={{ fontSize: 11, color: '#6b7280', margin: '1px 0 0 0' }}>{cust.email}</p>
                                                     </div>
                                                 </div>
                                             </td>
 
-                                            <td style={{ padding: '14px 16px' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-                                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>{cust.id}</span>
-                                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1' }}>
-                                                        {cust.type}
-                                                    </span>
-                                                </div>
+                                            <td style={{ padding: '9px 14px' }}>
+                                                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: typeCfg[cust.type]?.bg || '#eef2ff', color: typeCfg[cust.type]?.color || '#6366f1', display: 'inline-block' }}>
+                                                    {cust.type}
+                                                </span>
                                             </td>
 
-                                            <td style={{ padding: '14px 16px', color: '#374151', fontWeight: 500 }}>
+                                            <td style={{ padding: '9px 14px', color: '#374151', fontWeight: 500 }}>
                                                 {cust.phone || '—'}
                                             </td>
 
-                                            <td style={{ padding: '14px 16px', color: '#374151' }}>
-                                                {cust.city || '—'}
+                                            <td style={{ padding: '9px 14px', color: '#374151' }}>
+                                                {cust.location || cust.city || '—'}
                                             </td>
 
-                                            <td style={{ padding: '14px 16px', fontWeight: 700, color: '#111827' }}>
-                                                {cust.orders} orders
+                                            <td style={{ padding: '9px 14px', textAlign: 'center', fontWeight: 700, color: '#111827' }}>
+                                                {cust.orders ?? 0}
                                             </td>
 
-                                            <td style={{ padding: '14px 16px', fontWeight: 800, color: '#10b981' }}>
+                                            <td style={{ padding: '9px 14px', fontWeight: 800, color: '#10b981' }}>
                                                 {fmt(cust.totalSpent)}
                                             </td>
 
-                                            <td style={{ padding: '14px 16px' }}>
-                                                <div style={{ fontSize: 11 }}>
-                                                    <span style={{ color: '#6366f1', fontWeight: 700, display: 'block' }}>Wallet: {fmt(cust.credit || 0)}</span>
-                                                    <span style={{ color: '#d97706', fontWeight: 600 }}>Points: {cust.loyaltyPoints || 0} pts</span>
-                                                </div>
+                                            <td style={{ padding: '9px 14px' }}>
+                                                {(() => {
+                                                    const isAct = cust.status === 'Active';
+                                                    const bg = isAct ? '#ecfdf5' : '#f3f4f6';
+                                                    const color = isAct ? '#059669' : '#4b5563';
+                                                    const border = isAct ? '#a7f3d0' : '#e5e7eb';
+                                                    const dotBg = isAct ? '#10b981' : '#9ca3af';
+                                                    const label = isAct ? 'Active' : 'Inactive';
+
+                                                    return (
+                                                        <span
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 5,
+                                                                fontSize: 11,
+                                                                fontWeight: 700,
+                                                                padding: '2px 8px',
+                                                                borderRadius: 12,
+                                                                background: bg,
+                                                                color: color,
+                                                                border: `1px solid ${border}`,
+                                                            }}
+                                                        >
+                                                            <span
+                                                                style={{
+                                                                    width: 5,
+                                                                    height: 5,
+                                                                    borderRadius: '50%',
+                                                                    background: dotBg,
+                                                                }}
+                                                            />
+                                                            {label}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </td>
 
-                                            <td style={{ padding: '14px 16px' }}>
-                                                <CustomerStatusToggle
-                                                    isActive={cust.status === 'Active'}
-                                                    loading={updatingStatusId === custId}
-                                                    onToggle={() => handleStatusToggle(custId, cust.status)}
-                                                />
-                                            </td>
+                                            <td style={{ padding: '9px 14px', textAlign: 'center' }}>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                                                    <CustomerStatusToggle
+                                                        isActive={cust.status === 'Active'}
+                                                        loading={updatingStatusId === custId}
+                                                        onToggle={() => handleStatusToggle(custId, cust.status)}
+                                                    />
 
-                                            <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                                                <div style={{ display: 'inline-flex', gap: 6 }}>
                                                     <button
                                                         type="button"
                                                         title="View Profile Details"
                                                         onClick={() => handleViewCustomerProfile(custId)}
-                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#6366f1', cursor: 'pointer' }}
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#6366f1',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
                                                     >
                                                         <BsEye size={14} />
                                                     </button>
@@ -1542,9 +1687,21 @@ const Customers = () => {
                                                         type="button"
                                                         title="Edit Customer"
                                                         onClick={() => setEditingCustomer(cust)}
-                                                        style={{ padding: 6, borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer' }}
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            color: '#374151',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
                                                     >
-                                                        <BsPencilSquare size={14} />
+                                                        <BsPencilSquare size={13} />
                                                     </button>
                                                 </div>
                                             </td>
@@ -1557,35 +1714,87 @@ const Customers = () => {
                 </div>
 
                 {/* Pagination Controls */}
-                <div style={{ padding: '14px 20px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb' }}>
+                <div style={{ padding: '10px 16px', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f9fafb', flexWrap: 'wrap', gap: 10 }}>
                     <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
-                        Showing <strong>{filteredCustomers.length > 0 ? (page - 1) * PAGE_SIZE + 1 : 0}</strong> to <strong>{Math.min(page * PAGE_SIZE, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> customers
+                        Showing <strong>{filteredCustomers.length > 0 ? (page - 1) * pageSize + 1 : 0}</strong> to <strong>{Math.min(page * pageSize, filteredCustomers.length)}</strong> of <strong>{filteredCustomers.length}</strong> customers
                     </p>
 
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            disabled={page === 1}
-                            onClick={() => setPage(prev => Math.max(1, prev - 1))}
-                            style={{ padding: '5px 10px', fontSize: 12 }}
-                        >
-                            <BsChevronLeft size={12} /> Prev
-                        </button>
+                    <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
+                        {/* Entries per Page Dropdown */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 12, color: '#4b5563', fontWeight: 600 }}>Entries per page:</span>
+                            <select
+                                className="ec-input"
+                                value={pageSize}
+                                onChange={e => {
+                                    setPageSize(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                                style={{
+                                    height: 32,
+                                    fontSize: 12,
+                                    padding: '0 8px',
+                                    borderRadius: 6,
+                                    background: '#ffffff',
+                                    border: '1px solid #d1d5db',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    color: '#374151',
+                                }}
+                            >
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
 
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
-                            Page {page} of {totalPages}
-                        </span>
+                        {/* Navigation Controls: Arrows only */}
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                disabled={page === 1}
+                                onClick={() => setPage(prev => Math.max(1, prev - 1))}
+                                title="Previous Page"
+                                aria-label="Previous Page"
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    padding: 0,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: 6,
+                                }}
+                            >
+                                <BsChevronLeft size={14} />
+                            </button>
 
-                        <button
-                            type="button"
-                            className="adm-btn-secondary"
-                            disabled={page >= totalPages}
-                            onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
-                            style={{ padding: '5px 10px', fontSize: 12 }}
-                        >
-                            Next <BsChevronRight size={12} />
-                        </button>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', padding: '0 6px' }}>
+                                Page {page} of {totalPages}
+                            </span>
+
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                disabled={page >= totalPages}
+                                onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+                                title="Next Page"
+                                aria-label="Next Page"
+                                style={{
+                                    width: 32,
+                                    height: 32,
+                                    padding: 0,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: 6,
+                                }}
+                            >
+                                <BsChevronRight size={14} />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1639,7 +1848,11 @@ const Customers = () => {
             {showAddModal && (
                 <AddCustomerModal
                     onClose={() => setShowAddModal(false)}
-                    onCreated={loadCrmDashboard}
+                    onCreated={async () => {
+                        setShowAddModal(false);
+                        showNotification('Customer created successfully!', 'success');
+                        await loadCrmDashboard(false);
+                    }}
                 />
             )}
 
@@ -1647,7 +1860,20 @@ const Customers = () => {
                 <EditCustomerModal
                     customer={editingCustomer}
                     onClose={() => setEditingCustomer(null)}
-                    onSaved={loadCrmDashboard}
+                    onSaved={async (updatedData) => {
+                        if (updatedData) {
+                            setCustomers(prev => prev.map(c =>
+                                (c.backendId === updatedData.backendId || c.id === updatedData.id)
+                                    ? { ...c, ...updatedData }
+                                    : c
+                            ));
+                            if (selectedCustomer && (selectedCustomer.backendId === updatedData.backendId || selectedCustomer.id === updatedData.id)) {
+                                setSelectedCustomer(prev => prev ? { ...prev, ...updatedData } : prev);
+                            }
+                            showNotification('Customer updated successfully!', 'success');
+                        }
+                        await loadCrmDashboard(false);
+                    }}
                 />
             )}
 
@@ -1656,6 +1882,10 @@ const Customers = () => {
                     customers={customers}
                     preSelectedIds={selectedIds}
                     onClose={() => setShowCampaignModal(false)}
+                    onCampaignSent={() => {
+                        setShowCampaignModal(false);
+                        showNotification('Marketing campaign sent successfully!', 'success');
+                    }}
                 />
             )}
 
@@ -1676,6 +1906,9 @@ const Customers = () => {
                     onStatusChange={handleStatusToggle}
                     onRefresh={handleViewCustomerProfile}
                     showFeedback={true}
+                    allowedTabs={['Overview', 'Orders', 'Ledger', 'Notes', 'Messages', 'Actions']}
+                    hideLoyalty={true}
+                    hideWallet={true}
                 />
             )}
         </div>
