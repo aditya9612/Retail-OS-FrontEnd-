@@ -224,3 +224,69 @@ export const exportCustomerDirectory = async ({ status = 'all', format = 'excel'
     return response;
 };
 
+export const getFeedbackAnalytics = async () => {
+    const response = await apiClient.get(`${CUSTOMER_API_URL}/feedback/analytics`);
+    return response.data;
+};
+
+export const getFeedbackByCustomerId = async (customerId) => {
+    const response = await apiClient.get(`${CUSTOMER_API_URL}/feedback/${customerId}`);
+    return response.data;
+};
+
+export const getNotesByCustomerId = async (customerId) => {
+    const response = await apiClient.get(`${CUSTOMER_API_URL}/notes/${customerId}`);
+    return response.data;
+};
+
+export const updateCreditLimit = async (customerId, creditLimit) => {
+    const payload = typeof creditLimit === 'object' ? creditLimit : { credit_limit: Number(creditLimit) };
+    const response = await apiClient.patch(
+        `${CUSTOMER_API_URL}/${customerId}/credit-limit`,
+        payload
+    );
+    return response.data;
+};
+
+export const getCustomerLedger = async (customerId, params = {}) => {
+    const response = await apiClient.get(
+        `${CUSTOMER_API_URL}/${customerId}/ledger`,
+        { params }
+    );
+    return response.data;
+};
+
+export const recordCustomerLedgerPayment = async (customerId, paymentData) => {
+    const response = await apiClient.post(
+        `${CUSTOMER_API_URL}/${customerId}/ledger/payment`,
+        paymentData
+    );
+    return response.data;
+};
+
+export const exportCustomerLedgerPdf = async (customerId) => {
+    const response = await apiClient.get(
+        `${CUSTOMER_API_URL}/${customerId}/ledger/pdf`,
+        { responseType: 'blob' }
+    );
+    return response;
+};
+
+export const sendCustomerLedgerPdf = async (customerId, data = {}) => {
+    const response = await apiClient.post(
+        `${CUSTOMER_API_URL}/${customerId}/send-ledger-pdf`,
+        data
+    );
+    return response.data;
+};
+
+export const getSmsNotifications = async (params = {}) => {
+    const response = await apiClient.get(`${CUSTOMER_API_URL}/notifications/sms`, { params });
+    return response.data;
+};
+
+export const getWhatsappNotifications = async (params = {}) => {
+    const response = await apiClient.get(`${CUSTOMER_API_URL}/notifications/whatsapp`, { params });
+    return response.data;
+};
+

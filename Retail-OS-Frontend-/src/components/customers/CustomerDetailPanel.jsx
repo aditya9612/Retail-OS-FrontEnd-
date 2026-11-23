@@ -6,6 +6,7 @@ import {
     getCustomerLoyalty,
     getLoyaltyHistory,
     getNotes,
+    getNotesByCustomerId,
     getCommunications,
     creditWallet,
     debitWallet,
@@ -16,10 +17,20 @@ import {
     sendCustomerSms,
     sendCustomerWhatsapp,
     createFeedback,
+    getFeedbackByCustomerId,
     createReferral,
+    getCustomerLedger,
+    recordCustomerLedgerPayment,
+    updateCreditLimit,
+    exportCustomerLedgerPdf,
+    sendCustomerLedgerPdf,
 } from '../../services/customer';
 import { fmt, normalizeApiList, getApiErrorMessage, setStoredCustomerStatus } from './customerHelpers';
-import { BsGift, BsWallet2, BsChatText, BsJournalText, BsEnvelope, BsCheckCircleFill, BsXCircleFill, BsPerson, BsPlus } from 'react-icons/bs';
+import {
+    BsGift, BsWallet2, BsChatText, BsJournalText, BsEnvelope,
+    BsCheckCircleFill, BsXCircleFill, BsPerson, BsPlus,
+    BsReceiptCutoff, BsDownload, BsSend
+} from 'react-icons/bs';
 
 const statusCfg = {
     Active: { color: '#10b981', bg: '#ecfdf5' },
@@ -33,7 +44,7 @@ const typeCfg = {
     New: { color: '#0ea5e9', bg: '#f0f9ff' },
 };
 
-const TABS = ['Overview', 'Orders', 'Wallet', 'Loyalty', 'Notes', 'Messages', 'Actions'];
+const TABS = ['Overview', 'Orders', 'Ledger', 'Wallet', 'Loyalty', 'Notes', 'Messages', 'Actions'];
 
 const tabBtnStyle = (active) => ({
     padding: '7px 14px',
@@ -93,10 +104,17 @@ const CustomerDetailPanel = ({
     onClose,
     onStatusChange,
     onRefresh,
+    onCustomerUpdated,
     showFeedback = false,
     hideLoyalty = false,
+    hideWallet = false,
+    allowedTabs,
 }) => {
-    const [activeTab, setActiveTab] = useState('Overview');
+    const visibleTabs = allowedTabs && Array.isArray(allowedTabs) && allowedTabs.length > 0
+        ? TABS.filter(t => allowedTabs.includes(t))
+        : TABS.filter(t => (!hideLoyalty || t !== 'Loyalty') && (!hideWallet || t !== 'Wallet'));
+
+    const [activeTab, setActiveTab] = useState(visibleTabs[0] || 'Overview');
     const [status, setStatus] = useState(customer.status || 'Active');
     const [actionLoading, setActionLoading] = useState(false);
 
@@ -109,15 +127,22 @@ const CustomerDetailPanel = ({
     // Tab Lazy Loading States & Cache
     const [tabData, setTabData] = useState({
         orders: null,
+        ledger: null,
         wallet: null,
         walletTransactions: null,
         loyalty: null,
         loyaltyHistory: null,
         notes: null,
         communications: null,
+        feedbacks: null,
     });
     const [loadedTabs, setLoadedTabs] = useState({ Overview: true });
     const [tabLoading, setTabLoading] = useState(false);
+
+    const [paymentAmount, setPaymentAmount] = useState('');
+    const [paymentMode, setPaymentMode] = useState('Cash');
+    const [paymentRef, setPaymentRef] = useState('');
+    const [newCreditLimit, setNewCreditLimit] = useState('');
 
     const [walletAmount, setWalletAmount] = useState('');
     const [walletNote, setWalletNote] = useState('');
@@ -138,16 +163,19 @@ const CustomerDetailPanel = ({
 
     // Reset tab cache when customer changes
     useEffect(() => {
-        setActiveTab('Overview');
-        setLoadedTabs({ Overview: true });
+        const defaultTab = visibleTabs.includes('Overview') ? 'Overview' : (visibleTabs[0] || 'Overview');
+        setActiveTab(defaultTab);
+        setLoadedTabs({ [defaultTab]: true });
         setTabData({
             orders: null,
+            ledger: null,
             wallet: null,
             walletTransactions: null,
             loyalty: null,
             loyaltyHistory: null,
             notes: null,
             communications: null,
+            feedbacks: null,
         });
     }, [customer?.backendId]);
 
@@ -162,7 +190,12 @@ const CustomerDetailPanel = ({
                 const res = await getCustomerOrders(customer.backendId);
                 setTabData(prev => ({ ...prev, orders: res }));
                 setLoadedTabs(prev => ({ ...prev, Orders: true }));
+            } else if (tabName === 'Ledger') {
+                const res = await getCustomerLedger(customer.backendId);
+                setTabData(prev => ({ ...prev, ledger: res }));
+                setLoadedTabs(prev => ({ ...prev, Ledger: true }));
             } else if (tabName === 'Wallet') {
+                if (hideWallet) return;
                 const [walletRes, walletTxRes] = await Promise.allSettled([
                     getCustomerWallet(customer.backendId),
                     getWalletTransactions(customer.backendId),
@@ -186,14 +219,24 @@ const CustomerDetailPanel = ({
                 }));
                 setLoadedTabs(prev => ({ ...prev, Loyalty: true }));
             } else if (tabName === 'Notes') {
-                const res = await getNotes({ customer_id: customer.backendId });
-                setTabData(prev => ({ ...prev, notes: res }));
+                const [notesRes, specificNotesRes] = await Promise.allSettled([
+                    getNotes({ customer_id: customer.backendId }),
+                    getNotesByCustomerId(customer.backendId),
+                ]);
+                const list = specificNotesRes.status === 'fulfilled' && specificNotesRes.value ? specificNotesRes.value : (notesRes.status === 'fulfilled' ? notesRes.value : []);
+                setTabData(prev => ({ ...prev, notes: list }));
                 setLoadedTabs(prev => ({ ...prev, Notes: true }));
             } else if (tabName === 'Messages') {
                 const res = await getCommunications({ customer_id: customer.backendId });
                 setTabData(prev => ({ ...prev, communications: res }));
                 setLoadedTabs(prev => ({ ...prev, Messages: true }));
             } else if (tabName === 'Actions') {
+                if (showFeedback) {
+                    try {
+                        const fb = await getFeedbackByCustomerId(customer.backendId);
+                        setTabData(prev => ({ ...prev, feedbacks: fb }));
+                    } catch (_) {}
+                }
                 setLoadedTabs(prev => ({ ...prev, Actions: true }));
             }
         } catch (err) {
@@ -250,6 +293,7 @@ const CustomerDetailPanel = ({
                 await fetchTabData(activeTab);
             }
             if (onRefresh) await onRefresh(customer.backendId);
+            if (onCustomerUpdated) await onCustomerUpdated(customer.backendId);
         } catch (error) {
             showPanelNotice(getApiErrorMessage(error, 'Action failed. Please try again.'), 'error');
         } finally {
@@ -261,6 +305,72 @@ const CustomerDetailPanel = ({
         runAction(
             () => addLoyalty(customer.backendId, { points: 100, reason: 'Initial Loyalty Enrollment' }),
             'Customer successfully enrolled in loyalty program!'
+        );
+    };
+
+    const handleRecordLedgerPayment = () => {
+        if (!paymentAmount || isNaN(Number(paymentAmount)) || Number(paymentAmount) <= 0) {
+            showPanelNotice('Please enter a valid payment amount.', 'error');
+            return;
+        }
+        runAction(
+            () => recordCustomerLedgerPayment(customer.backendId, {
+                amount: Number(paymentAmount),
+                payment_mode: paymentMode || 'Cash',
+                reference: paymentRef?.trim() || 'Manual Ledger Payment',
+            }),
+            'Customer ledger payment recorded successfully!',
+            async () => {
+                setPaymentAmount('');
+                setPaymentRef('');
+                await fetchTabData('Ledger', true);
+            }
+        );
+    };
+
+    const handleUpdateCreditLimit = () => {
+        if (!newCreditLimit || isNaN(Number(newCreditLimit))) {
+            showPanelNotice('Please enter a valid credit limit.', 'error');
+            return;
+        }
+        runAction(
+            () => updateCreditLimit(customer.backendId, Number(newCreditLimit)),
+            'Customer credit limit updated successfully!',
+            async () => {
+                setNewCreditLimit('');
+                await fetchTabData('Ledger', true);
+            }
+        );
+    };
+
+    const handleDownloadLedgerPdf = async () => {
+        try {
+            setActionLoading(true);
+            const res = await exportCustomerLedgerPdf(customer.backendId);
+            const blob = res instanceof Blob ? res : new Blob([res?.data || res], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ledger-${(customer.name || 'customer').replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            showPanelNotice('Ledger PDF downloaded successfully!', 'success');
+        } catch (err) {
+            showPanelNotice(getApiErrorMessage(err, 'Failed to download ledger PDF.'), 'error');
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleSendLedgerPdf = () => {
+        runAction(
+            () => sendCustomerLedgerPdf(customer.backendId, {
+                customer_id: Number(customer.backendId),
+                channel: 'WHATSAPP'
+            }),
+            'Customer ledger PDF sent successfully!'
         );
     };
 
@@ -331,7 +441,7 @@ const CustomerDetailPanel = ({
 
                         {/* Navigation Tabs */}
                         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginBottom: 16, paddingBottom: 4 }}>
-                            {(hideLoyalty ? TABS.filter(t => t !== 'Loyalty') : TABS).map(tab => (
+                            {visibleTabs.map(tab => (
                                 <button key={tab} type="button" style={tabBtnStyle(activeTab === tab)} onClick={() => setActiveTab(tab)}>
                                     {tab}
                                 </button>
@@ -355,7 +465,7 @@ const CustomerDetailPanel = ({
                                                 { label: 'City', value: customer.city || 'Not specified' },
                                                 { label: 'Total Orders', value: `${customer.orders ?? 0}` },
                                                 { label: 'Total Spent', value: fmt(customer.totalSpent) },
-                                                { label: 'Wallet Balance', value: walletBalance > 0 ? fmt(walletBalance) : '₹0' },
+                                                ...(!hideWallet ? [{ label: 'Wallet Balance', value: walletBalance > 0 ? fmt(walletBalance) : '₹0' }] : []),
                                                 ...(!hideLoyalty ? [{ label: 'Loyalty Points', value: `${points} pts` }] : []),
                                                 { label: 'Last Purchase', value: customer.lastOrder },
                                                 { label: 'Birthday', value: customer.birthday || 'Not set' },
@@ -415,6 +525,150 @@ const CustomerDetailPanel = ({
                                             </div>
                                         )}
                                     />
+                                )}
+
+                                {/* TAB 3: LEDGER */}
+                                {activeTab === 'Ledger' && (
+                                    <>
+                                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 16, marginBottom: 14 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                                                <div>
+                                                    <p style={{ fontSize: 11, color: '#64748b', fontWeight: 700, textTransform: 'uppercase', margin: 0 }}>Customer Khata / Ledger</p>
+                                                    <p style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: '3px 0 0 0' }}>
+                                                        {fmt(tabData.ledger?.balance ?? tabData.ledger?.current_balance ?? 0)}
+                                                    </p>
+                                                    <span style={{ fontSize: 11, color: '#64748b' }}>Current Outstanding Balance</span>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: 8 }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleDownloadLedgerPdf}
+                                                        className="adm-btn-secondary"
+                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 10px' }}
+                                                        title="Download Ledger PDF"
+                                                    >
+                                                        <BsDownload size={13} /> PDF
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleSendLedgerPdf}
+                                                        className="adm-btn-secondary"
+                                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, padding: '6px 10px' }}
+                                                        title="Send Ledger PDF via WhatsApp"
+                                                    >
+                                                        <BsSend size={13} /> Send
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Credit Limit Badge & Inline Edit */}
+                                            <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                                                <div>
+                                                    <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Credit Limit: </span>
+                                                    <strong style={{ color: '#6366f1', fontSize: 13 }}>
+                                                        {fmt(tabData.ledger?.credit_limit ?? customer.credit_limit ?? 0)}
+                                                    </strong>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        className="ec-input"
+                                                        placeholder="New limit"
+                                                        value={newCreditLimit}
+                                                        onChange={e => setNewCreditLimit(e.target.value)}
+                                                        style={{ width: 110, height: 32, fontSize: 12 }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        className="adm-btn-primary"
+                                                        disabled={actionLoading || !newCreditLimit}
+                                                        onClick={handleUpdateCreditLimit}
+                                                        style={{ height: 32, padding: '0 10px', fontSize: 11 }}
+                                                    >
+                                                        Update
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Ledger Entries List */}
+                                        <ListBlock
+                                            title="Statement Entries & Transactions"
+                                            items={tabData.ledger?.entries || tabData.ledger?.transactions || tabData.ledger?.items || []}
+                                            emptyTitle="No Ledger Entries Found"
+                                            emptyDesc="Invoices and recorded payments will appear in this ledger."
+                                            renderItem={(item) => {
+                                                const isPayment = item.type === 'payment' || item.type === 'credit' || (item.credit && Number(item.credit) > 0);
+                                                const amt = item.amount || (isPayment ? item.credit : item.debit) || 0;
+                                                return (
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <div>
+                                                            <strong style={{ textTransform: 'capitalize', color: '#1e293b' }}>
+                                                                {item.description || item.narration || (isPayment ? 'Payment Received' : 'Invoice Debit')}
+                                                            </strong>
+                                                            <span style={{ color: '#64748b', display: 'block', fontSize: 11, marginTop: 2 }}>
+                                                                {item.date || item.created_at ? new Date(item.date || item.created_at).toLocaleDateString('en-GB') : 'Recent'}
+                                                                {item.payment_mode ? ` • ${item.payment_mode}` : ''}
+                                                                {item.reference ? ` • Ref: ${item.reference}` : ''}
+                                                            </span>
+                                                        </div>
+                                                        <div style={{ textAlign: 'right' }}>
+                                                            <span style={{ fontWeight: 800, color: isPayment ? '#10b981' : '#ef4444' }}>
+                                                                {isPayment ? '-' : '+'}{fmt(amt)}
+                                                            </span>
+                                                            {item.balance !== undefined && (
+                                                                <span style={{ display: 'block', fontSize: 10, color: '#94a3b8' }}>
+                                                                    Bal: {fmt(item.balance)}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }}
+                                        />
+
+                                        {/* Record Payment Form */}
+                                        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, marginTop: 10 }}>
+                                            <p style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 8 }}>Record Payment to Ledger</p>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                                                <input
+                                                    className="ec-input"
+                                                    type="number"
+                                                    min="1"
+                                                    placeholder="Payment Amount (₹)"
+                                                    value={paymentAmount}
+                                                    onChange={e => setPaymentAmount(e.target.value)}
+                                                />
+                                                <select
+                                                    className="ec-input"
+                                                    value={paymentMode}
+                                                    onChange={e => setPaymentMode(e.target.value)}
+                                                >
+                                                    <option value="Cash">Cash</option>
+                                                    <option value="UPI">UPI / GPay</option>
+                                                    <option value="Bank Transfer">Bank Transfer</option>
+                                                    <option value="Cheque">Cheque</option>
+                                                    <option value="Card">Card</option>
+                                                </select>
+                                            </div>
+                                            <input
+                                                className="ec-input"
+                                                placeholder="Reference / Transaction Note (Optional)"
+                                                value={paymentRef}
+                                                onChange={e => setPaymentRef(e.target.value)}
+                                                style={{ width: '100%', marginBottom: 8 }}
+                                            />
+                                            <button
+                                                type="button"
+                                                className="adm-btn-primary"
+                                                disabled={actionLoading || !paymentAmount}
+                                                onClick={handleRecordLedgerPayment}
+                                            >
+                                                Record Payment
+                                            </button>
+                                        </div>
+                                    </>
                                 )}
 
                                 {/* TAB 3: WALLET */}
@@ -839,11 +1093,34 @@ const CustomerDetailPanel = ({
                                                     notes: feedbackText.trim(),
                                                 }),
                                                 'Feedback recorded.',
-                                                () => setFeedbackText('')
+                                                async () => {
+                                                    setFeedbackText('');
+                                                    try {
+                                                        const fb = await getFeedbackByCustomerId(customer.backendId);
+                                                        setTabData(prev => ({ ...prev, feedbacks: fb }));
+                                                    } catch (_) {}
+                                                }
                                             )}
                                         >
                                             Submit Feedback
                                         </button>
+
+                                        {tabData.feedbacks && (Array.isArray(tabData.feedbacks) ? tabData.feedbacks.length > 0 : Boolean(tabData.feedbacks?.items?.length)) && (
+                                            <div style={{ marginTop: 12, borderTop: '1px solid #e5e7eb', paddingTop: 10 }}>
+                                                <p style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', margin: '0 0 6px 0' }}>Recent Customer Feedback</p>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 120, overflowY: 'auto' }}>
+                                                    {normalizeApiList(tabData.feedbacks).map((f, i) => (
+                                                        <div key={f.id || i} style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px', fontSize: 11 }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                <span style={{ color: '#d97706', fontWeight: 700 }}>{'⭐'.repeat(f.rating || 5)}</span>
+                                                                <span style={{ color: '#9ca3af', fontSize: 10 }}>{f.created_at ? new Date(f.created_at).toLocaleDateString('en-GB') : 'Recent'}</span>
+                                                            </div>
+                                                            <p style={{ margin: '2px 0 0 0', color: '#374151' }}>{f.comment || f.feedback || f.notes || '—'}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
