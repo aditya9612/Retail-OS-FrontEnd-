@@ -158,12 +158,59 @@ const mapPeriodToApi = (p) => {
 
 const normalizeKpis = (raw) => {
     if (!raw || typeof raw !== 'object') return null;
-    if (raw.kpis && typeof raw.kpis === 'object') return raw.kpis;
-    if (raw.data && typeof raw.data === 'object' && !raw.online_revenue) {
-        if (raw.data.kpis && typeof raw.data.kpis === 'object') return raw.data.kpis;
-        return raw.data;
+    let kpis = null;
+    if (raw.kpis && typeof raw.kpis === 'object') kpis = { ...raw.kpis };
+    else if (raw.data && typeof raw.data === 'object' && !raw.online_revenue) {
+        if (raw.data.kpis && typeof raw.data.kpis === 'object') kpis = { ...raw.data.kpis };
+        else kpis = { ...raw.data };
+    } else {
+        kpis = { ...raw };
     }
-    return raw;
+
+    // Ensure logical consistency between total_online_orders and other KPI metrics
+    if (kpis && typeof kpis === 'object') {
+        const totalOrdersVal = kpis.total_online_orders?.value != null ? Number(kpis.total_online_orders.value) : null;
+        if (totalOrdersVal === 0 && kpis.pending_deliveries && typeof kpis.pending_deliveries === 'object') {
+            kpis.pending_deliveries = {
+                ...kpis.pending_deliveries,
+                value: 0,
+                change_percentage: 0
+            };
+        } else if (totalOrdersVal != null && totalOrdersVal > 0 && kpis.pending_deliveries?.value != null) {
+            const rawPending = Number(kpis.pending_deliveries.value);
+            if (rawPending > totalOrdersVal) {
+                kpis.pending_deliveries = {
+                    ...kpis.pending_deliveries,
+                    value: totalOrdersVal
+                };
+            }
+        }
+
+        const activeProdsVal = kpis.active_products?.value != null ? Number(kpis.active_products.value) : null;
+        if (activeProdsVal === 0 && kpis.active_products && typeof kpis.active_products === 'object') {
+            kpis.active_products = {
+                ...kpis.active_products,
+                change_percentage: 0
+            };
+        }
+
+        const convRateVal = kpis.conversion_rate?.value != null ? Number(kpis.conversion_rate.value) : null;
+        if ((convRateVal === 0 || totalOrdersVal === 0) && kpis.conversion_rate && typeof kpis.conversion_rate === 'object') {
+            kpis.conversion_rate = {
+                ...kpis.conversion_rate,
+                change_percentage: 0
+            };
+        }
+
+        const cartAbandVal = kpis.cart_abandonment?.value != null ? Number(kpis.cart_abandonment.value) : null;
+        if ((cartAbandVal === 0 || totalOrdersVal === 0) && kpis.cart_abandonment && typeof kpis.cart_abandonment === 'object') {
+            kpis.cart_abandonment = {
+                ...kpis.cart_abandonment,
+                change_percentage: 0
+            };
+        }
+    }
+    return kpis;
 };
 
 const normalizeRevenueComparison = (raw) => {
@@ -714,7 +761,7 @@ const ECommerceDashboard = () => {
                 }
 
                 if (!kpisData && overviewData?.kpis) {
-                    kpisData = overviewData.kpis;
+                    kpisData = normalizeKpis(overviewData.kpis);
                     kpisSynced = true;
                 }
 
@@ -1518,7 +1565,7 @@ const ECommerceDashboard = () => {
                     rawOverview = rawOverviewResult.value;
                     overviewSynced = true;
                     if (!newKpis && rawOverview.kpis) {
-                        newKpis = rawOverview.kpis;
+                        newKpis = normalizeKpis(rawOverview.kpis);
                         kpisSynced = true;
                     }
                     if (!newRevComp && rawOverview.revenue_comparison) {
@@ -2058,18 +2105,62 @@ const ECommerceDashboard = () => {
     // 8 e-commerce KPI metrics cards from GET /api/v1/ecommerce/dashboard/kpis
     const effectiveKpis = liveData.kpisData || liveData.overviewData?.kpis;
 
+    // Cross-validate and reconcile Total Online Orders & Pending Deliveries:
+    const rawKpiTotalOrders = (effectiveKpis?.total_online_orders && effectiveKpis.total_online_orders.value != null)
+        ? Number(effectiveKpis.total_online_orders.value)
+        : null;
+    const resolvedTotalOrders = rawKpiTotalOrders != null
+        ? Math.max(rawKpiTotalOrders, effectiveTotalOrders, totalOrders)
+        : Math.max(effectiveTotalOrders, totalOrders);
+
+    const rawKpiPendingDeliveries = (effectiveKpis?.pending_deliveries && effectiveKpis.pending_deliveries.value != null)
+        ? Number(effectiveKpis.pending_deliveries.value)
+        : null;
+
+    const rawKpiActiveProducts = (effectiveKpis?.active_products && effectiveKpis.active_products.value != null)
+        ? Number(effectiveKpis.active_products.value)
+        : null;
+    const resolvedActiveProducts = rawKpiActiveProducts != null
+        ? Math.max(rawKpiActiveProducts, typeof activeProducts === 'number' ? activeProducts : 0)
+        : (typeof activeProducts === 'number' ? activeProducts : 0);
+
+    const breakdownPendingCount = statusBreakdownData.reduce((sum, item) => {
+        const st = String(item.status || item.name || '').toLowerCase().trim();
+        if (['pending', 'processing', 'shipped', 'out for delivery', 'out_for_delivery', 'in_transit', 'dispatched', 'confirmed', 'packed', 'ready_for_pickup'].includes(st)) {
+            return sum + Number(item.count || 0);
+        }
+        return sum;
+    }, 0);
+
+    // Business & mathematical reconciliation:
+    // 1. If total online orders is 0, pending deliveries CANNOT exist (must be 0).
+    // 2. Pending deliveries can never exceed total online orders.
+    // 3. When pending deliveries is 0, change percentage must be '+0%' instead of showing anomalous growth.
+    const resolvedPendingDeliveries = resolvedTotalOrders === 0
+        ? 0
+        : Math.min(
+            resolvedTotalOrders,
+            breakdownPendingCount > 0
+                ? breakdownPendingCount
+                : (pendingDeliveries > 0 ? pendingDeliveries : (rawKpiPendingDeliveries != null ? rawKpiPendingDeliveries : 0))
+        );
+
     const kpis = [
         {
             label: 'Online Revenue',
             value: (effectiveKpis?.online_revenue && effectiveKpis.online_revenue.value != null)
                 ? fmt(effectiveKpis.online_revenue.value)
                 : fmt(revenue),
-            change: effectiveKpis?.online_revenue?.change_percentage != null
-                ? ((effectiveKpis.online_revenue.change_percentage >= 0 ? '+' : '') + effectiveKpis.online_revenue.change_percentage + '%')
-                : (revenue > 0 ? '+24.3%' : '0.0%'),
-            up: effectiveKpis?.online_revenue?.change_percentage != null
-                ? effectiveKpis.online_revenue.change_percentage >= 0
-                : revenue > 0,
+            change: (parseAmount(effectiveKpis?.online_revenue?.value) === 0 && revenue === 0)
+                ? '+0%'
+                : (effectiveKpis?.online_revenue?.change_percentage != null
+                    ? ((effectiveKpis.online_revenue.change_percentage >= 0 ? '+' : '') + effectiveKpis.online_revenue.change_percentage + '%')
+                    : (revenue > 0 ? '+24.3%' : '+0%')),
+            up: (parseAmount(effectiveKpis?.online_revenue?.value) === 0 && revenue === 0)
+                ? false
+                : (effectiveKpis?.online_revenue?.change_percentage != null
+                    ? effectiveKpis.online_revenue.change_percentage >= 0
+                    : revenue > 0),
             icon: <BsCurrencyRupee size={18} />,
             color: '#6366f1',
             bg: '#eef2ff',
@@ -2077,15 +2168,13 @@ const ECommerceDashboard = () => {
         },
         {
             label: 'Total Online Orders',
-            value: (effectiveKpis?.total_online_orders && effectiveKpis.total_online_orders.value != null)
-                ? Number(effectiveKpis.total_online_orders.value).toLocaleString('en-IN')
-                : totalOrders.toLocaleString('en-IN'),
+            value: resolvedTotalOrders.toLocaleString('en-IN'),
             change: effectiveKpis?.total_online_orders?.change_percentage != null
                 ? ((effectiveKpis.total_online_orders.change_percentage >= 0 ? '+' : '') + effectiveKpis.total_online_orders.change_percentage + '%')
-                : (totalOrders > 0 ? '+19.8%' : '0.0%'),
+                : (resolvedTotalOrders > 0 ? '+19.8%' : '+0%'),
             up: effectiveKpis?.total_online_orders?.change_percentage != null
                 ? effectiveKpis.total_online_orders.change_percentage >= 0
-                : totalOrders > 0,
+                : resolvedTotalOrders > 0,
             icon: <BsCartCheck size={18} />,
             color: '#10b981',
             bg: '#ecfdf5',
@@ -2097,15 +2186,17 @@ const ECommerceDashboard = () => {
         },
         {
             label: 'Active Products',
-            value: (effectiveKpis?.active_products && effectiveKpis.active_products.value != null)
-                ? Number(effectiveKpis.active_products.value).toLocaleString('en-IN')
-                : (typeof activeProducts === 'number' ? activeProducts.toLocaleString('en-IN') : String(activeProducts)),
-            change: effectiveKpis?.active_products?.change_percentage != null
-                ? ((effectiveKpis.active_products.change_percentage >= 0 ? '+' : '') + effectiveKpis.active_products.change_percentage + '%')
-                : (activeProducts > 0 ? ('+' + activePct + '%') : '0.0%'),
-            up: effectiveKpis?.active_products?.change_percentage != null
-                ? effectiveKpis.active_products.change_percentage >= 0
-                : activeProducts > 0,
+            value: resolvedActiveProducts.toLocaleString('en-IN'),
+            change: resolvedActiveProducts === 0
+                ? '+0%'
+                : (effectiveKpis?.active_products?.change_percentage != null
+                    ? ((effectiveKpis.active_products.change_percentage >= 0 ? '+' : '') + effectiveKpis.active_products.change_percentage + '%')
+                    : (activeProducts > 0 ? ('+' + activePct + '%') : '+0%')),
+            up: resolvedActiveProducts === 0
+                ? false
+                : (effectiveKpis?.active_products?.change_percentage != null
+                    ? effectiveKpis.active_products.change_percentage >= 0
+                    : activeProducts > 0),
             icon: <BsBoxSeam size={18} />,
             color: '#f59e0b',
             bg: '#fffbeb',
@@ -2118,47 +2209,63 @@ const ECommerceDashboard = () => {
         },
         {
             label: 'Conversion Rate',
-            value: (effectiveKpis?.conversion_rate && effectiveKpis.conversion_rate.value != null)
-                ? (effectiveKpis.conversion_rate.value + '%')
-                : conversionRate,
-            change: effectiveKpis?.conversion_rate?.change_percentage != null
-                ? ((effectiveKpis.conversion_rate.change_percentage >= 0 ? '+' : '') + effectiveKpis.conversion_rate.change_percentage + '%')
-                : (parseFloat(conversionRate) > 0 ? '+0.4%' : '0.0%'),
-            up: effectiveKpis?.conversion_rate?.change_percentage != null
-                ? effectiveKpis.conversion_rate.change_percentage >= 0
-                : parseFloat(conversionRate) > 0,
+            value: resolvedTotalOrders === 0
+                ? '0%'
+                : ((effectiveKpis?.conversion_rate && effectiveKpis.conversion_rate.value != null)
+                    ? (effectiveKpis.conversion_rate.value + '%')
+                    : conversionRate),
+            change: (resolvedTotalOrders === 0 || parseFloat(conversionRate) === 0)
+                ? '+0%'
+                : (effectiveKpis?.conversion_rate?.change_percentage != null
+                    ? ((effectiveKpis.conversion_rate.change_percentage >= 0 ? '+' : '') + effectiveKpis.conversion_rate.change_percentage + '%')
+                    : (parseFloat(conversionRate) > 0 ? '+0.4%' : '+0%')),
+            up: (resolvedTotalOrders === 0 || parseFloat(conversionRate) === 0)
+                ? false
+                : (effectiveKpis?.conversion_rate?.change_percentage != null
+                    ? effectiveKpis.conversion_rate.change_percentage >= 0
+                    : parseFloat(conversionRate) > 0),
             icon: <BsShopWindow size={18} />,
             color: '#22d3ee',
             bg: '#ecfeff',
-            sub: effectiveKpis?.conversion_rate?.subtext || (totalOrders > 0 ? (fulfilledCount.toLocaleString('en-IN') + ' fulfilled ÷ ' + totalOrders.toLocaleString('en-IN') + ' orders (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
+            sub: effectiveKpis?.conversion_rate?.subtext || (resolvedTotalOrders > 0 ? (fulfilledCount.toLocaleString('en-IN') + ' fulfilled ÷ ' + resolvedTotalOrders.toLocaleString('en-IN') + ' orders (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
         },
         {
             label: 'Cart Abandonment',
-            value: (effectiveKpis?.cart_abandonment && effectiveKpis.cart_abandonment.value != null)
-                ? (effectiveKpis.cart_abandonment.value + '%')
-                : cartAbandonment,
-            change: effectiveKpis?.cart_abandonment?.change_percentage != null
-                ? ((effectiveKpis.cart_abandonment.change_percentage >= 0 ? '+' : '') + effectiveKpis.cart_abandonment.change_percentage + '%')
-                : (totalOrders > 0 ? '-3.1%' : '0.0%'),
-            up: effectiveKpis?.cart_abandonment?.change_percentage != null
-                ? effectiveKpis.cart_abandonment.change_percentage < 0
-                : totalOrders > 0,
+            value: resolvedTotalOrders === 0
+                ? '0%'
+                : ((effectiveKpis?.cart_abandonment && effectiveKpis.cart_abandonment.value != null)
+                    ? (effectiveKpis.cart_abandonment.value + '%')
+                    : cartAbandonment),
+            change: (resolvedTotalOrders === 0 || parseFloat(cartAbandonment) === 0)
+                ? '+0%'
+                : (effectiveKpis?.cart_abandonment?.change_percentage != null
+                    ? ((effectiveKpis.cart_abandonment.change_percentage >= 0 ? '+' : '') + effectiveKpis.cart_abandonment.change_percentage + '%')
+                    : (resolvedTotalOrders > 0 ? '-3.1%' : '+0%')),
+            up: (resolvedTotalOrders === 0 || parseFloat(cartAbandonment) === 0)
+                ? false
+                : (effectiveKpis?.cart_abandonment?.change_percentage != null
+                    ? effectiveKpis.cart_abandonment.change_percentage < 0
+                    : resolvedTotalOrders > 0),
             icon: <BsTagFill size={18} />,
             color: '#8b5cf6',
             bg: '#f5f3ff',
-            sub: effectiveKpis?.cart_abandonment?.subtext || (totalOrders > 0 ? ('Abandoned / checkout rate (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
+            sub: effectiveKpis?.cart_abandonment?.subtext || (resolvedTotalOrders > 0 ? ('Abandoned / checkout rate (' + periodLabel + ')') : ('0 orders placed (' + periodLabel + ')'))
         },
         {
             label: 'Avg. Order Value',
             value: (effectiveKpis?.avg_order_value && effectiveKpis.avg_order_value.value != null)
                 ? fmt(effectiveKpis.avg_order_value.value)
                 : fmt(aov),
-            change: effectiveKpis?.avg_order_value?.change_percentage != null
-                ? ((effectiveKpis.avg_order_value.change_percentage >= 0 ? '+' : '') + effectiveKpis.avg_order_value.change_percentage + '%')
-                : (aov > 0 ? '+12.5%' : '0.0%'),
-            up: effectiveKpis?.avg_order_value?.change_percentage != null
-                ? effectiveKpis.avg_order_value.change_percentage >= 0
-                : aov > 0,
+            change: (parseAmount(effectiveKpis?.avg_order_value?.value) === 0 && aov === 0)
+                ? '+0%'
+                : (effectiveKpis?.avg_order_value?.change_percentage != null
+                    ? ((effectiveKpis.avg_order_value.change_percentage >= 0 ? '+' : '') + effectiveKpis.avg_order_value.change_percentage + '%')
+                    : (aov > 0 ? '+12.5%' : '+0%')),
+            up: (parseAmount(effectiveKpis?.avg_order_value?.value) === 0 && aov === 0)
+                ? false
+                : (effectiveKpis?.avg_order_value?.change_percentage != null
+                    ? effectiveKpis.avg_order_value.change_percentage >= 0
+                    : aov > 0),
             icon: <BsBagCheck size={18} />,
             color: '#ec4899',
             bg: '#fdf2f8',
@@ -2169,12 +2276,16 @@ const ECommerceDashboard = () => {
             value: (effectiveKpis?.online_customers && effectiveKpis.online_customers.value != null)
                 ? Number(effectiveKpis.online_customers.value).toLocaleString('en-IN')
                 : onlineCustomers.toLocaleString('en-IN'),
-            change: effectiveKpis?.online_customers?.change_percentage != null
-                ? ((effectiveKpis.online_customers.change_percentage >= 0 ? '+' : '') + effectiveKpis.online_customers.change_percentage + '%')
-                : (onlineCustomers > 0 ? '+31.2%' : '0.0%'),
-            up: effectiveKpis?.online_customers?.change_percentage != null
-                ? effectiveKpis.online_customers.change_percentage >= 0
-                : onlineCustomers > 0,
+            change: ((effectiveKpis?.online_customers?.value != null ? Number(effectiveKpis.online_customers.value) : onlineCustomers) === 0)
+                ? '+0%'
+                : (effectiveKpis?.online_customers?.change_percentage != null
+                    ? ((effectiveKpis.online_customers.change_percentage >= 0 ? '+' : '') + effectiveKpis.online_customers.change_percentage + '%')
+                    : (onlineCustomers > 0 ? '+31.2%' : '+0%')),
+            up: ((effectiveKpis?.online_customers?.value != null ? Number(effectiveKpis.online_customers.value) : onlineCustomers) === 0)
+                ? false
+                : (effectiveKpis?.online_customers?.change_percentage != null
+                    ? effectiveKpis.online_customers.change_percentage >= 0
+                    : onlineCustomers > 0),
             icon: <BsPeopleFill size={18} />,
             color: '#0ea5e9',
             bg: '#f0f9ff',
@@ -2185,17 +2296,19 @@ const ECommerceDashboard = () => {
         },
         {
             label: 'Pending Deliveries',
-            value: (effectiveKpis?.pending_deliveries && effectiveKpis.pending_deliveries.value != null)
-                ? Number(effectiveKpis.pending_deliveries.value).toLocaleString('en-IN')
-                : pendingDeliveries.toLocaleString('en-IN'),
-            change: effectiveKpis?.pending_deliveries?.change_percentage != null
-                ? ((effectiveKpis.pending_deliveries.change_percentage >= 0 ? '+' : '') + effectiveKpis.pending_deliveries.change_percentage + '%')
-                : (pendingDeliveries > 0 ? '+5.2%' : '0.0%'),
+            value: resolvedPendingDeliveries.toLocaleString('en-IN'),
+            change: resolvedPendingDeliveries === 0
+                ? '+0%'
+                : (effectiveKpis?.pending_deliveries?.change_percentage != null
+                    ? ((effectiveKpis.pending_deliveries.change_percentage >= 0 ? '+' : '') + effectiveKpis.pending_deliveries.change_percentage + '%')
+                    : (pendingDeliveries > 0 ? '+5.2%' : '+0%')),
             up: false,
             icon: <BsTruck size={18} />,
             color: '#f97316',
             bg: '#fff7ed',
-            sub: effectiveKpis?.pending_deliveries?.subtext || ('Awaiting dispatch (' + currentYear + ')'),
+            sub: resolvedPendingDeliveries === 0
+                ? ('0 awaiting dispatch (' + periodLabel + ')')
+                : (effectiveKpis?.pending_deliveries?.subtext || ('Awaiting dispatch (' + periodLabel + ')')),
             path: '/ecommerce/delivery'
         },
     ];

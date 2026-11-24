@@ -60,6 +60,105 @@ const PAYMENT_MODES = [
 
 export { resolveProductImage };
 
+// ── Systematic Product Name Formatter ────────────────────────────────────
+export const formatSystematicProductName = (name, fallbackId) => {
+    if (!name || typeof name !== 'string') {
+        return fallbackId ? `Product #${fallbackId}` : 'Unnamed Product';
+    }
+    const cleaned = name.trim().replace(/\s+/g, ' ');
+    if (!cleaned) return fallbackId ? `Product #${fallbackId}` : 'Unnamed Product';
+
+    // Title case with proper retail unit and acronym preservation
+    return cleaned.split(' ').map(word => {
+        if (/^(usb|led|pos|gst|ean|sku|hd|qc|rgb|mrp)$/i.test(word)) return word.toUpperCase();
+        if (/^\d+(w|l|g|kg|ml|oz|cm|mm|m)$/i.test(word)) {
+            const match = word.match(/^(\d+)([a-zA-Z]+)$/);
+            if (match) {
+                const unit = match[2].toLowerCase();
+                const formattedUnit = (unit === 'w' || unit === 'l') ? unit.toUpperCase() : unit;
+                return `${match[1]}${formattedUnit}`;
+            }
+        }
+        if (/^parle-?g$/i.test(word)) return 'Parle-G';
+        if (/^boat$/i.test(word)) return 'boAt';
+        if (/^type-c$/i.test(word)) return 'Type-C';
+        if (/^t-shirt$/i.test(word)) return 'T-Shirt';
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    }).join(' ');
+};
+
+const isProductOutOfStock = (product) => {
+    if (!product) return false;
+    if (product.isInStock === false && (product.stock <= 0)) return true;
+    if (product.status === 'Out of Stock') return true;
+    if (product.is_in_stock === false || product.in_stock === false) return true;
+    return false;
+};
+
+// ── Stock calculation helpers ───────────────────────────────────────────
+const extractProductStock = (p) => {
+    // 1. Direct stock or quantity properties
+    if (p.stock !== undefined && p.stock !== null && p.stock !== '') {
+        const val = Number(p.stock);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    if (p.quantity !== undefined && p.quantity !== null && p.quantity !== '') {
+        const val = Number(p.quantity);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    if (p.current_stock !== undefined && p.current_stock !== null && p.current_stock !== '') {
+        const val = Number(p.current_stock);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    if (p.inventory_quantity !== undefined && p.inventory_quantity !== null && p.inventory_quantity !== '') {
+        const val = Number(p.inventory_quantity);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    if (p.available_stock !== undefined && p.available_stock !== null && p.available_stock !== '') {
+        const val = Number(p.available_stock);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    if (p.stock_quantity !== undefined && p.stock_quantity !== null && p.stock_quantity !== '') {
+        const val = Number(p.stock_quantity);
+        if (!isNaN(val)) return Math.max(0, val);
+    }
+    // 2. Inventory object or array
+    if (p.inventory && typeof p.inventory === 'object') {
+        if (Array.isArray(p.inventory)) {
+            const sum = p.inventory.reduce((tot, item) => {
+                const q = item.stock ?? item.quantity ?? item.current_stock ?? item.inventory_quantity ?? 0;
+                return tot + (Number(q) || 0);
+            }, 0);
+            if (sum > 0) return sum;
+        } else {
+            const q = p.inventory.stock ?? p.inventory.quantity ?? p.inventory.current_stock ?? p.inventory.inventory_quantity;
+            if (q !== undefined && q !== null && q !== '') {
+                const val = Number(q);
+                if (!isNaN(val)) return Math.max(0, val);
+            }
+        }
+    }
+    // 3. Status or boolean flag checks: active catalog items default to available in-stock
+    if (p.is_in_stock === true || p.in_stock === true || p.status === 'In Stock' || p.status === 'Active' || p.is_active === true) {
+        return 50;
+    }
+    // Only if explicitly declared out of stock or inactive with zero inventory
+    if (p.is_in_stock === false || p.in_stock === false || p.status === 'Out of Stock' || p.status === 'Inactive' || p.is_active === false) {
+        return 0;
+    }
+    // Default fallback for catalog products: in-stock with 50 units
+    return 50;
+};
+
+const isProductInStock = (p, stockCount) => {
+    // If explicitly marked as in-stock, trust it
+    if (p.is_in_stock === true || p.in_stock === true) return true;
+    // If explicitly marked as out of stock or inactive and stock is 0
+    if ((p.status === 'Out of Stock' || p.is_in_stock === false || p.in_stock === false) && stockCount <= 0) return false;
+    // Otherwise in-stock if stock > 0
+    return stockCount > 0;
+};
+
 const Billing = () => {
     const [customer, setCustomer] = useState({ name: '', phone: '', gstin: '' });
     const [cart, setCart] = useState([]);
@@ -106,6 +205,12 @@ const Billing = () => {
     const [manualBarcodeInput, setManualBarcodeInput] = useState('');
     // ── Quantity limit warning ─────────────────────────────────────────────
     const [qtyLimitWarning, setQtyLimitWarning] = useState('');
+    const [stockWarning, setStockWarning] = useState('');
+    const showStockWarning = useCallback((productName) => {
+        setStockWarning(`"${productName}" is currently Out of Stock.`);
+        setTimeout(() => setStockWarning(''), 3000);
+    }, []);
+
     // ─────────────────────────────────────────────────────────────────────
     const scanInputRef = useRef(null);
 
@@ -257,9 +362,14 @@ const Billing = () => {
                     const gstVal = Number(p.gst_rate ?? p.tax_rate ?? p.gstRate ?? p.taxRate ?? (p.variants?.gst_rate || 0));
                     const barcodeVal = p.barcode || p.barcode_number || p.barcodeNumber || p.sku || String(p.id);
 
+                    const stockVal = extractProductStock(p);
+                    const inStock = isProductInStock(p, stockVal);
+                    const finalStock = inStock ? Math.max(stockVal, 1) : stockVal;
+                    const formattedName = formatSystematicProductName(p.name || p.title || p.product_name, p.id);
+
                     return {
                         id: p.id,
-                        name: p.name || p.title || p.product_name || `Product #${p.id}`,
+                        name: formattedName,
                         price: isNaN(priceVal) ? 0 : priceVal,
                         hsn: p.hsn_code || p.hsnCode || p.hsn || '',
                         gstRate: isNaN(gstVal) ? 0 : gstVal,
@@ -267,10 +377,13 @@ const Billing = () => {
                         barcode: String(barcodeVal),
                         image: resolveProductImage({
                             ...p,
-                            name: p.name || p.title,
+                            name: formattedName,
                             category: catName,
                         }),
                         discount: Number(p.discount || p.discount_amount || 0),
+                        stock: finalStock,
+                        isInStock: inStock,
+                        status: inStock ? 'In Stock' : 'Out of Stock',
                     };
                 });
                 setProducts(mapped);
@@ -396,9 +509,12 @@ const Billing = () => {
             return responseItems.map(serverItem => {
                 const existing = prev.find(i => i.id === serverItem.product_id) ||
                     products.find(p => p.id === serverItem.product_id);
+                const rawName = serverItem.product_name || existing?.name;
+                const formattedName = formatSystematicProductName(rawName, serverItem.product_id);
+                const resolvedImage = resolveProductImage(existing || { id: serverItem.product_id, name: formattedName, image: existing?.image });
                 return {
                     id: serverItem.product_id,
-                    name: serverItem.product_name || existing?.name || `Product #${serverItem.product_id}`,
+                    name: formattedName,
                     sku: serverItem.sku || existing?.sku || '',
                     hsn: serverItem.hsn_code || existing?.hsn || '',
                     qty: parseInt(serverItem.quantity, 10),
@@ -410,8 +526,8 @@ const Billing = () => {
                     sgstAmount: parseFloat(serverItem.sgst_amount || 0),
                     igstAmount: parseFloat(serverItem.igst_amount || 0),
                     totalAmount: parseFloat(serverItem.total_amount || 0),
-                    image: existing?.image || '/images/products/parle-g.jpg',
-                    category: existing?.category || 'Groceries',
+                    image: resolvedImage,
+                    category: existing?.category || 'General',
                 };
             });
         });
@@ -439,7 +555,9 @@ const Billing = () => {
         setCart(prev => {
             const existing = prev.find(i => i.id === product.id);
             if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1, unsynced: true } : i);
-            return [...prev, { ...product, image: resolveProductImage(product), qty: 1, discountPerItem: product.discount || 0, unsynced: true }];
+            const formattedName = formatSystematicProductName(product.name, product.id);
+            const resolvedImg = resolveProductImage({ ...product, name: formattedName });
+            return [...prev, { ...product, name: formattedName, image: resolvedImg, qty: 1, discountPerItem: product.discount || 0, unsynced: true }];
         });
 
         setAddingItemId(product.id);
@@ -1341,109 +1459,267 @@ const Billing = () => {
                         </div>
                     ) : (
                         filteredProducts.map(product => {
-                        const inCart = cart.find(i => i.id === product.id);
-                        const pImg = resolveProductImage(product);
-                        return (
-                            <div
-                                key={product.id}
-                                className={`pos-product-card${inCart ? ' pos-product-card--in-cart' : ''}`}
-                                onClick={() => addToCart(product)}
-                            >
-                                {inCart && (
-                                    <div className="pos-product-qty-badge">{inCart.qty}</div>
-                                )}
-                                <div className="pos-product-image">
-                                    <img
-                                        src={pImg}
-                                        alt={product.name}
-                                        loading="lazy"
-                                        onError={(e) => {
-                                            if (!e.target.dataset.triedFallback) {
-                                                e.target.dataset.triedFallback = 'true';
-                                                e.target.src = LOCAL_PRODUCT_IMAGES.parleG;
-                                            }
-                                        }}
-                                    />
-                                </div>
-                                <span className="pos-product-cat">{product.category}</span>
-                                <h3 className="pos-product-name">{product.name}</h3>
-                                {/* Display Item ID and Barcode on product card */}
-                                <div style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    fontSize: 10,
-                                    fontFamily: 'monospace',
-                                    fontWeight: 700,
-                                    color: '#4f46e5',
-                                    background: '#eef2ff',
-                                    padding: '2px 6px',
-                                    borderRadius: 4,
-                                    width: 'fit-content',
-                                    marginTop: 2,
-                                    marginBottom: 2,
-                                    flexWrap: 'wrap',
-                                }}>
-                                    <span>Item #{product.id}</span>
-                                    <span>•</span>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                        <BsUpcScan size={10} /> Barcode: {product.barcode}
-                                    </span>
-                                </div>
-                                {/* ── Discount badge on product card ── */}
-                                {product.discount > 0 && (
-                                    <div style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: 3,
-                                        fontSize: 10, fontWeight: 700,
-                                        color: '#dc2626', background: '#fef2f2',
-                                        border: '1px solid #fecaca',
-                                        padding: '2px 6px', borderRadius: 4,
-                                        width: 'fit-content', marginBottom: 2,
-                                    }}>
-                                        <BsPercent size={9} /> ₹{product.discount} OFF per item
-                                    </div>
-                                )}
-                                <div className="pos-product-footer">
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                                        {product.discount > 0 ? (
-                                            <>
-                                                <span style={{ fontSize: 10, color: '#9ca3af', textDecoration: 'line-through' }}>
-                                                    ₹{product.price.toLocaleString()}
-                                                </span>
-                                                <span className="pos-product-price" style={{ color: '#10b981' }}>
-                                                    ₹{(product.price - product.discount).toLocaleString()}
-                                                </span>
-                                            </>
-                                        ) : (
-                                            <span className="pos-product-price">₹{product.price.toLocaleString()}</span>
-                                        )}
-                                        <span style={{ fontSize: 9, color: '#9ca3af', fontWeight: 500 }}>excl. GST</span>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        className="pos-product-add-btn"
-                                        style={{
-                                            border: 'none',
-                                            outline: 'none',
-                                            cursor: 'pointer',
-                                            ...(addingItemId === product.id ? { opacity: 0.6 } : {})
-                                        }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
+                            const inCart = cart.find(i => i.id === product.id);
+                            const isOutOfStock = isProductOutOfStock(product);
+                            return (
+                                <div
+                                    key={product.id}
+                                    className={`pos-product-card${inCart ? ' pos-product-card--in-cart' : ''}${isOutOfStock ? ' pos-product-card--out-of-stock' : ''}`}
+                                    style={{
+                                        position: 'relative',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        height: '100%',
+                                        minHeight: 295,
+                                        background: inCart ? '#fafafe' : '#ffffff',
+                                        border: inCart ? '1.5px solid #818cf8' : '1.5px solid #e2e8f0',
+                                        borderRadius: 14,
+                                        padding: '12px',
+                                        cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        ...(isOutOfStock ? {
+                                            opacity: 0.72,
+                                            borderColor: '#fca5a5',
+                                            background: '#fffaf9',
+                                        } : {}),
+                                    }}
+                                    onClick={() => {
+                                        if (isOutOfStock) {
+                                            showStockWarning(product.name);
+                                        } else {
                                             addToCart(product);
-                                        }}
-                                        title={`Add ${product.name} to cart`}
-                                    >
-                                        {addingItemId === product.id
-                                            ? <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0 }}>…</span>
-                                            : <BsPlus size={18} />
                                         }
-                                    </button>
+                                    }}
+                                >
+                                    {isOutOfStock ? (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 8,
+                                            left: 8,
+                                            background: '#ef4444',
+                                            color: '#ffffff',
+                                            fontSize: 10,
+                                            fontWeight: 800,
+                                            padding: '3px 8px',
+                                            borderRadius: 6,
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '0.04em',
+                                            boxShadow: '0 2px 6px rgba(239, 68, 68, 0.35)',
+                                            zIndex: 3,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                        }}>
+                                            <BsExclamationTriangle size={10} /> Out of Stock
+                                        </div>
+                                    ) : inCart ? (
+                                        <div className="pos-product-qty-badge" style={{
+                                            position: 'absolute',
+                                            top: 8,
+                                            right: 8,
+                                            background: '#4f46e5',
+                                            color: '#fff',
+                                            fontSize: 11,
+                                            fontWeight: 800,
+                                            width: 22,
+                                            height: 22,
+                                            borderRadius: '50%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            boxShadow: '0 2px 6px rgba(79, 70, 229, 0.4)',
+                                            zIndex: 3,
+                                        }}>{inCart.qty}</div>
+                                    ) : null}
+                                    <div
+                                        className="pos-product-image"
+                                        style={{
+                                            width: '100%',
+                                            height: 96,
+                                            borderRadius: 10,
+                                            overflow: 'hidden',
+                                            background: '#f8fafc',
+                                            border: '1px solid #f1f5f9',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            marginBottom: 8,
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        <img
+                                            src={resolveProductImage(product)}
+                                            alt={product.name}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.25s ease' }}
+                                            onError={(e) => {
+                                                if (!e.target.dataset.triedFallback) {
+                                                    e.target.dataset.triedFallback = 'true';
+                                                    e.target.src = LOCAL_PRODUCT_IMAGES.parleG;
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 2, flexShrink: 0 }}>
+                                        <span
+                                            className="pos-product-cat"
+                                            style={{
+                                                fontSize: 9.5,
+                                                fontWeight: 800,
+                                                color: '#6366f1',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.06em',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {product.category}
+                                        </span>
+                                        {product.discount > 0 && (
+                                            <span style={{
+                                                fontSize: 9,
+                                                fontWeight: 800,
+                                                color: '#dc2626',
+                                                background: '#fef2f2',
+                                                border: '1px solid #fecaca',
+                                                borderRadius: 4,
+                                                padding: '1px 5px',
+                                                whiteSpace: 'nowrap',
+                                            }}>
+                                                ₹{product.discount} OFF
+                                            </span>
+                                        )}
+                                    </div>
+                                    <h3
+                                        className="pos-product-name"
+                                        title={product.name}
+                                        style={{
+                                            fontSize: 13,
+                                            fontWeight: 700,
+                                            color: '#0f172a',
+                                            lineHeight: 1.35,
+                                            height: 35,
+                                            minHeight: 35,
+                                            margin: '2px 0 4px',
+                                            display: '-webkit-box',
+                                            WebkitLineClamp: 2,
+                                            WebkitBoxOrient: 'vertical',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            wordBreak: 'break-word',
+                                        }}
+                                    >
+                                        {product.name}
+                                    </h3>
+                                    {/* Display Item ID and Barcode on product card */}
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        fontSize: 9.5,
+                                        fontFamily: 'monospace',
+                                        fontWeight: 700,
+                                        color: '#4f46e5',
+                                        background: '#eef2ff',
+                                        padding: '2px 6px',
+                                        borderRadius: 4,
+                                        width: 'fit-content',
+                                        marginBottom: 4,
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: '100%',
+                                    }}>
+                                        <span>Item #{product.id}</span>
+                                        <span>•</span>
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                            <BsUpcScan size={9} /> {product.barcode}
+                                        </span>
+                                    </div>
+                                    {/* Stock status badge on product card */}
+                                    <div
+                                        className={`pos-product-stock-badge ${product.isInStock !== false && (product.stock > 0 || product.isInStock) ? 'in-stock' : 'out-of-stock'}`}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                            fontSize: 9.5,
+                                            fontWeight: 700,
+                                            color: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#059669' : '#dc2626',
+                                            background: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#ecfdf5' : '#fef2f2',
+                                            border: `1px solid ${(product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#a7f3d0' : '#fecaca'}`,
+                                            padding: '2px 6px',
+                                            borderRadius: 4,
+                                            width: 'fit-content',
+                                            marginBottom: 6,
+                                        }}
+                                    >
+                                        <span style={{
+                                            width: 5,
+                                            height: 5,
+                                            borderRadius: '50%',
+                                            background: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#10b981' : '#ef4444',
+                                            display: 'inline-block',
+                                        }} />
+                                        <span>
+                                            {(product.isInStock !== false && (product.stock > 0 || product.isInStock))
+                                                ? `In Stock (${product.stock ?? 50})`
+                                                : 'Out of Stock'}
+                                        </span>
+                                    </div>
+                                    <div className="pos-product-footer" style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6, borderTop: '1px solid #f1f5f9' }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                            {product.discount > 0 ? (
+                                                <>
+                                                    <span style={{ fontSize: 9.5, color: '#9ca3af', textDecoration: 'line-through' }}>
+                                                        ₹{product.price.toLocaleString()}
+                                                    </span>
+                                                    <span className="pos-product-price" style={{ color: '#10b981', fontSize: 14, fontWeight: 800 }}>
+                                                        ₹{(product.price - product.discount).toLocaleString()}
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <span className="pos-product-price" style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>₹{product.price.toLocaleString()}</span>
+                                            )}
+                                            <span style={{ fontSize: 9, color: isOutOfStock ? '#ef4444' : '#9ca3af', fontWeight: isOutOfStock ? 700 : 500 }}>
+                                                {isOutOfStock ? 'Out of Stock' : `GST ${product.gstRate}% excl.`}
+                                            </span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className="pos-product-add-btn"
+                                            disabled={isOutOfStock}
+                                            title={isOutOfStock ? `${product.name} is Out of Stock` : `Add ${product.name} to cart`}
+                                            style={{
+                                                border: 'none',
+                                                outline: 'none',
+                                                cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                                                background: isOutOfStock ? '#fee2e2' : undefined,
+                                                color: isOutOfStock ? '#ef4444' : undefined,
+                                                ...(isOutOfStock ? { opacity: 0.5 } : {}),
+                                                ...(addingItemId === product.id ? { opacity: 0.6 } : {})
+                                            }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (isOutOfStock) {
+                                                    showStockWarning(product.name);
+                                                } else {
+                                                    addToCart(product);
+                                                }
+                                            }}
+                                        >
+                                            {isOutOfStock ? (
+                                                <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px' }}>OOS</span>
+                                            ) : addingItemId === product.id ? (
+                                                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0 }}>…</span>
+                                            ) : (
+                                                <BsPlus size={18} />
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
-                                <span className="pos-product-gst-tag">GST {product.gstRate}% excl.</span>
-                            </div>
-                        );
-                    }))}
+                            );
+                        }))}
                 </div>
             </div>
 
@@ -1622,6 +1898,25 @@ const Billing = () => {
                     <div className="pos-right-content custom-scrollbar">
 
                         {/* ── Quantity Limit Warning Toast ── */}
+                        {stockWarning && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+                                padding: '8px 12px', marginBottom: 10, fontSize: 12, color: '#991b1b', fontWeight: 600,
+                                animation: 'fadeIn 0.2s ease',
+                            }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 14 }}>⚠️</span>
+                                    {stockWarning}
+                                </span>
+                                <button
+                                    onClick={() => setStockWarning('')}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', display: 'flex', padding: 0, marginLeft: 8 }}
+                                >
+                                    <BsX size={16} />
+                                </button>
+                            </div>
+                        )}
                         {qtyLimitWarning && (
                             <div style={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -2645,19 +2940,22 @@ const Billing = () => {
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                 <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: 8, overflow: 'hidden', flexShrink: 0, border: '1px solid #e2e8f0' }}>
-                                                    {p.image && (p.image.startsWith('/') || p.image.startsWith('http')) ? (
+                                                    {p.image && (p.image.startsWith('/') || p.image.startsWith('http') || p.image.startsWith('data:')) ? (
                                                         <img
                                                             src={p.image}
                                                             alt={p.name}
                                                             style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '7px' }}
-                                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                                            onError={(e) => {
+                                                                e.target.onerror = null;
+                                                                e.target.src = resolveProductImage({ ...p, image: null });
+                                                            }}
                                                         />
                                                     ) : (
-                                                        <span style={{ fontSize: 22 }}>{p.image}</span>
+                                                        <span style={{ fontSize: 20 }}>📦</span>
                                                     )}
                                                 </div>
                                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={p.name}>
                                                         {p.name}
                                                     </div>
                                                     <div style={{ fontSize: 11, color: '#64748b' }}>

@@ -3,8 +3,16 @@ import {
     BsPlus, BsSearch, BsPencilFill, BsTrashFill, BsCheckCircleFill,
     BsXCircleFill, BsTagFill, BsPercent, BsCurrencyRupee, BsTruck,
     BsPeople, BsClockHistory, BsInfoCircle, BsEye, BsEyeSlash,
+    BsDownload, BsLightningFill, BsTicketPerforated, BsClipboard, BsCheck2,
+    BsLockFill, BsUnlockFill, BsFileEarmarkSpreadsheet, BsFileEarmarkPdf,
 } from 'react-icons/bs';
-import { getCoupons, createCoupon, updateCoupon, deleteCoupon, getActiveCoupons, getExpiredCoupons, getCouponStats, activateCoupon, deactivateCoupon, getCoupon, validateCoupon, applyCoupon } from '../../services/couponService';
+import {
+    getCoupons, createCoupon, updateCoupon, deleteCoupon,
+    getActiveCoupons, getExpiredCoupons, getCouponStats,
+    activateCoupon, deactivateCoupon, getCoupon,
+    validateCoupon, applyCoupon,
+    getApplicableCoupons, exportCoupons, bulkGenerateCoupons, getCouponRedemptions,
+} from '../../services/couponService';
 
 
 
@@ -241,6 +249,7 @@ const mapBackendToFrontend = (b) => {
 
     const mapped = {
         id: raw.id || b.id || `cpn-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        rawId: raw.id || b.id || null,
         code: String(raw.code || '').toUpperCase(),
         type,
         value,
@@ -311,6 +320,948 @@ const validateMaxDiscount = (form) => {
     return null;
 };
 
+// ── Modal for Bulk Generating Coupons (POST /api/v1/coupons/bulk-generate) ─────────
+const BulkGenerateModal = ({ onClose, onGenerated }) => {
+    const [form, setForm] = useState({
+        prefix: 'FEST',
+        count: 10,
+        description: 'Festive season promotional single-use vouchers',
+        discount_type: 'percentage',
+        discount_value: 15,
+        minimum_order_amount: 500,
+        maximum_discount: 250,
+        usage_limit: 1,
+        usage_limit_per_customer: 1,
+        start_date: new Date().toISOString().split('T')[0],
+        end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [result, setResult] = useState(null);
+    const [copiedAll, setCopiedAll] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await bulkGenerateCoupons(form);
+            setResult(res);
+            if (onGenerated) onGenerated(res);
+        } catch (err) {
+            console.error('Error generating bulk coupons:', err);
+            setError(err.message || 'Failed to bulk generate coupon codes.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCopyAll = () => {
+        const codesList = result?.coupons?.map(c => c.code) || [];
+        if (codesList.length === 0) return;
+        navigator.clipboard.writeText(codesList.join('\n'));
+        setCopiedAll(true);
+        setTimeout(() => setCopiedAll(false), 2000);
+    };
+
+    return (
+        <div className="ec-modal-overlay" style={{ zIndex: 1200 }} onClick={onClose}>
+            <div className="ec-modal" style={{ maxWidth: 540, maxHeight: '92vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                <div className="ec-modal-header" style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: 12 }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>⚡</span>
+                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>
+                                Bulk Generate Coupons
+                            </h3>
+                            <span style={{ fontSize: 10, fontWeight: 700, background: '#f5f3ff', color: '#6d28d9', padding: '2px 8px', borderRadius: 10 }}>
+                                POST /coupons/bulk-generate
+                            </span>
+                        </div>
+                        <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 0' }}>
+                            Generate batches of unique, single-use voucher codes in seconds
+                        </p>
+                    </div>
+                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+                </div>
+
+                {!result ? (
+                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
+                        {error && (
+                            <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2', padding: '8px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500 }}>
+                                ⚠️ {error}
+                            </div>
+                        )}
+
+                        <div className="ec-form-row">
+                            <div className="ec-field">
+                                <label style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Code Prefix *</label>
+                                <input className="ec-input" placeholder="e.g. FEST, VIP, SALE" required maxLength={20}
+                                    value={form.prefix} onChange={e => setForm(f => ({ ...f, prefix: e.target.value.toUpperCase() }))}
+                                    style={{ fontFamily: 'monospace', fontWeight: 700, letterSpacing: 1 }} />
+                            </div>
+                            <div className="ec-field">
+                                <label style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Number of Codes *</label>
+                                <input className="ec-input" type="number" min={1} max={500} required
+                                    value={form.count} onChange={e => setForm(f => ({ ...f, count: Math.min(500, Math.max(1, parseInt(e.target.value, 10) || 1)) }))} />
+                            </div>
+                        </div>
+
+                        <div className="ec-field">
+                            <label style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Description *</label>
+                            <input className="ec-input" placeholder="e.g. Festive discount vouchers" required
+                                value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+                        </div>
+
+                        <div className="ec-form-row">
+                            <div className="ec-field">
+                                <label style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Discount Type *</label>
+                                <select className="ec-input" value={form.discount_type} onChange={e => setForm(f => ({ ...f, discount_type: e.target.value }))}>
+                                    <option value="percentage">Percentage (%)</option>
+                                    <option value="fixed">Fixed Amount (₹)</option>
+                                </select>
+                            </div>
+                            <div className="ec-field">
+                                <label style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
+                                    {form.discount_type === 'percentage' ? 'Discount % *' : 'Discount Amount (₹) *'}
+                                </label>
+                                <input className="ec-input" type="number" min={1} required
+                                    value={form.discount_value} onChange={e => setForm(f => ({ ...f, discount_value: e.target.value }))} />
+                            </div>
+                        </div>
+
+                        <div className="ec-form-row">
+                            <div className="ec-field">
+                                <label style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Min Order Value (₹)</label>
+                                <input className="ec-input" type="number" min={1}
+                                    value={form.minimum_order_amount} onChange={e => setForm(f => ({ ...f, minimum_order_amount: e.target.value }))} />
+                            </div>
+                            <div className="ec-field">
+                                <label style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Max Discount (₹)</label>
+                                <input className="ec-input" type="number" min={1} placeholder="Optional"
+                                    value={form.maximum_discount || ''} onChange={e => setForm(f => ({ ...f, maximum_discount: e.target.value }))} />
+                            </div>
+                        </div>
+
+                        <div className="ec-form-row">
+                            <div className="ec-field">
+                                <label style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Start Date *</label>
+                                <input className="ec-input" type="date" required
+                                    value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
+                            </div>
+                            <div className="ec-field">
+                                <label style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Expiry Date *</label>
+                                <input className="ec-input" type="date" required
+                                    value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+                            <button type="button" className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose} disabled={loading}>
+                                Cancel
+                            </button>
+                            <button type="submit" className="adm-btn-primary" style={{ flex: 1.5, justifyContent: 'center', background: '#7c3aed' }} disabled={loading}>
+                                {loading ? 'Generating…' : `⚡ Generate ${form.count} Vouchers`}
+                            </button>
+                        </div>
+                    </form>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
+                        <div style={{ background: '#f5f3ff', border: '1.5px solid #ddd6fe', borderRadius: 10, padding: '14px 16px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#6d28d9', fontWeight: 800, fontSize: 14 }}>
+                                <span>🎉</span>
+                                <span>{result.message || `Successfully generated ${result.generated_count || result.coupons?.length || 0} unique vouchers!`}</span>
+                            </div>
+                            <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0' }}>
+                                Prefix: <strong>{form.prefix}</strong> · {form.discount_type === 'percentage' ? `${form.discount_value}% Off` : `₹${form.discount_value} Off`}
+                            </p>
+                        </div>
+
+                        <div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Generated Codes ({result.coupons?.length || 0})</span>
+                                <button
+                                    type="button"
+                                    onClick={handleCopyAll}
+                                    style={{
+                                        padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                                        background: '#f3f4f6', border: '1px solid #d1d5db', cursor: 'pointer',
+                                        display: 'flex', alignItems: 'center', gap: 4, color: '#374151',
+                                    }}>
+                                    {copiedAll ? <BsCheck2 size={12} color="#16a34a" /> : <BsClipboard size={12} />}
+                                    <span>{copiedAll ? 'Copied All!' : 'Copy All Codes'}</span>
+                                </button>
+                            </div>
+                            <div style={{
+                                maxHeight: 220, overflowY: 'auto', background: '#0f172a', borderRadius: 8,
+                                padding: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8,
+                            }}>
+                                {(result.coupons || []).map((cpn, idx) => (
+                                    <div key={idx} style={{
+                                        background: '#1e293b', color: '#38bdf8', fontFamily: 'monospace',
+                                        fontWeight: 700, fontSize: 12, padding: '6px 8px', borderRadius: 4, textAlign: 'center',
+                                        letterSpacing: 0.5, border: '1px solid #334155',
+                                    }}>
+                                        {cpn.code || cpn}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                style={{ flex: 1, justifyContent: 'center' }}
+                                onClick={() => setResult(null)}>
+                                Generate More
+                            </button>
+                            <button
+                                type="button"
+                                className="adm-btn-primary"
+                                style={{ flex: 1, justifyContent: 'center', background: '#10b981' }}
+                                onClick={onClose}>
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ── Modal for Customer Redemptions (GET /api/v1/coupons/{coupon_id}/redemptions) ────
+const CouponRedemptionsModal = ({ coupon, onClose }) => {
+    const [redemptions, setRedemptions] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const couponId = coupon?.rawId || coupon?.id;
+
+    const fetchRedemptions = async () => {
+        if (!couponId) return;
+        setLoading(true);
+        setError(null);
+        try {
+            const data = await getCouponRedemptions(couponId);
+            const list = Array.isArray(data) ? data : (data?.data || data?.items || data?.redemptions || []);
+            setRedemptions(Array.isArray(list) ? list : []);
+        } catch (err) {
+            console.error('Error fetching coupon redemptions:', err);
+            setError(err.message || 'Failed to fetch customer redemptions.');
+            setRedemptions([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchRedemptions();
+    }, [couponId]);
+
+    return (
+        <div className="ec-modal-overlay" style={{ zIndex: 1200 }} onClick={onClose}>
+            <div className="ec-modal" style={{ maxWidth: 640, maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                <div className="ec-modal-header" style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: 12 }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>🎟️</span>
+                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>
+                                Customer Redemptions · {coupon?.code}
+                            </h3>
+                            <span style={{ fontSize: 10, fontWeight: 700, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 10 }}>
+                                GET /redemptions
+                            </span>
+                        </div>
+                        <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 0' }}>
+                            Customer transactions where coupon <strong>{coupon?.code}</strong> was successfully redeemed
+                        </p>
+                    </div>
+                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+                </div>
+
+                <div style={{ marginTop: 14 }}>
+                    {loading ? (
+                        <div style={{ textAlign: 'center', padding: 40, color: '#6b7280', fontSize: 13 }}>
+                            <p>Loading customer redemptions…</p>
+                        </div>
+                    ) : error ? (
+                        <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2', padding: '12px 14px', borderRadius: 8, fontSize: 13 }}>
+                            <p style={{ margin: 0, fontWeight: 600 }}>⚠️ {error}</p>
+                            <p style={{ margin: '4px 0 0', fontSize: 11, color: '#6b7280' }}>
+                                (If no redemptions have been recorded yet on the database, this coupon has 0 transactions)
+                            </p>
+                        </div>
+                    ) : redemptions.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af', fontSize: 13 }}>
+                            <BsTicketPerforated size={36} style={{ opacity: 0.3, marginBottom: 8 }} />
+                            <p style={{ fontWeight: 600, color: '#374151' }}>No Customer Redemptions Yet</p>
+                            <p style={{ fontSize: 12, color: '#9ca3af' }}>This coupon code has not been redeemed on any orders.</p>
+                        </div>
+                    ) : (
+                        <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                <thead>
+                                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569' }}>#</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Order ID</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569' }}>Customer</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#475569' }}>Order Amount</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#475569' }}>Discount</th>
+                                        <th style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#475569' }}>Redeemed At</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {redemptions.map((r, i) => (
+                                        <tr key={r.id || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '8px 12px', color: '#9ca3af', fontFamily: 'monospace' }}>{r.id || i + 1}</td>
+                                            <td style={{ padding: '8px 12px', fontWeight: 600, color: '#111827' }}>
+                                                {r.order_id ? `#ORD-${r.order_id}` : '--'}
+                                            </td>
+                                            <td style={{ padding: '8px 12px', color: '#4b5563' }}>
+                                                {r.customer_phone || (r.customer_id ? `Cust #${r.customer_id}` : 'Walk-in Customer')}
+                                            </td>
+                                            <td style={{ padding: '8px 12px', textAlign: 'right', color: '#374151' }}>
+                                                ₹{Number(r.order_amount || 0).toLocaleString('en-IN')}
+                                            </td>
+                                            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#059669' }}>
+                                                -₹{Number(r.discount_amount || 0).toLocaleString('en-IN')}
+                                            </td>
+                                            <td style={{ padding: '8px 12px', textAlign: 'right', color: '#6b7280', fontSize: 11 }}>
+                                                {r.redeemed_at ? new Date(r.redeemed_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' }) : 'Recent'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
+                    <span style={{ fontSize: 12, color: '#6b7280' }}>
+                        Total redemptions: <strong>{redemptions.length}</strong>
+                    </span>
+                    <button className="adm-btn-secondary" onClick={onClose}>
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ── Modal for Exporting Coupons Report (GET /api/v1/coupons/export) ─────────────────
+const ExportCouponsModal = ({ onClose, onExportSuccess }) => {
+    const [format, setFormat] = useState('excel'); // 'excel' | 'csv' | 'pdf'
+    const [status, setStatus] = useState('all');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    const handleExport = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await exportCoupons({ format, status: status === 'all' ? undefined : status });
+            const a = document.createElement('a');
+            a.href = res.url;
+            a.download = res.filename;
+            a.click();
+            setTimeout(() => window.URL.revokeObjectURL(res.url), 1000);
+            if (onExportSuccess) onExportSuccess(`Exported ${format.toUpperCase()} report successfully!`);
+            onClose();
+        } catch (err) {
+            console.error('Export failed:', err);
+            setError(err.message || 'Failed to export coupons report.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="ec-modal-overlay" style={{ zIndex: 1200 }} onClick={onClose}>
+            <div className="ec-modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+                <div className="ec-modal-header" style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: 12 }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>📊</span>
+                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>
+                                Export Coupons Report
+                            </h3>
+                            <span style={{ fontSize: 10, fontWeight: 700, background: '#ecfdf5', color: '#047857', padding: '2px 8px', borderRadius: 10 }}>
+                                GET /export
+                            </span>
+                        </div>
+                        <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 0' }}>
+                            Download complete coupons audit report in Excel, CSV, or PDF
+                        </p>
+                    </div>
+                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
+                    {error && (
+                        <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2', padding: '8px 12px', borderRadius: 8, fontSize: 12 }}>
+                            ⚠️ {error}
+                        </div>
+                    )}
+
+                    <div className="ec-field">
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Select File Format *</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 4 }}>
+                            {[
+                                { id: 'excel', label: 'Excel (.xlsx)', icon: <BsFileEarmarkSpreadsheet size={16} /> },
+                                { id: 'csv', label: 'CSV (.csv)', icon: '📄' },
+                                { id: 'pdf', label: 'PDF (.pdf)', icon: <BsFileEarmarkPdf size={16} /> },
+                            ].map(f => (
+                                <button
+                                    key={f.id}
+                                    type="button"
+                                    onClick={() => setFormat(f.id)}
+                                    style={{
+                                        padding: '10px 8px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                                        border: `1.5px solid ${format === f.id ? '#4f46e5' : '#e2e8f0'}`,
+                                        background: format === f.id ? '#eef2ff' : '#fff',
+                                        color: format === f.id ? '#4f46e5' : '#475569',
+                                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                                    }}>
+                                    <span>{f.icon}</span>
+                                    <span>{f.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="ec-field">
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Filter by Status</label>
+                        <select className="ec-input" value={status} onChange={e => setStatus(e.target.value)}>
+                            <option value="all">All Coupons</option>
+                            <option value="active">Active Coupons</option>
+                            <option value="expired">Expired Coupons</option>
+                            <option value="inactive">Inactive Coupons</option>
+                            <option value="scheduled">Scheduled Coupons</option>
+                        </select>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                        <button type="button" className="adm-btn-secondary" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose} disabled={loading}>
+                            Cancel
+                        </button>
+                        <button type="button" className="adm-btn-primary" style={{ flex: 1.5, justifyContent: 'center' }} onClick={handleExport} disabled={loading}>
+                            {loading ? 'Exporting…' : `⬇️ Download ${format.toUpperCase()}`}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ── Modal for Applicable & Locked Recommendations (GET /api/v1/coupons/applicable) ──
+const ApplicableCouponsModal = ({ onClose, onApplyToTest }) => {
+    const [amount, setAmount] = useState('500');
+    const [phone, setPhone] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [data, setData] = useState(null);
+
+    const handleFetch = async (e) => {
+        if (e) e.preventDefault();
+        const numAmt = Number(amount);
+        if (!numAmt || numAmt <= 0) {
+            setError('Please enter a valid cart amount greater than 0.');
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await getApplicableCoupons({
+                order_amount: numAmt,
+                ...(phone.trim() ? { customer_phone: phone.trim() } : {}),
+            });
+            setData(res);
+        } catch (err) {
+            console.error('Error fetching applicable coupons:', err);
+            setError(err.message || 'Failed to fetch applicable coupon recommendations.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        handleFetch();
+    }, []);
+
+    const applicableList = data?.applicable_coupons || [];
+    const lockedList = data?.locked_coupons || [];
+
+    return (
+        <div className="ec-modal-overlay" style={{ zIndex: 1200 }} onClick={onClose}>
+            <div className="ec-modal" style={{ maxWidth: 580, maxHeight: '92vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                <div className="ec-modal-header" style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: 12 }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>🎯</span>
+                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: 0 }}>
+                                Applicable & Locked Coupons
+                            </h3>
+                            <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: 10 }}>
+                                GET /applicable
+                            </span>
+                        </div>
+                        <p style={{ fontSize: 11, color: '#64748b', margin: '4px 0 0' }}>
+                            Smart recommendations for current cart value, including unlockable offers
+                        </p>
+                    </div>
+                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+                </div>
+
+                {/* Amount Filter Bar */}
+                <form onSubmit={handleFetch} style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginTop: 14 }}>
+                    <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>
+                            Cart / Order Amount (₹) *
+                        </label>
+                        <input
+                            className="ec-input"
+                            type="number"
+                            min="1"
+                            value={amount}
+                            onChange={e => setAmount(e.target.value)}
+                            placeholder="e.g. 500"
+                            required
+                        />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4 }}>
+                            Customer Phone (Optional)
+                        </label>
+                        <input
+                            className="ec-input"
+                            value={phone}
+                            onChange={e => setPhone(e.target.value)}
+                            placeholder="e.g. 9876543210"
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        className="adm-btn-primary"
+                        disabled={loading}
+                        style={{ height: 38, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <BsSearch size={12} /> {loading ? 'Checking…' : 'Find'}
+                    </button>
+                </form>
+
+                {error && (
+                    <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2', padding: '10px 12px', borderRadius: 8, fontSize: 12, marginTop: 12 }}>
+                        ⚠️ {error}
+                    </div>
+                )}
+
+                {/* Results */}
+                <div style={{ marginTop: 16 }}>
+                    {/* Applicable (Unlocked) */}
+                    <div style={{ marginBottom: 16 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                            <BsUnlockFill size={14} color="#16a34a" />
+                            <h4 style={{ fontSize: 13, fontWeight: 800, color: '#16a34a', margin: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                Applicable Coupons ({applicableList.length})
+                            </h4>
+                        </div>
+                        {applicableList.length === 0 ? (
+                            <p style={{ fontSize: 12, color: '#9ca3af', background: '#f9fafb', padding: '12px 14px', borderRadius: 8 }}>
+                                No coupons are currently applicable for ₹{amount || 0}. Add items to unlock coupons below!
+                            </p>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {applicableList.map((c, i) => (
+                                    <div key={i} style={{
+                                        background: '#f0fdf4', border: '1.5px solid #bbf7d0', borderRadius: 8,
+                                        padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14, color: '#166534', letterSpacing: 1 }}>
+                                                    {c.code || c.coupon_code}
+                                                </span>
+                                                <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '1px 6px', borderRadius: 4 }}>
+                                                    Ready to Apply
+                                                </span>
+                                            </div>
+                                            <p style={{ fontSize: 11, color: '#4b5563', margin: '3px 0 0' }}>
+                                                {c.description || (c.discount_type === 'percentage' ? `${c.discount_value}% Discount` : `₹${c.discount_value} Flat Off`)}
+                                            </p>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <p style={{ fontSize: 14, fontWeight: 800, color: '#15803d', margin: 0 }}>
+                                                {c.discount_amount ? `Save ₹${c.discount_amount}` : (c.discount_type === 'percentage' ? `${c.discount_value}% OFF` : `₹${c.discount_value} OFF`)}
+                                            </p>
+                                            {onApplyToTest && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onApplyToTest(c.code || c.coupon_code, amount)}
+                                                    style={{
+                                                        marginTop: 4, padding: '2px 8px', borderRadius: 4, fontSize: 10,
+                                                        fontWeight: 700, background: '#16a34a', color: '#fff', border: 'none', cursor: 'pointer',
+                                                    }}>
+                                                    Test Apply
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Locked (Requires higher cart) */}
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                            <BsLockFill size={14} color="#f59e0b" />
+                            <h4 style={{ fontSize: 13, fontWeight: 800, color: '#b45309', margin: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                Locked Coupons ({lockedList.length})
+                            </h4>
+                        </div>
+                        {lockedList.length === 0 ? (
+                            <p style={{ fontSize: 12, color: '#9ca3af', background: '#f9fafb', padding: '12px 14px', borderRadius: 8 }}>
+                                No locked coupons for this cart amount.
+                            </p>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {lockedList.map((c, i) => {
+                                    const minRequired = Number(c.minimum_order_amount || c.min_order_amount || 0);
+                                    const diff = minRequired > Number(amount) ? minRequired - Number(amount) : 0;
+                                    return (
+                                        <div key={i} style={{
+                                            background: '#fffbeb', border: '1.5px solid #fde68a', borderRadius: 8,
+                                            padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                        }}>
+                                            <div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 14, color: '#92400e', letterSpacing: 1 }}>
+                                                        {c.code || c.coupon_code}
+                                                    </span>
+                                                    <span style={{ fontSize: 10, fontWeight: 700, background: '#fef3c7', color: '#b45309', padding: '1px 6px', borderRadius: 4 }}>
+                                                        Locked
+                                                    </span>
+                                                </div>
+                                                <p style={{ fontSize: 11, color: '#78350f', margin: '3px 0 0' }}>
+                                                    {c.description || (c.discount_type === 'percentage' ? `${c.discount_value}% Discount` : `₹${c.discount_value} Flat Off`)}
+                                                </p>
+                                            </div>
+                                            <div style={{ textAlign: 'right' }}>
+                                                <span style={{ fontSize: 11, fontWeight: 700, color: '#b45309' }}>
+                                                    {diff > 0 ? `Add ₹${diff} more` : `Min ₹${minRequired}`}
+                                                </span>
+                                                <p style={{ fontSize: 10, color: '#92400e', margin: '2px 0 0' }}>
+                                                    to unlock
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div style={{ marginTop: 16, borderTop: '1px solid #e5e7eb', paddingTop: 12, textAlign: 'right' }}>
+                    <button type="button" className="adm-btn-secondary" onClick={onClose}>
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ── Embedded Recommendations View for 'applicable' Tab (GET /api/v1/coupons/applicable) ──
+const ApplicableRecommendationsView = ({ onApplyToTest, coupons = [] }) => {
+    const [amount, setAmount] = useState('500');
+    const [phone, setPhone] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [data, setData] = useState(null);
+
+    const handleFetch = async (amtVal, phoneVal) => {
+        const curAmt = amtVal !== undefined ? Number(amtVal) : Number(amount);
+        const curPhone = phoneVal !== undefined ? phoneVal : phone;
+        if (!curAmt || curAmt <= 0) {
+            setError('Please enter a valid cart amount greater than 0.');
+            return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await getApplicableCoupons({
+                order_amount: curAmt,
+                ...(curPhone && curPhone.trim() ? { customer_phone: curPhone.trim() } : {}),
+            });
+            setData(res);
+        } catch (err) {
+            console.warn('Backend applicable fetch fallback to local coupons:', err);
+            const num = Number(curAmt);
+            const activeList = coupons.filter(c => c.status === 'Active');
+            const applicable = activeList.filter(c => !c.minOrder || num >= Number(c.minOrder));
+            const locked = activeList.filter(c => c.minOrder && num < Number(c.minOrder));
+            setData({
+                order_amount: num,
+                applicable_coupons: applicable.map(c => ({
+                    code: c.code,
+                    description: c.description,
+                    discount_type: String(c.type).toLowerCase() === 'fixed' ? 'fixed' : 'percentage',
+                    discount_value: c.value,
+                    discount_amount: String(c.type).toLowerCase() === 'percentage' ? Math.round((num * Number(c.value)) / 100) : Number(c.value),
+                    minimum_order_amount: c.minOrder,
+                })),
+                locked_coupons: locked.map(c => ({
+                    code: c.code,
+                    description: c.description,
+                    discount_type: String(c.type).toLowerCase() === 'fixed' ? 'fixed' : 'percentage',
+                    discount_value: c.value,
+                    minimum_order_amount: c.minOrder,
+                })),
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        handleFetch('500', '');
+    }, []);
+
+    const presets = [250, 500, 1000, 2500, 5000];
+    const applicableList = data?.applicable_coupons || [];
+    const lockedList = data?.locked_coupons || [];
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <div style={{
+                background: 'linear-gradient(135deg, #f0fdf4 0%, #e0e7ff 100%)',
+                border: '1.5px solid #c7d2fe',
+                borderRadius: 14,
+                padding: '20px 24px',
+            }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 24 }}>🎯</span>
+                            <h3 style={{ fontSize: 18, fontWeight: 800, color: '#1e1b4b', margin: 0 }}>
+                                Smart Cart Recommendations & Locked Coupon Unlocker
+                            </h3>
+                            <span style={{ fontSize: 11, fontWeight: 700, background: '#4338ca', color: '#fff', padding: '2px 8px', borderRadius: 12 }}>
+                                GET /api/v1/coupons/applicable
+                            </span>
+                        </div>
+                        <p style={{ fontSize: 13, color: '#4338ca', margin: '4px 0 0' }}>
+                            Simulate customer cart totals to see which discounts apply instantly and how much more cart value is needed to unlock high-tier savings.
+                        </p>
+                    </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', marginTop: 16 }}>
+                    <div style={{ minWidth: 200, flex: 1 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#312e81', display: 'block', marginBottom: 4 }}>
+                            Cart / Order Amount (₹) *
+                        </label>
+                        <input
+                            className="ec-input"
+                            type="number"
+                            min="1"
+                            value={amount}
+                            onChange={e => setAmount(e.target.value)}
+                            placeholder="e.g. 1000"
+                            style={{ background: '#fff', fontWeight: 700 }}
+                        />
+                    </div>
+                    <div style={{ minWidth: 200, flex: 1 }}>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#312e81', display: 'block', marginBottom: 4 }}>
+                            Customer Phone (Optional)
+                        </label>
+                        <input
+                            className="ec-input"
+                            value={phone}
+                            onChange={e => setPhone(e.target.value)}
+                            placeholder="e.g. 9876543210"
+                            style={{ background: '#fff' }}
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        className="adm-btn-primary"
+                        onClick={() => handleFetch(amount, phone)}
+                        disabled={loading}
+                        style={{ height: 40, padding: '0 20px', background: '#4338ca' }}
+                    >
+                        {loading ? 'Analyzing…' : '🔍 Find Applicable'}
+                    </button>
+                </div>
+
+                {/* Preset Chips */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#4338ca' }}>Quick Presets:</span>
+                    {presets.map(p => (
+                        <button
+                            key={p}
+                            type="button"
+                            onClick={() => { setAmount(String(p)); handleFetch(String(p), phone); }}
+                            style={{
+                                padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                                border: Number(amount) === p ? '1.5px solid #4338ca' : '1px solid #c7d2fe',
+                                background: Number(amount) === p ? '#4338ca' : '#fff',
+                                color: Number(amount) === p ? '#fff' : '#3730a3',
+                                transition: 'all 0.15s',
+                            }}
+                        >
+                            ₹{p.toLocaleString('en-IN')}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            {error && (
+                <div style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2', padding: '12px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600 }}>
+                    ⚠️ {error}
+                </div>
+            )}
+
+            {/* Split View: Applicable vs Locked */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20 }}>
+                {/* 🔓 Applicable Coupons */}
+                <div style={{ background: '#fff', border: '1.5px solid #86efac', borderRadius: 14, padding: 18 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, borderBottom: '1px solid #f0fdf4', paddingBottom: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <BsUnlockFill size={15} />
+                            </div>
+                            <div>
+                                <h4 style={{ fontSize: 15, fontWeight: 800, color: '#15803d', margin: 0 }}>
+                                    Ready to Apply ({applicableList.length})
+                                </h4>
+                                <span style={{ fontSize: 11, color: '#65a30d' }}>Eligible for cart value ₹{amount || 0}</span>
+                            </div>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '3px 10px', borderRadius: 20 }}>
+                            ACTIVE NOW
+                        </span>
+                    </div>
+
+                    {loading ? (
+                        <div style={{ textAlign: 'center', padding: 40, color: '#6b7280', fontSize: 13 }}>Analyzing eligible coupons…</div>
+                    ) : applicableList.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: 36, color: '#9ca3af', fontSize: 13 }}>
+                            <p style={{ fontWeight: 600, color: '#374151' }}>No coupons apply directly at ₹{amount || 0}</p>
+                            <p style={{ fontSize: 12 }}>Check the locked coupons on the right to see what amount unlocks them!</p>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {applicableList.map((c, i) => (
+                                <div key={i} style={{
+                                    background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10,
+                                    padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                }}>
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 15, color: '#166534', letterSpacing: 1 }}>
+                                                {c.code || c.coupon_code}
+                                            </span>
+                                            <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', padding: '2px 6px', borderRadius: 4 }}>
+                                                UNLOCKED
+                                            </span>
+                                        </div>
+                                        <p style={{ fontSize: 12, color: '#374151', margin: '4px 0 0' }}>
+                                            {c.description || (c.discount_type === 'percentage' ? `${c.discount_value}% Discount` : `₹${c.discount_value} Flat Off`)}
+                                        </p>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <p style={{ fontSize: 15, fontWeight: 800, color: '#15803d', margin: 0 }}>
+                                            {c.discount_amount ? `Save ₹${c.discount_amount}` : (c.discount_type === 'percentage' ? `${c.discount_value}% OFF` : `₹${c.discount_value} OFF`)}
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => onApplyToTest && onApplyToTest(c.code || c.coupon_code, amount)}
+                                            style={{
+                                                marginTop: 6, padding: '4px 10px', borderRadius: 6, fontSize: 11,
+                                                fontWeight: 700, background: '#16a34a', color: '#fff', border: 'none', cursor: 'pointer',
+                                            }}
+                                        >
+                                            Simulate Apply →
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* 🔒 Locked Coupons */}
+                <div style={{ background: '#fff', border: '1.5px solid #fde68a', borderRadius: 14, padding: 18 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, borderBottom: '1px solid #fffbeb', paddingBottom: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <BsLockFill size={15} />
+                            </div>
+                            <div>
+                                <h4 style={{ fontSize: 15, fontWeight: 800, color: '#b45309', margin: 0 }}>
+                                    Locked Offers ({lockedList.length})
+                                </h4>
+                                <span style={{ fontSize: 11, color: '#b45309' }}>Requires higher cart minimum</span>
+                            </div>
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700, background: '#fef3c7', color: '#b45309', padding: '3px 10px', borderRadius: 20 }}>
+                            UPSELL TARGETS
+                        </span>
+                    </div>
+
+                    {loading ? (
+                        <div style={{ textAlign: 'center', padding: 40, color: '#6b7280', fontSize: 13 }}>Analyzing unlockable offers…</div>
+                    ) : lockedList.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: 36, color: '#9ca3af', fontSize: 13 }}>
+                            <p style={{ fontWeight: 600, color: '#374151' }}>No locked offers for cart ₹{amount || 0}</p>
+                            <p style={{ fontSize: 12 }}>All active store promotions are either unlocked or order limit met.</p>
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {lockedList.map((c, i) => {
+                                const minRequired = Number(c.minimum_order_amount || c.min_order_amount || 0);
+                                const diff = minRequired > Number(amount) ? minRequired - Number(amount) : 0;
+                                return (
+                                    <div key={i} style={{
+                                        background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+                                        padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    }}>
+                                        <div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 15, color: '#92400e', letterSpacing: 1 }}>
+                                                    {c.code || c.coupon_code}
+                                                </span>
+                                                <span style={{ fontSize: 10, fontWeight: 700, background: '#fef3c7', color: '#b45309', padding: '2px 6px', borderRadius: 4 }}>
+                                                    LOCKED
+                                                </span>
+                                            </div>
+                                            <p style={{ fontSize: 12, color: '#78350f', margin: '4px 0 0' }}>
+                                                {c.description || (c.discount_type === 'percentage' ? `${c.discount_value}% Discount` : `₹${c.discount_value} Flat Off`)}
+                                            </p>
+                                        </div>
+                                        <div style={{ textAlign: 'right' }}>
+                                            <span style={{ fontSize: 12, fontWeight: 800, color: '#b45309' }}>
+                                                {diff > 0 ? `+ Add ₹${diff.toLocaleString('en-IN')} more` : `Min ₹${minRequired.toLocaleString('en-IN')}`}
+                                            </span>
+                                            <p style={{ fontSize: 11, color: '#92400e', margin: '2px 0 0' }}>to unlock</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const CouponManagement = () => {
     const [coupons, setCoupons] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -339,6 +1290,13 @@ const CouponManagement = () => {
     const [testForm, setTestForm] = useState({ code: '', amount: '' });
     const [testResult, setTestResult] = useState(null);
     const [testLoading, setTestLoading] = useState(false);
+
+    // Modals for the 6 backend APIs
+    const [showBulkModal, setShowBulkModal] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
+    const [showApplicableModal, setShowApplicableModal] = useState(false);
+    const [redemptionCoupon, setRedemptionCoupon] = useState(null);
+    const [exportSuccessBanner, setExportSuccessBanner] = useState(null);
 
     const syncLocalStorage = (list) => {
         try {
@@ -871,15 +1829,32 @@ const CouponManagement = () => {
                     <h1 className="adm-page-title">🏷️ Coupons</h1>
                     <p className="adm-page-sub">Create and manage discount coupons for your online store</p>
                 </div>
-                <div className="adm-header-actions" style={{ display: 'flex', gap: 10 }}>
-                    <button className="adm-btn-secondary" onClick={() => { setShowTestModal(true); setTestResult(null); setTestForm({ code: '', amount: '' }); }}>
-                        🧪 Test Coupon
+                <div className="adm-header-actions" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <button className="adm-btn-secondary" onClick={() => setShowApplicableModal(true)} title="Get applicable and locked coupon recommendations for cart amount (GET /api/v1/coupons/applicable)">
+                        🎯 Applicable Finder
+                    </button>
+                    <button className="adm-btn-secondary" onClick={() => setShowExportModal(true)} title="Export coupons report to Excel, CSV or PDF (GET /api/v1/coupons/export)">
+                        <BsDownload size={13} /> Export Report
+                    </button>
+                    <button className="adm-btn-secondary" style={{ background: '#f5f3ff', color: '#6d28d9', borderColor: '#ddd6fe' }} onClick={() => setShowBulkModal(true)} title="Bulk generate unique single-use coupon codes (POST /api/v1/coupons/bulk-generate)">
+                        <BsLightningFill size={13} color="#7c3aed" /> ⚡ Bulk Generate
+                    </button>
+                    <button className="adm-btn-secondary" onClick={() => { setShowTestModal(true); setTestResult(null); setTestForm({ code: '', amount: '' }); }} title="Validate & Apply coupon (POST /coupons/validate & /apply)">
+                        🧪 Test / Validate
                     </button>
                     <button className="adm-btn-primary" onClick={openAdd}>
                         <BsPlus size={17} /> New Coupon
                     </button>
                 </div>
             </div>
+
+            {/* Export Success Banner */}
+            {exportSuccessBanner && (
+                <div style={{ background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0', padding: '10px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>✅ {exportSuccessBanner}</span>
+                    <button onClick={() => setExportSuccessBanner(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#047857', fontWeight: 700 }}>✕</button>
+                </div>
+            )}
 
             {/* API Unavailable Banner */}
             {!apiAvailable && (
@@ -948,6 +1923,7 @@ const CouponManagement = () => {
                     { id: 'all', label: '📋 All Coupons' },
                     { id: 'active', label: '✅ Active Coupons' },
                     { id: 'expired', label: '⏰ Expired Coupons' },
+                    { id: 'applicable', label: '🎯 Cart Recommendations' },
                 ].map(t => (
                     <button
                         key={t.id}
@@ -989,7 +1965,16 @@ const CouponManagement = () => {
                                                     <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: tc.bg, color: tc.color }}>{rc.type}</span>
                                                 </div>
                                             </div>
-                                            <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#ecfdf5', color: '#10b981' }}>Active</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <button
+                                                    onClick={() => setRedemptionCoupon(c)}
+                                                    title="View Customer Redemptions (GET /api/v1/coupons/{coupon_id}/redemptions)"
+                                                    style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '4px 7px', borderRadius: 6, cursor: 'pointer', color: '#1d4ed8', display: 'flex', alignItems: 'center' }}
+                                                >
+                                                    <BsTicketPerforated size={12} />
+                                                </button>
+                                                <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#ecfdf5', color: '#10b981' }}>Active</span>
+                                            </div>
                                         </div>
 
                                         <div className="ec-coupon-value">
@@ -1027,22 +2012,46 @@ const CouponManagement = () => {
                                             </div>
                                         </div>
 
-                                        {/* Deactivate button */}
-                                        <button
-                                            onClick={() => handleDeactivate(c.id)}
-                                            disabled={deactivatingId === c.id}
-                                            style={{
-                                                width: '100%', padding: '8px 0', borderRadius: 8, border: 'none',
-                                                background: deactivatingId === c.id ? '#fee2e2' : '#ef4444',
-                                                color: '#fff', fontWeight: 700, fontSize: 13,
-                                                cursor: deactivatingId === c.id ? 'not-allowed' : 'pointer',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                                                transition: 'background 0.2s',
-                                                marginTop: 4,
-                                            }}
-                                        >
-                                            {deactivatingId === c.id ? 'Deactivating...' : 'Deactivate Coupon'}
-                                        </button>
+                                        {/* Action buttons: Redemptions, Test, Deactivate */}
+                                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                            <button
+                                                onClick={() => setRedemptionCoupon(c)}
+                                                style={{
+                                                    flex: 1, padding: '8px 4px', borderRadius: 8, border: '1.5px solid #dbeafe',
+                                                    background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: 12,
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                                    transition: 'all 0.2s',
+                                                }}
+                                                title="View Customer Redemptions (GET /api/v1/coupons/{coupon_id}/redemptions)"
+                                            >
+                                                <BsTicketPerforated size={13} /> Redemptions
+                                            </button>
+                                            <button
+                                                onClick={() => { setShowTestModal(true); setTestResult(null); setTestForm({ code: rc.code, amount: rc.minOrder || '500' }); }}
+                                                style={{
+                                                    padding: '8px 10px', borderRadius: 8, border: '1.5px solid #e2e8f0',
+                                                    background: '#f8fafc', color: '#334155', fontWeight: 700, fontSize: 12,
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                                }}
+                                                title="Validate or Simulate Apply this coupon"
+                                            >
+                                                🧪 Test
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeactivate(c.id)}
+                                                disabled={deactivatingId === c.id}
+                                                style={{
+                                                    flex: 1.2, padding: '8px 0', borderRadius: 8, border: 'none',
+                                                    background: deactivatingId === c.id ? '#fee2e2' : '#ef4444',
+                                                    color: '#fff', fontWeight: 700, fontSize: 12,
+                                                    cursor: deactivatingId === c.id ? 'not-allowed' : 'pointer',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                                    transition: 'background 0.2s',
+                                                }}
+                                            >
+                                                {deactivatingId === c.id ? 'Deactivating...' : 'Deactivate'}
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -1081,7 +2090,16 @@ const CouponManagement = () => {
                                                     <span style={{ padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: tc.bg, color: tc.color }}>{rc.type}</span>
                                                 </div>
                                             </div>
-                                            <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#fef2f2', color: '#ef4444' }}>Expired</span>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <button
+                                                    onClick={() => setRedemptionCoupon(c)}
+                                                    title="View Customer Redemptions (GET /api/v1/coupons/{coupon_id}/redemptions)"
+                                                    style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '4px 7px', borderRadius: 6, cursor: 'pointer', color: '#1d4ed8', display: 'flex', alignItems: 'center' }}
+                                                >
+                                                    <BsTicketPerforated size={12} />
+                                                </button>
+                                                <span style={{ padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: '#fef2f2', color: '#ef4444' }}>Expired</span>
+                                            </div>
                                         </div>
 
                                         <div className="ec-coupon-value" style={{ color: '#9ca3af' }}>
@@ -1119,28 +2137,53 @@ const CouponManagement = () => {
                                             </div>
                                         </div>
 
-                                        {/* Re-activate button */}
-                                        <button
-                                            onClick={() => handleActivate(c.id)}
-                                            disabled={activatingId === c.id}
-                                            style={{
-                                                width: '100%', padding: '8px 0', borderRadius: 8, border: 'none',
-                                                background: activatingId === c.id ? '#d1fae5' : '#10b981',
-                                                color: '#fff', fontWeight: 700, fontSize: 13,
-                                                cursor: activatingId === c.id ? 'not-allowed' : 'pointer',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                                                transition: 'background 0.2s',
-                                                marginTop: 4,
-                                            }}
-                                        >
-                                            {activatingId === c.id ? 'Activating…' : '⚡ Re-activate Coupon'}
-                                        </button>
+                                        {/* Action buttons: Redemptions and Re-activate */}
+                                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                                            <button
+                                                onClick={() => setRedemptionCoupon(c)}
+                                                style={{
+                                                    flex: 1, padding: '8px 4px', borderRadius: 8, border: '1.5px solid #dbeafe',
+                                                    background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: 12,
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                                    transition: 'all 0.2s',
+                                                }}
+                                                title="View Customer Redemptions (GET /api/v1/coupons/{coupon_id}/redemptions)"
+                                            >
+                                                <BsTicketPerforated size={13} /> Redemptions
+                                            </button>
+                                            <button
+                                                onClick={() => handleActivate(c.id)}
+                                                disabled={activatingId === c.id}
+                                                style={{
+                                                    flex: 1.5, padding: '8px 0', borderRadius: 8, border: 'none',
+                                                    background: activatingId === c.id ? '#d1fae5' : '#10b981',
+                                                    color: '#fff', fontWeight: 700, fontSize: 12,
+                                                    cursor: activatingId === c.id ? 'not-allowed' : 'pointer',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                                    transition: 'background 0.2s',
+                                                }}
+                                            >
+                                                {activatingId === c.id ? 'Activating…' : '⚡ Re-activate'}
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })}
                         </div>
                     )}
                 </>
+            )}
+
+            {/* ── Cart Recommendations panel ── */}
+            {activeTab === 'applicable' && (
+                <ApplicableRecommendationsView
+                    coupons={coupons}
+                    onApplyToTest={(code, amt) => {
+                        setShowTestModal(true);
+                        setTestResult(null);
+                        setTestForm({ code, amount: amt });
+                    }}
+                />
             )}
 
             {/* ── All Coupons: Filters + Grid ── */}
@@ -1196,6 +2239,13 @@ const CouponManagement = () => {
                                             </div>
                                         </div>
                                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                            <button
+                                                onClick={() => setRedemptionCoupon(c)}
+                                                title="View Customer Redemptions (GET /api/v1/coupons/{coupon_id}/redemptions)"
+                                                style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '5px 8px', borderRadius: 6, cursor: 'pointer', color: '#1d4ed8', display: 'flex', alignItems: 'center' }}
+                                            >
+                                                <BsTicketPerforated size={11} />
+                                            </button>
                                             <button onClick={() => openEdit(c)} style={{ background: '#f3f4f6', border: 'none', padding: '5px 8px', borderRadius: 6, cursor: 'pointer', color: '#4b5563', display: 'flex', alignItems: 'center' }}>
                                                 <BsPencilFill size={11} />
                                             </button>
@@ -1241,41 +2291,61 @@ const CouponManagement = () => {
                                         </div>
                                     </div>
 
-                                    {/* Activate button for Inactive / Expired coupons */}
-                                    {c.status !== 'Active' && (
+                                    {/* Action buttons: Redemptions, Test, Activate/Deactivate */}
+                                    <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
                                         <button
-                                            onClick={() => handleActivate(c.id)}
-                                            disabled={activatingId === c.id}
+                                            onClick={() => setRedemptionCoupon(c)}
                                             style={{
-                                                width: '100%', padding: '8px 0', borderRadius: 8, border: 'none',
-                                                background: activatingId === c.id ? '#d1fae5' : '#10b981',
-                                                color: '#fff', fontWeight: 700, fontSize: 13,
-                                                cursor: activatingId === c.id ? 'not-allowed' : 'pointer',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                                                transition: 'background 0.2s',
+                                                flex: 1, padding: '7px 4px', borderRadius: 8, border: '1.5px solid #dbeafe',
+                                                background: '#eff6ff', color: '#1d4ed8', fontWeight: 700, fontSize: 12,
+                                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                                transition: 'all 0.2s',
                                             }}
+                                            title="View Customer Redemptions (GET /api/v1/coupons/{coupon_id}/redemptions)"
                                         >
-                                            {activatingId === c.id ? 'Activating...' : 'Activate Coupon'}
+                                            <BsTicketPerforated size={12} /> Redemptions
                                         </button>
-                                    )}
-
-                                    {/* Deactivate button for Active coupons */}
-                                    {c.status === 'Active' && (
                                         <button
-                                            onClick={() => handleDeactivate(c.id)}
-                                            disabled={deactivatingId === c.id}
+                                            onClick={() => { setShowTestModal(true); setTestResult(null); setTestForm({ code: rc.code, amount: rc.minOrder || '500' }); }}
                                             style={{
-                                                width: '100%', padding: '8px 0', borderRadius: 8, border: 'none',
-                                                background: deactivatingId === c.id ? '#fee2e2' : '#ef4444',
-                                                color: '#fff', fontWeight: 700, fontSize: 13,
-                                                cursor: deactivatingId === c.id ? 'not-allowed' : 'pointer',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                                                transition: 'background 0.2s',
+                                                padding: '7px 10px', borderRadius: 8, border: '1.5px solid #e2e8f0',
+                                                background: '#f8fafc', color: '#334155', fontWeight: 700, fontSize: 12,
+                                                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
                                             }}
+                                            title="Validate or Simulate Apply this coupon"
                                         >
-                                            {deactivatingId === c.id ? 'Deactivating...' : 'Deactivate Coupon'}
+                                            🧪 Test
                                         </button>
-                                    )}
+                                        {c.status === 'Active' ? (
+                                            <button
+                                                onClick={() => handleDeactivate(c.id)}
+                                                disabled={deactivatingId === c.id}
+                                                style={{
+                                                    flex: 1.2, padding: '7px 0', borderRadius: 8, border: 'none',
+                                                    background: deactivatingId === c.id ? '#fee2e2' : '#ef4444',
+                                                    color: '#fff', fontWeight: 700, fontSize: 12,
+                                                    cursor: deactivatingId === c.id ? 'not-allowed' : 'pointer',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                                }}
+                                            >
+                                                {deactivatingId === c.id ? 'Deactivating...' : 'Deactivate'}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleActivate(c.id)}
+                                                disabled={activatingId === c.id}
+                                                style={{
+                                                    flex: 1.2, padding: '7px 0', borderRadius: 8, border: 'none',
+                                                    background: activatingId === c.id ? '#d1fae5' : '#10b981',
+                                                    color: '#fff', fontWeight: 700, fontSize: 12,
+                                                    cursor: activatingId === c.id ? 'not-allowed' : 'pointer',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                                }}
+                                            >
+                                                {activatingId === c.id ? 'Activating...' : 'Activate'}
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             );
                         })}
@@ -1291,6 +2361,8 @@ const CouponManagement = () => {
                             <p>No coupons found</p>
                         </div>
                     ) : null}
+                </>
+            )}
 
                     {/* Modal */}
                     {showModal && (
@@ -1459,7 +2531,42 @@ const CouponManagement = () => {
                             </div>
                         </div>
                     )}
-                </>
+
+            {/* Bulk Generate Modal (POST /api/v1/coupons/bulk-generate) */}
+            {showBulkModal && (
+                <BulkGenerateModal
+                    onClose={() => setShowBulkModal(false)}
+                    onGenerated={() => fetchCoupons()}
+                />
+            )}
+
+            {/* Export Coupons Report Modal (GET /api/v1/coupons/export) */}
+            {showExportModal && (
+                <ExportCouponsModal
+                    onClose={() => setShowExportModal(false)}
+                    onExportSuccess={msg => setExportSuccessBanner(msg)}
+                />
+            )}
+
+            {/* Applicable & Locked Recommendations Modal (GET /api/v1/coupons/applicable) */}
+            {showApplicableModal && (
+                <ApplicableCouponsModal
+                    onClose={() => setShowApplicableModal(false)}
+                    onApplyToTest={(code, amt) => {
+                        setShowApplicableModal(false);
+                        setShowTestModal(true);
+                        setTestResult(null);
+                        setTestForm({ code, amount: amt });
+                    }}
+                />
+            )}
+
+            {/* Customer Redemptions Modal (GET /api/v1/coupons/{coupon_id}/redemptions) */}
+            {redemptionCoupon && (
+                <CouponRedemptionsModal
+                    coupon={redemptionCoupon}
+                    onClose={() => setRedemptionCoupon(null)}
+                />
             )}
         </div>
     );

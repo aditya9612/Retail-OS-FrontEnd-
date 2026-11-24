@@ -48,6 +48,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     // 6. Category Management (/categories) - [from Punam]
     // 7. Store Management & Targets (/stores, /stores/targets, /ecommerce/store) - [from Punam]
     // 8. Warehouses, Purchases, Suppliers, GRN, Purchase Returns, Stock - [from Shital]
+    // 9. Order Returns (/ecommerce/returns, /returns) - [from Priya]
     const isCustomerModule = currentPath.startsWith('/customers');
     const isBillingGstModule = (
         currentPath.startsWith('/billing') ||
@@ -67,6 +68,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const isProductModule = currentPath.startsWith('/products');
     const isCategoryModule = currentPath.startsWith('/categories');
     const isStoreModule = currentPath.startsWith('/stores') || currentPath === '/ecommerce/store';
+    const isOrderReturns = currentPath.toLowerCase().includes('/ecommerce/returns') || currentPath.toLowerCase().endsWith('/returns');
 
     const shouldHideSearchBar = (
         isCustomerModule ||
@@ -82,10 +84,12 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
         isInventoryStock ||
         isProductModule ||
         isCategoryModule ||
-        isStoreModule
+        isStoreModule ||
+        isOrderReturns
     );
     const isSearchHidden = shouldHideSearchBar;
     const hideSearch = shouldHideSearchBar;
+    const hideHeaderSearch = shouldHideSearchBar;
     const [showProfileMenu, setShowProfileMenu] = useState(false);
 
     // ── Notifications Popup State ──
@@ -585,7 +589,7 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
                 <BsList size={20} />
             </button>
 
-            {/* Global Search Bar - Hidden on Customer, Billing/GST, Dashboard, Store Transfers, Products, Categories, Stores */}
+            {/* Global Search Bar - Hidden on Customer, Billing/GST, Dashboard, Store Transfers, Products, Categories, Stores, Order Returns */}
             {!shouldHideSearchBar ? (
                 <div className="header-search-wrap" ref={searchWrapRef} style={{ flex: 1, position: 'relative' }}>
                     <BsSearch className="header-search-icon" size={14} />
