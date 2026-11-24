@@ -2,6 +2,8 @@ import React from "react";
 import "./InventoryFilters.css";
 import {
   FiRotateCcw,
+  FiFilter,
+  FiDownload,
 } from "react-icons/fi";
 
 const InventoryFilters = ({
@@ -31,6 +33,7 @@ const InventoryFilters = ({
   setFilterDate,
 
   onSearch,
+  onExport,
 }) => {
   /* =====================================================
      WAREHOUSE OPTIONS
@@ -71,7 +74,7 @@ const InventoryFilters = ({
         ];
 
   /* =====================================================
-     RESET FILTERS
+     CLEAR / RESET FILTERS
   ===================================================== */
 
   const handleReset = () => {
@@ -87,6 +90,73 @@ const InventoryFilters = ({
     if (typeof onSearch === "function") {
       onSearch();
     }
+  };
+
+  /* =====================================================
+     FILTER / APPLY SEARCH CRITERIA
+  ===================================================== */
+
+  const handleSearch = () => {
+    if (typeof onSearch === "function") {
+      onSearch();
+    }
+  };
+
+  /* =====================================================
+     EXPORT INVENTORY DATA
+  ===================================================== */
+
+  const handleExport = () => {
+    if (typeof onExport === "function") {
+      onExport();
+      return;
+    }
+
+    const exportData = Array.isArray(inventory) ? inventory : [];
+    if (exportData.length === 0) {
+      alert("No inventory data available to export");
+      return;
+    }
+
+    const headers = [
+      "Product Name",
+      "SKU",
+      "Category",
+      "Warehouse",
+      "Supplier",
+      "Stock Status",
+      "Available Quantity",
+      "Unit",
+      "Purchase Price",
+      "Selling Price",
+      "Created Date",
+    ];
+
+    const rows = exportData.map((item) => [
+      `"${String(item?.name || item?.product_name || "").replace(/"/g, '""')}"`,
+      `"${String(item?.sku || "").replace(/"/g, '""')}"`,
+      `"${String(item?.category_name || item?.category || "").replace(/"/g, '""')}"`,
+      `"${String(item?.warehouse_name || item?.store_name || "").replace(/"/g, '""')}"`,
+      `"${String(item?.supplier_name || item?.supplierName || "").replace(/"/g, '""')}"`,
+      `"${String(item?.stock_status || item?.status || "").replace(/"/g, '""')}"`,
+      Number(item?.available_quantity ?? item?.quantity ?? 0),
+      `"${String(item?.unit || "Pcs").replace(/"/g, '""')}"`,
+      Number(item?.purchase_price ?? item?.cost_price ?? 0),
+      Number(item?.selling_price ?? item?.price ?? 0),
+      `"${String(item?.created_at || item?.created_date || item?.createdDate || "").slice(0, 10)}"`,
+    ]);
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `inventory_export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -159,16 +229,18 @@ const InventoryFilters = ({
               All Categories
             </option>
 
-            {(categories || []).map((cat) => (
-              <option
-                key={cat.id}
-                value={String(cat.id)}
-              >
-                {cat.name ||
-                  cat.category_name ||
-                  `Category ${cat.id}`}
-              </option>
-            ))}
+            {(categories || []).map((cat, idx) => {
+              const catValue = String(cat.id != null ? cat.id : (cat.name || cat.category_name || cat)).trim();
+              const catLabel = String(cat.name || cat.category_name || (cat.id ? `Category ${cat.id}` : cat)).trim();
+              return (
+                <option
+                  key={cat.id != null ? String(cat.id) : (cat.name || idx)}
+                  value={catValue}
+                >
+                  {catLabel}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -273,22 +345,52 @@ const InventoryFilters = ({
         </div>
 
         {/* =====================
-            Reset Action
+            Filter Actions (Filter, Clear, Export)
         ===================== */}
         <div className="filter-group filter-action-group">
           <label className="filter-action-label" aria-hidden="true">
             &nbsp;
           </label>
-          <button
-            type="button"
-            className="reset-btn"
-            onClick={handleReset}
-            title="Reset Filters"
-            aria-label="Reset Filters"
-          >
-            <FiRotateCcw size={14} />
-            <span>Reset</span>
-          </button>
+          <div className="filter-actions-btn-group">
+            {/* Filter */}
+            <button
+              type="button"
+              className="filter-btn search-btn"
+              onClick={handleSearch}
+              title="Filter – Apply the selected filter criteria"
+              aria-label="Filter – Apply the selected filter criteria"
+              data-action="filter"
+            >
+              <FiFilter size={15} />
+              <span>Filter</span>
+            </button>
+
+            {/* Clear */}
+            <button
+              type="button"
+              className="clear-btn reset-btn"
+              onClick={handleReset}
+              title="Clear – Reset all selected filters"
+              aria-label="Clear – Reset all selected filters"
+              data-action="clear"
+            >
+              <FiRotateCcw size={15} />
+              <span>Clear</span>
+            </button>
+
+            {/* Export */}
+            <button
+              type="button"
+              className="export-btn"
+              onClick={handleExport}
+              title="Export – Download/export inventory data"
+              aria-label="Export – Download/export inventory data"
+              data-action="export"
+            >
+              <FiDownload size={15} />
+              <span>Export</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

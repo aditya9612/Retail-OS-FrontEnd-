@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import apiClient from '../../services/api';
@@ -9,7 +8,7 @@ import { getWarehouses, getWarehouseDashboard, getWarehouseById, createWarehouse
 import { warehouseService } from '../../services/warehouseService';
 import userService from '../../services/userService';
 import { listStores } from '../../services/inventoryService';
-import grnService, { createGRN, getGRNs, getGRNById, getGRNStats, getGRNByNumber, exportGRNs, deleteGRN, qualityCheckGRN, receiveGRN, rejectGRN, getGRNHistory, downloadGRNPdf, getGRNPrintSlip } from '../../services/grnService';
+import grnService, { createGRN, getGRNs, getGRNById, getGRNStats, getGRNByNumber, exportGRNs, deleteGRN, qualityCheckGRN, receiveGRN, rejectGRN, getGRNHistory, downloadGRNPdf, previewGRNPdf, downloadGRNCsv, getGRNPrintSlip } from '../../services/grnService';
 import { getPurchaseOrders, getPurchaseOrder } from '../../api/purchaseOrdersApi';
 import { listSuppliers } from '../../api/supplierApi';
 import PurchaseOrderReturns from '../PurchaseOrderReturns';
@@ -23,13 +22,16 @@ import {
     BsStars, BsPlug, BsDisplay, BsCashStack, BsArrowReturnLeft, BsReceiptCutoff,
     BsCreditCard2Front, BsBoxSeam, BsSend, BsGear, BsTag, BsExclamationTriangle, BsImage,
     BsTrash, BsShop, BsChevronLeft, BsChevronRight, BsX, BsEye, BsCheckCircle, BsXCircle,
-    BsChevronDown, BsChevronUp, BsActivity, BsTable, BsPencilFill, BsTrashFill, BsPlusCircle
+    BsChevronDown, BsChevronUp, BsActivity, BsTable, BsPencilFill, BsTrashFill, BsPlusCircle,
+    BsFileEarmarkPdf, BsShieldCheck, BsClipboardData, BsCalendarCheck, BsFunnel
 } from 'react-icons/bs';
 
 
 /* ─────────────────────────────────────────────────────────────
    Shared Module Header & Wrapper
 ───────────────────────────────────────────────────────────── */
+
+
 const ModuleContainer = ({ title, subtitle, icon, actionBtn, children }) => (
     <div style={{ padding: '24px 28px', maxWidth: '1440px', margin: '0 auto' }}>
         <div style={{
@@ -71,29 +73,79 @@ const ModuleContainer = ({ title, subtitle, icon, actionBtn, children }) => (
     </div>
 );
 
-const StatCard = ({ label, value, sub, color = '#6366f1' }) => (
-    <div style={{
-        background: '#fff',
-        borderRadius: 12,
-        padding: '16px 20px',
-        border: '1px solid #e5e7eb',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        flex: 1,
-        minWidth: 180
-    }}>
-        <p style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-            {label}
-        </p>
-        <p style={{ fontSize: 24, fontWeight: 800, color: '#111827', margin: 0 }}>
-            {value}
-        </p>
-        {sub && <p style={{ fontSize: 12, color, margin: '4px 0 0 0', fontWeight: 600 }}>{sub}</p>}
-    </div>
-);
+const StatCard = ({ label, value, sub, color = '#6366f1' }) => {
+    const isValueBox = label === "Total Stock Value" || (typeof value === "string" && value.includes("₹"));
+    return (
+        <div style={{
+            background: '#fff',
+            borderRadius: 12,
+            padding: '16px 20px',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            flex: 1,
+            minWidth: 180,
+            maxWidth: '100%',
+            overflow: 'hidden',
+            boxSizing: 'border-box'
+        }}>
+            <p style={{
+                fontSize: 12,
+                fontWeight: 600,
+                color: '#6b7280',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: 6,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+            }}>
+                {label}
+            </p>
+            <p
+                title={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
+                style={{
+                    fontSize: isValueBox
+                        ? (String(value).length >= 14 ? 18 : String(value).length >= 11 ? 20 : 22)
+                        : 24,
+                    fontWeight: 800,
+                    color: '#111827',
+                    margin: 0,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box'
+                }}
+            >
+                {value}
+            </p>
+            {sub && (
+                <p style={{
+                    fontSize: 12,
+                    color,
+                    margin: '4px 0 0 0',
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                }}>
+                    {sub}
+                </p>
+            )}
+        </div>
+    );
+};
 
 /* ─────────────────────────────────────────────────────────────
    1. BILLING & GST: Returns & Refunds
 ───────────────────────────────────────────────────────────── */
+
+
+/* ─────────────────────────────────────────────────────────────
+   1. BILLING & GST: Returns & Refunds
+───────────────────────────────────────────────────────────── */
+
+
 export { ReturnsRefundsPage } from '../ReturnsRefunds';
 
 /* ─────────────────────────────────────────────────────────────
@@ -1011,6 +1063,12 @@ const formatWarehouseStockValue = (val) => {
     return `₹${Number(val).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
+
+/* ─────────────────────────────────────────────────────────────
+   5. INVENTORY: Warehouses
+───────────────────────────────────────────────────────────── */
+
+
 export const WarehousesPage = () => {
     const [searchParams] = useSearchParams();
     const [warehouses, setWarehouses] = useState([]);
@@ -1077,7 +1135,16 @@ export const WarehousesPage = () => {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [viewMode, setViewMode] = useState("table");
-    const [warehouseTab, setWarehouseTab] = useState("status"); // "status" | "details"
+    const [togglingStatusId, setTogglingStatusId] = useState(null);
+    const [statusToast, setStatusToast] = useState(null);
+
+    useEffect(() => {
+        if (!statusToast) return;
+        const timer = setTimeout(() => {
+            setStatusToast(null);
+        }, 4000);
+        return () => clearTimeout(timer);
+    }, [statusToast]);
 
     const hasFetchedRef = useRef(false);
 
@@ -1145,8 +1212,9 @@ export const WarehousesPage = () => {
             if (!wh) return false;
 
             // Status filter
-            if (statusFilter === "active" && wh.is_active === false) return false;
-            if (statusFilter === "inactive" && wh.is_active !== false) return false;
+            const isWhActive = wh.is_active === true || wh.status === "Active" || wh.status === "active";
+            if (statusFilter === "active" && !isWhActive) return false;
+            if (statusFilter === "inactive" && isWhActive) return false;
 
             // Store filter
             if (storeFilter && storeFilter !== "all") {
@@ -1199,6 +1267,44 @@ export const WarehousesPage = () => {
         const startIndex = (page - 1) * pageSize;
         return filteredWarehouses.slice(startIndex, startIndex + pageSize);
     }, [filteredWarehouses, page, pageSize]);
+
+    const hasActiveFilters = Boolean(
+        (search && search.trim() !== '') ||
+        (statusFilter && statusFilter !== 'all') ||
+        (storeFilter && storeFilter !== 'all')
+    );
+
+    const getPageNumbers = () => {
+        const pages = [];
+        if (totalPages <= 5) {
+            for (let i = 1; i <= totalPages; i++) pages.push(i);
+        } else {
+            if (page <= 3) {
+                pages.push(1, 2, 3, 4, '...', totalPages);
+            } else if (page >= totalPages - 2) {
+                pages.push(1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+            } else {
+                pages.push(1, '...', page - 1, page, page + 1, '...', totalPages);
+            }
+        }
+        return pages;
+    };
+
+    const storeOptions = useMemo(() => {
+        const map = new Map();
+        (availableStores || []).forEach(st => {
+            if (st && st.id) {
+                map.set(String(st.id), st.name || `Store #${st.id}`);
+            }
+        });
+        (rawWarehouses || []).forEach(wh => {
+            const sId = wh.store_id ?? wh.storeId;
+            if (sId && !map.has(String(sId))) {
+                map.set(String(sId), wh.store_name || wh.storeName || `Store #${sId}`);
+            }
+        });
+        return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    }, [availableStores, rawWarehouses]);
 
     const handleSearchSubmit = (e) => {
         if (e) e.preventDefault();
@@ -1384,6 +1490,58 @@ export const WarehousesPage = () => {
         }
     };
 
+    const handleToggleStatus = async (warehouse) => {
+        if (!warehouse || !warehouse.id || togglingStatusId) return;
+        const currentActive = warehouse.is_active === true || warehouse.status === 'Active' || warehouse.status === 'active';
+        const newActive = !currentActive;
+        const whName = warehouse.name || warehouse.warehouse_name || `Warehouse #${warehouse.id}`;
+
+        const confirmed = window.confirm(
+            `Are you sure you want to change status of "${whName}" to ${newActive ? 'Active' : 'Inactive'}?`
+        );
+        if (!confirmed) return;
+
+        try {
+            setTogglingStatusId(warehouse.id);
+            setStatusToast(null);
+
+            // Optimistic update in UI
+            setRawWarehouses(prev => prev.map(w => w.id === warehouse.id ? { ...w, is_active: newActive, status: newActive ? 'Active' : 'Inactive' } : w));
+            setWarehouses(prev => prev.map(w => w.id === warehouse.id ? { ...w, is_active: newActive, status: newActive ? 'Active' : 'Inactive' } : w));
+
+            // Call existing PATCH /api/v1/warehouses/{id}
+            const res = await updateWarehouse(warehouse.id, { is_active: newActive });
+
+            const successMsg = res?.message || `Warehouse "${whName}" status changed to ${newActive ? 'Active' : 'Inactive'} successfully.`;
+            setStatusToast({
+                type: 'success',
+                message: successMsg
+            });
+
+            // Re-fetch to ensure fresh server sync
+            await Promise.allSettled([fetchWarehouses(), fetchDashboard()]);
+        } catch (err) {
+            console.error("Failed to update warehouse status:", err);
+            // Rollback optimistic state
+            setRawWarehouses(prev => prev.map(w => w.id === warehouse.id ? { ...w, is_active: currentActive, status: currentActive ? 'Active' : 'Inactive' } : w));
+            setWarehouses(prev => prev.map(w => w.id === warehouse.id ? { ...w, is_active: currentActive, status: currentActive ? 'Active' : 'Inactive' } : w));
+
+            const errMsg =
+                err?.response?.data?.detail?.message ||
+                (typeof err?.response?.data?.detail === "string" ? err.response.data.detail : null) ||
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to update warehouse status.";
+
+            setStatusToast({
+                type: 'error',
+                message: errMsg
+            });
+        } finally {
+            setTogglingStatusId(null);
+        }
+    };
+
 
     const handleRefresh = () => {
         fetchWarehouses();
@@ -1395,6 +1553,15 @@ export const WarehousesPage = () => {
         hasFetchedRef.current = true;
         fetchWarehouses();
         fetchDashboard();
+        // Load available stores on mount for store filter dropdown
+        listStores()
+            .then((res) => {
+                const list = res?.data?.data || res?.data || (Array.isArray(res) ? res : []);
+                setAvailableStores(list);
+            })
+            .catch((err) => {
+                console.error("Failed to load stores for warehouse filters:", err);
+            });
     }, []);
 
     useEffect(() => {
@@ -1776,6 +1943,72 @@ export const WarehousesPage = () => {
             ? formatWarehouseStockValue(dashboardData.total_stock_value)
             : "₹0.00";
 
+    const WarehouseStatCard = ({ label, value, sub, icon, iconBg, iconColor }) => (
+        <div className="wh-stat-card" style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '18px 20px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            boxSizing: 'border-box'
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: '#64748b',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em'
+                }}>
+                    {label}
+                </span>
+                <div style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    background: iconBg,
+                    color: iconColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                }}>
+                    {icon}
+                </div>
+            </div>
+            <div>
+                <div style={{
+                    fontSize: 26,
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    lineHeight: 1.15,
+                    letterSpacing: '-0.02em',
+                    marginBottom: 5,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                }}>
+                    {value}
+                </div>
+                {sub && (
+                    <div style={{
+                        fontSize: 11.5,
+                        fontWeight: 500,
+                        color: '#64748b',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                    }}>
+                        {sub}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
     return (
         <div className="warehouse-page-root" style={{ width: '100%', minHeight: '100%' }}>
             <style>{`
@@ -1864,6 +2097,238 @@ export const WarehousesPage = () => {
                     background: #f1f5f9 !important;
                 }
 
+                /* Warehouse Stat Card Hover Interaction */
+                .wh-stat-card {
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                }
+                .wh-stat-card:hover {
+                    transform: translateY(-2px) !important;
+                    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08) !important;
+                    border-color: #cbd5e1 !important;
+                }
+
+                /* Professional SaaS Search Bar & Filters Styling - Unified Single Row */
+                .warehouse-page-root .wh-toolbar-container {
+                    padding: 14px 18px !important;
+                    background: #ffffff !important;
+                }
+
+                .warehouse-page-root .wh-toolbar-row {
+                    display: flex !important;
+                    align-items: center !important;
+                    flex-wrap: wrap !important;
+                    gap: 12px !important;
+                    width: 100% !important;
+                }
+
+                .warehouse-page-root .wh-search-form {
+                    display: flex !important;
+                    align-items: center !important;
+                    margin: 0 !important;
+                    flex: 1 1 280px !important;
+                    max-width: 360px !important;
+                    min-width: 240px !important;
+                }
+
+                .warehouse-page-root .wh-search-box {
+                    position: relative !important;
+                    width: 100% !important;
+                    display: flex !important;
+                    align-items: center !important;
+                }
+
+                .warehouse-page-root .wh-search-icon {
+                    position: absolute !important;
+                    left: 12px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    color: #64748b !important;
+                    pointer-events: none !important;
+                }
+
+                .warehouse-page-root .wh-search-input {
+                    width: 100% !important;
+                    height: 38px !important;
+                    padding: 0 32px 0 34px !important;
+                    border: 1.5px solid #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    font-size: 13px !important;
+                    font-weight: 500 !important;
+                    background: #f8fafc !important;
+                    color: #0f172a !important;
+                    outline: none !important;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                }
+                .warehouse-page-root .wh-search-input::placeholder {
+                    color: #64748b !important;
+                    opacity: 1 !important;
+                    font-weight: 400 !important;
+                }
+                .warehouse-page-root .wh-search-input:hover {
+                    border-color: #94a3b8 !important;
+                    background: #ffffff !important;
+                }
+                .warehouse-page-root .wh-search-input:focus {
+                    background: #ffffff !important;
+                    border-color: #6366f1 !important;
+                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+                }
+
+                .warehouse-page-root .wh-search-clear-btn {
+                    position: absolute !important;
+                    right: 8px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    background: #e2e8f0 !important;
+                    border: none !important;
+                    border-radius: 50% !important;
+                    width: 20px !important;
+                    height: 20px !important;
+                    cursor: pointer !important;
+                    color: #475569 !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    padding: 0 !important;
+                    transition: all 0.15s ease !important;
+                }
+                .warehouse-page-root .wh-search-clear-btn:hover {
+                    background: #cbd5e1 !important;
+                    color: #0f172a !important;
+                }
+
+                /* Filter Dropdown Wrappers in Single Row */
+                .warehouse-page-root .wh-filter-wrapper {
+                    position: relative !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    height: 38px !important;
+                    flex: 0 1 auto !important;
+                }
+
+                .warehouse-page-root .wh-store-filter-wrapper {
+                    min-width: 200px !important;
+                    max-width: 260px !important;
+                    flex: 1 1 220px !important;
+                }
+
+                .warehouse-page-root .wh-status-filter-wrapper {
+                    min-width: 150px !important;
+                    max-width: 180px !important;
+                    flex: 1 1 160px !important;
+                }
+
+                .warehouse-page-root .wh-filter-prefix-icon {
+                    position: absolute !important;
+                    left: 11px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    pointer-events: none !important;
+                    z-index: 2 !important;
+                }
+
+                .warehouse-page-root .wh-store-filter-wrapper .wh-filter-prefix-icon {
+                    color: #10b981 !important;
+                }
+
+                .warehouse-page-root .wh-status-filter-wrapper .wh-filter-prefix-icon {
+                    color: #6366f1 !important;
+                }
+
+                .warehouse-page-root .wh-filter-select {
+                    width: 100% !important;
+                    height: 38px !important;
+                    padding: 0 28px 0 32px !important;
+                    border: 1.5px solid #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    font-size: 13px !important;
+                    font-weight: 500 !important;
+                    background: #ffffff !important;
+                    color: #0f172a !important;
+                    outline: none !important;
+                    cursor: pointer !important;
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    -moz-appearance: none !important;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                    text-overflow: ellipsis !important;
+                    white-space: nowrap !important;
+                }
+                .warehouse-page-root .wh-filter-select:hover {
+                    border-color: #94a3b8 !important;
+                    background: #f8fafc !important;
+                }
+                .warehouse-page-root .wh-filter-select:focus {
+                    background: #ffffff !important;
+                    border-color: #6366f1 !important;
+                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+                }
+                .warehouse-page-root .wh-filter-select.is-active {
+                    background: #eef2ff !important;
+                    border-color: #6366f1 !important;
+                    color: #3730a3 !important;
+                    font-weight: 600 !important;
+                }
+                .warehouse-page-root .wh-filter-select-icon {
+                    position: absolute !important;
+                    right: 10px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    color: #64748b !important;
+                    pointer-events: none !important;
+                    z-index: 2 !important;
+                }
+
+                /* Active Filter Badge & Reset Button Group */
+                .warehouse-page-root .wh-filter-actions-group {
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 8px !important;
+                    margin-left: auto !important;
+                    flex-wrap: wrap !important;
+                }
+
+                .warehouse-page-root .wh-active-filter-badge {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    gap: 5px !important;
+                    padding: 0 11px !important;
+                    height: 36px !important;
+                    background: #eef2ff !important;
+                    color: #4338ca !important;
+                    border: 1px solid #c7d2fe !important;
+                    border-radius: 20px !important;
+                    font-size: 12px !important;
+                    font-weight: 600 !important;
+                    white-space: nowrap !important;
+                }
+
+                .warehouse-page-root .wh-clear-btn {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    gap: 4px !important;
+                    padding: 0 12px !important;
+                    height: 36px !important;
+                    font-size: 12.5px !important;
+                    font-weight: 600 !important;
+                    color: #b91c1c !important;
+                    background: #fef2f2 !important;
+                    border: 1px solid #fecaca !important;
+                    border-radius: 8px !important;
+                    cursor: pointer !important;
+                    transition: all 0.15s ease !important;
+                    white-space: nowrap !important;
+                }
+                .warehouse-page-root .wh-clear-btn:hover {
+                    background: #dc2626 !important;
+                    color: #ffffff !important;
+                    border-color: #dc2626 !important;
+                    transform: translateY(-1px) !important;
+                    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.2) !important;
+                }
+
                 /* Action Button & Tooltip Styles */
                 .wh-actions {
                     display: inline-flex;
@@ -1893,46 +2358,50 @@ export const WarehousesPage = () => {
                 .wh-btn-view {
                     background: #eef2ff;
                     color: #4f46e5;
-                    border-color: #c7d2fe;
+                    border: 1.5px solid #c7d2fe;
                 }
                 .wh-btn-view:hover {
-                    background: #e0e7ff;
-                    color: #4338ca;
-                    border-color: #a5b4fc;
+                    background: #4f46e5;
+                    color: #ffffff;
+                    border-color: #4f46e5;
                     transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
                 }
                 .wh-btn-create {
                     background: #ecfdf5;
                     color: #059669;
-                    border-color: #a7f3d0;
+                    border: 1.5px solid #a7f3d0;
                 }
                 .wh-btn-create:hover {
-                    background: #d1fae5;
-                    color: #047857;
-                    border-color: #6ee7b7;
+                    background: #059669;
+                    color: #ffffff;
+                    border-color: #059669;
                     transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
                 }
                 .wh-btn-edit {
                     background: #f8fafc;
                     color: #334155;
-                    border-color: #cbd5e1;
+                    border: 1.5px solid #cbd5e1;
                 }
                 .wh-btn-edit:hover {
-                    background: #f1f5f9;
-                    color: #0f172a;
-                    border-color: #94a3b8;
+                    background: #0284c7;
+                    color: #ffffff;
+                    border-color: #0284c7;
                     transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
                 }
                 .wh-btn-delete {
                     background: #fef2f2;
                     color: #dc2626;
-                    border-color: #fee2e2;
+                    border: 1.5px solid #fecaca;
                 }
                 .wh-btn-delete:hover:not(:disabled) {
-                    background: #fee2e2;
-                    color: #b91c1c;
-                    border-color: #fca5a5;
+                    background: #dc2626;
+                    color: #ffffff;
+                    border-color: #dc2626;
                     transform: translateY(-1px);
+                    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
                 }
                 .wh-btn-delete:disabled {
                     cursor: not-allowed;
@@ -2130,6 +2599,11 @@ export const WarehousesPage = () => {
                     border-width: 5px 5px 0 5px;
                     border-color: #0f172a transparent transparent transparent;
                 }
+
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
             `}</style>
             <ModuleContainer
                 className="warehouse-page-container"
@@ -2139,746 +2613,222 @@ export const WarehousesPage = () => {
                 headerStyle={{ marginBottom: 14, paddingBottom: 12 }}
                 style={{ width: '100%', maxWidth: '100%', margin: 0, padding: '16px 24px 20px 24px', boxSizing: 'border-box' }}
                 actionBtn={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <div
-                            className="warehouse-segmented-tabs"
-                            style={{
-                                display: 'inline-flex',
-                                borderRadius: 8,
-                                border: '1px solid #d1d5db',
-                                background: '#f3f4f6',
-                                padding: 2
-                            }}
-                        >
-                            <button
-                                type="button"
-                                id="tab-wh-status-header"
-                                onClick={() => setWarehouseTab('status')}
-                                title="Warehouse Status"
-                                style={{
-                                    padding: '6px 14px',
-                                    borderRadius: 6,
-                                    border: 'none',
-                                    fontSize: 12.5,
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    background: warehouseTab === 'status' ? '#ffffff' : 'transparent',
-                                    color: warehouseTab === 'status' ? '#4f46e5' : '#6b7280',
-                                    boxShadow: warehouseTab === 'status' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                                    transition: 'all 0.15s ease',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 6
-                                }}
-                            >
-                                <BsActivity size={13} style={{ color: warehouseTab === 'status' ? '#4f46e5' : '#9ca3af' }} />
-                                Warehouse Status
-                            </button>
-                            <button
-                                type="button"
-                                id="tab-wh-details-header"
-                                onClick={() => setWarehouseTab('details')}
-                                title="Warehouse Details"
-                                style={{
-                                    padding: '6px 14px',
-                                    borderRadius: 6,
-                                    border: 'none',
-                                    fontSize: 12.5,
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                    background: warehouseTab === 'details' ? '#ffffff' : 'transparent',
-                                    color: warehouseTab === 'details' ? '#4f46e5' : '#6b7280',
-                                    boxShadow: warehouseTab === 'details' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-                                    transition: 'all 0.15s ease',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 6
-                                }}
-                            >
-                                <BsTable size={13} style={{ color: warehouseTab === 'details' ? '#4f46e5' : '#9ca3af' }} />
-                                Warehouse Details
-                            </button>
-                        </div>
-                        <button
-                            onClick={handleRefresh}
-                            disabled={loading || dashboardLoading}
-                            title="Refresh Warehouses"
-                            style={{
-                                background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', padding: '10px 14px',
-                                borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: (loading || dashboardLoading) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                            }}
-                        >
-                            <BsArrowRepeat size={16} /> Refresh
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleOpenAddModal}
-                            title="Add New Warehouse"
-                            style={{
-                                background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                                borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                                transition: 'background-color 0.15s ease'
-                            }}
-                        >
-                            <BsPlus size={18} /> Add Warehouse
-                        </button>
-                    </div>
-                }
-            >
-                {/* Dashboard Stat Cards */}
-                <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-                    <StatCard
-                        label="Total Warehouses"
-                        value={totalWarehouses}
-                        sub="Registered stock locations"
-                        color="#6366f1"
-                    />
-                    <StatCard
-                        label="Active Warehouses"
-                        value={activeWarehouses}
-                        sub="Operational & ready"
-                        color="#10b981"
-                    />
-                    <StatCard
-                        label="Inactive Warehouses"
-                        value={inactiveWarehouses}
-                        sub={Number(inactiveWarehouses) > 0 ? "Requires attention" : "All operational"}
-                        color={Number(inactiveWarehouses) > 0 ? "#ef4444" : "#6b7280"}
-                    />
-                    <StatCard
-                        label="Total Stock Units"
-                        value={totalStockUnits}
-                        sub="Units in warehouses"
-                        color="#0ea5e9"
-                    />
-                    <StatCard
-                        label="Total Stock Value"
-                        value={totalStockValue}
-                        sub="Inventory valuation"
-                        color="#8b5cf6"
-                    />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <button
+                        onClick={handleRefresh}
+                        disabled={loading || dashboardLoading}
+                        title="Refresh Warehouses"
+                        style={{
+                            background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', padding: '10px 14px',
+                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: (loading || dashboardLoading) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6
+                        }}
+                    >
+                        <BsArrowRepeat size={16} /> Refresh
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleOpenAddModal}
+                        title="Add New Warehouse"
+                        style={{
+                            background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
+                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                            transition: 'background-color 0.15s ease'
+                        }}
+                    >
+                        <BsPlus size={18} /> Add Warehouse
+                    </button>
                 </div>
+            }
+        >
+            {/* Authoritative Warehouse SaaS KPI Summary Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 24 }}>
+                <WarehouseStatCard
+                    label="Total Warehouses"
+                    value={dashboardLoading ? '...' : totalWarehouses}
+                    sub="Registered stock locations"
+                    icon={<BsBuildings size={17} />}
+                    iconBg="#eef2ff"
+                    iconColor="#4f46e5"
+                />
+                <WarehouseStatCard
+                    label="Active Warehouses"
+                    value={dashboardLoading ? '...' : activeWarehouses}
+                    sub="Operational & ready"
+                    icon={<BsCheckCircleFill size={17} />}
+                    iconBg="#ecfdf5"
+                    iconColor="#059669"
+                />
+                <WarehouseStatCard
+                    label="Inactive Warehouses"
+                    value={dashboardLoading ? '...' : inactiveWarehouses}
+                    sub={Number(inactiveWarehouses) > 0 ? "Requires attention" : "All operational"}
+                    icon={<BsExclamationTriangle size={17} />}
+                    iconBg={Number(inactiveWarehouses) > 0 ? "#fff1f2" : "#f8fafc"}
+                    iconColor={Number(inactiveWarehouses) > 0 ? "#e11d48" : "#64748b"}
+                />
+                <WarehouseStatCard
+                    label="Total Stock Units"
+                    value={dashboardLoading ? '...' : totalStockUnits}
+                    sub="Units in warehouses"
+                    icon={<BsBoxSeam size={17} />}
+                    iconBg="#f0f9ff"
+                    iconColor="#0284c7"
+                />
+                <WarehouseStatCard
+                    label="Total Stock Value"
+                    value={dashboardLoading ? '...' : totalStockValue}
+                    sub="Inventory valuation"
+                    icon={<BsCashStack size={17} />}
+                    iconBg="#f5f3ff"
+                    iconColor="#7c3aed"
+                />
+            </div>
 
-                {dashboardError && (
-                    <div style={{
-                        fontSize: 12.5,
-                        color: '#b91c1c',
-                        background: '#fef2f2',
-                        padding: '8px 14px',
-                        borderRadius: 8,
-                        border: '1px solid #fee2e2',
-                        marginBottom: 20
-                    }}>
-                        Note: Could not refresh dashboard counts ({dashboardError}).
-                    </div>
-                )}
+            {dashboardError && (
+                <div style={{
+                    fontSize: 12.5,
+                    color: '#b91c1c',
+                    background: '#fef2f2',
+                    padding: '8px 14px',
+                    borderRadius: 8,
+                    border: '1px solid #fee2e2',
+                    marginBottom: 20
+                }}>
+                    Note: Could not refresh dashboard counts ({dashboardError}).
+                </div>
+            )}
 
-                {/* Warehouse Delete Feedback Banner */}
-                {deleteFeedback && (
-                    <div style={{
-                        borderRadius: 10,
-                        padding: '14px 18px',
-                        marginBottom: 20,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                        background: deleteFeedback.type === 'success'
-                            ? '#ecfdf5'
-                            : (deleteFeedback.type === 'conflict' ? '#fffbeb' : '#fef2f2'),
-                        border: `1px solid ${deleteFeedback.type === 'success'
+            {/* Warehouse Delete Feedback Banner */}
+            {deleteFeedback && (
+                <div style={{
+                    borderRadius: 10,
+                    padding: '14px 18px',
+                    marginBottom: 20,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                    background: deleteFeedback.type === 'success'
+                        ? '#ecfdf5'
+                        : (deleteFeedback.type === 'conflict' ? '#fffbeb' : '#fef2f2'),
+                    border: `1px solid ${
+                        deleteFeedback.type === 'success'
                             ? '#a7f3d0'
                             : (deleteFeedback.type === 'conflict' ? '#fde68a' : '#fecaca')
-                            }`,
-                        color: deleteFeedback.type === 'success'
-                            ? '#065f46'
-                            : (deleteFeedback.type === 'conflict' ? '#92400e' : '#991b1b')
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                            {deleteFeedback.type === 'success' ? (
-                                <BsCheckCircleFill size={18} style={{ color: '#059669', marginTop: 2, flexShrink: 0 }} />
-                            ) : (
-                                <BsExclamationTriangle size={18} style={{
-                                    color: deleteFeedback.type === 'conflict' ? '#d97706' : '#dc2626',
-                                    marginTop: 2,
-                                    flexShrink: 0
-                                }} />
-                            )}
-                            <div>
-                                <strong style={{ display: 'block', fontSize: 13.5, fontWeight: 700, marginBottom: 2 }}>
-                                    {deleteFeedback.type === 'success'
-                                        ? 'Warehouse Deleted'
-                                        : (deleteFeedback.type === 'conflict' ? 'Cannot Delete Warehouse (Active Stock Conflict)' : 'Failed to Delete Warehouse')}
-                                </strong>
-                                <p style={{ margin: 0, fontSize: 13, lineHeight: 1.4 }}>
-                                    {deleteFeedback.message}
+                    }`,
+                    color: deleteFeedback.type === 'success'
+                        ? '#065f46'
+                        : (deleteFeedback.type === 'conflict' ? '#92400e' : '#991b1b')
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        {deleteFeedback.type === 'success' ? (
+                            <BsCheckCircleFill size={18} style={{ color: '#059669', marginTop: 2, flexShrink: 0 }} />
+                        ) : (
+                            <BsExclamationTriangle size={18} style={{
+                                color: deleteFeedback.type === 'conflict' ? '#d97706' : '#dc2626',
+                                marginTop: 2,
+                                flexShrink: 0
+                            }} />
+                        )}
+                        <div>
+                            <strong style={{ display: 'block', fontSize: 13.5, fontWeight: 700, marginBottom: 2 }}>
+                                {deleteFeedback.type === 'success'
+                                    ? 'Warehouse Deleted'
+                                    : (deleteFeedback.type === 'conflict' ? 'Cannot Delete Warehouse (Active Stock Conflict)' : 'Failed to Delete Warehouse')}
+                            </strong>
+                            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.4 }}>
+                                {deleteFeedback.message}
+                            </p>
+                            {deleteFeedback.detail && (
+                                <p style={{ margin: '6px 0 0 0', fontSize: 12, opacity: 0.9, lineHeight: 1.4 }}>
+                                    {deleteFeedback.detail}
                                 </p>
-                                {deleteFeedback.detail && (
-                                    <p style={{ margin: '6px 0 0 0', fontSize: 12, opacity: 0.9, lineHeight: 1.4 }}>
-                                        {deleteFeedback.detail}
-                                    </p>
-                                )}
-                            </div>
+                            )}
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => setDeleteFeedback(null)}
-                            style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: 'currentColor',
-                                opacity: 0.7,
-                                fontSize: 16,
-                                lineHeight: 1,
-                                cursor: 'pointer',
-                                padding: '2px 6px'
-                            }}
-                            title="Dismiss"
-                        >
-                            ✕
-                        </button>
                     </div>
-                )}
+                    <button
+                        type="button"
+                        onClick={() => setDeleteFeedback(null)}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'currentColor',
+                            opacity: 0.7,
+                            fontSize: 16,
+                            lineHeight: 1,
+                            cursor: 'pointer',
+                            padding: '2px 6px'
+                        }}
+                        title="Dismiss"
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
 
-                {/* Segmented Tab Navigation: Warehouse Status / Warehouse Details */}
+            {/* Status Update Toast Notification */}
+            {statusToast && (
                 <div style={{
+                    borderRadius: 10,
+                    padding: '12px 18px',
+                    marginBottom: 18,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    flexWrap: 'wrap',
                     gap: 12,
-                    marginBottom: 14
+                    background: statusToast.type === 'success' ? '#ecfdf5' : '#fef2f2',
+                    border: `1px solid ${statusToast.type === 'success' ? '#a7f3d0' : '#fecaca'}`,
+                    color: statusToast.type === 'success' ? '#065f46' : '#991b1b',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.04)'
                 }}>
-                    <div
-                        className="warehouse-segmented-tabs"
-                        style={{
-                            display: 'inline-flex',
-                            borderRadius: 8,
-                            border: '1px solid #d1d5db',
-                            background: '#f3f4f6',
-                            padding: 3,
-                            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.03)'
-                        }}
-                    >
-                        <button
-                            type="button"
-                            id="tab-warehouse-status"
-                            onClick={() => setWarehouseTab('status')}
-                            style={{
-                                padding: '7px 18px',
-                                borderRadius: 6,
-                                border: 'none',
-                                fontSize: 13,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                background: warehouseTab === 'status' ? '#ffffff' : 'transparent',
-                                color: warehouseTab === 'status' ? '#4f46e5' : '#6b7280',
-                                boxShadow: warehouseTab === 'status' ? '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)' : 'none',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 7,
-                                transition: 'all 0.15s ease'
-                            }}
-                        >
-                            <BsActivity size={15} style={{ color: warehouseTab === 'status' ? '#4f46e5' : '#9ca3af' }} />
-                            <span>Warehouse Status</span>
-                        </button>
-                        <button
-                            type="button"
-                            id="tab-warehouse-details"
-                            onClick={() => setWarehouseTab('details')}
-                            style={{
-                                padding: '7px 18px',
-                                borderRadius: 6,
-                                border: 'none',
-                                fontSize: 13,
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                background: warehouseTab === 'details' ? '#ffffff' : 'transparent',
-                                color: warehouseTab === 'details' ? '#4f46e5' : '#6b7280',
-                                boxShadow: warehouseTab === 'details' ? '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)' : 'none',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 7,
-                                transition: 'all 0.15s ease'
-                            }}
-                        >
-                            <BsTable size={15} style={{ color: warehouseTab === 'details' ? '#4f46e5' : '#9ca3af' }} />
-                            <span>Warehouse Details</span>
-                        </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {statusToast.type === 'success' ? (
+                            <BsCheckCircleFill size={18} style={{ color: '#059669', flexShrink: 0 }} />
+                        ) : (
+                            <BsExclamationTriangle size={18} style={{ color: '#dc2626', flexShrink: 0 }} />
+                        )}
+                        <span style={{ fontSize: 13.5, fontWeight: 600 }}>
+                            {statusToast.message}
+                        </span>
                     </div>
+                    <button
+                        type="button"
+                        onClick={() => setStatusToast(null)}
+                        style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'currentColor',
+                            opacity: 0.7,
+                            fontSize: 16,
+                            lineHeight: 1,
+                            cursor: 'pointer',
+                            padding: '2px 6px'
+                        }}
+                        title="Dismiss"
+                    >
+                        ✕
+                    </button>
                 </div>
+            )}
 
-                {/* TAB 1: WAREHOUSE STATUS VIEW */}
-                {warehouseTab === 'status' ? (
-                    loading ? (
-                        <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280' }}>
-                            <div style={{
-                                display: 'inline-block',
-                                width: 32,
-                                height: 32,
-                                border: '3px solid #e5e7eb',
-                                borderTopColor: '#6366f1',
-                                borderRadius: '50%',
-                                animation: 'spin 1s linear infinite',
-                                marginBottom: 12
-                            }} />
-                            <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>Loading warehouse status...</p>
-                        </div>
-                    ) : error ? (
-                        <div style={{
-                            background: '#fef2f2',
-                            border: '1px solid #fee2e2',
-                            borderRadius: 12,
-                            padding: '20px 24px',
-                            color: '#dc2626',
-                            display: 'flex',
-                            alignItems: 'flex-start',
-                            gap: 14
-                        }}>
-                            <BsExclamationTriangle size={22} style={{ marginTop: 2, flexShrink: 0 }} />
-                            <div style={{ flex: 1 }}>
-                                <strong style={{ display: 'block', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
-                                    Unable to load warehouse status
-                                </strong>
-                                <p style={{ fontSize: 13, color: '#b91c1c', margin: '0 0 12px 0' }}>{error}</p>
-                                <button
-                                    onClick={() => fetchWarehouses()}
-                                    style={{
-                                        background: '#dc2626',
-                                        color: '#ffffff',
-                                        border: 'none',
-                                        padding: '6px 14px',
-                                        borderRadius: 6,
-                                        fontSize: 12.5,
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Try Again
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="warehouse-status-view">
-                            {/* Status KPI Summary Cards */}
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                                gap: 14,
-                                marginBottom: 16
-                            }}>
-                                {/* Active Warehouses Card */}
-                                <div style={{
-                                    background: '#ffffff',
-                                    border: '1px solid #e5e7eb',
-                                    borderLeft: '4px solid #10b981',
-                                    borderRadius: 10,
-                                    padding: '16px 20px',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                        <span style={{ fontSize: 11.5, fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                            Active Stock Locations
-                                        </span>
-                                        <span style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 5,
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            padding: '2px 8px',
-                                            borderRadius: 12,
-                                            background: '#ecfdf5',
-                                            color: '#059669',
-                                            border: '1px solid #a7f3d0'
-                                        }}>
-                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                                            Active
-                                        </span>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                                        <span style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>
-                                            {rawWarehouses.filter(w => w.is_active === true || w.status === 'Active' || w.status === 'active').length}
-                                        </span>
-                                        <span style={{ fontSize: 13, color: '#6b7280' }}>
-                                            of {rawWarehouses.length} locations operational
-                                        </span>
-                                    </div>
-                                    <p style={{ margin: '6px 0 0', fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
-                                        Fully operational depots actively accepting purchase orders, inwards, and stock dispatches.
-                                    </p>
-                                </div>
 
-                                {/* Inactive Warehouses Card */}
-                                <div style={{
-                                    background: '#ffffff',
-                                    border: '1px solid #e5e7eb',
-                                    borderLeft: '4px solid ' + (rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#ef4444' : '#9ca3af'),
-                                    borderRadius: 10,
-                                    padding: '16px 20px',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                        <span style={{ fontSize: 11.5, fontWeight: 700, color: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#dc2626' : '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                            Inactive Stock Locations
-                                        </span>
-                                        <span style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 5,
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            padding: '2px 8px',
-                                            borderRadius: 12,
-                                            background: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#fef2f2' : '#f3f4f6',
-                                            color: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#dc2626' : '#6b7280',
-                                            border: '1px solid ' + (rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#fecaca' : '#e5e7eb')
-                                        }}>
-                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? '#ef4444' : '#9ca3af' }} />
-                                            {rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length > 0 ? 'Requires Attention' : 'All Operational'}
-                                        </span>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                                        <span style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>
-                                            {rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length}
-                                        </span>
-                                        <span style={{ fontSize: 13, color: '#6b7280' }}>
-                                            decommissioned or restricted
-                                        </span>
-                                    </div>
-                                    <p style={{ margin: '6px 0 0', fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
-                                        Stock locations with paused activities. Movements and transfers are disabled until reactivated.
-                                    </p>
-                                </div>
 
-                                {/* Network Availability Rate Card */}
-                                <div style={{
-                                    background: '#ffffff',
-                                    border: '1px solid #e5e7eb',
-                                    borderLeft: '4px solid #6366f1',
-                                    borderRadius: 10,
-                                    padding: '16px 20px',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                                        <span style={{ fontSize: 11.5, fontWeight: 700, color: '#4f46e5', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                            Operational Availability
-                                        </span>
-                                        <span style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            padding: '2px 8px',
-                                            borderRadius: 12,
-                                            background: '#eef2ff',
-                                            color: '#4f46e5',
-                                            border: '1px solid #c7d2fe'
-                                        }}>
-                                            Live Network
-                                        </span>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                                        <span style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>
-                                            {rawWarehouses.length > 0
-                                                ? Math.round((rawWarehouses.filter(w => w.is_active === true || w.status === 'Active' || w.status === 'active').length / rawWarehouses.length) * 100)
-                                                : 100}%
-                                        </span>
-                                        <span style={{ fontSize: 13, color: '#6b7280' }}>
-                                            system readiness rate
-                                        </span>
-                                    </div>
-                                    <p style={{ margin: '6px 0 0', fontSize: 12, color: '#6b7280', lineHeight: 1.4 }}>
-                                        Ratio of active stock locations available for immediate retail fulfillment and inventory distribution.
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* Operational Status Table */}
-                            <div style={{
-                                background: '#ffffff',
-                                borderRadius: 12,
-                                border: '1px solid #e5e7eb',
-                                overflow: 'hidden',
-                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                            }}>
-                                <div style={{
-                                    padding: '14px 18px',
-                                    background: '#f9fafb',
-                                    borderBottom: '1px solid #e5e7eb',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'space-between',
-                                    flexWrap: 'wrap',
-                                    gap: 10
-                                }}>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#111827' }}>
-                                            Warehouse Operational Status
-                                        </h3>
-                                        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#6b7280' }}>
-                                            Real-time active and inactive warehouse operational statuses fetched from registered warehouse data
-                                        </p>
-                                    </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 5,
-                                            fontSize: 12,
-                                            fontWeight: 600,
-                                            color: '#059669',
-                                            background: '#ecfdf5',
-                                            padding: '3px 10px',
-                                            borderRadius: 12,
-                                            border: '1px solid #a7f3d0'
-                                        }}>
-                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-                                            {rawWarehouses.filter(w => w.is_active === true || w.status === 'Active' || w.status === 'active').length} Active
-                                        </span>
-                                        <span style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 5,
-                                            fontSize: 12,
-                                            fontWeight: 600,
-                                            color: '#dc2626',
-                                            background: '#fef2f2',
-                                            padding: '3px 10px',
-                                            borderRadius: 12,
-                                            border: '1px solid #fecaca'
-                                        }}>
-                                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }} />
-                                            {rawWarehouses.filter(w => !(w.is_active === true || w.status === 'Active' || w.status === 'active')).length} Inactive
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="warehouse-table-scroll custom-scrollbar" style={{ maxHeight: '480px', overflowY: 'auto', overflowX: 'auto' }}>
-                                    <table className="warehouse-table" style={{ width: '100%', minWidth: '1150px', borderCollapse: 'separate', borderSpacing: 0, textAlign: 'left', fontSize: 13 }}>
-                                        <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', boxShadow: '0 1px 2px rgba(0,0,0,0.06)' }}>
-                                            <tr>
-                                                <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Warehouse Code</th>
-                                                <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Warehouse Name</th>
-                                                <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Store</th>
-                                                <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, minWidth: 240, whiteSpace: 'nowrap' }}>Address / Location</th>
-                                                <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Operational Status</th>
-                                                <th style={{ padding: '11px 16px', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600, whiteSpace: 'nowrap' }}>Readiness Note</th>
-                                                <th style={{
-                                                    position: 'sticky',
-                                                    top: 0,
-                                                    right: 0,
-                                                    zIndex: 25,
-                                                    background: '#f9fafb',
-                                                    padding: '8px 14px',
-                                                    borderBottom: '1px solid #e5e7eb',
-                                                    color: '#4b5563',
-                                                    fontWeight: 600,
-                                                    textAlign: 'center',
-                                                    whiteSpace: 'nowrap',
-                                                    minWidth: 155,
-                                                    width: 155,
-                                                    boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                                }}>
-                                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                                        <span>Action</span>
-                                                        <button
-                                                            type="button"
-                                                            className="wh-action-btn wh-btn-create"
-                                                            data-tooltip="Add Warehouse"
-                                                            title="Add Warehouse"
-                                                            aria-label="Add Warehouse"
-                                                            onClick={handleOpenAddModal}
-                                                            style={{ width: 26, height: 26, borderRadius: 6 }}
-                                                        >
-                                                            <BsPlus size={18} />
-                                                        </button>
-                                                    </div>
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {rawWarehouses.map((wh, idx) => {
-                                                const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
-                                                const code = (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "")
-                                                    ? String(rawCode).trim()
-                                                    : "—";
-                                                const name = wh.name || ('Warehouse #' + (wh.id || (idx + 1)));
-                                                const address = wh.address || wh.location || "Address not provided";
-                                                const storeId = wh.store_id ?? wh.storeId;
-                                                const storeName = wh.store_name || wh.storeName;
-                                                const isActive = wh.is_active === true || wh.status === "active" || wh.status === "Active";
-
-                                                return (
-                                                    <tr
-                                                        key={wh.id || idx}
-                                                        style={{ borderBottom: '1px solid #f3f4f6', transition: 'background-color 0.15s ease' }}
-                                                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                                                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                    >
-                                                        <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
-                                                            {code !== "—" ? (
-                                                                <span style={{
-                                                                    fontSize: 12,
-                                                                    fontWeight: 700,
-                                                                    color: '#4f46e5',
-                                                                    background: '#eef2ff',
-                                                                    padding: '3px 8px',
-                                                                    borderRadius: 6,
-                                                                    display: 'inline-block',
-                                                                    letterSpacing: '0.02em'
-                                                                }}>
-                                                                    {code}
-                                                                </span>
-                                                            ) : (
-                                                                <span style={{ color: '#9ca3af', fontSize: 13 }}>—</span>
-                                                            )}
-                                                        </td>
-                                                        <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
-                                                            <strong style={{ color: '#111827', fontWeight: 600, display: 'block' }}>{name}</strong>
-                                                            <span style={{ fontSize: 11.5, color: '#9ca3af' }}>ID: #{wh.id || (idx + 1)}</span>
-                                                        </td>
-                                                        <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
-                                                            {storeName ? (
-                                                                <div>
-                                                                    <strong style={{ color: '#111827', fontWeight: 600, display: 'block' }}>{storeName}</strong>
-                                                                    {storeId != null && <span style={{ fontSize: 11.5, color: '#6b7280' }}>Store #{storeId}</span>}
-                                                                </div>
-                                                            ) : storeId != null ? (
-                                                                <span style={{ fontWeight: 600, color: '#111827' }}>Store #{storeId}</span>
-                                                            ) : (
-                                                                <span style={{ color: '#9ca3af' }}>—</span>
-                                                            )}
-                                                        </td>
-                                                        <td style={{ padding: '11px 16px', color: '#4b5563', minWidth: 240, whiteSpace: 'nowrap' }}>
-                                                            <span title={address}>{address}</span>
-                                                        </td>
-                                                        <td style={{ padding: '11px 16px', whiteSpace: 'nowrap' }}>
-                                                            <span style={{
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 6,
-                                                                padding: '4px 12px',
-                                                                borderRadius: 20,
-                                                                fontSize: 12,
-                                                                fontWeight: 700,
-                                                                background: isActive ? '#ecfdf5' : '#fef2f2',
-                                                                color: isActive ? '#059669' : '#dc2626',
-                                                                border: '1px solid ' + (isActive ? '#a7f3d0' : '#fecaca')
-                                                            }}>
-                                                                <span style={{
-                                                                    width: 7,
-                                                                    height: 7,
-                                                                    borderRadius: '50%',
-                                                                    background: isActive ? '#10b981' : '#ef4444',
-                                                                    boxShadow: isActive ? '0 0 0 2px rgba(16, 185, 129, 0.25)' : '0 0 0 2px rgba(239, 68, 68, 0.25)'
-                                                                }} />
-                                                                {isActive ? 'Active' : 'Inactive'}
-                                                            </span>
-                                                        </td>
-                                                        <td style={{ padding: '11px 16px', fontSize: 12, color: isActive ? '#059669' : '#dc2626', whiteSpace: 'nowrap' }}>
-                                                            {isActive
-                                                                ? 'Ready for Inward & Dispatch'
-                                                                : 'Stock Inward Paused'}
-                                                        </td>
-                                                        <td style={{
-                                                            position: 'sticky',
-                                                            right: 0,
-                                                            zIndex: 10,
-                                                            background: '#ffffff',
-                                                            padding: '11px 16px',
-                                                            textAlign: 'center',
-                                                            whiteSpace: 'nowrap',
-                                                            minWidth: 155,
-                                                            width: 155,
-                                                            boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                                        }}>
-                                                            <div className="wh-actions">
-                                                                {/* VIEW */}
-                                                                <button
-                                                                    type="button"
-                                                                    className="wh-action-btn wh-btn-view"
-                                                                    data-tooltip="View Warehouse"
-                                                                    title="View Warehouse"
-                                                                    aria-label="View Warehouse"
-                                                                    onClick={() => handleViewWarehouse(wh.id)}
-                                                                >
-                                                                    <BsEye size={14} />
-                                                                </button>
-
-                                                                {/* EDIT */}
-                                                                <button
-                                                                    type="button"
-                                                                    className="wh-action-btn wh-btn-edit"
-                                                                    data-tooltip="Edit Warehouse"
-                                                                    title="Edit Warehouse"
-                                                                    aria-label="Edit Warehouse"
-                                                                    onClick={() => handleOpenEditModal(wh)}
-                                                                >
-                                                                    <BsPencilFill size={13} />
-                                                                </button>
-
-                                                                {/* DELETE */}
-                                                                <button
-                                                                    type="button"
-                                                                    className="wh-action-btn wh-btn-delete"
-                                                                    data-tooltip="Delete Warehouse"
-                                                                    title="Delete Warehouse"
-                                                                    aria-label="Delete Warehouse"
-                                                                    disabled={deletingId !== null}
-                                                                    onClick={() => handleRequestDelete(wh)}
-                                                                >
-                                                                    <BsTrashFill size={13} />
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    )
-                ) : (
-                    /* TAB 2: WAREHOUSE DETAILS VIEW */
-                    <>
-                        {/* Warehouse Search and Filter Controls */}
-                        <form
-                            onSubmit={handleSearchSubmit}
-                            style={{
-                                background: '#ffffff',
-                                border: '1px solid #e5e7eb',
-                                borderRadius: 12,
-                                padding: '14px 18px',
-                                marginBottom: 20,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 12,
-                                flexWrap: 'wrap',
-                            }}
-                        >
-                            <div style={{ position: 'relative', flex: '1 1 240px' }}>
-                                <BsSearch style={{ position: 'absolute', left: 12, top: 11, color: '#9ca3af', pointerEvents: 'none' }} />
+            {/* Search and Filters Toolbar Container - Unified Single Horizontal Row */}
+            <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)', marginBottom: 20 }}>
+                <div className="wh-toolbar-container">
+                    <div className="wh-toolbar-row">
+                        {/* 1. Search Input: compact & balanced */}
+                        <form onSubmit={handleSearchSubmit} className="wh-search-form">
+                            <div className="wh-search-box">
+                                <BsSearch className="wh-search-icon" size={13} />
                                 <input
                                     type="text"
+                                    className="wh-search-input"
                                     placeholder="Search by name, code, location, ID..."
                                     value={search}
                                     onChange={(e) => {
                                         setSearch(e.target.value);
                                         setPage(1);
-                                    }}
-                                    style={{
-                                        width: '100%',
-                                        padding: search ? '8px 32px 8px 36px' : '8px 12px 8px 36px',
-                                        border: '1px solid #d1d5db',
-                                        borderRadius: 8,
-                                        fontSize: 13.5,
-                                        outline: 'none',
-                                        color: '#111827',
-                                        boxSizing: 'border-box'
                                     }}
                                 />
                                 {search && (
@@ -2891,499 +2841,381 @@ export const WarehousesPage = () => {
                                                 setRawWarehouses(allWarehousesRef.current);
                                             }
                                         }}
-                                        style={{
-                                            position: 'absolute',
-                                            right: 10,
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            background: 'transparent',
-                                            border: 'none',
-                                            color: '#9ca3af',
-                                            cursor: 'pointer',
-                                            padding: 2,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center'
-                                        }}
                                         title="Clear search"
+                                        className="wh-search-clear-btn"
                                     >
-                                        <BsX size={18} />
+                                        <BsX size={14} />
                                     </button>
                                 )}
                             </div>
+                        </form>
 
-                            <div style={{ flex: '0 0 auto', minWidth: 140 }}>
-                                <select
-                                    value={statusFilter}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setStatusFilter(val);
-                                        fetchWarehouses({ statusFilter: val, page: 1 });
-                                    }}
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px 12px',
-                                        border: '1px solid #d1d5db',
-                                        borderRadius: 8,
-                                        fontSize: 13,
-                                        color: '#374151',
-                                        background: '#fff',
-                                        cursor: 'pointer',
-                                    }}
-                                >
-                                    <option value="all">All Status</option>
-                                    <option value="active">Active Only</option>
-                                    <option value="inactive">Inactive Only</option>
-                                </select>
-                            </div>
-
-                            <div style={{ flex: '0 0 auto', minWidth: 140 }}>
-                                <input
-                                    type="number"
-                                    placeholder="Store ID (e.g. 2)"
-                                    value={storeFilter === 'all' ? '' : storeFilter}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setStoreFilter(val === '' ? 'all' : val);
-                                    }}
-                                    style={{
-                                        width: '100%',
-                                        padding: '8px 12px',
-                                        border: '1px solid #d1d5db',
-                                        borderRadius: 8,
-                                        fontSize: 13,
-                                        color: '#374151',
-                                        boxSizing: 'border-box'
-                                    }}
-                                />
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                style={{
-                                    background: '#6366f1',
-                                    color: '#fff',
-                                    border: 'none',
-                                    padding: '8px 16px',
-                                    borderRadius: 8,
-                                    fontWeight: 600,
-                                    fontSize: 13,
-                                    cursor: loading ? 'not-allowed' : 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 6,
+                        {/* 2. Store Filter Dropdown */}
+                        <div className="wh-filter-wrapper wh-store-filter-wrapper">
+                            <BsShop className="wh-filter-prefix-icon" size={13} />
+                            <select
+                                className={`wh-filter-select ${storeFilter !== 'all' ? 'is-active' : ''}`}
+                                value={storeFilter}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setStoreFilter(val);
+                                    fetchWarehouses({ storeFilter: val, page: 1 });
                                 }}
+                                aria-label="Filter by store"
                             >
-                                <BsSearch size={13} /> Filter
-                            </button>
+                                <option value="all">All Stores</option>
+                                {storeOptions.map(st => (
+                                    <option key={st.id} value={st.id}>
+                                        Store #{st.id} {st.name && st.name !== `Store #${st.id}` ? `(${st.name})` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            <BsChevronDown size={11} className="wh-filter-select-icon" />
+                        </div>
 
-                            {(search.trim() || statusFilter !== 'all' || storeFilter !== 'all') && (
+                        {/* 3. Status Filter Dropdown */}
+                        <div className="wh-filter-wrapper wh-status-filter-wrapper">
+                            <BsActivity className="wh-filter-prefix-icon" size={13} />
+                            <select
+                                className={`wh-filter-select ${statusFilter !== 'all' ? 'is-active' : ''}`}
+                                value={statusFilter}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setStatusFilter(val);
+                                    fetchWarehouses({ statusFilter: val, page: 1 });
+                                }}
+                                aria-label="Filter by status"
+                            >
+                                <option value="all">All Status</option>
+                                <option value="active">Active Only</option>
+                                <option value="inactive">Inactive Only</option>
+                            </select>
+                            <BsChevronDown size={11} className="wh-filter-select-icon" />
+                        </div>
+
+                        {/* 4. Active Filters Indicator & Reset Button */}
+                        {hasActiveFilters && (
+                            <div className="wh-filter-actions-group">
+                                <div className="wh-active-filter-badge">
+                                    <BsFunnel size={11} />
+                                    <span>Filters Active</span>
+                                </div>
                                 <button
                                     type="button"
                                     onClick={handleResetFilters}
-                                    style={{
-                                        background: '#f3f4f6',
-                                        color: '#4b5563',
-                                        border: '1px solid #d1d5db',
-                                        padding: '8px 14px',
-                                        borderRadius: 8,
-                                        fontWeight: 600,
-                                        fontSize: 13,
-                                        cursor: 'pointer',
-                                    }}
+                                    className="wh-clear-btn"
+                                    title="Reset all filters to default"
                                 >
-                                    Clear
+                                    <BsX size={15} /> Reset Filters
                                 </button>
-                            )}
-                        </form>
-
-                        {loading ? (
-                            <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280' }}>
-                                <div style={{
-                                    display: 'inline-block',
-                                    width: 32,
-                                    height: 32,
-                                    border: '3px solid #e5e7eb',
-                                    borderTopColor: '#6366f1',
-                                    borderRadius: '50%',
-                                    animation: 'spin 1s linear infinite',
-                                    marginBottom: 12
-                                }} />
-                                <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>Loading warehouses...</p>
                             </div>
-                        ) : error ? (
-                            <div style={{
-                                background: '#fef2f2',
-                                border: '1px solid #fee2e2',
-                                borderRadius: 12,
-                                padding: '20px 24px',
-                                color: '#dc2626',
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: 14
-                            }}>
-                                <BsExclamationTriangle size={22} style={{ marginTop: 2, flexShrink: 0 }} />
-                                <div style={{ flex: 1 }}>
-                                    <strong style={{ display: 'block', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
-                                        Unable to load warehouses
-                                    </strong>
-                                    <p style={{ fontSize: 13, color: '#b91c1c', margin: '0 0 12px 0' }}>{error}</p>
-                                    <button
-                                        onClick={() => fetchWarehouses()}
-                                        style={{
-                                            background: '#dc2626',
-                                            color: '#ffffff',
-                                            border: 'none',
-                                            padding: '6px 14px',
-                                            borderRadius: 6,
-                                            fontSize: 12.5,
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280' }}>
+                    <div style={{
+                        display: 'inline-block',
+                        width: 32,
+                        height: 32,
+                        border: '3px solid #e5e7eb',
+                        borderTopColor: '#6366f1',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite',
+                        marginBottom: 12
+                    }} />
+                    <p style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>Loading warehouses...</p>
+                </div>
+            ) : error ? (
+                <div style={{
+                    background: '#fef2f2',
+                    border: '1px solid #fee2e2',
+                    borderRadius: 12,
+                    padding: '20px 24px',
+                    color: '#dc2626',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 14
+                }}>
+                    <BsExclamationTriangle size={22} style={{ marginTop: 2, flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                        <strong style={{ display: 'block', fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
+                            Unable to load warehouses
+                        </strong>
+                        <p style={{ fontSize: 13, color: '#b91c1c', margin: '0 0 12px 0' }}>{error}</p>
+                        <button
+                            onClick={() => fetchWarehouses()}
+                            style={{
+                                background: '#dc2626',
+                                color: '#ffffff',
+                                border: 'none',
+                                padding: '6px 14px',
+                                borderRadius: 6,
+                                fontSize: 12.5,
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                            }}
+                        >
+                            Try Again
+                        </button>
+                    </div>
+                </div>
+            ) : filteredWarehouses.length === 0 ? (
+                <div style={{
+                    textAlign: 'center',
+                    padding: '48px 20px',
+                    background: '#fff',
+                    borderRadius: 12,
+                    border: '1px solid #e5e7eb',
+                    color: '#6b7280'
+                }}>
+                    {search.trim() || statusFilter !== 'all' || storeFilter !== 'all' ? (
+                        <>
+                            <BsSearch size={34} style={{ color: '#9ca3af', marginBottom: 12 }} />
+                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '0 0 6px 0' }}>
+                                No Matching Warehouses Found
+                            </h3>
+                            <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#6b7280' }}>
+                                No active or registered warehouses matched your search criteria {search.trim() ? `for "${search.trim()}"` : ''} {storeFilter !== 'all' ? `(Store #${storeFilter})` : ''}.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={handleResetFilters}
+                                style={{
+                                    background: '#f3f4f6',
+                                    color: '#374151',
+                                    border: '1px solid #d1d5db',
+                                    padding: '7px 16px',
+                                    borderRadius: 8,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Clear Search & Filters
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <BsBuildings size={36} style={{ color: '#9ca3af', marginBottom: 12 }} />
+                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '0 0 6px 0' }}>
+                                No Warehouses Found
+                            </h3>
+                            <p style={{ margin: 0, fontSize: 13 }}>There are currently no warehouses registered in this tenant.</p>
+                        </>
+                    )}
+                </div>
+            ) : (
+                <>
+                    {viewMode === "table" ? (
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        border: '1px solid #e5e7eb',
+                        overflow: 'hidden',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                    }}>
+                        <div
+                            className="warehouse-table-scroll custom-scrollbar"
+                            style={{
+                                maxHeight: '480px',
+                                overflowY: 'auto',
+                                overflowX: 'auto',
+                                scrollBehavior: 'smooth',
+                                position: 'relative'
+                            }}
+                        >
+                            <table
+                                className="warehouse-table"
+                                style={{
+                                    width: '100%',
+                                    minWidth: '1150px',
+                                    borderCollapse: 'separate',
+                                    borderSpacing: 0,
+                                    textAlign: 'left',
+                                    fontSize: 13
+                                }}
+                            >
+                                <thead style={{
+                                    position: 'sticky',
+                                    top: 0,
+                                    zIndex: 20,
+                                    background: '#f9fafb',
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
+                                }}>
+                                    <tr>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Warehouse Code</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Warehouse Name</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Store</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', minWidth: 240, whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Address / Location</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Tenant ID</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Created Date</th>
+                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Status</th>
+                                        <th style={{
+                                            position: 'sticky',
+                                            top: 0,
+                                            right: 0,
+                                            zIndex: 25,
+                                            background: '#f9fafb',
+                                            padding: '8px 14px',
+                                            textAlign: 'center',
+                                            whiteSpace: 'nowrap',
+                                            borderBottom: '1px solid #e5e7eb',
+                                            color: '#4b5563',
                                             fontWeight: 600,
-                                            cursor: 'pointer'
-                                        }}
-                                    >
-                                        Try Again
-                                    </button>
-                                </div>
-                            </div>
-                        ) : filteredWarehouses.length === 0 ? (
-                            <div style={{
-                                textAlign: 'center',
-                                padding: '48px 20px',
-                                background: '#fff',
-                                borderRadius: 12,
-                                border: '1px solid #e5e7eb',
-                                color: '#6b7280'
-                            }}>
-                                {search.trim() || statusFilter !== 'all' || storeFilter !== 'all' ? (
-                                    <>
-                                        <BsSearch size={34} style={{ color: '#9ca3af', marginBottom: 12 }} />
-                                        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '0 0 6px 0' }}>
-                                            No Matching Warehouses Found
-                                        </h3>
-                                        <p style={{ margin: '0 0 16px 0', fontSize: 13, color: '#6b7280' }}>
-                                            No active or registered warehouses matched your search criteria {search.trim() ? `for "${search.trim()}"` : ''} {storeFilter !== 'all' ? `(Store #${storeFilter})` : ''}.
-                                        </p>
-                                        <button
-                                            type="button"
-                                            onClick={handleResetFilters}
-                                            style={{
-                                                background: '#f3f4f6',
-                                                color: '#374151',
-                                                border: '1px solid #d1d5db',
-                                                padding: '7px 16px',
-                                                borderRadius: 8,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            Clear Search & Filters
-                                        </button>
-                                    </>
-                                ) : (
-                                    <>
-                                        <BsBuildings size={36} style={{ color: '#9ca3af', marginBottom: 12 }} />
-                                        <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '0 0 6px 0' }}>
-                                            No Warehouses Found
-                                        </h3>
-                                        <p style={{ margin: 0, fontSize: 13 }}>There are currently no warehouses registered in this tenant.</p>
-                                    </>
-                                )}
-                            </div>
-                        ) : (
-                            <>
-                                {viewMode === "table" ? (
-                                    <div style={{
-                                        background: '#ffffff',
-                                        borderRadius: 12,
-                                        border: '1px solid #e5e7eb',
-                                        overflow: 'hidden',
-                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                                    }}>
-                                        <div
-                                            className="warehouse-table-scroll custom-scrollbar"
-                                            style={{
-                                                maxHeight: '480px',
-                                                overflowY: 'auto',
-                                                overflowX: 'auto',
-                                                scrollBehavior: 'smooth',
-                                                position: 'relative'
-                                            }}
-                                        >
-                                            <table
-                                                className="warehouse-table"
-                                                style={{
-                                                    width: '100%',
-                                                    minWidth: '1150px',
-                                                    borderCollapse: 'separate',
-                                                    borderSpacing: 0,
-                                                    textAlign: 'left',
-                                                    fontSize: 13
-                                                }}
-                                            >
-                                                <thead style={{
-                                                    position: 'sticky',
-                                                    top: 0,
-                                                    zIndex: 20,
-                                                    background: '#f9fafb',
-                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
-                                                }}>
-                                                    <tr>
-                                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Warehouse Code</th>
-                                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Warehouse Name</th>
-                                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Store</th>
-                                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', minWidth: 240, whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Address / Location</th>
-                                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Tenant ID</th>
-                                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Created Date</th>
-                                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Status</th>
-                                                        <th style={{
-                                                            position: 'sticky',
-                                                            top: 0,
-                                                            right: 0,
-                                                            zIndex: 25,
-                                                            background: '#f9fafb',
-                                                            padding: '8px 14px',
-                                                            textAlign: 'center',
-                                                            whiteSpace: 'nowrap',
-                                                            borderBottom: '1px solid #e5e7eb',
-                                                            color: '#4b5563',
-                                                            fontWeight: 600,
-                                                            minWidth: 155,
-                                                            width: 155,
-                                                            boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                                        }}>
-                                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                                                <span>Action</span>
-                                                                <button
-                                                                    type="button"
-                                                                    className="wh-action-btn wh-btn-create"
-                                                                    data-tooltip="Add Warehouse"
-                                                                    title="Add Warehouse"
-                                                                    aria-label="Add Warehouse"
-                                                                    onClick={handleOpenAddModal}
-                                                                    style={{ width: 26, height: 26, borderRadius: 6 }}
-                                                                >
-                                                                    <BsPlus size={18} />
-                                                                </button>
-                                                            </div>
-                                                        </th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {paginatedWarehouses.map((wh, i) => {
-                                                        const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
-                                                        const code = (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "")
-                                                            ? String(rawCode).trim()
-                                                            : "—";
-                                                        const name = wh.name || `Warehouse #${wh.id || (i + 1)}`;
-                                                        const address = wh.address || wh.location || "Address not provided";
-                                                        const storeId = wh.store_id ?? wh.storeId;
-                                                        const storeName = wh.store_name || wh.storeName;
-                                                        const tenantId = wh.tenant_id ?? wh.tenantId;
-                                                        const isActive = wh.is_active !== false;
-
-                                                        return (
-                                                            <tr
-                                                                key={wh.id || i}
-                                                                style={{
-                                                                    borderBottom: '1px solid #f3f4f6',
-                                                                    transition: 'background-color 0.15s ease'
-                                                                }}
-                                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                                            >
-                                                                <td style={{ padding: '14px 18px' }}>
-                                                                    {code !== "—" ? (
-                                                                        <span style={{
-                                                                            fontSize: 12,
-                                                                            fontWeight: 700,
-                                                                            color: '#4f46e5',
-                                                                            background: '#eef2ff',
-                                                                            padding: '3px 8px',
-                                                                            borderRadius: 6,
-                                                                            display: 'inline-block',
-                                                                            letterSpacing: '0.02em'
-                                                                        }}>
-                                                                            {code}
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span style={{ color: '#9ca3af', fontWeight: 500 }}>—</span>
-                                                                    )}
-                                                                </td>
-                                                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#111827' }}>
-                                                                    {name}
-                                                                </td>
-                                                                <td style={{ padding: '14px 18px', color: '#374151' }}>
-                                                                    {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : '—')}
-                                                                </td>
-                                                                <td style={{ padding: '14px 18px', color: '#6b7280' }}>
-                                                                    {address}
-                                                                </td>
-                                                                <td style={{ padding: '14px 18px', color: '#10b981', fontWeight: 600 }}>
-                                                                    {tenantId !== undefined && tenantId !== null ? `#${tenantId}` : '—'}
-                                                                </td>
-                                                                <td style={{ padding: '14px 18px', color: '#6b7280', fontSize: 12.5 }}>
-                                                                    {wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '—'}
-                                                                </td>
-                                                                <td style={{ padding: '14px 18px' }}>
-                                                                    <span style={{
-                                                                        padding: '3px 8px',
-                                                                        borderRadius: 10,
-                                                                        fontSize: 11.5,
-                                                                        fontWeight: 700,
-                                                                        background: isActive ? '#ecfdf5' : '#fef2f2',
-                                                                        color: isActive ? '#059669' : '#dc2626'
-                                                                    }}>
-                                                                        {isActive ? (wh.status || 'Active') : 'Inactive'}
-                                                                    </span>
-                                                                </td>
-                                                                <td style={{
-                                                                    position: 'sticky',
-                                                                    right: 0,
-                                                                    zIndex: 10,
-                                                                    background: '#ffffff',
-                                                                    padding: '11px 16px',
-                                                                    textAlign: 'center',
-                                                                    whiteSpace: 'nowrap',
-                                                                    minWidth: 155,
-                                                                    width: 155,
-                                                                    boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                                                }}>
-                                                                    <div className="wh-actions">
-                                                                        {/* VIEW */}
-                                                                        <button
-                                                                            type="button"
-                                                                            className="wh-action-btn wh-btn-view"
-                                                                            data-tooltip="View Warehouse"
-                                                                            title="View Warehouse"
-                                                                            aria-label="View Warehouse"
-                                                                            onClick={() => handleViewWarehouse(wh.id)}
-                                                                        >
-                                                                            <BsEye size={14} />
-                                                                        </button>
-
-                                                                        {/* EDIT */}
-                                                                        <button
-                                                                            type="button"
-                                                                            className="wh-action-btn wh-btn-edit"
-                                                                            data-tooltip="Edit Warehouse"
-                                                                            title="Edit Warehouse"
-                                                                            aria-label="Edit Warehouse"
-                                                                            onClick={() => handleOpenEditModal(wh)}
-                                                                        >
-                                                                            <BsPencilFill size={13} />
-                                                                        </button>
-
-                                                                        {/* DELETE */}
-                                                                        <button
-                                                                            type="button"
-                                                                            className="wh-action-btn wh-btn-delete"
-                                                                            data-tooltip="Delete Warehouse"
-                                                                            title="Delete Warehouse"
-                                                                            aria-label="Delete Warehouse"
-                                                                            disabled={deletingId !== null}
-                                                                            onClick={() => handleRequestDelete(wh)}
-                                                                        >
-                                                                            <BsTrashFill size={13} />
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
-                                        {paginatedWarehouses.map((wh, i) => {
-                                            const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
-                                            const code = (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "")
-                                                ? String(rawCode).trim()
-                                                : "—";
-                                            const isActive = wh.is_active !== false;
-                                            const name = wh.name || `Warehouse #${wh.id || (i + 1)}`;
-                                            const address = wh.address || wh.location || "Address not provided";
-                                            const storeId = wh.store_id ?? wh.storeId;
-                                            const storeName = wh.store_name || wh.storeName;
-                                            const tenantId = wh.tenant_id ?? wh.tenantId;
-
-                                            return (
-                                                <div
-                                                    key={wh.id || i}
-                                                    style={{
-                                                        background: '#fff',
-                                                        borderRadius: 12,
-                                                        border: '1px solid #e5e7eb',
-                                                        padding: 22,
-                                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                                                    }}
+                                            minWidth: 155,
+                                            width: 155,
+                                            boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
+                                        }}>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                                <span>Action</span>
+                                                <button
+                                                    type="button"
+                                                    className="wh-action-btn wh-btn-create"
+                                                    data-tooltip="Add Warehouse"
+                                                    title="Add Warehouse"
+                                                    aria-label="Add Warehouse"
+                                                    onClick={handleOpenAddModal}
+                                                    style={{ width: 26, height: 26, borderRadius: 6 }}
                                                 >
-                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                                                        <div>
-                                                            <span style={{
-                                                                fontSize: 11,
-                                                                fontWeight: 700,
-                                                                color: code !== "—" ? '#6366f1' : '#9ca3af',
-                                                                background: code !== "—" ? '#eef2ff' : '#f3f4f6',
-                                                                padding: '2px 8px',
-                                                                borderRadius: 4
-                                                            }}>
-                                                                {code}
-                                                            </span>
-                                                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '6px 0 2px 0' }}>
-                                                                {name}
-                                                            </h3>
-                                                            <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
-                                                                {address}
-                                                            </p>
-                                                        </div>
+                                                    <BsPlus size={18} />
+                                                </button>
+                                            </div>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {paginatedWarehouses.map((wh, i) => {
+                                        const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
+                                        const code = (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "")
+                                            ? String(rawCode).trim()
+                                            : "—";
+                                        const name = wh.name || `Warehouse #${wh.id || (i + 1)}`;
+                                        const address = wh.address || wh.location || "Address not provided";
+                                        const storeId = wh.store_id ?? wh.storeId;
+                                        const storeName = wh.store_name || wh.storeName;
+                                        const tenantId = wh.tenant_id ?? wh.tenantId;
+                                        const isActive = wh.is_active === true || wh.status === "Active" || wh.status === "active";
+
+                                        return (
+                                            <tr
+                                                key={wh.id || i}
+                                                style={{
+                                                    borderBottom: '1px solid #f3f4f6',
+                                                    transition: 'background-color 0.15s ease'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                            >
+                                                <td style={{ padding: '14px 18px' }}>
+                                                    {code !== "—" ? (
                                                         <span style={{
+                                                            fontSize: 12,
+                                                            fontWeight: 700,
+                                                            color: '#4f46e5',
+                                                            background: '#eef2ff',
+                                                            padding: '3px 8px',
+                                                            borderRadius: 6,
+                                                            display: 'inline-block',
+                                                            letterSpacing: '0.02em'
+                                                        }}>
+                                                            {code}
+                                                        </span>
+                                                    ) : (
+                                                        <span style={{ color: '#9ca3af', fontWeight: 500 }}>—</span>
+                                                    )}
+                                                </td>
+                                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#111827' }}>
+                                                    {name}
+                                                </td>
+                                                <td style={{ padding: '14px 18px', color: '#374151' }}>
+                                                    {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : '—')}
+                                                </td>
+                                                <td style={{ padding: '14px 18px', color: '#6b7280' }}>
+                                                    {address}
+                                                </td>
+                                                <td style={{ padding: '14px 18px', color: '#10b981', fontWeight: 600 }}>
+                                                    {tenantId !== undefined && tenantId !== null ? `#${tenantId}` : '—'}
+                                                </td>
+                                                <td style={{ padding: '14px 18px', color: '#6b7280', fontSize: 12.5 }}>
+                                                    {wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '—'}
+                                                </td>
+                                                <td style={{ padding: '14px 18px', whiteSpace: 'nowrap' }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleToggleStatus(wh)}
+                                                        disabled={togglingStatusId === wh.id}
+                                                        title={togglingStatusId === wh.id ? "Updating status..." : `Click to change status to ${isActive ? 'Inactive' : 'Active'}`}
+                                                        style={{
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 6,
+                                                            padding: '4px 12px',
+                                                            borderRadius: 20,
+                                                            fontSize: 12,
+                                                            fontWeight: 700,
                                                             background: isActive ? '#ecfdf5' : '#fef2f2',
                                                             color: isActive ? '#059669' : '#dc2626',
-                                                            fontSize: 11,
-                                                            fontWeight: 700,
-                                                            padding: '3px 8px',
-                                                            borderRadius: 10
-                                                        }}>
-                                                            {isActive ? (wh.status || 'Active') : 'Inactive'}
-                                                        </span>
-                                                    </div>
-                                                    <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                                                        <div>
-                                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Warehouse Code</span>
-                                                            <strong style={{ fontSize: 13, color: '#4f46e5', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                {code}
-                                                            </strong>
-                                                        </div>
-                                                        <div>
-                                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Store</span>
-                                                            <strong style={{ fontSize: 13, color: '#111827', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={storeName || (storeId != null ? `Store #${storeId}` : '-')}>
-                                                                {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : (wh.items || '-'))}
-                                                            </strong>
-                                                        </div>
-                                                        <div>
-                                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Tenant ID</span>
-                                                            <strong style={{ fontSize: 14, color: '#10b981' }}>
-                                                                {tenantId !== undefined && tenantId !== null ? `#${tenantId}` : (wh.value || '-')}
-                                                            </strong>
-                                                        </div>
-                                                        <div>
-                                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Created At</span>
-                                                            <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>
-                                                                {wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '-'}
-                                                            </span>
-                                                        </div>
-                                                        <div>
-                                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Updated At</span>
-                                                            <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>
-                                                                {wh.updated_at ? new Date(wh.updated_at).toLocaleDateString() : (wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '-')}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                                                            border: '1px solid ' + (isActive ? '#a7f3d0' : '#fecaca'),
+                                                            cursor: togglingStatusId === wh.id ? 'wait' : 'pointer',
+                                                            transition: 'all 0.15s ease',
+                                                            outline: 'none',
+                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                                                        }}
+                                                        onMouseEnter={(e) => {
+                                                            if (togglingStatusId !== wh.id) {
+                                                                e.currentTarget.style.transform = 'scale(1.02)';
+                                                                e.currentTarget.style.boxShadow = '0 2px 5px rgba(0,0,0,0.08)';
+                                                            }
+                                                        }}
+                                                        onMouseLeave={(e) => {
+                                                            e.currentTarget.style.transform = 'scale(1)';
+                                                            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.03)';
+                                                        }}
+                                                    >
+                                                        {togglingStatusId === wh.id ? (
+                                                            <>
+                                                                <span style={{
+                                                                    display: 'inline-block',
+                                                                    width: 10,
+                                                                    height: 10,
+                                                                    border: '2px solid currentColor',
+                                                                    borderTopColor: 'transparent',
+                                                                    borderRadius: '50%',
+                                                                    animation: 'spin 0.8s linear infinite'
+                                                                }} />
+                                                                <span>Updating...</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span style={{
+                                                                    width: 7,
+                                                                    height: 7,
+                                                                    borderRadius: '50%',
+                                                                    background: isActive ? '#10b981' : '#ef4444',
+                                                                    boxShadow: isActive ? '0 0 0 2px rgba(16, 185, 129, 0.25)' : '0 0 0 2px rgba(239, 68, 68, 0.25)'
+                                                                }} />
+                                                                <span>{isActive ? 'Active' : 'Inactive'}</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                </td>
+                                                <td style={{
+                                                    position: 'sticky',
+                                                    right: 0,
+                                                    zIndex: 10,
+                                                    background: '#ffffff',
+                                                    padding: '11px 16px',
+                                                    textAlign: 'center',
+                                                    whiteSpace: 'nowrap',
+                                                    minWidth: 155,
+                                                    width: 155,
+                                                    boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
+                                                }}>
+                                                    <div className="wh-actions">
+                                                        {/* VIEW */}
                                                         <button
                                                             type="button"
                                                             className="wh-action-btn wh-btn-view"
@@ -3394,6 +3226,8 @@ export const WarehousesPage = () => {
                                                         >
                                                             <BsEye size={14} />
                                                         </button>
+
+                                                        {/* EDIT */}
                                                         <button
                                                             type="button"
                                                             className="wh-action-btn wh-btn-edit"
@@ -3404,6 +3238,8 @@ export const WarehousesPage = () => {
                                                         >
                                                             <BsPencilFill size={13} />
                                                         </button>
+
+                                                        {/* DELETE */}
                                                         <button
                                                             type="button"
                                                             className="wh-action-btn wh-btn-delete"
@@ -3416,504 +3252,846 @@ export const WarehousesPage = () => {
                                                             <BsTrashFill size={13} />
                                                         </button>
                                                     </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+                        {paginatedWarehouses.map((wh, i) => {
+                            const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
+                            const code = (rawCode !== undefined && rawCode !== null && String(rawCode).trim() !== "")
+                                ? String(rawCode).trim()
+                                : "—";
+                            const isActive = wh.is_active === true || wh.status === "Active" || wh.status === "active";
+                            const name = wh.name || `Warehouse #${wh.id || (i + 1)}`;
+                            const address = wh.address || wh.location || "Address not provided";
+                            const storeId = wh.store_id ?? wh.storeId;
+                            const storeName = wh.store_name || wh.storeName;
+                            const tenantId = wh.tenant_id ?? wh.tenantId;
 
-                                {filteredWarehouses.length > 0 && (
-                                    <div style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        marginTop: 20,
-                                        padding: '12px 4px',
-                                        borderTop: '1px solid #e5e7eb',
-                                        flexWrap: 'wrap',
-                                        gap: 12
-                                    }}>
-                                        <span style={{ fontSize: 13, color: '#6b7280' }}>
-                                            Showing {Math.min(filteredWarehouses.length, (page - 1) * pageSize + 1)} to {Math.min(filteredWarehouses.length, page * pageSize)} of {filteredWarehouses.length} {filteredWarehouses.length === 1 ? 'warehouse' : 'warehouses'}
-                                            {search.trim() ? ` matching "${search.trim()}"` : ''}
-                                        </span>
-                                        {totalPages > 1 && (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <button
-                                                    type="button"
-                                                    disabled={page <= 1}
-                                                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                                    style={{
-                                                        background: page <= 1 ? '#f3f4f6' : '#fff',
-                                                        color: page <= 1 ? '#9ca3af' : '#374151',
-                                                        border: '1px solid #d1d5db',
-                                                        padding: '6px 12px',
-                                                        borderRadius: 6,
-                                                        fontSize: 12.5,
-                                                        fontWeight: 600,
-                                                        cursor: page <= 1 ? 'not-allowed' : 'pointer'
-                                                    }}
-                                                >
-                                                    Previous
-                                                </button>
-                                                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
-                                                    Page {page} of {totalPages}
-                                                </span>
-                                                <button
-                                                    type="button"
-                                                    disabled={page >= totalPages}
-                                                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                                    style={{
-                                                        background: page >= totalPages ? '#f3f4f6' : '#fff',
-                                                        color: page >= totalPages ? '#9ca3af' : '#374151',
-                                                        border: '1px solid #d1d5db',
-                                                        padding: '6px 12px',
-                                                        borderRadius: 6,
-                                                        fontSize: 12.5,
-                                                        fontWeight: 600,
-                                                        cursor: page >= totalPages ? 'not-allowed' : 'pointer'
-                                                    }}
-                                                >
-                                                    Next
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </>
-                )}
-
-                {/* Warehouse Details Modal (GET /api/v1/warehouses/{id}) */}
-                {selectedWarehouseId && (
-                    <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: 'rgba(15, 23, 42, 0.55)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 9999,
-                        padding: 20,
-                        backdropFilter: 'blur(3px)'
-                    }}>
-                        <div style={{
-                            background: '#ffffff',
-                            borderRadius: 14,
-                            width: '100%',
-                            maxWidth: 780,
-                            maxHeight: '90vh',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                            border: '1px solid #e5e7eb',
-                            overflow: 'hidden'
-                        }}>
-                            <div style={{
-                                padding: '18px 24px',
-                                borderBottom: '1px solid #e5e7eb',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: '#fafafa'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 34,
-                                        height: 34,
-                                        borderRadius: 8,
-                                        background: '#eef2ff',
-                                        color: '#6366f1',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <BsBuildings size={18} />
-                                    </div>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
-                                            Warehouse Details #{selectedWarehouseId}
-                                        </h3>
-                                        <span style={{ fontSize: 12, color: '#6b7280' }}>
-                                            GET /api/v1/warehouses/{selectedWarehouseId}
-                                        </span>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={handleCloseModal}
+                            return (
+                                <div
+                                    key={wh.id || i}
                                     style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        fontSize: 20,
-                                        lineHeight: 1,
-                                        cursor: 'pointer',
-                                        color: '#9ca3af',
-                                        padding: '4px 8px'
+                                        background: '#fff',
+                                        borderRadius: 12,
+                                        border: '1px solid #e5e7eb',
+                                        padding: 22,
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
                                     }}
                                 >
-                                    ✕
-                                </button>
-                            </div>
-
-                            <div style={{ padding: '24px' }}>
-                                {selectedWarehouseLoading ? (
-                                    <div style={{ textAlign: 'center', padding: '36px 0', color: '#6b7280' }}>
-                                        <div style={{
-                                            display: 'inline-block',
-                                            width: 32,
-                                            height: 32,
-                                            border: '3px solid #e5e7eb',
-                                            borderTopColor: '#6366f1',
-                                            borderRadius: '50%',
-                                            animation: 'spin 1s linear infinite',
-                                            marginBottom: 12
-                                        }} />
-                                        <p style={{ margin: 0, fontSize: 13.5, fontWeight: 500 }}>Fetching warehouse details...</p>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                                        <div>
+                                            <span style={{
+                                                fontSize: 11,
+                                                fontWeight: 700,
+                                                color: code !== "—" ? '#6366f1' : '#9ca3af',
+                                                background: code !== "—" ? '#eef2ff' : '#f3f4f6',
+                                                padding: '2px 8px',
+                                                borderRadius: 4
+                                            }}>
+                                                {code}
+                                            </span>
+                                            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#111827', margin: '6px 0 2px 0' }}>
+                                                {name}
+                                            </h3>
+                                            <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>
+                                                {address}
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleToggleStatus(wh)}
+                                            disabled={togglingStatusId === wh.id}
+                                            title={togglingStatusId === wh.id ? "Updating status..." : `Click to change status to ${isActive ? 'Inactive' : 'Active'}`}
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 5,
+                                                background: isActive ? '#ecfdf5' : '#fef2f2',
+                                                color: isActive ? '#059669' : '#dc2626',
+                                                border: '1px solid ' + (isActive ? '#a7f3d0' : '#fecaca'),
+                                                fontSize: 11,
+                                                fontWeight: 700,
+                                                padding: '3px 10px',
+                                                borderRadius: 12,
+                                                cursor: togglingStatusId === wh.id ? 'wait' : 'pointer',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                        >
+                                            {togglingStatusId === wh.id ? (
+                                                <>
+                                                    <span style={{
+                                                        display: 'inline-block',
+                                                        width: 9,
+                                                        height: 9,
+                                                        border: '2px solid currentColor',
+                                                        borderTopColor: 'transparent',
+                                                        borderRadius: '50%',
+                                                        animation: 'spin 0.8s linear infinite'
+                                                    }} />
+                                                    <span>Updating...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span style={{
+                                                        width: 6,
+                                                        height: 6,
+                                                        borderRadius: '50%',
+                                                        background: isActive ? '#10b981' : '#ef4444'
+                                                    }} />
+                                                    <span>{isActive ? 'Active' : 'Inactive'}</span>
+                                                </>
+                                            )}
+                                        </button>
                                     </div>
-                                ) : selectedWarehouseError ? (
+                                    <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Warehouse Code</span>
+                                            <strong style={{ fontSize: 13, color: '#4f46e5', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {code}
+                                            </strong>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Store</span>
+                                            <strong style={{ fontSize: 13, color: '#111827', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={storeName || (storeId != null ? `Store #${storeId}` : '-')}>
+                                                {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : (wh.items || '-'))}
+                                            </strong>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Tenant ID</span>
+                                            <strong style={{ fontSize: 14, color: '#10b981' }}>
+                                                {tenantId !== undefined && tenantId !== null ? `#${tenantId}` : (wh.value || '-')}
+                                            </strong>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Created At</span>
+                                            <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>
+                                                {wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '-'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#9ca3af', display: 'block' }}>Updated At</span>
+                                            <span style={{ fontSize: 12, color: '#374151', fontWeight: 600 }}>
+                                                {wh.updated_at ? new Date(wh.updated_at).toLocaleDateString() : (wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '-')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+                                        <button
+                                            type="button"
+                                            className="wh-action-btn wh-btn-view"
+                                            data-tooltip="View Warehouse"
+                                            title="View Warehouse"
+                                            aria-label="View Warehouse"
+                                            onClick={() => handleViewWarehouse(wh.id)}
+                                        >
+                                            <BsEye size={14} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="wh-action-btn wh-btn-edit"
+                                            data-tooltip="Edit Warehouse"
+                                            title="Edit Warehouse"
+                                            aria-label="Edit Warehouse"
+                                            onClick={() => handleOpenEditModal(wh)}
+                                        >
+                                            <BsPencilFill size={13} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="wh-action-btn wh-btn-delete"
+                                            data-tooltip="Delete Warehouse"
+                                            title="Delete Warehouse"
+                                            aria-label="Delete Warehouse"
+                                            disabled={deletingId !== null}
+                                            onClick={() => handleRequestDelete(wh)}
+                                        >
+                                            <BsTrashFill size={13} />
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+                
+                {/* Warehouse Table Pagination Controls */}
+                {!loading && filteredWarehouses.length > 0 && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: totalPages > 1 ? 'space-between' : 'flex-start',
+                        padding: '14px 20px',
+                        borderTop: '1px solid #e2e8f0',
+                        background: '#ffffff',
+                        flexWrap: 'wrap',
+                        gap: 12
+                    }}>
+                        {/* Warehouse Showing Info */}
+                        <div style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>
+                            Showing <strong>{filteredWarehouses.length === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to <strong>{Math.min(filteredWarehouses.length, page * pageSize)}</strong> of <strong>{filteredWarehouses.length}</strong> {filteredWarehouses.length === 1 ? 'warehouse' : 'warehouses'}
+                            {search.trim() ? ` matching "${search.trim()}"` : ''}
+                        </div>
+
+                        {/* Page Numbers only (Rows per page & Previous/Next removed as requested) */}
+                        {totalPages > 1 && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                {getPageNumbers().map((p, idx) => {
+                                    if (p === '...') {
+                                        return (
+                                            <span
+                                                key={`ellipsis-${idx}`}
+                                                style={{
+                                                    minWidth: 28,
+                                                    height: 34,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    color: '#94a3b8',
+                                                    fontSize: 13,
+                                                    fontWeight: 600
+                                                }}
+                                            >
+                                                …
+                                            </span>
+                                        );
+                                    }
+                                    const isActive = p === page;
+                                    return (
+                                        <button
+                                            key={p}
+                                            type="button"
+                                            onClick={() => setPage(p)}
+                                            style={{
+                                                minWidth: 34,
+                                                height: 34,
+                                                padding: '0 8px',
+                                                borderRadius: 8,
+                                                border: isActive ? '1.5px solid #4f46e5' : '1.5px solid #cbd5e1',
+                                                background: isActive ? '#4f46e5' : '#ffffff',
+                                                color: isActive ? '#ffffff' : '#334155',
+                                                fontSize: 12.5,
+                                                fontWeight: 700,
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s ease',
+                                                boxShadow: isActive ? '0 1px 3px rgba(79, 70, 229, 0.3)' : 'none'
+                                            }}
+                                            aria-label={`Page ${p}`}
+                                            aria-current={isActive ? 'page' : undefined}
+                                        >
+                                            {p}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </>
+        )}
+
+            {/* Warehouse Details Modal (GET /api/v1/warehouses/{id}) */}
+            {selectedWarehouseId && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    padding: 20,
+                    backdropFilter: 'blur(3px)'
+                }}>
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: 14,
+                        width: '100%',
+                        maxWidth: 780,
+                        maxHeight: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        border: '1px solid #e5e7eb',
+                        overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            padding: '18px 24px',
+                            borderBottom: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: '#fafafa'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: 8,
+                                    background: '#eef2ff',
+                                    color: '#6366f1',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BsBuildings size={18} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                        Warehouse Details #{selectedWarehouseId}
+                                    </h3>
+                                    <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                        GET /api/v1/warehouses/{selectedWarehouseId}
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleCloseModal}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    fontSize: 20,
+                                    lineHeight: 1,
+                                    cursor: 'pointer',
+                                    color: '#9ca3af',
+                                    padding: '4px 8px'
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '24px' }}>
+                            {selectedWarehouseLoading ? (
+                                <div style={{ textAlign: 'center', padding: '36px 0', color: '#6b7280' }}>
                                     <div style={{
-                                        background: '#fef2f2',
-                                        border: '1px solid #fee2e2',
-                                        borderRadius: 10,
-                                        padding: 16,
-                                        color: '#dc2626'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                                            <BsExclamationTriangle size={20} style={{ marginTop: 2, flexShrink: 0 }} />
+                                        display: 'inline-block',
+                                        width: 32,
+                                        height: 32,
+                                        border: '3px solid #e5e7eb',
+                                        borderTopColor: '#6366f1',
+                                        borderRadius: '50%',
+                                        animation: 'spin 1s linear infinite',
+                                        marginBottom: 12
+                                    }} />
+                                    <p style={{ margin: 0, fontSize: 13.5, fontWeight: 500 }}>Fetching warehouse details...</p>
+                                </div>
+                            ) : selectedWarehouseError ? (
+                                <div style={{
+                                    background: '#fef2f2',
+                                    border: '1px solid #fee2e2',
+                                    borderRadius: 10,
+                                    padding: 16,
+                                    color: '#dc2626'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                                        <BsExclamationTriangle size={20} style={{ marginTop: 2, flexShrink: 0 }} />
+                                        <div>
+                                            <strong style={{ display: 'block', fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+                                                Error Fetching Warehouse Details
+                                            </strong>
+                                            <p style={{ fontSize: 12.5, margin: '0 0 12px 0', color: '#b91c1c' }}>
+                                                {selectedWarehouseError}
+                                            </p>
+                                            <button
+                                                onClick={() => handleViewWarehouse(selectedWarehouseId)}
+                                                style={{
+                                                    background: '#dc2626',
+                                                    color: '#ffffff',
+                                                    border: 'none',
+                                                    padding: '6px 12px',
+                                                    borderRadius: 6,
+                                                    fontSize: 12,
+                                                    fontWeight: 600,
+                                                    cursor: 'pointer'
+                                                }}
+                                            >
+                                                Try Again
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : selectedWarehouse ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        {(() => {
+                                            const rawModalCode = selectedWarehouse.code ?? selectedWarehouse.warehouse_code ?? selectedWarehouse.warehouseCode;
+                                            const modalCode = (rawModalCode && String(rawModalCode).trim() !== "") ? String(rawModalCode).trim() : "—";
+                                            return (
+                                                <span style={{
+                                                    fontSize: 12,
+                                                    fontWeight: 700,
+                                                    color: modalCode !== "—" ? '#6366f1' : '#9ca3af',
+                                                    background: modalCode !== "—" ? '#eef2ff' : '#f3f4f6',
+                                                    padding: '3px 10px',
+                                                    borderRadius: 6
+                                                }}>
+                                                    {modalCode}
+                                                </span>
+                                            );
+                                        })()}
+                                        <span style={{
+                                            fontSize: 11.5,
+                                            fontWeight: 700,
+                                            padding: '3px 10px',
+                                            borderRadius: 10,
+                                            background: selectedWarehouse.is_active ? '#ecfdf5' : '#fef2f2',
+                                            color: selectedWarehouse.is_active ? '#059669' : '#dc2626'
+                                        }}>
+                                            {selectedWarehouse.is_active ? 'Active' : 'Inactive'}
+                                        </span>
+                                    </div>
+
+                                    <div style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: 10, border: '1px solid #f1f5f9' }}>
+                                        <h4 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
+                                            {selectedWarehouse.name}
+                                        </h4>
+                                        <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
+                                            {selectedWarehouse.address || 'Address not specified'}
+                                        </p>
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Warehouse Code</span>
+                                            <strong style={{ fontSize: 14, color: '#4f46e5' }}>
+                                                {(() => {
+                                                    const rawModalCode = selectedWarehouse.code ?? selectedWarehouse.warehouse_code ?? selectedWarehouse.warehouseCode;
+                                                    return (rawModalCode && String(rawModalCode).trim() !== "") ? String(rawModalCode).trim() : "—";
+                                                })()}
+                                            </strong>
+                                        </div>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Warehouse ID</span>
+                                            <strong style={{ fontSize: 14, color: '#0f172a' }}>#{selectedWarehouse.id}</strong>
+                                        </div>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Tenant ID</span>
+                                            <strong style={{ fontSize: 14, color: '#10b981' }}>#{selectedWarehouse.tenant_id}</strong>
+                                        </div>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Store Name</span>
+                                            <strong style={{ fontSize: 13.5, color: '#0f172a' }}>
+                                                {selectedWarehouse.store_name || '-'}
+                                            </strong>
+                                        </div>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Store ID</span>
+                                            <strong style={{ fontSize: 14, color: '#0f172a' }}>
+                                                {selectedWarehouse.store_id != null ? `#${selectedWarehouse.store_id}` : 'None (Unassigned)'}
+                                            </strong>
+                                        </div>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Created At</span>
+                                            <span style={{ fontSize: 12, color: '#334155', fontWeight: 600 }}>
+                                                {selectedWarehouse.created_at ? new Date(selectedWarehouse.created_at).toLocaleString() : '-'}
+                                            </span>
+                                        </div>
+                                        <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
+                                            <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Updated At</span>
+                                            <span style={{ fontSize: 12, color: '#334155', fontWeight: 600 }}>
+                                                {selectedWarehouse.updated_at ? new Date(selectedWarehouse.updated_at).toLocaleString() : (selectedWarehouse.created_at ? new Date(selectedWarehouse.created_at).toLocaleString() : '-')}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Warehouse Transfers Section */}
+                                    <div style={{ marginTop: 22, borderTop: '1px solid #e5e7eb', paddingTop: 18 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
                                             <div>
-                                                <strong style={{ display: 'block', fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
-                                                    Error Fetching Warehouse Details
-                                                </strong>
-                                                <p style={{ fontSize: 12.5, margin: '0 0 12px 0', color: '#b91c1c' }}>
-                                                    {selectedWarehouseError}
-                                                </p>
+                                                <h5 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <BsArrowLeftRight size={15} color="#6366f1" /> Warehouse Transfers
+                                                </h5>
+                                                <span style={{ fontSize: 11.5, color: '#6b7280' }}>
+                                                    GET /api/v1/warehouses/{selectedWarehouseId}/transfers?limit=50
+                                                </span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => fetchTransfersForWarehouse(selectedWarehouseId)}
+                                                disabled={transfersLoading}
+                                                style={{
+                                                    background: '#f3f4f6',
+                                                    border: '1px solid #d1d5db',
+                                                    borderRadius: 6,
+                                                    padding: '5px 12px',
+                                                    fontSize: 12,
+                                                    fontWeight: 600,
+                                                    color: '#374151',
+                                                    cursor: transfersLoading ? 'not-allowed' : 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 5
+                                                }}
+                                            >
+                                                <BsArrowRepeat size={13} /> {transfersLoading ? 'Refreshing...' : 'Refresh'}
+                                            </button>
+                                        </div>
+
+                                        {transfersLoading ? (
+                                            <div style={{ textAlign: 'center', padding: '24px 0', color: '#6b7280' }}>
+                                                <div style={{
+                                                    display: 'inline-block',
+                                                    width: 24,
+                                                    height: 24,
+                                                    border: '2px solid #e5e7eb',
+                                                    borderTopColor: '#6366f1',
+                                                    borderRadius: '50%',
+                                                    animation: 'spin 1s linear infinite',
+                                                    marginBottom: 8
+                                                }} />
+                                                <div style={{ fontSize: 13 }}>Loading transfers...</div>
+                                            </div>
+                                        ) : transfersError ? (
+                                            <div style={{
+                                                background: '#fef2f2',
+                                                border: '1px solid #fee2e2',
+                                                borderRadius: 8,
+                                                padding: '12px 14px',
+                                                color: '#dc2626',
+                                                fontSize: 12.5,
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                gap: 10
+                                            }}>
+                                                <span>{transfersError}</span>
                                                 <button
-                                                    onClick={() => handleViewWarehouse(selectedWarehouseId)}
+                                                    type="button"
+                                                    onClick={() => fetchTransfersForWarehouse(selectedWarehouseId)}
                                                     style={{
                                                         background: '#dc2626',
-                                                        color: '#ffffff',
+                                                        color: '#fff',
                                                         border: 'none',
-                                                        padding: '6px 12px',
-                                                        borderRadius: 6,
+                                                        borderRadius: 4,
+                                                        padding: '4px 10px',
                                                         fontSize: 12,
                                                         fontWeight: 600,
                                                         cursor: 'pointer'
                                                     }}
                                                 >
-                                                    Try Again
+                                                    Retry
                                                 </button>
                                             </div>
-                                        </div>
-                                    </div>
-                                ) : selectedWarehouse ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                            {(() => {
-                                                const rawModalCode = selectedWarehouse.code ?? selectedWarehouse.warehouse_code ?? selectedWarehouse.warehouseCode;
-                                                const modalCode = (rawModalCode && String(rawModalCode).trim() !== "") ? String(rawModalCode).trim() : "—";
-                                                return (
-                                                    <span style={{
-                                                        fontSize: 12,
-                                                        fontWeight: 700,
-                                                        color: modalCode !== "—" ? '#6366f1' : '#9ca3af',
-                                                        background: modalCode !== "—" ? '#eef2ff' : '#f3f4f6',
-                                                        padding: '3px 10px',
-                                                        borderRadius: 6
-                                                    }}>
-                                                        {modalCode}
-                                                    </span>
-                                                );
-                                            })()}
-                                            <span style={{
-                                                fontSize: 11.5,
-                                                fontWeight: 700,
-                                                padding: '3px 10px',
-                                                borderRadius: 10,
-                                                background: selectedWarehouse.is_active ? '#ecfdf5' : '#fef2f2',
-                                                color: selectedWarehouse.is_active ? '#059669' : '#dc2626'
+                                        ) : warehouseTransfers.length === 0 ? (
+                                            <div style={{
+                                                textAlign: 'center',
+                                                padding: '24px 12px',
+                                                background: '#f9fafb',
+                                                borderRadius: 8,
+                                                border: '1px dashed #d1d5db',
+                                                color: '#6b7280',
+                                                fontSize: 13
                                             }}>
-                                                {selectedWarehouse.is_active ? 'Active' : 'Inactive'}
-                                            </span>
-                                        </div>
+                                                No transfers found.
+                                            </div>
+                                        ) : (
+                                            <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
+                                                    <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
+                                                        <tr>
+                                                            <th style={{ padding: '8px 12px' }}>Transfer Number</th>
+                                                            <th style={{ padding: '8px 12px' }}>Transfer Type</th>
+                                                            <th style={{ padding: '8px 12px' }}>Source Store</th>
+                                                            <th style={{ padding: '8px 12px' }}>Destination Store</th>
+                                                            <th style={{ padding: '8px 12px' }}>Status</th>
+                                                            <th style={{ padding: '8px 12px' }}>Item Count</th>
+                                                            <th style={{ padding: '8px 12px' }}>Created Date</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {warehouseTransfers.map((tr, idx) => {
+                                                            const trNum = tr.transfer_number || tr.transferNumber || tr.code || tr.reference || (tr.id ? `#${tr.id}` : '—');
+                                                            const trType = tr.transfer_type || tr.transferType || tr.type || 'Warehouse Transfer';
+                                                            const srcStore = tr.source_store_name || tr.sourceStoreName || tr.source_store?.name || (tr.source_store_id != null ? `Store #${tr.source_store_id}` : (tr.from_location_name || tr.from || '—'));
+                                                            const dstStore = tr.destination_store_name || tr.destinationStoreName || tr.destination_store?.name || (tr.destination_store_id != null ? `Store #${tr.destination_store_id}` : (tr.to_location_name || tr.to || '—'));
+                                                            const status = tr.status || 'Pending';
+                                                            const itemCount = tr.item_count ?? tr.items_count ?? tr.total_items ?? tr.items?.length ?? tr.quantity ?? 0;
+                                                            const createdDate = tr.created_at ? new Date(tr.created_at).toLocaleDateString() : (tr.date || '—');
 
-                                        <div style={{ background: '#f8fafc', padding: '14px 16px', borderRadius: 10, border: '1px solid #f1f5f9' }}>
-                                            <h4 style={{ margin: '0 0 4px 0', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>
-                                                {selectedWarehouse.name}
-                                            </h4>
-                                            <p style={{ margin: 0, fontSize: 13, color: '#64748b' }}>
-                                                {selectedWarehouse.address || 'Address not specified'}
-                                            </p>
-                                        </div>
-
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                                            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                                                <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Warehouse Code</span>
-                                                <strong style={{ fontSize: 14, color: '#4f46e5' }}>
-                                                    {(() => {
-                                                        const rawModalCode = selectedWarehouse.code ?? selectedWarehouse.warehouse_code ?? selectedWarehouse.warehouseCode;
-                                                        return (rawModalCode && String(rawModalCode).trim() !== "") ? String(rawModalCode).trim() : "—";
-                                                    })()}
-                                                </strong>
+                                                            return (
+                                                                <tr key={tr.id || idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                                                    <td style={{ padding: '8px 12px', fontWeight: 700, color: '#6366f1' }}>{trNum}</td>
+                                                                    <td style={{ padding: '8px 12px', color: '#374151' }}>{trType}</td>
+                                                                    <td style={{ padding: '8px 12px', color: '#374151' }}>{srcStore}</td>
+                                                                    <td style={{ padding: '8px 12px', color: '#374151' }}>{dstStore}</td>
+                                                                    <td style={{ padding: '8px 12px' }}>
+                                                                        <span style={{
+                                                                            padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
+                                                                            background: status.toLowerCase().includes('complete') || status.toLowerCase().includes('received') ? '#ecfdf5' : (status.toLowerCase().includes('transit') ? '#eff6ff' : '#fffbeb'),
+                                                                            color: status.toLowerCase().includes('complete') || status.toLowerCase().includes('received') ? '#059669' : (status.toLowerCase().includes('transit') ? '#2563eb' : '#d97706')
+                                                                        }}>
+                                                                            {status}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td style={{ padding: '8px 12px', fontWeight: 600 }}>{itemCount}</td>
+                                                                    <td style={{ padding: '8px 12px', color: '#6b7280' }}>{createdDate}</td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
                                             </div>
-                                            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                                                <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Warehouse ID</span>
-                                                <strong style={{ fontSize: 14, color: '#0f172a' }}>#{selectedWarehouse.id}</strong>
-                                            </div>
-                                            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                                                <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Tenant ID</span>
-                                                <strong style={{ fontSize: 14, color: '#10b981' }}>#{selectedWarehouse.tenant_id}</strong>
-                                            </div>
-                                            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                                                <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Store Name</span>
-                                                <strong style={{ fontSize: 13.5, color: '#0f172a' }}>
-                                                    {selectedWarehouse.store_name || '-'}
-                                                </strong>
-                                            </div>
-                                            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                                                <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Store ID</span>
-                                                <strong style={{ fontSize: 14, color: '#0f172a' }}>
-                                                    {selectedWarehouse.store_id != null ? `#${selectedWarehouse.store_id}` : 'None (Unassigned)'}
-                                                </strong>
-                                            </div>
-                                            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                                                <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Created At</span>
-                                                <span style={{ fontSize: 12, color: '#334155', fontWeight: 600 }}>
-                                                    {selectedWarehouse.created_at ? new Date(selectedWarehouse.created_at).toLocaleString() : '-'}
-                                                </span>
-                                            </div>
-                                            <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px' }}>
-                                                <span style={{ fontSize: 11, color: '#94a3b8', display: 'block' }}>Updated At</span>
-                                                <span style={{ fontSize: 12, color: '#334155', fontWeight: 600 }}>
-                                                    {selectedWarehouse.updated_at ? new Date(selectedWarehouse.updated_at).toLocaleString() : (selectedWarehouse.created_at ? new Date(selectedWarehouse.created_at).toLocaleString() : '-')}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {/* Warehouse Transfers Section */}
-                                        <div style={{ marginTop: 22, borderTop: '1px solid #e5e7eb', paddingTop: 18 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-                                                <div>
-                                                    <h5 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                        <BsArrowLeftRight size={15} color="#6366f1" /> Warehouse Transfers
-                                                    </h5>
-                                                    <span style={{ fontSize: 11.5, color: '#6b7280' }}>
-                                                        GET /api/v1/warehouses/{selectedWarehouseId}/transfers?limit=50
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => fetchTransfersForWarehouse(selectedWarehouseId)}
-                                                    disabled={transfersLoading}
-                                                    style={{
-                                                        background: '#f3f4f6',
-                                                        border: '1px solid #d1d5db',
-                                                        borderRadius: 6,
-                                                        padding: '5px 12px',
-                                                        fontSize: 12,
-                                                        fontWeight: 600,
-                                                        color: '#374151',
-                                                        cursor: transfersLoading ? 'not-allowed' : 'pointer',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: 5
-                                                    }}
-                                                >
-                                                    <BsArrowRepeat size={13} /> {transfersLoading ? 'Refreshing...' : 'Refresh'}
-                                                </button>
-                                            </div>
-
-                                            {transfersLoading ? (
-                                                <div style={{ textAlign: 'center', padding: '24px 0', color: '#6b7280' }}>
-                                                    <div style={{
-                                                        display: 'inline-block',
-                                                        width: 24,
-                                                        height: 24,
-                                                        border: '2px solid #e5e7eb',
-                                                        borderTopColor: '#6366f1',
-                                                        borderRadius: '50%',
-                                                        animation: 'spin 1s linear infinite',
-                                                        marginBottom: 8
-                                                    }} />
-                                                    <div style={{ fontSize: 13 }}>Loading transfers...</div>
-                                                </div>
-                                            ) : transfersError ? (
-                                                <div style={{
-                                                    background: '#fef2f2',
-                                                    border: '1px solid #fee2e2',
-                                                    borderRadius: 8,
-                                                    padding: '12px 14px',
-                                                    color: '#dc2626',
-                                                    fontSize: 12.5,
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    gap: 10
-                                                }}>
-                                                    <span>{transfersError}</span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => fetchTransfersForWarehouse(selectedWarehouseId)}
-                                                        style={{
-                                                            background: '#dc2626',
-                                                            color: '#fff',
-                                                            border: 'none',
-                                                            borderRadius: 4,
-                                                            padding: '4px 10px',
-                                                            fontSize: 12,
-                                                            fontWeight: 600,
-                                                            cursor: 'pointer'
-                                                        }}
-                                                    >
-                                                        Retry
-                                                    </button>
-                                                </div>
-                                            ) : warehouseTransfers.length === 0 ? (
-                                                <div style={{
-                                                    textAlign: 'center',
-                                                    padding: '24px 12px',
-                                                    background: '#f9fafb',
-                                                    borderRadius: 8,
-                                                    border: '1px dashed #d1d5db',
-                                                    color: '#6b7280',
-                                                    fontSize: 13
-                                                }}>
-                                                    No transfers found.
-                                                </div>
-                                            ) : (
-                                                <div style={{ overflowX: 'auto', border: '1px solid #e5e7eb', borderRadius: 8 }}>
-                                                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
-                                                        <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
-                                                            <tr>
-                                                                <th style={{ padding: '8px 12px' }}>Transfer Number</th>
-                                                                <th style={{ padding: '8px 12px' }}>Transfer Type</th>
-                                                                <th style={{ padding: '8px 12px' }}>Source Store</th>
-                                                                <th style={{ padding: '8px 12px' }}>Destination Store</th>
-                                                                <th style={{ padding: '8px 12px' }}>Status</th>
-                                                                <th style={{ padding: '8px 12px' }}>Item Count</th>
-                                                                <th style={{ padding: '8px 12px' }}>Created Date</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {warehouseTransfers.map((tr, idx) => {
-                                                                const trNum = tr.transfer_number || tr.transferNumber || tr.code || tr.reference || (tr.id ? `#${tr.id}` : '—');
-                                                                const trType = tr.transfer_type || tr.transferType || tr.type || 'Warehouse Transfer';
-                                                                const srcStore = tr.source_store_name || tr.sourceStoreName || tr.source_store?.name || (tr.source_store_id != null ? `Store #${tr.source_store_id}` : (tr.from_location_name || tr.from || '—'));
-                                                                const dstStore = tr.destination_store_name || tr.destinationStoreName || tr.destination_store?.name || (tr.destination_store_id != null ? `Store #${tr.destination_store_id}` : (tr.to_location_name || tr.to || '—'));
-                                                                const status = tr.status || 'Pending';
-                                                                const itemCount = tr.item_count ?? tr.items_count ?? tr.total_items ?? tr.items?.length ?? tr.quantity ?? 0;
-                                                                const createdDate = tr.created_at ? new Date(tr.created_at).toLocaleDateString() : (tr.date || '—');
-
-                                                                return (
-                                                                    <tr key={tr.id || idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                                                        <td style={{ padding: '8px 12px', fontWeight: 700, color: '#6366f1' }}>{trNum}</td>
-                                                                        <td style={{ padding: '8px 12px', color: '#374151' }}>{trType}</td>
-                                                                        <td style={{ padding: '8px 12px', color: '#374151' }}>{srcStore}</td>
-                                                                        <td style={{ padding: '8px 12px', color: '#374151' }}>{dstStore}</td>
-                                                                        <td style={{ padding: '8px 12px' }}>
-                                                                            <span style={{
-                                                                                padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700,
-                                                                                background: status.toLowerCase().includes('complete') || status.toLowerCase().includes('received') ? '#ecfdf5' : (status.toLowerCase().includes('transit') ? '#eff6ff' : '#fffbeb'),
-                                                                                color: status.toLowerCase().includes('complete') || status.toLowerCase().includes('received') ? '#059669' : (status.toLowerCase().includes('transit') ? '#2563eb' : '#d97706')
-                                                                            }}>
-                                                                                {status}
-                                                                            </span>
-                                                                        </td>
-                                                                        <td style={{ padding: '8px 12px', fontWeight: 600 }}>{itemCount}</td>
-                                                                        <td style={{ padding: '8px 12px', color: '#6b7280' }}>{createdDate}</td>
-                                                                    </tr>
-                                                                );
-                                                            })}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            )}
-                                        </div>
+                                        )}
                                     </div>
-                                ) : null}
-                            </div>
+                                </div>
+                            ) : null}
+                        </div>
 
-                            <div style={{
-                                padding: '14px 24px',
-                                borderTop: '1px solid #e5e7eb',
-                                background: '#fafafa',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: 12
-                            }}>
-                                {selectedWarehouse && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleOpenEditModal(selectedWarehouse)}
-                                            style={{
-                                                background: '#f8fafc',
-                                                color: '#334155',
-                                                border: '1px solid #cbd5e1',
-                                                padding: '8px 16px',
-                                                borderRadius: 8,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 6
-                                            }}
-                                        >
-                                            <BsPencilFill size={13} /> Edit Warehouse
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRequestDelete(selectedWarehouse)}
-                                            disabled={deletingId !== null}
-                                            style={{
-                                                background: '#fef2f2',
-                                                color: '#dc2626',
-                                                border: '1px solid #fee2e2',
-                                                padding: '8px 16px',
-                                                borderRadius: 8,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: deletingId !== null ? 'not-allowed' : 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                opacity: deletingId === selectedWarehouse.id ? 0.6 : (deletingId !== null ? 0.4 : 1)
-                                            }}
-                                        >
-                                            <BsTrashFill size={13} />
-                                            {deletingId === selectedWarehouse.id ? 'Deleting...' : 'Delete Warehouse'}
-                                        </button>
-                                    </div>
-                                )}
-                                <button
-                                    onClick={handleCloseModal}
-                                    style={{
-                                        background: '#f3f4f6',
-                                        color: '#374151',
-                                        border: '1px solid #d1d5db',
-                                        padding: '8px 18px',
-                                        borderRadius: 8,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        marginLeft: 'auto'
-                                    }}
-                                >
-                                    Close
-                                </button>
-                            </div>
+                        <div style={{
+                            padding: '14px 24px',
+                            borderTop: '1px solid #e5e7eb',
+                            background: '#fafafa',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: 12
+                        }}>
+                            {selectedWarehouse && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenEditModal(selectedWarehouse)}
+                                        style={{
+                                            background: '#f8fafc',
+                                            color: '#334155',
+                                            border: '1px solid #cbd5e1',
+                                            padding: '8px 16px',
+                                            borderRadius: 8,
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 6
+                                        }}
+                                    >
+                                        <BsPencilFill size={13} /> Edit Warehouse
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRequestDelete(selectedWarehouse)}
+                                        disabled={deletingId !== null}
+                                        style={{
+                                            background: '#fef2f2',
+                                            color: '#dc2626',
+                                            border: '1px solid #fee2e2',
+                                            padding: '8px 16px',
+                                            borderRadius: 8,
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            cursor: deletingId !== null ? 'not-allowed' : 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            opacity: deletingId === selectedWarehouse.id ? 0.6 : (deletingId !== null ? 0.4 : 1)
+                                        }}
+                                    >
+                                        <BsTrashFill size={13} />
+                                        {deletingId === selectedWarehouse.id ? 'Deleting...' : 'Delete Warehouse'}
+                                    </button>
+                                </div>
+                            )}
+                            <button
+                                onClick={handleCloseModal}
+                                style={{
+                                    background: '#f3f4f6',
+                                    color: '#374151',
+                                    border: '1px solid #d1d5db',
+                                    padding: '8px 18px',
+                                    borderRadius: 8,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    marginLeft: 'auto'
+                                }}
+                            >
+                                Close
+                            </button>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Warehouse Delete Confirmation Modal */}
-                {warehouseToDelete && (
+            {/* Warehouse Delete Confirmation Modal */}
+            {warehouseToDelete && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 10000,
+                    padding: 20,
+                    backdropFilter: 'blur(3px)'
+                }}>
                     <div style={{
+                        background: '#ffffff',
+                        borderRadius: 14,
+                        width: '100%',
+                        maxWidth: 480,
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        border: '1px solid #e5e7eb',
+                        overflow: 'hidden'
+                    }}>
+                        <div style={{
+                            padding: '18px 24px',
+                            borderBottom: '1px solid #fee2e2',
+                            background: '#fef2f2',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 8,
+                                    background: '#fee2e2',
+                                    color: '#dc2626',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BsTrash size={18} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#991b1b' }}>
+                                        Confirm Warehouse Deletion
+                                    </h3>
+                                    <span style={{ fontSize: 11.5, color: '#b91c1c' }}>
+                                        DELETE /api/v1/warehouses/{warehouseToDelete.id}
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCancelDelete}
+                                disabled={deletingId !== null}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    fontSize: 18,
+                                    lineHeight: 1,
+                                    cursor: deletingId !== null ? 'not-allowed' : 'pointer',
+                                    color: '#9ca3af',
+                                    padding: '4px 6px'
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '22px 24px' }}>
+                            <p style={{ margin: '0 0 14px 0', fontSize: 14, color: '#1f2937', lineHeight: 1.5 }}>
+                                Are you sure you want to delete warehouse <strong>{warehouseToDelete.name || `Warehouse #${warehouseToDelete.id}`}</strong> (ID: #{warehouseToDelete.id})?
+                            </p>
+
+                            <div style={{
+                                background: '#fffbeb',
+                                border: '1px solid #fef3c7',
+                                borderRadius: 8,
+                                padding: '12px 14px',
+                                fontSize: 12.5,
+                                color: '#92400e',
+                                lineHeight: 1.45
+                            }}>
+                                <strong>Active Stock Restriction:</strong> The backend prevents deleting any warehouse that contains active stock (HTTP 409 Conflict). If stock exists, all inventory items must be transferred or cleared prior to deletion.
+                            </div>
+
+                            {modalError && (
+                                <div style={{
+                                    marginTop: 14,
+                                    background: '#fef2f2',
+                                    border: '1px solid #fee2e2',
+                                    borderRadius: 8,
+                                    padding: '12px 14px',
+                                    fontSize: 12.5,
+                                    color: '#b91c1c',
+                                    lineHeight: 1.45
+                                }}>
+                                    <strong style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
+                                        {modalError.isConflict ? 'Cannot Delete Warehouse (HTTP 409 Conflict):' : 'Error Deleting Warehouse:'}
+                                    </strong>
+                                    <div>{modalError.message}</div>
+                                    {modalError.detail && (
+                                        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.9 }}>
+                                            {modalError.detail}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{
+                            padding: '14px 24px',
+                            borderTop: '1px solid #e5e7eb',
+                            background: '#fafafa',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: 10
+                        }}>
+                            <button
+                                type="button"
+                                onClick={handleCancelDelete}
+                                disabled={deletingId !== null}
+                                style={{
+                                    background: '#f3f4f6',
+                                    color: '#374151',
+                                    border: '1px solid #d1d5db',
+                                    padding: '8px 16px',
+                                    borderRadius: 8,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: deletingId !== null ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDelete}
+                                disabled={deletingId !== null}
+                                style={{
+                                    background: '#dc2626',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    padding: '8px 18px',
+                                    borderRadius: 8,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: deletingId !== null ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    opacity: deletingId !== null ? 0.7 : 1
+                                }}
+                            >
+                                <BsTrash size={14} />
+                                {deletingId !== null ? 'Deleting...' : 'Confirm Delete'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ADD WAREHOUSE MODAL */}
+            {isAddModalOpen && (
+                <div
+                    style={{
                         position: 'fixed',
                         top: 0,
                         left: 0,
@@ -3926,869 +4104,699 @@ export const WarehousesPage = () => {
                         zIndex: 10000,
                         padding: 20,
                         backdropFilter: 'blur(3px)'
-                    }}>
-                        <div style={{
+                    }}
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget && !isSubmittingWarehouse) {
+                            handleCloseAddModal();
+                        }
+                    }}
+                >
+                    <div
+                        style={{
                             background: '#ffffff',
                             borderRadius: 14,
                             width: '100%',
-                            maxWidth: 480,
+                            maxWidth: 540,
+                            maxHeight: '90vh',
+                            display: 'flex',
+                            flexDirection: 'column',
                             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
                             border: '1px solid #e5e7eb',
                             overflow: 'hidden'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div style={{
+                            padding: '18px 24px',
+                            borderBottom: '1px solid #e5e7eb',
+                            background: '#fafafa',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
                         }}>
-                            <div style={{
-                                padding: '18px 24px',
-                                borderBottom: '1px solid #fee2e2',
-                                background: '#fef2f2',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: 8,
-                                        background: '#fee2e2',
-                                        color: '#dc2626',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <BsTrash size={18} />
-                                    </div>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#991b1b' }}>
-                                            Confirm Warehouse Deletion
-                                        </h3>
-                                        <span style={{ fontSize: 11.5, color: '#b91c1c' }}>
-                                            DELETE /api/v1/warehouses/{warehouseToDelete.id}
-                                        </span>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleCancelDelete}
-                                    disabled={deletingId !== null}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        fontSize: 18,
-                                        lineHeight: 1,
-                                        cursor: deletingId !== null ? 'not-allowed' : 'pointer',
-                                        color: '#9ca3af',
-                                        padding: '4px 6px'
-                                    }}
-                                >
-                                    ✕
-                                </button>
-                            </div>
-
-                            <div style={{ padding: '22px 24px' }}>
-                                <p style={{ margin: '0 0 14px 0', fontSize: 14, color: '#1f2937', lineHeight: 1.5 }}>
-                                    Are you sure you want to delete warehouse <strong>{warehouseToDelete.name || `Warehouse #${warehouseToDelete.id}`}</strong> (ID: #{warehouseToDelete.id})?
-                                </p>
-
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                 <div style={{
-                                    background: '#fffbeb',
-                                    border: '1px solid #fef3c7',
+                                    width: 36,
+                                    height: 36,
                                     borderRadius: 8,
-                                    padding: '12px 14px',
-                                    fontSize: 12.5,
-                                    color: '#92400e',
-                                    lineHeight: 1.45
+                                    background: '#eef2ff',
+                                    color: '#6366f1',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
                                 }}>
-                                    <strong>Active Stock Restriction:</strong> The backend prevents deleting any warehouse that contains active stock (HTTP 409 Conflict). If stock exists, all inventory items must be transferred or cleared prior to deletion.
+                                    <BsBuildings size={18} />
                                 </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                        Add New Warehouse
+                                    </h3>
+                                    <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                        Register a new stock location or central depot
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCloseAddModal}
+                                disabled={isSubmittingWarehouse}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    fontSize: 20,
+                                    lineHeight: 1,
+                                    cursor: isSubmittingWarehouse ? 'not-allowed' : 'pointer',
+                                    color: '#9ca3af',
+                                    padding: '4px 8px'
+                                }}
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
 
-                                {modalError && (
+                        {/* Modal Body / Form */}
+                        <form onSubmit={handleCreateWarehouse} style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ padding: '24px', overflowY: 'auto', maxHeight: 'calc(90vh - 140px)' }}>
+                                {/* Error Alert */}
+                                {addFormError && (
                                     <div style={{
-                                        marginTop: 14,
+                                        marginBottom: 18,
                                         background: '#fef2f2',
                                         border: '1px solid #fee2e2',
                                         borderRadius: 8,
                                         padding: '12px 14px',
-                                        fontSize: 12.5,
                                         color: '#b91c1c',
-                                        lineHeight: 1.45
+                                        fontSize: 12.5,
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: 8
                                     }}>
-                                        <strong style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>
-                                            {modalError.isConflict ? 'Cannot Delete Warehouse (HTTP 409 Conflict):' : 'Error Deleting Warehouse:'}
-                                        </strong>
-                                        <div>{modalError.message}</div>
-                                        {modalError.detail && (
-                                            <div style={{ marginTop: 6, fontSize: 12, opacity: 0.9 }}>
-                                                {modalError.detail}
-                                            </div>
-                                        )}
+                                        <BsExclamationTriangle size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                                        <div style={{ flex: 1 }}>{addFormError}</div>
                                     </div>
                                 )}
+
+                                {/* Success Alert */}
+                                {addFormSuccess && (
+                                    <div style={{
+                                        marginBottom: 18,
+                                        background: '#ecfdf5',
+                                        border: '1px solid #a7f3d0',
+                                        borderRadius: 8,
+                                        padding: '12px 14px',
+                                        color: '#065f46',
+                                        fontSize: 12.5,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8
+                                    }}>
+                                        <BsCheckCircle size={16} style={{ flexShrink: 0 }} />
+                                        <div>{addFormSuccess}</div>
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                    {/* Warehouse Name */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Warehouse Name <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. Central Distribution Depot"
+                                            value={addFormData.name}
+                                            onChange={(e) => {
+                                                setAddFormData(prev => ({ ...prev, name: e.target.value }));
+                                                if (validationErrors.name) {
+                                                    setValidationErrors(prev => ({ ...prev, name: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${validationErrors.name ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingWarehouse}
+                                            required
+                                        />
+                                        {validationErrors.name && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {validationErrors.name}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Warehouse Code */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Warehouse Code <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. WH-MUM-01"
+                                            value={addFormData.code}
+                                            onChange={(e) => {
+                                                setAddFormData(prev => ({ ...prev, code: e.target.value.toUpperCase() }));
+                                                if (validationErrors.code) {
+                                                    setValidationErrors(prev => ({ ...prev, code: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${validationErrors.code ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                fontFamily: 'monospace',
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingWarehouse}
+                                            required
+                                        />
+                                        {validationErrors.code && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {validationErrors.code}
+                                            </span>
+                                        )}
+                                        <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                            Unique identifier (2-50 characters). Must include letters (e.g. WH-001 or WH01; cannot contain only numbers)
+                                        </span>
+                                    </div>
+
+                                    {/* Associated Store */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Associated Store <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
+                                        </label>
+                                        <select
+                                            value={addFormData.store_id}
+                                            onChange={(e) => setAddFormData(prev => ({ ...prev, store_id: e.target.value }))}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: '1px solid #d1d5db',
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                background: '#fff',
+                                                cursor: 'pointer',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingWarehouse || loadingStores}
+                                        >
+                                            <option value="">-- None (Central / Independent Depot) --</option>
+                                            {availableStores.map(st => (
+                                                <option key={st.id} value={st.id}>
+                                                    {st.name || st.store_name || "Store"}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                            Link to a specific retail branch store or keep unlinked for central warehouse
+                                        </span>
+                                    </div>
+
+                                    {/* Location / Address */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Address / Location Details <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
+                                        </label>
+                                        <textarea
+                                            rows={3}
+                                            placeholder="Enter warehouse physical address, city, or location details..."
+                                            value={addFormData.address}
+                                            onChange={(e) => {
+                                                setAddFormData(prev => ({ ...prev, address: e.target.value }));
+                                                if (validationErrors.address) {
+                                                    setValidationErrors(prev => ({ ...prev, address: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${validationErrors.address ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                resize: 'vertical',
+                                                fontFamily: 'inherit',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingWarehouse}
+                                        />
+                                        {validationErrors.address && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {validationErrors.address}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
+                            {/* Modal Footer */}
                             <div style={{
-                                padding: '14px 24px',
+                                padding: '16px 24px',
                                 borderTop: '1px solid #e5e7eb',
                                 background: '#fafafa',
                                 display: 'flex',
+                                alignItems: 'center',
                                 justifyContent: 'flex-end',
                                 gap: 10
                             }}>
                                 <button
                                     type="button"
-                                    onClick={handleCancelDelete}
-                                    disabled={deletingId !== null}
+                                    onClick={handleCloseAddModal}
+                                    disabled={isSubmittingWarehouse}
                                     style={{
                                         background: '#f3f4f6',
                                         color: '#374151',
                                         border: '1px solid #d1d5db',
-                                        padding: '8px 16px',
+                                        padding: '9px 18px',
                                         borderRadius: 8,
                                         fontSize: 13,
                                         fontWeight: 600,
-                                        cursor: deletingId !== null ? 'not-allowed' : 'pointer'
+                                        cursor: isSubmittingWarehouse ? 'not-allowed' : 'pointer'
                                     }}
                                 >
                                     Cancel
                                 </button>
                                 <button
-                                    type="button"
-                                    onClick={handleConfirmDelete}
-                                    disabled={deletingId !== null}
+                                    type="submit"
+                                    disabled={isSubmittingWarehouse}
                                     style={{
-                                        background: '#dc2626',
+                                        background: isSubmittingWarehouse ? '#818cf8' : '#6366f1',
                                         color: '#ffffff',
                                         border: 'none',
-                                        padding: '8px 18px',
+                                        padding: '9px 20px',
                                         borderRadius: 8,
                                         fontSize: 13,
                                         fontWeight: 600,
-                                        cursor: deletingId !== null ? 'not-allowed' : 'pointer',
+                                        cursor: isSubmittingWarehouse ? 'not-allowed' : 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
                                         gap: 6,
-                                        opacity: deletingId !== null ? 0.7 : 1
+                                        boxShadow: '0 1px 2px rgba(99, 102, 241, 0.2)'
                                     }}
                                 >
-                                    <BsTrash size={14} />
-                                    {deletingId !== null ? 'Deleting...' : 'Confirm Delete'}
+                                    {isSubmittingWarehouse ? (
+                                        <>
+                                            <span style={{
+                                                display: 'inline-block',
+                                                width: 14,
+                                                height: 14,
+                                                border: '2px solid #ffffff',
+                                                borderTopColor: 'transparent',
+                                                borderRadius: '50%',
+                                                animation: 'spin 1s linear infinite'
+                                            }} />
+                                            <span>Saving...</span>
+                                        </>
+                                    ) : (
+                                        <span>Save Warehouse</span>
+                                    )}
                                 </button>
                             </div>
-                        </div>
+                        </form>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* ADD WAREHOUSE MODAL */}
-                {isAddModalOpen && (
+            {/* EDIT WAREHOUSE MODAL (PATCH /api/v1/warehouses/{id}) */}
+            {isEditModalOpen && editingWarehouse && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 10000,
+                        padding: 20,
+                        backdropFilter: 'blur(3px)'
+                    }}
+                    onClick={(e) => {
+                        if (e.target === e.currentTarget && !isSubmittingEdit) {
+                            handleCloseEditModal();
+                        }
+                    }}
+                >
                     <div
                         style={{
-                            position: 'fixed',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                            background: '#ffffff',
+                            borderRadius: 14,
+                            width: '100%',
+                            maxWidth: 540,
+                            maxHeight: '90vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                            border: '1px solid #e5e7eb',
+                            overflow: 'hidden'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div style={{
+                            padding: '18px 24px',
+                            borderBottom: '1px solid #e5e7eb',
+                            background: '#fafafa',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                            zIndex: 10000,
-                            padding: 20,
-                            backdropFilter: 'blur(3px)'
-                        }}
-                        onClick={(e) => {
-                            if (e.target === e.currentTarget && !isSubmittingWarehouse) {
-                                handleCloseAddModal();
-                            }
-                        }}
-                    >
-                        <div
-                            style={{
-                                background: '#ffffff',
-                                borderRadius: 14,
-                                width: '100%',
-                                maxWidth: 540,
-                                maxHeight: '90vh',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                                border: '1px solid #e5e7eb',
-                                overflow: 'hidden'
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {/* Modal Header */}
-                            <div style={{
-                                padding: '18px 24px',
-                                borderBottom: '1px solid #e5e7eb',
-                                background: '#fafafa',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: 8,
-                                        background: '#eef2ff',
-                                        color: '#6366f1',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <BsBuildings size={18} />
-                                    </div>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
-                                            Add New Warehouse
-                                        </h3>
-                                        <span style={{ fontSize: 12, color: '#6b7280' }}>
-                                            Register a new stock location or central depot
-                                        </span>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleCloseAddModal}
-                                    disabled={isSubmittingWarehouse}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        fontSize: 20,
-                                        lineHeight: 1,
-                                        cursor: isSubmittingWarehouse ? 'not-allowed' : 'pointer',
-                                        color: '#9ca3af',
-                                        padding: '4px 8px'
-                                    }}
-                                    title="Close"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-
-                            {/* Modal Body / Form */}
-                            <form onSubmit={handleCreateWarehouse} style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ padding: '24px', overflowY: 'auto', maxHeight: 'calc(90vh - 140px)' }}>
-                                    {/* Error Alert */}
-                                    {addFormError && (
-                                        <div style={{
-                                            marginBottom: 18,
-                                            background: '#fef2f2',
-                                            border: '1px solid #fee2e2',
-                                            borderRadius: 8,
-                                            padding: '12px 14px',
-                                            color: '#b91c1c',
-                                            fontSize: 12.5,
-                                            display: 'flex',
-                                            alignItems: 'flex-start',
-                                            gap: 8
-                                        }}>
-                                            <BsExclamationTriangle size={16} style={{ marginTop: 2, flexShrink: 0 }} />
-                                            <div style={{ flex: 1 }}>{addFormError}</div>
-                                        </div>
-                                    )}
-
-                                    {/* Success Alert */}
-                                    {addFormSuccess && (
-                                        <div style={{
-                                            marginBottom: 18,
-                                            background: '#ecfdf5',
-                                            border: '1px solid #a7f3d0',
-                                            borderRadius: 8,
-                                            padding: '12px 14px',
-                                            color: '#065f46',
-                                            fontSize: 12.5,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 8
-                                        }}>
-                                            <BsCheckCircle size={16} style={{ flexShrink: 0 }} />
-                                            <div>{addFormSuccess}</div>
-                                        </div>
-                                    )}
-
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                        {/* Warehouse Name */}
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                                Warehouse Name <span style={{ color: '#ef4444' }}>*</span>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                placeholder="e.g. Central Distribution Depot"
-                                                value={addFormData.name}
-                                                onChange={(e) => {
-                                                    setAddFormData(prev => ({ ...prev, name: e.target.value }));
-                                                    if (validationErrors.name) {
-                                                        setValidationErrors(prev => ({ ...prev, name: null }));
-                                                    }
-                                                }}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '9px 12px',
-                                                    border: `1px solid ${validationErrors.name ? '#ef4444' : '#d1d5db'}`,
-                                                    borderRadius: 8,
-                                                    fontSize: 13.5,
-                                                    outline: 'none',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                                disabled={isSubmittingWarehouse}
-                                                required
-                                            />
-                                            {validationErrors.name && (
-                                                <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
-                                                    {validationErrors.name}
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Warehouse Code */}
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                                Warehouse Code <span style={{ color: '#ef4444' }}>*</span>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                placeholder="e.g. WH-MUM-01"
-                                                value={addFormData.code}
-                                                onChange={(e) => {
-                                                    setAddFormData(prev => ({ ...prev, code: e.target.value.toUpperCase() }));
-                                                    if (validationErrors.code) {
-                                                        setValidationErrors(prev => ({ ...prev, code: null }));
-                                                    }
-                                                }}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '9px 12px',
-                                                    border: `1px solid ${validationErrors.code ? '#ef4444' : '#d1d5db'}`,
-                                                    borderRadius: 8,
-                                                    fontSize: 13.5,
-                                                    fontFamily: 'monospace',
-                                                    outline: 'none',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                                disabled={isSubmittingWarehouse}
-                                                required
-                                            />
-                                            {validationErrors.code && (
-                                                <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
-                                                    {validationErrors.code}
-                                                </span>
-                                            )}
-                                            <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
-                                                Unique identifier (2-50 characters). Must include letters (e.g. WH-001 or WH01; cannot contain only numbers)
-                                            </span>
-                                        </div>
-
-                                        {/* Associated Store */}
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                                Associated Store <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
-                                            </label>
-                                            <select
-                                                value={addFormData.store_id}
-                                                onChange={(e) => setAddFormData(prev => ({ ...prev, store_id: e.target.value }))}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '9px 12px',
-                                                    border: '1px solid #d1d5db',
-                                                    borderRadius: 8,
-                                                    fontSize: 13.5,
-                                                    outline: 'none',
-                                                    background: '#fff',
-                                                    cursor: 'pointer',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                                disabled={isSubmittingWarehouse || loadingStores}
-                                            >
-                                                <option value="">-- None (Central / Independent Depot) --</option>
-                                                {availableStores.map(st => (
-                                                    <option key={st.id} value={st.id}>
-                                                        {st.name} {st.code ? `(${st.code})` : `(Store #${st.id})`}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
-                                                Link to a specific retail branch store or keep unlinked for central warehouse
-                                            </span>
-                                        </div>
-
-                                        {/* Location / Address */}
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                                Address / Location Details <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
-                                            </label>
-                                            <textarea
-                                                rows={3}
-                                                placeholder="Enter warehouse physical address, city, or location details..."
-                                                value={addFormData.address}
-                                                onChange={(e) => {
-                                                    setAddFormData(prev => ({ ...prev, address: e.target.value }));
-                                                    if (validationErrors.address) {
-                                                        setValidationErrors(prev => ({ ...prev, address: null }));
-                                                    }
-                                                }}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '9px 12px',
-                                                    border: `1px solid ${validationErrors.address ? '#ef4444' : '#d1d5db'}`,
-                                                    borderRadius: 8,
-                                                    fontSize: 13.5,
-                                                    outline: 'none',
-                                                    resize: 'vertical',
-                                                    fontFamily: 'inherit',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                                disabled={isSubmittingWarehouse}
-                                            />
-                                            {validationErrors.address && (
-                                                <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
-                                                    {validationErrors.address}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Modal Footer */}
+                            justifyContent: 'space-between'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                 <div style={{
-                                    padding: '16px 24px',
-                                    borderTop: '1px solid #e5e7eb',
-                                    background: '#fafafa',
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 8,
+                                    background: '#eef2ff',
+                                    color: '#6366f1',
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'flex-end',
-                                    gap: 10
+                                    justifyContent: 'center'
                                 }}>
-                                    <button
-                                        type="button"
-                                        onClick={handleCloseAddModal}
-                                        disabled={isSubmittingWarehouse}
-                                        style={{
-                                            background: '#f3f4f6',
-                                            color: '#374151',
-                                            border: '1px solid #d1d5db',
-                                            padding: '9px 18px',
-                                            borderRadius: 8,
-                                            fontSize: 13,
-                                            fontWeight: 600,
-                                            cursor: isSubmittingWarehouse ? 'not-allowed' : 'pointer'
-                                        }}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={isSubmittingWarehouse}
-                                        style={{
-                                            background: isSubmittingWarehouse ? '#818cf8' : '#6366f1',
-                                            color: '#ffffff',
-                                            border: 'none',
-                                            padding: '9px 20px',
-                                            borderRadius: 8,
-                                            fontSize: 13,
-                                            fontWeight: 600,
-                                            cursor: isSubmittingWarehouse ? 'not-allowed' : 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 6,
-                                            boxShadow: '0 1px 2px rgba(99, 102, 241, 0.2)'
-                                        }}
-                                    >
-                                        {isSubmittingWarehouse ? (
-                                            <>
-                                                <span style={{
-                                                    display: 'inline-block',
-                                                    width: 14,
-                                                    height: 14,
-                                                    border: '2px solid #ffffff',
-                                                    borderTopColor: 'transparent',
-                                                    borderRadius: '50%',
-                                                    animation: 'spin 1s linear infinite'
-                                                }} />
-                                                <span>Creating...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <BsPlus size={18} />
-                                                <span>Create Warehouse</span>
-                                            </>
-                                        )}
-                                    </button>
+                                    <BsPencilFill size={16} />
                                 </div>
-                            </form>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                        Edit Warehouse #{editingWarehouse.id}
+                                    </h3>
+                                    <span style={{ fontSize: 12, color: '#6b7280' }}>
+                                        PATCH /api/v1/warehouses/{editingWarehouse.id}
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCloseEditModal}
+                                disabled={isSubmittingEdit}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    fontSize: 20,
+                                    lineHeight: 1,
+                                    cursor: isSubmittingEdit ? 'not-allowed' : 'pointer',
+                                    color: '#9ca3af',
+                                    padding: '4px 8px'
+                                }}
+                                title="Close"
+                            >
+                                ✕
+                            </button>
                         </div>
-                    </div>
-                )}
 
-                {/* EDIT WAREHOUSE MODAL (PATCH /api/v1/warehouses/{id}) */}
-                {isEditModalOpen && editingWarehouse && (
-                    <div
-                        style={{
-                            position: 'fixed',
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            zIndex: 10000,
-                            padding: 20,
-                            backdropFilter: 'blur(3px)'
-                        }}
-                        onClick={(e) => {
-                            if (e.target === e.currentTarget && !isSubmittingEdit) {
-                                handleCloseEditModal();
-                            }
-                        }}
-                    >
-                        <div
-                            style={{
-                                background: '#ffffff',
-                                borderRadius: 14,
-                                width: '100%',
-                                maxWidth: 540,
-                                maxHeight: '90vh',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                                border: '1px solid #e5e7eb',
-                                overflow: 'hidden'
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {/* Modal Header */}
+                        {/* Modal Body / Form */}
+                        <form onSubmit={handleUpdateWarehouse} style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ padding: '24px', overflowY: 'auto', maxHeight: 'calc(90vh - 140px)' }}>
+                                {/* Error Alert */}
+                                {editFormError && (
+                                    <div style={{
+                                        marginBottom: 18,
+                                        background: '#fef2f2',
+                                        border: '1px solid #fee2e2',
+                                        borderRadius: 8,
+                                        padding: '12px 14px',
+                                        color: '#b91c1c',
+                                        fontSize: 12.5,
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: 8
+                                    }}>
+                                        <BsExclamationTriangle size={16} style={{ marginTop: 2, flexShrink: 0 }} />
+                                        <div style={{ flex: 1 }}>{editFormError}</div>
+                                    </div>
+                                )}
+
+                                {/* Success Alert */}
+                                {editFormSuccess && (
+                                    <div style={{
+                                        marginBottom: 18,
+                                        background: '#ecfdf5',
+                                        border: '1px solid #a7f3d0',
+                                        borderRadius: 8,
+                                        padding: '12px 14px',
+                                        color: '#065f46',
+                                        fontSize: 12.5,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8
+                                    }}>
+                                        <BsCheckCircle size={16} style={{ flexShrink: 0 }} />
+                                        <div>{editFormSuccess}</div>
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                    {/* Warehouse Name */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Warehouse Name <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. Central Distribution Depot"
+                                            value={editFormData.name}
+                                            onChange={(e) => {
+                                                setEditFormData(prev => ({ ...prev, name: e.target.value }));
+                                                if (editValidationErrors.name) {
+                                                    setEditValidationErrors(prev => ({ ...prev, name: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${editValidationErrors.name ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingEdit}
+                                            required
+                                        />
+                                        {editValidationErrors.name && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {editValidationErrors.name}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Warehouse Code */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Warehouse Code <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="e.g. WH-MUM-01"
+                                            value={editFormData.code}
+                                            onChange={(e) => {
+                                                setEditFormData(prev => ({ ...prev, code: e.target.value.toUpperCase() }));
+                                                if (editValidationErrors.code) {
+                                                    setEditValidationErrors(prev => ({ ...prev, code: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${editValidationErrors.code ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                fontFamily: 'monospace',
+                                                outline: 'none',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingEdit}
+                                            required
+                                        />
+                                        {editValidationErrors.code && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {editValidationErrors.code}
+                                            </span>
+                                        )}
+                                        <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                            Unique identifier (2-50 characters). Must include letters (e.g. WH-001 or WH01; cannot contain only numbers)
+                                        </span>
+                                    </div>
+
+                                    {/* Associated Store */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Associated Store <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
+                                        </label>
+                                        <select
+                                            value={editFormData.store_id || ""}
+                                            onChange={(e) => setEditFormData(prev => ({ ...prev, store_id: e.target.value }))}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: '1px solid #d1d5db',
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                background: '#fff',
+                                                cursor: 'pointer',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingEdit || loadingStores}
+                                        >
+                                            <option value="">-- None (Central / Independent Depot) --</option>
+                                            {availableStores.map(st => (
+                                                <option key={st.id} value={st.id}>
+                                                    {st.name || st.store_name || "Store"}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                            Link to a specific retail branch store or keep unlinked for central warehouse
+                                        </span>
+                                    </div>
+
+                                    {/* Operational Status */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Operational Status
+                                        </label>
+                                        <select
+                                            value={editFormData.is_active ? "active" : "inactive"}
+                                            onChange={(e) => setEditFormData(prev => ({ ...prev, is_active: e.target.value === "active" }))}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: '1px solid #d1d5db',
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                background: '#fff',
+                                                cursor: 'pointer',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingEdit}
+                                        >
+                                            <option value="active">Active (Ready for Inward & Dispatch)</option>
+                                            <option value="inactive">Inactive (Operations Paused)</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Location / Address */}
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                            Address / Location Details <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
+                                        </label>
+                                        <textarea
+                                            rows={3}
+                                            placeholder="Enter warehouse physical address, city, or location details..."
+                                            value={editFormData.address}
+                                            onChange={(e) => {
+                                                setEditFormData(prev => ({ ...prev, address: e.target.value }));
+                                                if (editValidationErrors.address) {
+                                                    setEditValidationErrors(prev => ({ ...prev, address: null }));
+                                                }
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 12px',
+                                                border: `1px solid ${editValidationErrors.address ? '#ef4444' : '#d1d5db'}`,
+                                                borderRadius: 8,
+                                                fontSize: 13.5,
+                                                outline: 'none',
+                                                resize: 'vertical',
+                                                fontFamily: 'inherit',
+                                                boxSizing: 'border-box'
+                                            }}
+                                            disabled={isSubmittingEdit}
+                                        />
+                                        {editValidationErrors.address && (
+                                            <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
+                                                {editValidationErrors.address}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Modal Footer */}
                             <div style={{
-                                padding: '18px 24px',
-                                borderBottom: '1px solid #e5e7eb',
+                                padding: '16px 24px',
+                                borderTop: '1px solid #e5e7eb',
                                 background: '#fafafa',
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'space-between'
+                                justifyContent: 'flex-end',
+                                gap: 10
                             }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: 8,
-                                        background: '#eef2ff',
-                                        color: '#6366f1',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <BsPencilFill size={16} />
-                                    </div>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
-                                            Edit Warehouse #{editingWarehouse.id}
-                                        </h3>
-                                        <span style={{ fontSize: 12, color: '#6b7280' }}>
-                                            PATCH /api/v1/warehouses/{editingWarehouse.id}
-                                        </span>
-                                    </div>
-                                </div>
                                 <button
                                     type="button"
                                     onClick={handleCloseEditModal}
                                     disabled={isSubmittingEdit}
                                     style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        fontSize: 20,
-                                        lineHeight: 1,
-                                        cursor: isSubmittingEdit ? 'not-allowed' : 'pointer',
-                                        color: '#9ca3af',
-                                        padding: '4px 8px'
+                                        background: '#f3f4f6',
+                                        color: '#374151',
+                                        border: '1px solid #d1d5db',
+                                        padding: '9px 18px',
+                                        borderRadius: 8,
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        cursor: isSubmittingEdit ? 'not-allowed' : 'pointer'
                                     }}
-                                    title="Close"
                                 >
-                                    ✕
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmittingEdit}
+                                    style={{
+                                        background: isSubmittingEdit ? '#818cf8' : '#4f46e5',
+                                        color: '#ffffff',
+                                        border: 'none',
+                                        padding: '9px 20px',
+                                        borderRadius: 8,
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        cursor: isSubmittingEdit ? 'not-allowed' : 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        boxShadow: '0 1px 2px rgba(79, 70, 229, 0.2)'
+                                    }}
+                                >
+                                    {isSubmittingEdit ? (
+                                        <>
+                                            <span style={{
+                                                display: 'inline-block',
+                                                width: 14,
+                                                height: 14,
+                                                border: '2px solid #ffffff',
+                                                borderTopColor: 'transparent',
+                                                borderRadius: '50%',
+                                                animation: 'spin 1s linear infinite'
+                                            }} />
+                                            <span>Saving...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <BsPencilFill size={13} />
+                                            <span>Save Changes</span>
+                                        </>
+                                    )}
                                 </button>
                             </div>
-
-                            {/* Modal Body / Form */}
-                            <form onSubmit={handleUpdateWarehouse} style={{ display: 'flex', flexDirection: 'column' }}>
-                                <div style={{ padding: '24px', overflowY: 'auto', maxHeight: 'calc(90vh - 140px)' }}>
-                                    {/* Error Alert */}
-                                    {editFormError && (
-                                        <div style={{
-                                            marginBottom: 18,
-                                            background: '#fef2f2',
-                                            border: '1px solid #fee2e2',
-                                            borderRadius: 8,
-                                            padding: '12px 14px',
-                                            color: '#b91c1c',
-                                            fontSize: 12.5,
-                                            display: 'flex',
-                                            alignItems: 'flex-start',
-                                            gap: 8
-                                        }}>
-                                            <BsExclamationTriangle size={16} style={{ marginTop: 2, flexShrink: 0 }} />
-                                            <div style={{ flex: 1 }}>{editFormError}</div>
-                                        </div>
-                                    )}
-
-                                    {/* Success Alert */}
-                                    {editFormSuccess && (
-                                        <div style={{
-                                            marginBottom: 18,
-                                            background: '#ecfdf5',
-                                            border: '1px solid #a7f3d0',
-                                            borderRadius: 8,
-                                            padding: '12px 14px',
-                                            color: '#065f46',
-                                            fontSize: 12.5,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 8
-                                        }}>
-                                            <BsCheckCircle size={16} style={{ flexShrink: 0 }} />
-                                            <div>{editFormSuccess}</div>
-                                        </div>
-                                    )}
-
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                        {/* Warehouse Name */}
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                                Warehouse Name <span style={{ color: '#ef4444' }}>*</span>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                placeholder="e.g. Central Distribution Depot"
-                                                value={editFormData.name}
-                                                onChange={(e) => {
-                                                    setEditFormData(prev => ({ ...prev, name: e.target.value }));
-                                                    if (editValidationErrors.name) {
-                                                        setEditValidationErrors(prev => ({ ...prev, name: null }));
-                                                    }
-                                                }}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '9px 12px',
-                                                    border: `1px solid ${editValidationErrors.name ? '#ef4444' : '#d1d5db'}`,
-                                                    borderRadius: 8,
-                                                    fontSize: 13.5,
-                                                    outline: 'none',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                                disabled={isSubmittingEdit}
-                                                required
-                                            />
-                                            {editValidationErrors.name && (
-                                                <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
-                                                    {editValidationErrors.name}
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Warehouse Code */}
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                                Warehouse Code <span style={{ color: '#ef4444' }}>*</span>
-                                            </label>
-                                            <input
-                                                type="text"
-                                                placeholder="e.g. WH-MUM-01"
-                                                value={editFormData.code}
-                                                onChange={(e) => {
-                                                    setEditFormData(prev => ({ ...prev, code: e.target.value.toUpperCase() }));
-                                                    if (editValidationErrors.code) {
-                                                        setEditValidationErrors(prev => ({ ...prev, code: null }));
-                                                    }
-                                                }}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '9px 12px',
-                                                    border: `1px solid ${editValidationErrors.code ? '#ef4444' : '#d1d5db'}`,
-                                                    borderRadius: 8,
-                                                    fontSize: 13.5,
-                                                    fontFamily: 'monospace',
-                                                    outline: 'none',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                                disabled={isSubmittingEdit}
-                                                required
-                                            />
-                                            {editValidationErrors.code && (
-                                                <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
-                                                    {editValidationErrors.code}
-                                                </span>
-                                            )}
-                                            <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
-                                                Unique identifier (2-50 characters). Must include letters (e.g. WH-001 or WH01; cannot contain only numbers)
-                                            </span>
-                                        </div>
-
-                                        {/* Associated Store */}
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                                Associated Store <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
-                                            </label>
-                                            <select
-                                                value={editFormData.store_id || ""}
-                                                onChange={(e) => setEditFormData(prev => ({ ...prev, store_id: e.target.value }))}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '9px 12px',
-                                                    border: '1px solid #d1d5db',
-                                                    borderRadius: 8,
-                                                    fontSize: 13.5,
-                                                    outline: 'none',
-                                                    background: '#fff',
-                                                    cursor: 'pointer',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                                disabled={isSubmittingEdit || loadingStores}
-                                            >
-                                                <option value="">-- None (Central / Independent Depot) --</option>
-                                                {availableStores.map(st => (
-                                                    <option key={st.id} value={st.id}>
-                                                        {st.name} {st.code ? `(${st.code})` : `(Store #${st.id})`}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <span style={{ display: 'block', fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
-                                                Link to a specific retail branch store or keep unlinked for central warehouse
-                                            </span>
-                                        </div>
-
-                                        {/* Operational Status */}
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                                Operational Status
-                                            </label>
-                                            <select
-                                                value={editFormData.is_active ? "active" : "inactive"}
-                                                onChange={(e) => setEditFormData(prev => ({ ...prev, is_active: e.target.value === "active" }))}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '9px 12px',
-                                                    border: '1px solid #d1d5db',
-                                                    borderRadius: 8,
-                                                    fontSize: 13.5,
-                                                    outline: 'none',
-                                                    background: '#fff',
-                                                    cursor: 'pointer',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                                disabled={isSubmittingEdit}
-                                            >
-                                                <option value="active">Active (Ready for Inward & Dispatch)</option>
-                                                <option value="inactive">Inactive (Operations Paused)</option>
-                                            </select>
-                                        </div>
-
-                                        {/* Location / Address */}
-                                        <div>
-                                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                                Address / Location Details <span style={{ fontSize: 11, fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
-                                            </label>
-                                            <textarea
-                                                rows={3}
-                                                placeholder="Enter warehouse physical address, city, or location details..."
-                                                value={editFormData.address}
-                                                onChange={(e) => {
-                                                    setEditFormData(prev => ({ ...prev, address: e.target.value }));
-                                                    if (editValidationErrors.address) {
-                                                        setEditValidationErrors(prev => ({ ...prev, address: null }));
-                                                    }
-                                                }}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '9px 12px',
-                                                    border: `1px solid ${editValidationErrors.address ? '#ef4444' : '#d1d5db'}`,
-                                                    borderRadius: 8,
-                                                    fontSize: 13.5,
-                                                    outline: 'none',
-                                                    resize: 'vertical',
-                                                    fontFamily: 'inherit',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                                disabled={isSubmittingEdit}
-                                            />
-                                            {editValidationErrors.address && (
-                                                <span style={{ display: 'block', fontSize: 12, color: '#ef4444', marginTop: 4 }}>
-                                                    {editValidationErrors.address}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Modal Footer */}
-                                <div style={{
-                                    padding: '16px 24px',
-                                    borderTop: '1px solid #e5e7eb',
-                                    background: '#fafafa',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'flex-end',
-                                    gap: 10
-                                }}>
-                                    <button
-                                        type="button"
-                                        onClick={handleCloseEditModal}
-                                        disabled={isSubmittingEdit}
-                                        style={{
-                                            background: '#f3f4f6',
-                                            color: '#374151',
-                                            border: '1px solid #d1d5db',
-                                            padding: '9px 18px',
-                                            borderRadius: 8,
-                                            fontSize: 13,
-                                            fontWeight: 600,
-                                            cursor: isSubmittingEdit ? 'not-allowed' : 'pointer'
-                                        }}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={isSubmittingEdit}
-                                        style={{
-                                            background: isSubmittingEdit ? '#818cf8' : '#4f46e5',
-                                            color: '#ffffff',
-                                            border: 'none',
-                                            padding: '9px 20px',
-                                            borderRadius: 8,
-                                            fontSize: 13,
-                                            fontWeight: 600,
-                                            cursor: isSubmittingEdit ? 'not-allowed' : 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 6,
-                                            boxShadow: '0 1px 2px rgba(79, 70, 229, 0.2)'
-                                        }}
-                                    >
-                                        {isSubmittingEdit ? (
-                                            <>
-                                                <span style={{
-                                                    display: 'inline-block',
-                                                    width: 14,
-                                                    height: 14,
-                                                    border: '2px solid #ffffff',
-                                                    borderTopColor: 'transparent',
-                                                    borderRadius: '50%',
-                                                    animation: 'spin 1s linear infinite'
-                                                }} />
-                                                <span>Saving...</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <BsPencilFill size={13} />
-                                                <span>Save Changes</span>
-                                            </>
-                                        )}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
+                        </form>
                     </div>
-                )}
-            </ModuleContainer>
+                </div>
+            )}
+        </ModuleContainer>
         </div>
     );
 };
@@ -4809,11 +4817,14 @@ export const GRNPage = () => {
     const [filterStatus, setFilterStatus] = useState('');
     const [search, setSearch] = useState('');
 
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+
     // GRN Dashboard Statistics (strictly from GET /api/v1/grn/stats)
     const [stats, setStats] = useState(null);
     const [statsLoading, setStatsLoading] = useState(true);
     const [statsError, setStatsError] = useState(null);
-    const [showRecentGrns, setShowRecentGrns] = useState(true);
     const statsRequestIdRef = useRef(0);
 
     // Metadata for creating GRN and filtering
@@ -4867,6 +4878,8 @@ export const GRNPage = () => {
     const [isPrintSlipModalOpen, setIsPrintSlipModalOpen] = useState(false);
     const [printSlipHtml, setPrintSlipHtml] = useState('');
     const [printSlipGrn, setPrintSlipGrn] = useState(null);
+    const [previewingPdfGrnId, setPreviewingPdfGrnId] = useState(null);
+    const [downloadingCsvSlipGrnId, setDownloadingCsvSlipGrnId] = useState(null);
     const printSlipIframeRef = useRef(null);
 
     // Delete GRN State (strictly DELETE /api/v1/grn/{grn_id})
@@ -5419,6 +5432,10 @@ export const GRNPage = () => {
                         background: #f1f5f9;
                         font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                     }
+                    /* Remove / hide internal preview action bar in preview since actions are in the modal header */
+                    .action-bar, .action-buttons, .action-title, .no-print {
+                        display: none !important;
+                    }
                     /* Prevent unintended navigation via unauthenticated relative links */
                     a[href^="/api/"], a[href^="http://"], a[href^="https://"], .action-bar a:not([onclick*="print"]) {
                         pointer-events: none !important;
@@ -5428,7 +5445,7 @@ export const GRNPage = () => {
                     }
                 }
                 @media print {
-                    .action-bar, .actions, .no-print {
+                    .action-bar, .actions, .action-buttons, .action-title, .no-print {
                         display: none !important;
                     }
                     body {
@@ -5440,10 +5457,13 @@ export const GRNPage = () => {
             </style>
         `;
 
-        if (rawHtml.includes('</head>')) {
-            return rawHtml.replace('</head>', `${helperCss}</head>`);
+        // Strip internal action bar element if present in rawHtml
+        let cleanedHtml = rawHtml.replace(/<div[^>]*class=["'][^"']*action-bar[^"']*["'][\s\S]*?<\/div>\s*<\/div>/i, '');
+
+        if (cleanedHtml.includes('</head>')) {
+            return cleanedHtml.replace('</head>', `${helperCss}</head>`);
         }
-        return `${helperCss}${rawHtml}`;
+        return `${helperCss}${cleanedHtml}`;
     };
 
     /**
@@ -5522,6 +5542,105 @@ export const GRNPage = () => {
         } catch (err) {
             console.error('Open new tab error:', err);
             setPrintSlipError('Unable to open preview in a new window.');
+        }
+    };
+
+    /**
+     * Preview GRN PDF in a new window/tab:
+     * Calls GET /api/v1/grn/{grn_id}/download-pdf?format=pdf&mode=preview via previewGRNPdf(numericId)
+     */
+    const handlePreviewPdf = async (record) => {
+        if (!record) return;
+
+        const grnId = record.id ?? record.grn_id;
+        if (grnId === undefined || grnId === null || String(grnId).trim() === '') {
+            setPrintSlipError('Invalid GRN ID. Cannot preview PDF.');
+            return;
+        }
+
+        const numericId = Number(grnId);
+        if (!Number.isSafeInteger(numericId) || numericId <= 0) {
+            setPrintSlipError('Invalid GRN ID. Cannot preview PDF.');
+            return;
+        }
+
+        if (previewingPdfGrnId === numericId) return;
+
+        setPreviewingPdfGrnId(numericId);
+        setPrintSlipError(null);
+
+        try {
+            const response = await previewGRNPdf(numericId);
+
+            if (!response?.data || (response.data instanceof Blob && response.data.size === 0)) {
+                throw new Error('Received empty PDF response from server.');
+            }
+
+            const blob = response.data instanceof Blob
+                ? response.data
+                : new Blob([response.data], { type: 'application/pdf' });
+
+            const blobUrl = window.URL.createObjectURL(blob);
+            const newWindow = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+            if (!newWindow) {
+                setPrintSlipError('Popup blocked by browser. Please allow popups to preview PDF.');
+            }
+            setTimeout(() => {
+                window.URL.revokeObjectURL(blobUrl);
+            }, 60000);
+        } catch (err) {
+            console.error('GRN PDF Preview Error:', err);
+            const errorMsg = await parsePdfDownloadError(err);
+            setPrintSlipError(errorMsg || 'Unable to preview GRN PDF.');
+        } finally {
+            setPreviewingPdfGrnId(null);
+        }
+    };
+
+    /**
+     * Export / Download GRN CSV:
+     * Calls GET /api/v1/grn/{grn_id}/download-pdf?format=csv&mode=download via downloadGRNCsv(numericId)
+     */
+    const handleSlipDownloadCsv = async (record) => {
+        if (!record) return;
+
+        const grnId = record.id ?? record.grn_id;
+        if (grnId === undefined || grnId === null || String(grnId).trim() === '') {
+            setPrintSlipError('Invalid GRN ID. Cannot export CSV.');
+            return;
+        }
+
+        const numericId = Number(grnId);
+        if (!Number.isSafeInteger(numericId) || numericId <= 0) {
+            setPrintSlipError('Invalid GRN ID. Cannot export CSV.');
+            return;
+        }
+
+        if (downloadingCsvSlipGrnId === numericId) return;
+
+        setDownloadingCsvSlipGrnId(numericId);
+        setPrintSlipError(null);
+
+        try {
+            const response = await downloadGRNCsv(numericId);
+
+            if (!response?.data || (response.data instanceof Blob && response.data.size === 0)) {
+                throw new Error('Received empty CSV response from server.');
+            }
+
+            const grnNumber = record.grn_number || record.grnNumber;
+            const fallbackFilename = grnNumber ? `${grnNumber}.csv` : `GRN-${numericId}.csv`;
+
+            const contentDisposition = response.headers?.['content-disposition'] || response.headers?.['Content-Disposition'];
+            const filename = extractFilename(contentDisposition, fallbackFilename);
+
+            downloadCsvBlob(response.data, filename);
+        } catch (err) {
+            console.error('GRN CSV Download Error:', err);
+            const errorMsg = await parseExportError(err);
+            setPrintSlipError(errorMsg || 'Unable to export GRN CSV.');
+        } finally {
+            setDownloadingCsvSlipGrnId(null);
         }
     };
 
@@ -5964,7 +6083,7 @@ export const GRNPage = () => {
                         ? getGRNById(grnId).then(res => {
                             const resData = res?.data && typeof res.data === 'object' && !Array.isArray(res.data) ? res.data : res;
                             setSelectedGrn(prev => prev ? { ...prev, ...resData, status: 'received' } : resData);
-                        }).catch(() => { })
+                          }).catch(() => {})
                         : Promise.resolve()
                 ]);
             } else if (err?.response?.status === 422) {
@@ -6229,7 +6348,7 @@ export const GRNPage = () => {
                         ? getGRNById(id).then(res => {
                             const resData = res?.data && typeof res.data === 'object' && !Array.isArray(res.data) ? res.data : res;
                             setSelectedGrn(prev => prev ? { ...prev, ...resData } : resData);
-                        }).catch(() => { })
+                          }).catch(() => {})
                         : Promise.resolve()
                 ]);
             } else if (err?.response?.status === 422) {
@@ -6767,11 +6886,13 @@ export const GRNPage = () => {
         else if (key === 'supplier_id') setFilterSupplierId(value);
         else if (key === 'status') setFilterStatus(value);
 
+        setCurrentPage(1);
         fetchGrnData({ [key]: value });
     };
 
     const handleSearchSubmit = (e) => {
         if (e && e.preventDefault) e.preventDefault();
+        setCurrentPage(1);
         fetchGrnData({ search });
     };
 
@@ -6787,6 +6908,7 @@ export const GRNPage = () => {
         setFilterSupplierId('');
         setFilterStatus('');
         setSearch('');
+        setCurrentPage(1);
         fetchGrnData({
             purchase_order_id: '',
             warehouse_id: '',
@@ -6796,6 +6918,35 @@ export const GRNPage = () => {
             search: ''
         });
         fetchGrnStats();
+    };
+
+    // Pagination calculations
+    const totalPages = Math.max(1, Math.ceil(grns.length / pageSize));
+
+    useEffect(() => {
+        if (currentPage > totalPages && totalPages > 0) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
+
+    const paginatedGrns = useMemo(() => {
+        if (!Array.isArray(grns)) return [];
+        const startIndex = (currentPage - 1) * pageSize;
+        return grns.slice(startIndex, startIndex + pageSize);
+    }, [grns, currentPage, pageSize]);
+
+    const getPageNumbers = () => {
+        const total = totalPages;
+        if (total <= 7) {
+            return Array.from({ length: total }, (_, i) => i + 1);
+        }
+        if (currentPage <= 4) {
+            return [1, 2, 3, 4, 5, '...', total];
+        }
+        if (currentPage >= total - 3) {
+            return [1, '...', total - 4, total - 3, total - 2, total - 1, total];
+        }
+        return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', total];
     };
 
     const hasActiveFilters = Boolean(
@@ -6822,33 +6973,117 @@ export const GRNPage = () => {
 
     const renderStatusBadge = (statusStr) => {
         const s = String(statusStr || '').toLowerCase();
-        let bg = '#eff6ff';
-        let color = '#2563eb';
+        let bg = '#ecfdf5';
+        let border = '#a7f3d0';
+        let color = '#065f46';
+        let dot = '#10b981';
         let label = statusStr || 'Pending';
 
         if (s === 'received') {
             bg = '#ecfdf5';
-            color = '#059669';
+            border = '#a7f3d0';
+            color = '#065f46';
+            dot = '#10b981';
             label = 'Received';
         } else if (s === 'rejected' || s.includes('damage') || s.includes('discrepancy')) {
-            bg = '#fef2f2';
-            color = '#dc2626';
+            bg = '#fff1f2';
+            border = '#fecdd3';
+            color = '#9f1239';
+            dot = '#ef4444';
             label = 'Rejected';
         } else if (s === 'pending' || s === 'draft') {
             bg = '#fffbeb';
-            color = '#d97706';
+            border = '#fde68a';
+            color = '#92400e';
+            dot = '#f59e0b';
             label = 'Pending';
         }
 
         return (
             <span style={{
-                padding: '3px 10px', borderRadius: 12, fontSize: 11.5, fontWeight: 700,
-                background: bg, color: color, textTransform: 'capitalize', display: 'inline-block'
+                padding: '4px 10px',
+                borderRadius: 9999,
+                fontSize: 12,
+                fontWeight: 700,
+                background: bg,
+                border: `1px solid ${border}`,
+                color: color,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                letterSpacing: '0.01em'
             }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: dot }} />
                 {label}
             </span>
         );
     };
+
+    const GrnStatCard = ({ label, value, sub, icon, iconBg, iconColor }) => (
+        <div className="grn-stat-card" style={{
+            background: '#ffffff',
+            borderRadius: 12,
+            padding: '18px 20px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            boxSizing: 'border-box'
+        }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: '#64748b',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em'
+                }}>
+                    {label}
+                </span>
+                <div style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    background: iconBg,
+                    color: iconColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                }}>
+                    {icon}
+                </div>
+            </div>
+            <div>
+                <div style={{
+                    fontSize: 26,
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    lineHeight: 1.15,
+                    letterSpacing: '-0.02em',
+                    marginBottom: 5,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                }}>
+                    {value}
+                </div>
+                {sub && (
+                    <div style={{
+                        fontSize: 11.5,
+                        fontWeight: 500,
+                        color: '#64748b',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                    }}>
+                        {sub}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
 
     return (
         <div className="grn-page-root" style={{ width: '100%', minHeight: '100%' }}>
@@ -6908,660 +7143,920 @@ export const GRNPage = () => {
                         gap: 12px !important;
                     }
                 }
+
+                /* Modern Stat Card Hover Micro-interactions */
+                .grn-page-root .grn-stat-card {
+                    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s ease !important;
+                }
+                .grn-page-root .grn-stat-card:hover {
+                    transform: translateY(-2px) !important;
+                    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08) !important;
+                    border-color: #cbd5e1 !important;
+                }
+
+                /* Professional SaaS Search Bar & Filters Styling */
+                .grn-page-root .grn-toolbar-container {
+                    padding: 14px 18px !important;
+                    border-bottom: 1px solid #e2e8f0 !important;
+                    background: #ffffff !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 13px !important;
+                }
+
+                .grn-page-root .grn-search-input {
+                    width: 100% !important;
+                    height: 36px !important;
+                    padding: 0 30px 0 34px !important;
+                    border: 1.5px solid #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    font-size: 13px !important;
+                    font-weight: 500 !important;
+                    background: #f8fafc !important;
+                    color: #0f172a !important;
+                    outline: none !important;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                }
+                .grn-page-root .grn-search-input::placeholder {
+                    color: #64748b !important;
+                    opacity: 1 !important;
+                    font-weight: 400 !important;
+                }
+                .grn-page-root .grn-search-input:hover {
+                    border-color: #94a3b8 !important;
+                    background: #ffffff !important;
+                }
+                .grn-page-root .grn-search-input:focus {
+                    background: #ffffff !important;
+                    border-color: #6366f1 !important;
+                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+                }
+
+                /* Filters Grid */
+                .grn-page-root .grn-filters-grid {
+                    display: grid !important;
+                    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+                    gap: 12px !important;
+                    padding-top: 13px !important;
+                    border-top: 1px solid #f1f5f9 !important;
+                }
+                @media (max-width: 1100px) {
+                    .grn-page-root .grn-filters-grid {
+                        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    }
+                }
+                @media (max-width: 680px) {
+                    .grn-page-root .grn-filters-grid {
+                        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                    }
+                }
+                @media (max-width: 480px) {
+                    .grn-page-root .grn-filters-grid {
+                        grid-template-columns: 1fr !important;
+                    }
+                }
+
+                .grn-page-root .grn-filter-item {
+                    display: flex !important;
+                    flex-direction: column !important;
+                    gap: 4px !important;
+                    min-width: 0 !important;
+                }
+                .grn-page-root .grn-filter-label {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    gap: 5px !important;
+                    font-size: 11px !important;
+                    font-weight: 700 !important;
+                    color: #475569 !important;
+                    letter-spacing: 0.05em !important;
+                    text-transform: uppercase !important;
+                    margin-bottom: 2px !important;
+                    white-space: nowrap !important;
+                    overflow: hidden !important;
+                    text-overflow: ellipsis !important;
+                }
+                .grn-page-root .grn-filter-select-wrapper {
+                    position: relative !important;
+                    width: 100% !important;
+                }
+                .grn-page-root .grn-filter-select {
+                    width: 100% !important;
+                    height: 36px !important;
+                    padding: 0 28px 0 10px !important;
+                    border: 1.5px solid #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    font-size: 12.5px !important;
+                    font-weight: 500 !important;
+                    background: #ffffff !important;
+                    color: #0f172a !important;
+                    outline: none !important;
+                    cursor: pointer !important;
+                    appearance: none !important;
+                    -webkit-appearance: none !important;
+                    -moz-appearance: none !important;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                    text-overflow: ellipsis !important;
+                    white-space: nowrap !important;
+                }
+                .grn-page-root .grn-filter-select:hover {
+                    border-color: #94a3b8 !important;
+                    background: #f8fafc !important;
+                }
+                .grn-page-root .grn-filter-select:focus {
+                    background: #ffffff !important;
+                    border-color: #6366f1 !important;
+                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+                }
+                .grn-page-root .grn-filter-select.is-active {
+                    background: #eef2ff !important;
+                    border-color: #6366f1 !important;
+                    color: #3730a3 !important;
+                    font-weight: 600 !important;
+                }
+                .grn-page-root .grn-filter-select-icon {
+                    position: absolute !important;
+                    right: 10px !important;
+                    top: 50% !important;
+                    transform: translateY(-50%) !important;
+                    pointer-events: none !important;
+                    color: #64748b !important;
+                    transition: transform 0.2s ease, color 0.2s ease !important;
+                }
+                .grn-page-root .grn-filter-select-wrapper:hover .grn-filter-select-icon {
+                    color: #0f172a !important;
+                }
+
+                .grn-page-root .grn-clear-btn {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    gap: 5px !important;
+                    padding: 6px 12px !important;
+                    height: 36px !important;
+                    background: #fee2e2 !important;
+                    color: #b91c1c !important;
+                    border: 1.5px solid #fca5a5 !important;
+                    border-radius: 8px !important;
+                    font-size: 12px !important;
+                    font-weight: 600 !important;
+                    cursor: pointer !important;
+                    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                }
+                .grn-page-root .grn-clear-btn:hover {
+                    background: #dc2626 !important;
+                    color: #ffffff !important;
+                    border-color: #b91c1c !important;
+                    box-shadow: 0 4px 10px rgba(220, 38, 38, 0.25) !important;
+                    transform: translateY(-1px) !important;
+                }
+
+                /* Modern Table Row Hover */
+                .grn-page-root .grn-table tbody tr {
+                    transition: background-color 0.15s ease;
+                }
+                .grn-page-root .grn-table tbody tr:hover {
+                    background-color: #f8fafc !important;
+                }
+                /* GRN Action Buttons & Rich Tooltips */
+                .grn-page-root .grn-actions-row {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    gap: 6px !important;
+                    flex-wrap: nowrap !important;
+                    position: relative !important;
+                    z-index: 2 !important;
+                }
+                .grn-page-root .grn-action-btn {
+                    position: relative !important;
+                    width: 32px !important;
+                    height: 32px !important;
+                    min-width: 32px !important;
+                    padding: 0 !important;
+                    border-radius: 8px !important;
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    cursor: pointer !important;
+                    transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                    box-sizing: border-box !important;
+                    flex-shrink: 0 !important;
+                    border: 1.5px solid transparent !important;
+                }
+                .grn-page-root .grn-action-btn svg {
+                    width: 15px !important;
+                    height: 15px !important;
+                    flex-shrink: 0 !important;
+                    stroke: currentColor !important;
+                    stroke-width: 0.3px !important;
+                    transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                }
+                .grn-page-root .grn-action-btn:hover:not(:disabled) svg {
+                    transform: scale(1.15) !important;
+                }
+                .grn-page-root .grn-action-btn:active:not(:disabled) {
+                    transform: translateY(0) scale(0.95) !important;
+                }
+                .grn-page-root .grn-action-btn:disabled {
+                    cursor: not-allowed !important;
+                    opacity: 0.9 !important;
+                    box-shadow: none !important;
+                    transform: none !important;
+                    pointer-events: auto !important;
+                }
+                .grn-page-root .grn-action-btn:disabled:hover {
+                    box-shadow: none !important;
+                    transform: none !important;
+                }
+                .grn-page-root .grn-action-btn:disabled svg {
+                    transform: none !important;
+                }
+
+                /* Delicate visual divider between document and workflow actions */
+                .grn-page-root .grn-action-divider {
+                    width: 1.5px !important;
+                    height: 18px !important;
+                    background: #cbd5e1 !important;
+                    margin: 0 2px !important;
+                    flex-shrink: 0 !important;
+                }
+
+                /* Individual Color Themes & High-Contrast Visual Balance */
+                /* 1. View Note: Royal Blue */
+                .grn-page-root .grn-btn-view {
+                    background: #dbeafe !important;
+                    color: #1d4ed8 !important;
+                    border-color: #93c5fd !important;
+                }
+                .grn-page-root .grn-btn-view:hover:not(:disabled) {
+                    background: #1d4ed8 !important;
+                    color: #ffffff !important;
+                    border-color: #1e40af !important;
+                    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-view:disabled {
+                    background: #eff6ff !important;
+                    color: #2563eb !important;
+                    border-color: #93c5fd !important;
+                }
+
+                /* 2. History: Slate / Charcoal */
+                .grn-page-root .grn-btn-history {
+                    background: #f1f5f9 !important;
+                    color: #1e293b !important;
+                    border-color: #cbd5e1 !important;
+                }
+                .grn-page-root .grn-btn-history:hover:not(:disabled) {
+                    background: #1e293b !important;
+                    color: #ffffff !important;
+                    border-color: #0f172a !important;
+                    box-shadow: 0 4px 12px rgba(30, 41, 59, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-history:disabled {
+                    background: #f8fafc !important;
+                    color: #475569 !important;
+                    border-color: #cbd5e1 !important;
+                }
+
+                /* 3. PDF: Red / Rose */
+                .grn-page-root .grn-btn-pdf {
+                    background: #fee2e2 !important;
+                    color: #b91c1c !important;
+                    border-color: #fca5a5 !important;
+                }
+                .grn-page-root .grn-btn-pdf:hover:not(:disabled) {
+                    background: #dc2626 !important;
+                    color: #ffffff !important;
+                    border-color: #b91c1c !important;
+                    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-pdf:disabled {
+                    background: #fef2f2 !important;
+                    color: #dc2626 !important;
+                    border-color: #fca5a5 !important;
+                }
+
+                /* 4. Print Slip: Teal */
+                .grn-page-root .grn-btn-slip {
+                    background: #ccfbf1 !important;
+                    color: #0f766e !important;
+                    border-color: #5eead4 !important;
+                }
+                .grn-page-root .grn-btn-slip:hover:not(:disabled) {
+                    background: #0f766e !important;
+                    color: #ffffff !important;
+                    border-color: #115e59 !important;
+                    box-shadow: 0 4px 12px rgba(15, 118, 110, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-slip:disabled {
+                    background: #f0fdfa !important;
+                    color: #0d9488 !important;
+                    border-color: #5eead4 !important;
+                }
+
+                /* 5. Quality Check: Professional Blue */
+                .grn-page-root .grn-btn-qc {
+                    background: #dbeafe !important;
+                    color: #1d4ed8 !important;
+                    border-color: #93c5fd !important;
+                }
+                .grn-page-root .grn-btn-qc:hover:not(:disabled) {
+                    background: #1d4ed8 !important;
+                    color: #ffffff !important;
+                    border-color: #1e40af !important;
+                    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-qc:disabled {
+                    background: #eff6ff !important;
+                    color: #2563eb !important;
+                    border-color: #93c5fd !important;
+                }
+
+                /* 6. Result: Professional Purple */
+                .grn-page-root .grn-btn-result {
+                    background: #f3e8ff !important;
+                    color: #7c3aed !important;
+                    border-color: #c4b5fd !important;
+                }
+                .grn-page-root .grn-btn-result:hover:not(:disabled) {
+                    background: #7c3aed !important;
+                    color: #ffffff !important;
+                    border-color: #6d28d9 !important;
+                    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-result:disabled {
+                    background: #faf5ff !important;
+                    color: #7c3aed !important;
+                    border-color: #c4b5fd !important;
+                }
+
+                /* 7. Received: Professional Green */
+                .grn-page-root .grn-btn-receive {
+                    background: #dcfce7 !important;
+                    color: #15803d !important;
+                    border-color: #86efac !important;
+                }
+                .grn-page-root .grn-btn-receive:hover:not(:disabled) {
+                    background: #16a34a !important;
+                    color: #ffffff !important;
+                    border-color: #15803d !important;
+                    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-receive:disabled {
+                    background: #f0fdf4 !important;
+                    color: #16a34a !important;
+                    border-color: #86efac !important;
+                }
+
+                /* 8. Delete: Professional Red */
+                .grn-page-root .grn-btn-delete {
+                    background: #fee2e2 !important;
+                    color: #b91c1c !important;
+                    border-color: #fca5a5 !important;
+                }
+                .grn-page-root .grn-btn-delete:hover:not(:disabled) {
+                    background: #dc2626 !important;
+                    color: #ffffff !important;
+                    border-color: #b91c1c !important;
+                    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35) !important;
+                    transform: translateY(-2px) !important;
+                }
+                .grn-page-root .grn-btn-delete:disabled {
+                    background: #fef2f2 !important;
+                    color: #dc2626 !important;
+                    border-color: #fca5a5 !important;
+                }
+
+                /* Row hover highlighting & Tooltip Stacking */
+                .grn-page-root table tbody tr:hover {
+                    position: relative;
+                    z-index: 10;
+                }
+                .grn-page-root table tbody tr:hover td {
+                    position: relative;
+                    z-index: 10;
+                }
+                .grn-page-root .grn-action-btn:hover,
+                .grn-page-root .grn-action-btn:focus-visible {
+                    z-index: 99999 !important;
+                }
+
+                /* Custom Rich Tooltip [data-tooltip] */
+                .grn-page-root .grn-action-btn[data-tooltip]::after {
+                    content: attr(data-tooltip);
+                    position: absolute;
+                    bottom: calc(100% + 7px);
+                    left: 50%;
+                    transform: translateX(-50%) translateY(3px);
+                    padding: 6px 10px;
+                    background: #0f172a;
+                    color: #ffffff;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                    font-size: 11px;
+                    font-weight: 600;
+                    line-height: 1.25;
+                    white-space: nowrap;
+                    border-radius: 6px;
+                    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.32);
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    z-index: 999999;
+                    transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+                }
+
+                .grn-page-root .grn-action-btn[data-tooltip]::before {
+                    content: "";
+                    position: absolute;
+                    bottom: calc(100% + 2px);
+                    left: 50%;
+                    transform: translateX(-50%);
+                    border-width: 5px 5px 0 5px;
+                    border-style: solid;
+                    border-color: #0f172a transparent transparent transparent;
+                    pointer-events: none;
+                    opacity: 0;
+                    visibility: hidden;
+                    z-index: 999999;
+                    transition: opacity 0.15s ease, visibility 0.15s ease;
+                }
+
+                .grn-page-root .grn-action-btn[data-tooltip]:hover::after,
+                .grn-page-root .grn-action-btn[data-tooltip]:hover::before,
+                .grn-page-root .grn-action-btn[data-tooltip]:focus-visible::after,
+                .grn-page-root .grn-action-btn[data-tooltip]:focus-visible::before {
+                    opacity: 1;
+                    visibility: visible;
+                }
+
+                .grn-page-root .grn-action-btn[data-tooltip]:hover::after,
+                .grn-page-root .grn-action-btn[data-tooltip]:focus-visible::after {
+                    transform: translateX(-50%) translateY(0);
+                }
+
+                /* First 2 rows: tooltip opens downward so sticky headers or table top won't clip it */
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-action-btn[data-tooltip]::after {
+                    bottom: auto;
+                    top: calc(100% + 7px);
+                    transform: translateX(-50%) translateY(-3px);
+                }
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-action-btn[data-tooltip]:hover::after,
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-action-btn[data-tooltip]:focus-visible::after {
+                    transform: translateX(-50%) translateY(0);
+                }
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-action-btn[data-tooltip]::before {
+                    bottom: auto;
+                    top: calc(100% + 2px);
+                    border-width: 0 5px 5px 5px;
+                    border-color: transparent transparent #0f172a transparent;
+                }
+
+                /* Rightmost buttons alignment (prevent right screen clipping) */
+                .grn-page-root .grn-actions-row .grn-action-btn:last-child[data-tooltip]::after,
+                .grn-page-root .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]::after {
+                    left: auto;
+                    right: 0;
+                    transform: translateY(3px);
+                }
+                .grn-page-root .grn-actions-row .grn-action-btn:last-child[data-tooltip]:hover::after,
+                .grn-page-root .grn-actions-row .grn-action-btn:last-child[data-tooltip]:focus-visible::after,
+                .grn-page-root .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]:hover::after,
+                .grn-page-root .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
+                }
+                .grn-page-root .grn-actions-row .grn-action-btn:last-child[data-tooltip]::before,
+                .grn-page-root .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]::before {
+                    left: auto;
+                    right: 11px;
+                    transform: none;
+                }
+
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:last-child[data-tooltip]::after,
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]::after {
+                    left: auto;
+                    right: 0;
+                    transform: translateY(-3px);
+                }
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:last-child[data-tooltip]:hover::after,
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:last-child[data-tooltip]:focus-visible::after,
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]:hover::after,
+                .grn-page-root table tbody tr:nth-child(-n+2) .grn-actions-row .grn-action-btn:nth-last-child(2)[data-tooltip]:focus-visible::after {
+                    transform: translateY(0);
+                }
             `}</style>
             <ModuleContainer
                 title="Goods Received Notes (GRN)"
                 subtitle="Inspect, inward physical shipments against purchase orders, and verify batch/expiry dates"
                 icon={<BsTruck />}
-                actionBtn={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <button
-                            type="button"
-                            onClick={handleExportCsv}
-                            disabled={exportLoading}
-                            title="Export GRN records to CSV"
-                            style={{
-                                background: '#ffffff', color: '#374151', border: '1px solid #d1d5db', padding: '10px 16px',
-                                borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: exportLoading ? 'not-allowed' : 'pointer',
-                                display: 'flex', alignItems: 'center', gap: 6,
-                                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-                                opacity: exportLoading ? 0.7 : 1
-                            }}
-                        >
-                            <BsDownload size={15} /> {exportLoading ? 'Exporting...' : 'Export CSV'}
-                        </button>
-                        <button
-                            onClick={handleOpenCreateModal}
-                            style={{
-                                background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                                borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                                boxShadow: '0 2px 4px rgba(99, 102, 241, 0.2)'
-                            }}
-                        >
-                            <BsPlus size={18} /> Create Inward GRN
-                        </button>
-                    </div>
-                }
-            >
-                {/* Success Banners */}
-                {deleteGrnSuccess && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0',
-                        borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BsCheckCircle size={16} style={{ color: '#059669' }} />
-                            <span><strong>Success:</strong> {deleteGrnSuccess}</span>
-                        </div>
-                        <button
-                            onClick={() => setDeleteGrnSuccess(null)}
-                            style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 4 }}
-                        >
-                            <BsX size={18} />
-                        </button>
-                    </div>
-                )}
-
-                {qcSuccess && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0',
-                        borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BsCheckCircle size={16} style={{ color: '#059669' }} />
-                            <span><strong>QC Completed:</strong> {qcSuccess}</span>
-                        </div>
-                        <button
-                            onClick={() => setQcSuccess(null)}
-                            style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 4 }}
-                        >
-                            <BsX size={18} />
-                        </button>
-                    </div>
-                )}
-
-                {receiveGrnSuccess && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0',
-                        borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BsCheckCircle size={16} style={{ color: '#059669' }} />
-                            <span><strong>Received:</strong> {receiveGrnSuccess}</span>
-                        </div>
-                        <button
-                            onClick={() => setReceiveGrnSuccess(null)}
-                            style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 4 }}
-                        >
-                            <BsX size={18} />
-                        </button>
-                    </div>
-                )}
-
-                {receiveGrnError && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
-                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BsExclamationTriangle size={16} style={{ color: '#dc2626' }} />
-                            <span><strong>Error:</strong> {receiveGrnError}</span>
-                        </div>
-                        <button
-                            onClick={() => setReceiveGrnError(null)}
-                            style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 4 }}
-                        >
-                            <BsX size={18} />
-                        </button>
-                    </div>
-                )}
-
-                {rejectGrnSuccess && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0',
-                        borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BsCheckCircle size={16} style={{ color: '#059669' }} />
-                            <span><strong>Rejected:</strong> {rejectGrnSuccess}</span>
-                        </div>
-                        <button
-                            onClick={() => setRejectGrnSuccess(null)}
-                            style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 4 }}
-                        >
-                            <BsX size={18} />
-                        </button>
-                    </div>
-                )}
-
-                {rejectGrnError && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
-                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BsExclamationTriangle size={16} style={{ color: '#dc2626' }} />
-                            <span><strong>Error:</strong> {rejectGrnError}</span>
-                        </div>
-                        <button
-                            onClick={() => setRejectGrnError(null)}
-                            style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 4 }}
-                        >
-                            <BsX size={18} />
-                        </button>
-                    </div>
-                )}
-
-                {pdfDownloadSuccess && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0',
-                        borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BsCheckCircle size={16} style={{ color: '#059669' }} />
-                            <span><strong>Downloaded:</strong> {pdfDownloadSuccess}</span>
-                        </div>
-                        <button
-                            onClick={() => setPdfDownloadSuccess(null)}
-                            style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 4 }}
-                        >
-                            <BsX size={18} />
-                        </button>
-                    </div>
-                )}
-
-                {pdfDownloadError && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
-                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BsExclamationTriangle size={16} style={{ color: '#dc2626' }} />
-                            <span><strong>PDF Download Error:</strong> {pdfDownloadError}</span>
-                        </div>
-                        <button
-                            onClick={() => setPdfDownloadError(null)}
-                            style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 4 }}
-                        >
-                            <BsX size={18} />
-                        </button>
-                    </div>
-                )}
-
-                {printSlipError && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
-                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BsExclamationTriangle size={16} style={{ color: '#dc2626' }} />
-                            <span><strong>Print Slip Error:</strong> {printSlipError}</span>
-                        </div>
-                        <button
-                            onClick={() => setPrintSlipError(null)}
-                            style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 4 }}
-                        >
-                            <BsX size={18} />
-                        </button>
-                    </div>
-                )}
-
-                {/* Stat Cards strictly mapped from GET /api/v1/grn/stats */}
-                <div className="grn-stat-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 24 }}>
-                    <StatCard
-                        label="Total GRNs"
-                        value={statsLoading ? '...' : String(stats?.total_grns ?? 0)}
-                        sub="Recorded in Retail OS"
-                        color="#6366f1"
-                    />
-                    <StatCard
-                        label="Pending GRNs"
-                        value={statsLoading ? '...' : String(stats?.pending_grns ?? 0)}
-                        sub="Awaiting inspection"
-                        color="#f59e0b"
-                    />
-                    <StatCard
-                        label="Received GRNs"
-                        value={statsLoading ? '...' : String(stats?.received_grns ?? 0)}
-                        sub="Inwarded to stock"
-                        color="#10b981"
-                    />
-                    <StatCard
-                        label="Rejected GRNs"
-                        value={statsLoading ? '...' : String(stats?.rejected_grns ?? 0)}
-                        sub="Discrepancies / damages"
-                        color="#ef4444"
-                    />
-                    <StatCard
-                        label="Received Today"
-                        value={statsLoading ? '...' : String(stats?.received_today ?? 0)}
-                        sub="Shipments arrived today"
-                        color="#0ea5e9"
-                    />
-                    <StatCard
-                        label="Total Inward Value"
-                        value={statsLoading ? '...' : (
-                            stats?.total_inward_value != null
-                                ? `₹${Number(stats.total_inward_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                                : '₹0.00'
-                        )}
-                        sub="Cumulative inventory cost"
-                        color="#8b5cf6"
-                    />
+            actionBtn={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button
+                        type="button"
+                        onClick={handleExportCsv}
+                        disabled={exportLoading}
+                        title="Export GRN records to CSV"
+                        style={{
+                            background: '#ffffff', color: '#374151', border: '1px solid #d1d5db', padding: '10px 16px',
+                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: exportLoading ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center', gap: 6,
+                            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                            opacity: exportLoading ? 0.7 : 1
+                        }}
+                    >
+                        <BsDownload size={15} /> {exportLoading ? 'Exporting...' : 'Export CSV'}
+                    </button>
+                    <button
+                        onClick={handleOpenCreateModal}
+                        style={{
+                            background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
+                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                            boxShadow: '0 2px 4px rgba(99, 102, 241, 0.2)'
+                        }}
+                    >
+                        <BsPlus size={18} /> Create Inward GRN
+                    </button>
                 </div>
+            }
+        >
+            {/* Success Banners */}
+            {deleteGrnSuccess && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0',
+                    borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BsCheckCircle size={16} style={{ color: '#059669' }} />
+                        <span><strong>Success:</strong> {deleteGrnSuccess}</span>
+                    </div>
+                    <button
+                        onClick={() => setDeleteGrnSuccess(null)}
+                        style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 4 }}
+                    >
+                        <BsX size={18} />
+                    </button>
+                </div>
+            )}
 
-                {/* Error Banners */}
-                {error && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
-                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <span>{error}</span>
+            {qcSuccess && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0',
+                    borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BsCheckCircle size={16} style={{ color: '#059669' }} />
+                        <span><strong>QC Completed:</strong> {qcSuccess}</span>
+                    </div>
+                    <button
+                        onClick={() => setQcSuccess(null)}
+                        style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 4 }}
+                    >
+                        <BsX size={18} />
+                    </button>
+                </div>
+            )}
+
+            {receiveGrnSuccess && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0',
+                    borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BsCheckCircle size={16} style={{ color: '#059669' }} />
+                        <span><strong>Received:</strong> {receiveGrnSuccess}</span>
+                    </div>
+                    <button
+                        onClick={() => setReceiveGrnSuccess(null)}
+                        style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 4 }}
+                    >
+                        <BsX size={18} />
+                    </button>
+                </div>
+            )}
+
+            {receiveGrnError && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BsExclamationTriangle size={16} style={{ color: '#dc2626' }} />
+                        <span><strong>Error:</strong> {receiveGrnError}</span>
+                    </div>
+                    <button
+                        onClick={() => setReceiveGrnError(null)}
+                        style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 4 }}
+                    >
+                        <BsX size={18} />
+                    </button>
+                </div>
+            )}
+
+            {rejectGrnSuccess && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0',
+                    borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BsCheckCircle size={16} style={{ color: '#059669' }} />
+                        <span><strong>Rejected:</strong> {rejectGrnSuccess}</span>
+                    </div>
+                    <button
+                        onClick={() => setRejectGrnSuccess(null)}
+                        style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 4 }}
+                    >
+                        <BsX size={18} />
+                    </button>
+                </div>
+            )}
+
+            {rejectGrnError && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BsExclamationTriangle size={16} style={{ color: '#dc2626' }} />
+                        <span><strong>Error:</strong> {rejectGrnError}</span>
+                    </div>
+                    <button
+                        onClick={() => setRejectGrnError(null)}
+                        style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 4 }}
+                    >
+                        <BsX size={18} />
+                    </button>
+                </div>
+            )}
+
+            {pdfDownloadSuccess && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0',
+                    borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BsCheckCircle size={16} style={{ color: '#059669' }} />
+                        <span><strong>Downloaded:</strong> {pdfDownloadSuccess}</span>
+                    </div>
+                    <button
+                        onClick={() => setPdfDownloadSuccess(null)}
+                        style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 4 }}
+                    >
+                        <BsX size={18} />
+                    </button>
+                </div>
+            )}
+
+            {pdfDownloadError && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BsExclamationTriangle size={16} style={{ color: '#dc2626' }} />
+                        <span><strong>PDF Download Error:</strong> {pdfDownloadError}</span>
+                    </div>
+                    <button
+                        onClick={() => setPdfDownloadError(null)}
+                        style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 4 }}
+                    >
+                        <BsX size={18} />
+                    </button>
+                </div>
+            )}
+
+            {printSlipError && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <BsExclamationTriangle size={16} style={{ color: '#dc2626' }} />
+                        <span><strong>Print Slip Error:</strong> {printSlipError}</span>
+                    </div>
+                    <button
+                        onClick={() => setPrintSlipError(null)}
+                        style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 4 }}
+                    >
+                        <BsX size={18} />
+                    </button>
+                </div>
+            )}
+
+            {/* Stat Cards strictly mapped from GET /api/v1/grn/stats */}
+            <div className="grn-stat-cards" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 24 }}>
+                <GrnStatCard
+                    label="Total GRNs"
+                    value={statsLoading ? '...' : String(stats?.total_grns ?? 0)}
+                    sub="Recorded in Retail OS"
+                    icon={<BsTruck size={17} />}
+                    iconBg="#eef2ff"
+                    iconColor="#4f46e5"
+                />
+                <GrnStatCard
+                    label="Pending GRNs"
+                    value={statsLoading ? '...' : String(stats?.pending_grns ?? 0)}
+                    sub="Awaiting inspection"
+                    icon={<BsClockHistory size={17} />}
+                    iconBg="#fffbeb"
+                    iconColor="#d97706"
+                />
+                <GrnStatCard
+                    label="Received GRNs"
+                    value={statsLoading ? '...' : String(stats?.received_grns ?? 0)}
+                    sub="Inwarded to stock"
+                    icon={<BsCheckCircle size={17} />}
+                    iconBg="#ecfdf5"
+                    iconColor="#059669"
+                />
+                <GrnStatCard
+                    label="Rejected GRNs"
+                    value={statsLoading ? '...' : String(stats?.rejected_grns ?? 0)}
+                    sub="Discrepancies / damages"
+                    icon={<BsXCircle size={17} />}
+                    iconBg="#fff1f2"
+                    iconColor="#e11d48"
+                />
+                <GrnStatCard
+                    label="Received Today"
+                    value={statsLoading ? '...' : String(stats?.received_today ?? 0)}
+                    sub="Shipments arrived today"
+                    icon={<BsCalendarCheck size={17} />}
+                    iconBg="#f0f9ff"
+                    iconColor="#0284c7"
+                />
+                <GrnStatCard
+                    label="Total Inward Value"
+                    value={statsLoading ? '...' : (
+                        stats?.total_inward_value != null
+                            ? `₹${Number(stats.total_inward_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : '₹0.00'
+                    )}
+                    sub="Cumulative inventory cost"
+                    icon={<BsCashStack size={17} />}
+                    iconBg="#f5f3ff"
+                    iconColor="#7c3aed"
+                />
+            </div>
+
+            {/* Error Banners */}
+            {error && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <span>{error}</span>
+                    <button
+                        onClick={handleRefreshAll}
+                        style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                    >
+                        Retry Listing
+                    </button>
+                </div>
+            )}
+
+            {statsError && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#fffbeb', border: '1px solid #fde68a',
+                    borderRadius: 8, color: '#b45309', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <span><strong>Stats Note:</strong> {statsError}</span>
+                    <button
+                        onClick={fetchGrnStats}
+                        style={{ background: '#b45309', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                    >
+                        Retry Stats
+                    </button>
+                </div>
+            )}
+
+            {exportError && (
+                <div style={{
+                    marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                    <span><strong>Export Error:</strong> {exportError}</span>
+                    <div style={{ display: 'flex', gap: 8 }}>
                         <button
-                            onClick={handleRefreshAll}
+                            onClick={handleExportCsv}
                             style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                         >
-                            Retry Listing
+                            Retry Export
                         </button>
-                    </div>
-                )}
-
-                {statsError && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#fffbeb', border: '1px solid #fde68a',
-                        borderRadius: 8, color: '#b45309', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <span><strong>Stats Note:</strong> {statsError}</span>
                         <button
-                            onClick={fetchGrnStats}
-                            style={{ background: '#b45309', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                            onClick={() => setExportError(null)}
+                            style={{ background: 'transparent', color: '#991b1b', border: '1px solid #fecaca', padding: '6px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
                         >
-                            Retry Stats
+                            Dismiss
                         </button>
                     </div>
-                )}
-
-                {exportError && (
-                    <div style={{
-                        marginBottom: 16, padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
-                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                    }}>
-                        <span><strong>Export Error:</strong> {exportError}</span>
-                        <div style={{ display: 'flex', gap: 8 }}>
-                            <button
-                                onClick={handleExportCsv}
-                                style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                            >
-                                Retry Export
-                            </button>
-                            <button
-                                onClick={() => setExportError(null)}
-                                style={{ background: 'transparent', color: '#991b1b', border: '1px solid #fecaca', padding: '6px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                            >
-                                Dismiss
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {/* Recent GRNs Section from GET /api/v1/grn/stats */}
-                <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', marginBottom: 24, overflow: 'hidden' }}>
-                    <div style={{ padding: '14px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f9fafb' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <BsClockHistory style={{ color: '#6366f1' }} size={16} />
-                            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1e293b' }}>Recent GRNs</h3>
-                            <span style={{ fontSize: 11, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
-                                {stats?.recent_grns?.length ?? 0} records
-                            </span>
-                        </div>
-                        <button
-                            onClick={() => setShowRecentGrns(!showRecentGrns)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#6366f1', fontWeight: 600 }}
-                        >
-                            {showRecentGrns ? 'Collapse' : 'Expand'}
-                        </button>
-                    </div>
-
-                    {showRecentGrns && (
-                        <div>
-                            {statsLoading ? (
-                                <div style={{ padding: '24px 20px', textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
-                                    Loading recent GRNs...
-                                </div>
-                            ) : (!stats?.recent_grns || stats.recent_grns.length === 0) ? (
-                                <div style={{ padding: '28px 20px', textAlign: 'center', color: '#6b7280' }}>
-                                    <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#4b5563' }}>No recent GRN records found</p>
-                                </div>
-                            ) : (
-                                <div className="grn-table-container" style={{ overflowX: 'auto' }}>
-                                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12.5 }}>
-                                        <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
-                                            <tr>
-                                                <th style={{ padding: '10px 14px' }}>GRN #</th>
-                                                <th style={{ padding: '10px 14px' }}>PO Number</th>
-                                                <th style={{ padding: '10px 14px' }}>Supplier</th>
-                                                <th style={{ padding: '10px 14px' }}>Warehouse</th>
-                                                <th style={{ padding: '10px 14px' }}>Store</th>
-                                                <th style={{ padding: '10px 14px' }}>Status</th>
-                                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Items / Recv</th>
-                                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Cost Value</th>
-                                                <th style={{ padding: '10px 14px' }}>Received / Created At</th>
-                                                <th style={{ padding: '10px 14px', textAlign: 'right' }}>Action</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {stats.recent_grns.map((rg, idx) => {
-                                                const grnId = rg.id ?? rg.grn_id;
-                                                const grnNum = rg.grn_number || (grnId ? `GRN-${grnId}` : '—');
-                                                const grnStatus = rg.status ?? rg.grn_status ?? '';
-                                                const eligible = isGrnReceiveEligible(grnStatus);
-                                                const isReceiveDisabled = !eligible || Boolean(receivingGrnId);
-
-                                                console.log("GRN Receive Debug:", {
-                                                    id: grnId,
-                                                    status: grnStatus,
-                                                    eligible: eligible,
-                                                    receivingGrnId,
-                                                    disabled: isReceiveDisabled
-                                                });
-
-                                                const poNum = rg.purchase_order_number || (rg.purchase_order_id ? `PO-${rg.purchase_order_id}` : '—');
-                                                const supName = rg.supplier_name || '—';
-                                                const whName = rg.warehouse_name || '—';
-                                                const stName = rg.store_name || '—';
-                                                const itemsCnt = rg.total_items_count ?? (Array.isArray(rg.items) ? rg.items.length : 0);
-                                                const recvQty = rg.total_received_quantity ?? 0;
-                                                const costVal = rg.total_cost_value != null ? `₹${Number(rg.total_cost_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00';
-                                                const dateStr = rg.received_at ? new Date(rg.received_at).toLocaleDateString() : (rg.created_at ? new Date(rg.created_at).toLocaleDateString() : '—');
-
-                                                return (
-                                                    <tr key={grnId || idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                                        <td style={{ padding: '10px 14px', fontWeight: 700, color: '#6366f1' }}>
-                                                            {grnNum}
-                                                            <div style={{ fontSize: 10.5, color: '#9ca3af', fontWeight: 400 }}>ID: #{grnId ?? '—'}</div>
-                                                        </td>
-                                                        <td style={{ padding: '10px 14px', color: '#374151' }}>{poNum}</td>
-                                                        <td style={{ padding: '10px 14px', fontWeight: 600 }}>{supName}</td>
-                                                        <td style={{ padding: '10px 14px' }}>{whName}</td>
-                                                        <td style={{ padding: '10px 14px', color: '#6b7280' }}>{stName}</td>
-                                                        <td style={{ padding: '10px 14px' }}>{renderStatusBadge(grnStatus)}</td>
-                                                        <td style={{ padding: '10px 14px', textAlign: 'right' }}>
-                                                            {recvQty} pcs <span style={{ color: '#9ca3af' }}>({itemsCnt} items)</span>
-                                                        </td>
-                                                        <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600 }}>{costVal}</td>
-                                                        <td style={{ padding: '10px 14px', color: '#6b7280', fontSize: 11.5 }}>{dateStr}</td>
-                                                        <td style={{ padding: '10px 14px', textAlign: 'right', pointerEvents: 'auto', position: 'relative', zIndex: 1 }}>
-                                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, pointerEvents: 'auto', position: 'relative', zIndex: 1 }}>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleViewGrn(rg);
-                                                                    }}
-                                                                    style={{ background: '#f3f4f6', border: 'none', borderRadius: 4, padding: '4px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, pointerEvents: 'auto', position: 'relative', zIndex: 2 }}
-                                                                    title={`View Goods Received Note ${grnNum}`}
-                                                                >
-                                                                    <BsEye size={11} /> View Note
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleViewHistory(rg);
-                                                                    }}
-                                                                    style={{ background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 4, padding: '4px 8px', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, pointerEvents: 'auto', position: 'relative', zIndex: 2 }}
-                                                                    title={`View History Timeline for ${grnNum}`}
-                                                                >
-                                                                    <BsClockHistory size={11} /> History
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleDownloadPdf(rg);
-                                                                    }}
-                                                                    disabled={downloadingPdfGrnId === grnId}
-                                                                    title={`Download PDF for ${grnNum}`}
-                                                                    style={{
-                                                                        background: '#f8fafc',
-                                                                        color: '#475569',
-                                                                        border: '1px solid #cbd5e1',
-                                                                        borderRadius: 4,
-                                                                        padding: '4px 8px',
-                                                                        fontSize: 11.5,
-                                                                        fontWeight: 600,
-                                                                        cursor: downloadingPdfGrnId === grnId ? 'not-allowed' : 'pointer',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: 4,
-                                                                        pointerEvents: 'auto',
-                                                                        position: 'relative',
-                                                                        zIndex: 2
-                                                                    }}
-                                                                >
-                                                                    <BsDownload size={11} /> {downloadingPdfGrnId === grnId ? 'Downloading...' : 'PDF'}
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleOpenPrintSlip(rg);
-                                                                    }}
-                                                                    disabled={fetchingSlipGrnId === grnId}
-                                                                    title={`Print Slip for ${grnNum}`}
-                                                                    style={{
-                                                                        background: '#f8fafc',
-                                                                        color: '#475569',
-                                                                        border: '1px solid #cbd5e1',
-                                                                        borderRadius: 4,
-                                                                        padding: '4px 8px',
-                                                                        fontSize: 11.5,
-                                                                        fontWeight: 600,
-                                                                        cursor: fetchingSlipGrnId === grnId ? 'not-allowed' : 'pointer',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: 4,
-                                                                        pointerEvents: 'auto',
-                                                                        position: 'relative',
-                                                                        zIndex: 2
-                                                                    }}
-                                                                >
-                                                                    <BsPrinter size={11} /> {fetchingSlipGrnId === grnId ? 'Loading...' : 'Print Slip'}
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleOpenQcModal(rg);
-                                                                    }}
-                                                                    disabled={!isGrnQcEligible(grnStatus)}
-                                                                    title={!isGrnQcEligible(grnStatus) ? "Quality check can only be performed on pending GRN shipments" : `Perform Quality Check for ${grnNum}`}
-                                                                    style={{
-                                                                        background: !isGrnQcEligible(grnStatus) ? '#f8fafc' : '#eff6ff',
-                                                                        color: !isGrnQcEligible(grnStatus) ? '#94a3b8' : '#2563eb',
-                                                                        border: !isGrnQcEligible(grnStatus) ? '1px solid #e2e8f0' : '1px solid #bfdbfe',
-                                                                        borderRadius: 4,
-                                                                        padding: '4px 8px',
-                                                                        fontSize: 11.5,
-                                                                        fontWeight: 600,
-                                                                        cursor: !isGrnQcEligible(grnStatus) ? 'not-allowed' : 'pointer',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: 4,
-                                                                        opacity: !isGrnQcEligible(grnStatus) ? 0.6 : 1,
-                                                                        pointerEvents: 'auto',
-                                                                        position: 'relative',
-                                                                        zIndex: 2
-                                                                    }}
-                                                                >
-                                                                    <BsShieldLock size={11} /> QC
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        console.log('[GRN Receive Button Click] Clicked Receive on Recent GRNs row:', rg);
-                                                                        handleReceiveGrn(rg);
-                                                                    }}
-                                                                    disabled={isReceiveDisabled}
-                                                                    title={!eligible ? (isGrnReceived(grnStatus) ? "This GRN has already been received and inventory has been updated" : "Cannot receive a rejected GRN") : `Receive ${grnNum} into inventory`}
-                                                                    style={{
-                                                                        background: !eligible ? '#f8fafc' : '#ecfdf5',
-                                                                        color: !eligible ? '#94a3b8' : '#059669',
-                                                                        border: !eligible ? '1px solid #e2e8f0' : '1px solid #a7f3d0',
-                                                                        borderRadius: 4,
-                                                                        padding: '4px 8px',
-                                                                        fontSize: 11.5,
-                                                                        fontWeight: 600,
-                                                                        cursor: isReceiveDisabled ? 'not-allowed' : 'pointer',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: 4,
-                                                                        opacity: !eligible ? 0.6 : 1,
-                                                                        pointerEvents: 'auto',
-                                                                        position: 'relative',
-                                                                        zIndex: 2
-                                                                    }}
-                                                                >
-                                                                    <BsBoxSeam size={11} /> {receivingGrnId === grnId ? 'Receiving...' : 'Receive'}
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleRequestRejectGrn(rg);
-                                                                    }}
-                                                                    disabled={!isGrnRejectEligible(grnStatus) || Boolean(rejectingGrnId)}
-                                                                    title={!isGrnRejectEligible(grnStatus) ? (isGrnReceived(grnStatus) ? "Cannot reject a GRN that has already been received into inventory" : "This GRN has already been rejected") : `Reject ${grnNum}`}
-                                                                    style={{
-                                                                        background: !isGrnRejectEligible(grnStatus) ? '#f8fafc' : '#fff1f2',
-                                                                        color: !isGrnRejectEligible(grnStatus) ? '#94a3b8' : '#e11d48',
-                                                                        border: !isGrnRejectEligible(grnStatus) ? '1px solid #e2e8f0' : '1px solid #fecdd3',
-                                                                        borderRadius: 4,
-                                                                        padding: '4px 8px',
-                                                                        fontSize: 11.5,
-                                                                        fontWeight: 600,
-                                                                        cursor: (!isGrnRejectEligible(grnStatus) || Boolean(rejectingGrnId)) ? 'not-allowed' : 'pointer',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: 4,
-                                                                        opacity: !isGrnRejectEligible(grnStatus) ? 0.6 : 1,
-                                                                        pointerEvents: 'auto',
-                                                                        position: 'relative',
-                                                                        zIndex: 2
-                                                                    }}
-                                                                >
-                                                                    <BsXCircle size={11} /> {rejectingGrnId === grnId ? 'Rejecting...' : 'Reject'}
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleRequestDeleteGrn(rg);
-                                                                    }}
-                                                                    disabled={isGrnReceived(rg.status) || deletingGrnId === rg.id}
-                                                                    title={isGrnReceived(rg.status) ? "Cannot delete a GRN that has already been received into inventory" : `Delete ${grnNum}`}
-                                                                    style={{
-                                                                        background: isGrnReceived(rg.status) ? '#f3f4f6' : '#fef2f2',
-                                                                        color: isGrnReceived(rg.status) ? '#9ca3af' : '#dc2626',
-                                                                        border: isGrnReceived(rg.status) ? '1px solid #e5e7eb' : '1px solid #fecaca',
-                                                                        borderRadius: 4,
-                                                                        padding: '4px 8px',
-                                                                        fontSize: 11.5,
-                                                                        fontWeight: 600,
-                                                                        cursor: (isGrnReceived(rg.status) || deletingGrnId === rg.id) ? 'not-allowed' : 'pointer',
-                                                                        display: 'inline-flex',
-                                                                        alignItems: 'center',
-                                                                        gap: 4,
-                                                                        opacity: isGrnReceived(rg.status) ? 0.6 : 1,
-                                                                        pointerEvents: 'auto',
-                                                                        position: 'relative',
-                                                                        zIndex: 2
-                                                                    }}
-                                                                >
-                                                                    <BsTrash size={11} /> Delete
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    )}
                 </div>
+            )}
 
-                {/* Main GRN Table Container */}
-                <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-                    {/* Filter Bar with search and supported query parameters */}
-                    <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', background: '#ffffff', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                            {/* Search Input: query param `search` */}
-                            <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: 8, width: 340, maxWidth: '100%' }}>
-                                <div style={{ position: 'relative', width: '100%' }}>
-                                    <BsSearch style={{ position: 'absolute', left: 12, top: 11, color: '#9ca3af' }} />
-                                    <input
-                                        type="text"
-                                        placeholder="Search by GRN #, invoice, PO #..."
-                                        value={search}
-                                        onChange={e => setSearch(e.target.value)}
-                                        style={{ width: '100%', padding: '8px 30px 8px 36px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
-                                    />
-                                    {search && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setSearch('');
-                                                fetchGrnData({ search: '' });
-                                            }}
-                                            style={{ position: 'absolute', right: 8, top: 8, background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: 2 }}
-                                        >
-                                            <BsX size={16} />
-                                        </button>
-                                    )}
-                                </div>
-                                <button
-                                    type="submit"
-                                    style={{ background: '#6366f1', color: '#fff', border: 'none', padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                                >
-                                    Search
-                                </button>
-                            </form>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                                {hasActiveFilters && (
+            {/* Main GRN Table Container */}
+            <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)', overflow: 'hidden' }}>
+                {/* Filter Bar with search and supported query parameters */}
+                <div className="grn-toolbar-container">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                        {/* Search Input: query param `search` */}
+                        <form onSubmit={handleSearchSubmit} style={{ display: 'flex', alignItems: 'center', gap: 8, width: 320, maxWidth: '100%', margin: 0 }}>
+                            <div style={{ position: 'relative', width: '100%' }}>
+                                <BsSearch style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b', pointerEvents: 'none' }} size={13} />
+                                <input
+                                    type="text"
+                                    className="grn-search-input"
+                                    placeholder="Search GRN #, invoice, PO #..."
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                />
+                                {search && (
                                     <button
-                                        onClick={handleResetFilters}
-                                        style={{ background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                                        type="button"
+                                        onClick={() => {
+                                            setSearch('');
+                                            fetchGrnData({ search: '' });
+                                        }}
+                                        title="Clear search"
+                                        style={{
+                                            position: 'absolute',
+                                            right: 8,
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            background: '#e2e8f0',
+                                            border: 'none',
+                                            borderRadius: '50%',
+                                            width: 18,
+                                            height: 18,
+                                            cursor: 'pointer',
+                                            color: '#475569',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            padding: 0,
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        onMouseEnter={e => { e.currentTarget.style.background = '#cbd5e1'; e.currentTarget.style.color = '#0f172a'; }}
+                                        onMouseLeave={e => { e.currentTarget.style.background = '#e2e8f0'; e.currentTarget.style.color = '#475569'; }}
                                     >
-                                        <BsX size={16} /> Clear Filters
+                                        <BsX size={14} />
                                     </button>
                                 )}
-                                <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>
-                                    {loading ? 'Loading...' : `Showing ${grns.length} records`}
-                                </span>
-                                <button
-                                    onClick={handleRefreshAll}
-                                    title="Refresh GRN list and statistics"
-                                    style={{ background: '#f9fafb', border: '1px solid #d1d5db', borderRadius: 8, padding: '7px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, color: '#374151' }}
-                                >
-                                    <BsArrowRepeat size={14} /> Refresh
-                                </button>
                             </div>
-                        </div>
+                        </form>
 
-                        {/* Dropdown Filters corresponding to backend query parameters */}
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, paddingTop: 4 }}>
-                            {/* purchase_order_id */}
-                            <div>
-                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Purchase Order</label>
+                        {/* Active Filters Summary & Clear Filters */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            {hasActiveFilters && (
+                                <>
+                                    <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        padding: '5px 12px',
+                                        background: '#eef2ff',
+                                        color: '#4338ca',
+                                        border: '1px solid #c7d2fe',
+                                        borderRadius: 20,
+                                        fontSize: 12,
+                                        fontWeight: 600
+                                    }}>
+                                        <BsFunnel size={12} />
+                                        <span>Filters Active</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleResetFilters}
+                                        className="grn-clear-btn"
+                                        title="Reset all filters to default"
+                                    >
+                                        <BsX size={16} /> Reset Filters
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Dropdown Filters corresponding to backend query parameters */}
+                    <div className="grn-filters-grid">
+                        {/* 1. purchase_order_id */}
+                        <div className="grn-filter-item">
+                            <label className="grn-filter-label">
+                                <BsReceiptCutoff size={11} style={{ color: '#6366f1' }} />
+                                <span>Purchase Order</span>
+                            </label>
+                            <div className="grn-filter-select-wrapper">
                                 <select
+                                    className={`grn-filter-select ${filterPoId && filterPoId !== 'all' ? 'is-active' : ''}`}
                                     value={filterPoId}
                                     onChange={e => handleFilterChange('purchase_order_id', e.target.value)}
-                                    style={{ width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12.5, background: '#fff', outline: 'none' }}
                                 >
                                     <option value="">All Purchase Orders</option>
                                     {purchaseOrders.map(po => (
@@ -7570,2241 +8065,2374 @@ export const GRNPage = () => {
                                         </option>
                                     ))}
                                 </select>
+                                <BsChevronDown size={11} className="grn-filter-select-icon" />
                             </div>
+                        </div>
 
-                            {/* warehouse_id */}
-                            <div>
-                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Warehouse</label>
+                        {/* 2. warehouse_id */}
+                        <div className="grn-filter-item">
+                            <label className="grn-filter-label">
+                                <BsBuildings size={11} style={{ color: '#0ea5e9' }} />
+                                <span>Warehouse</span>
+                            </label>
+                            <div className="grn-filter-select-wrapper">
                                 <select
+                                    className={`grn-filter-select ${filterWarehouseId && filterWarehouseId !== 'all' ? 'is-active' : ''}`}
                                     value={filterWarehouseId}
                                     onChange={e => handleFilterChange('warehouse_id', e.target.value)}
-                                    style={{ width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12.5, background: '#fff', outline: 'none' }}
                                 >
                                     <option value="">All Warehouses</option>
                                     {warehouses.map(wh => (
                                         <option key={wh.id} value={wh.id}>{wh.name || `Warehouse #${wh.id}`}</option>
                                     ))}
                                 </select>
+                                <BsChevronDown size={11} className="grn-filter-select-icon" />
                             </div>
+                        </div>
 
-                            {/* store_id */}
-                            <div>
-                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Store</label>
+                        {/* 3. store_id */}
+                        <div className="grn-filter-item">
+                            <label className="grn-filter-label">
+                                <BsShop size={11} style={{ color: '#10b981' }} />
+                                <span>Store</span>
+                            </label>
+                            <div className="grn-filter-select-wrapper">
                                 <select
+                                    className={`grn-filter-select ${filterStoreId && filterStoreId !== 'all' ? 'is-active' : ''}`}
                                     value={filterStoreId}
                                     onChange={e => handleFilterChange('store_id', e.target.value)}
-                                    style={{ width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12.5, background: '#fff', outline: 'none' }}
                                 >
                                     <option value="">All Stores</option>
                                     {stores.map(st => (
                                         <option key={st.id} value={st.id}>{st.name || `Store #${st.id}`}</option>
                                     ))}
                                 </select>
+                                <BsChevronDown size={11} className="grn-filter-select-icon" />
                             </div>
+                        </div>
 
-                            {/* supplier_id */}
-                            <div>
-                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Supplier</label>
+                        {/* 4. supplier_id */}
+                        <div className="grn-filter-item">
+                            <label className="grn-filter-label">
+                                <BsTruck size={11} style={{ color: '#f59e0b' }} />
+                                <span>Supplier</span>
+                            </label>
+                            <div className="grn-filter-select-wrapper">
                                 <select
+                                    className={`grn-filter-select ${filterSupplierId && filterSupplierId !== 'all' ? 'is-active' : ''}`}
                                     value={filterSupplierId}
                                     onChange={e => handleFilterChange('supplier_id', e.target.value)}
-                                    style={{ width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12.5, background: '#fff', outline: 'none' }}
                                 >
                                     <option value="">All Suppliers</option>
                                     {availableSuppliers.map(sup => (
                                         <option key={sup.id} value={sup.id}>{sup.name || `Supplier #${sup.id}`}</option>
                                     ))}
                                 </select>
+                                <BsChevronDown size={11} className="grn-filter-select-icon" />
                             </div>
+                        </div>
 
-                            {/* status: Exact supported backend statuses: pending, received, rejected */}
-                            <div>
-                                <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 4 }}>Status</label>
+                        {/* 5. status */}
+                        <div className="grn-filter-item">
+                            <label className="grn-filter-label">
+                                <BsTag size={11} style={{ color: '#8b5cf6' }} />
+                                <span>Status</span>
+                            </label>
+                            <div className="grn-filter-select-wrapper">
                                 <select
+                                    className={`grn-filter-select ${filterStatus && filterStatus !== 'all' ? 'is-active' : ''}`}
                                     value={filterStatus}
                                     onChange={e => handleFilterChange('status', e.target.value)}
-                                    style={{ width: '100%', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12.5, background: '#fff', outline: 'none' }}
                                 >
                                     <option value="">All Statuses</option>
                                     <option value="pending">Pending</option>
                                     <option value="received">Received</option>
                                     <option value="rejected">Rejected</option>
                                 </select>
+                                <BsChevronDown size={11} className="grn-filter-select-icon" />
                             </div>
                         </div>
                     </div>
-
-                    {loading ? (
-                        <div style={{ padding: '48px 20px', textAlign: 'center', color: '#6b7280' }}>
-                            <BsClockHistory size={24} style={{ animation: 'spin 1.5s linear infinite', marginBottom: 8, color: '#6366f1' }} />
-                            <p style={{ margin: 0, fontSize: 14 }}>Loading Goods Received Notes from backend...</p>
-                        </div>
-                    ) : grns.length === 0 ? (
-                        <div style={{ padding: '48px 20px', textAlign: 'center', color: '#6b7280' }}>
-                            <BsTruck size={36} style={{ color: '#cbd5e1', marginBottom: 12 }} />
-                            <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#374151' }}>No GRN records found</p>
-                            <p style={{ margin: '6px 0 16px 0', fontSize: 13, color: '#6b7280' }}>
-                                {hasActiveFilters
-                                    ? 'No GRN records match your selected filter criteria. Try adjusting or clearing your filters.'
-                                    : 'No Goods Received Notes have been recorded yet.'}
-                            </p>
-                            {hasActiveFilters ? (
-                                <button
-                                    onClick={handleResetFilters}
-                                    style={{
-                                        background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', padding: '8px 16px',
-                                        borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6
-                                    }}
-                                >
-                                    <BsX size={16} /> Clear Filters
-                                </button>
-                            ) : (
-                                <button
-                                    onClick={handleOpenCreateModal}
-                                    style={{
-                                        background: '#6366f1', color: '#fff', border: 'none', padding: '8px 16px',
-                                        borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6
-                                    }}
-                                >
-                                    <BsPlus size={16} /> Create Inward GRN
-                                </button>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="grn-table-container" style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                                <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
-                                    <tr>
-                                        <th style={{ padding: '12px 16px' }}>GRN #</th>
-                                        <th style={{ padding: '12px 16px' }}>PO Reference</th>
-                                        <th style={{ padding: '12px 16px' }}>Supplier</th>
-                                        <th style={{ padding: '12px 16px' }}>Warehouse / Store</th>
-                                        <th style={{ padding: '12px 16px' }}>Invoice</th>
-                                        <th style={{ padding: '12px 16px', textAlign: 'right' }}>Items / Quantities</th>
-                                        <th style={{ padding: '12px 16px', textAlign: 'right' }}>Total Value</th>
-                                        <th style={{ padding: '12px 16px' }}>Status</th>
-                                        <th style={{ padding: '12px 16px' }}>Date</th>
-                                        <th style={{ padding: '12px 16px', textAlign: 'right' }}>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {grns.map((row, i) => {
-                                        const grnId = row.id ?? row.grn_id;
-                                        const grnLabel = row.grn_number || (grnId ? `GRN-${grnId}` : '-');
-                                        const grnStatus = row.status ?? row.grn_status ?? '';
-                                        const eligible = isGrnReceiveEligible(grnStatus);
-                                        const isReceiveDisabled = !eligible || Boolean(receivingGrnId);
-
-                                        console.log("GRN Receive Debug:", {
-                                            id: grnId,
-                                            status: grnStatus,
-                                            eligible: eligible,
-                                            receivingGrnId,
-                                            disabled: isReceiveDisabled
-                                        });
-
-                                        const poLabel = row.purchase_order_number || (row.purchase_order_id ? `PO-${row.purchase_order_id}` : '-');
-                                        const supplierName = row.supplier_name || row.supplier?.name || '-';
-                                        const warehouseName = row.warehouse_name || row.warehouse?.name || (row.warehouse_id ? `WH #${row.warehouse_id}` : '-');
-                                        const storeName = row.store_name || row.store?.name || (row.store_id ? `Store #${row.store_id}` : '');
-                                        const invoiceNo = row.invoice_number || '-';
-                                        const invoiceDate = row.invoice_date || '';
-                                        const itemsCount = row.total_items_count ?? (Array.isArray(row.items) ? row.items.length : 0);
-                                        const receivedQty = row.total_received_quantity ?? 0;
-                                        const acceptedQty = row.total_accepted_quantity ?? 0;
-                                        const rejectedQty = row.total_rejected_quantity ?? 0;
-                                        const totalCostValue = row.total_cost_value;
-                                        const receivedAt = row.received_at;
-                                        const createdAt = row.created_at;
-
-                                        return (
-                                            <tr key={grnId || i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                                <td style={{ padding: '14px 16px' }}>
-                                                    <div style={{ fontWeight: 700, color: '#6366f1' }}>{grnLabel}</div>
-                                                    <div style={{ fontSize: 11, color: '#9ca3af' }}>ID: #{grnId ?? '-'}</div>
-                                                </td>
-                                                <td style={{ padding: '14px 16px', color: '#374151', fontWeight: 500 }}>
-                                                    {poLabel}
-                                                </td>
-                                                <td style={{ padding: '14px 16px', fontWeight: 600, color: '#1f2937' }}>
-                                                    {supplierName}
-                                                </td>
-                                                <td style={{ padding: '14px 16px' }}>
-                                                    <div style={{ fontWeight: 500 }}>{warehouseName}</div>
-                                                    {storeName && <div style={{ fontSize: 11, color: '#6b7280' }}>{storeName}</div>}
-                                                </td>
-                                                <td style={{ padding: '14px 16px', color: '#4b5563' }}>
-                                                    <div>{invoiceNo}</div>
-                                                    {invoiceDate && <div style={{ fontSize: 11, color: '#9ca3af' }}>{invoiceDate}</div>}
-                                                </td>
-                                                <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                                                    <div style={{ fontWeight: 700, color: '#111827' }}>
-                                                        {receivedQty} pcs <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 400 }}>({itemsCount} items)</span>
-                                                    </div>
-                                                    <div style={{ fontSize: 11, color: '#6b7280' }}>
-                                                        <span style={{ color: '#059669' }}>Acc: {acceptedQty}</span>
-                                                        {Number(rejectedQty) > 0 && <span style={{ color: '#dc2626', marginLeft: 6 }}>Rej: {rejectedQty}</span>}
-                                                    </div>
-                                                </td>
-                                                <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: '#111827' }}>
-                                                    {totalCostValue ? `₹${Number(totalCostValue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00'}
-                                                </td>
-                                                <td style={{ padding: '14px 16px' }}>
-                                                    {renderStatusBadge(grnStatus)}
-                                                </td>
-                                                <td style={{ padding: '14px 16px', color: '#4b5563', fontSize: 12 }}>
-                                                    <div>{receivedAt ? new Date(receivedAt).toLocaleDateString() : (createdAt ? new Date(createdAt).toLocaleDateString() : '-')}</div>
-                                                    <div style={{ fontSize: 11, color: '#9ca3af' }}>{receivedAt ? 'Received' : (createdAt ? 'Created' : '')}</div>
-                                                </td>
-                                                <td style={{ padding: '14px 16px', textAlign: 'right', pointerEvents: 'auto', position: 'relative', zIndex: 1 }}>
-                                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, pointerEvents: 'auto', position: 'relative', zIndex: 1 }}>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleViewGrn(row);
-                                                            }}
-                                                            style={{ background: '#f3f4f6', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, pointerEvents: 'auto', position: 'relative', zIndex: 2 }}
-                                                            title={`View Note for ${grnLabel}`}
-                                                        >
-                                                            <BsEye size={12} /> View Note
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleViewHistory(row);
-                                                            }}
-                                                            style={{ background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, pointerEvents: 'auto', position: 'relative', zIndex: 2 }}
-                                                            title={`View History Timeline for ${grnLabel}`}
-                                                        >
-                                                            <BsClockHistory size={12} /> History
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDownloadPdf(row);
-                                                            }}
-                                                            disabled={downloadingPdfGrnId === grnId}
-                                                            title={`Download PDF for ${grnLabel}`}
-                                                            style={{
-                                                                background: '#f8fafc',
-                                                                color: '#475569',
-                                                                border: '1px solid #cbd5e1',
-                                                                borderRadius: 6,
-                                                                padding: '6px 12px',
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: downloadingPdfGrnId === grnId ? 'not-allowed' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4,
-                                                                pointerEvents: 'auto',
-                                                                position: 'relative',
-                                                                zIndex: 2
-                                                            }}
-                                                        >
-                                                            <BsDownload size={12} /> {downloadingPdfGrnId === grnId ? 'Downloading...' : 'PDF'}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleOpenPrintSlip(row);
-                                                            }}
-                                                            disabled={fetchingSlipGrnId === grnId}
-                                                            title={`Print Slip for ${grnLabel}`}
-                                                            style={{
-                                                                background: '#f8fafc',
-                                                                color: '#475569',
-                                                                border: '1px solid #cbd5e1',
-                                                                borderRadius: 6,
-                                                                padding: '6px 12px',
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: fetchingSlipGrnId === grnId ? 'not-allowed' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4,
-                                                                pointerEvents: 'auto',
-                                                                position: 'relative',
-                                                                zIndex: 2
-                                                            }}
-                                                        >
-                                                            <BsPrinter size={12} /> {fetchingSlipGrnId === grnId ? 'Loading...' : 'Print Slip'}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleOpenQcModal(row);
-                                                            }}
-                                                            disabled={!isGrnQcEligible(grnStatus)}
-                                                            title={!isGrnQcEligible(grnStatus) ? "Quality check can only be performed on pending GRN shipments" : `Perform Quality Check for ${grnLabel}`}
-                                                            style={{
-                                                                background: !isGrnQcEligible(grnStatus) ? '#f8fafc' : '#eff6ff',
-                                                                color: !isGrnQcEligible(grnStatus) ? '#94a3b8' : '#2563eb',
-                                                                border: !isGrnQcEligible(grnStatus) ? '1px solid #e2e8f0' : '1px solid #bfdbfe',
-                                                                borderRadius: 6,
-                                                                padding: '6px 10px',
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: !isGrnQcEligible(grnStatus) ? 'not-allowed' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4,
-                                                                opacity: !isGrnQcEligible(grnStatus) ? 0.6 : 1,
-                                                                pointerEvents: 'auto',
-                                                                position: 'relative',
-                                                                zIndex: 2
-                                                            }}
-                                                        >
-                                                            <BsShieldLock size={12} /> Quality Check
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                console.log('[GRN Receive Button Click] Clicked Receive on Main GRN table row:', row);
-                                                                handleReceiveGrn(row);
-                                                            }}
-                                                            disabled={isReceiveDisabled}
-                                                            title={!eligible ? (isGrnReceived(grnStatus) ? "This GRN has already been received and inventory has been updated" : "Cannot receive a rejected GRN") : `Receive ${grnLabel} into inventory`}
-                                                            style={{
-                                                                background: !eligible ? '#f8fafc' : '#ecfdf5',
-                                                                color: !eligible ? '#94a3b8' : '#059669',
-                                                                border: !eligible ? '1px solid #e2e8f0' : '1px solid #a7f3d0',
-                                                                borderRadius: 6,
-                                                                padding: '6px 10px',
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: isReceiveDisabled ? 'not-allowed' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4,
-                                                                opacity: !eligible ? 0.6 : 1,
-                                                                pointerEvents: 'auto',
-                                                                position: 'relative',
-                                                                zIndex: 2
-                                                            }}
-                                                        >
-                                                            <BsBoxSeam size={12} /> {receivingGrnId === grnId ? 'Receiving...' : 'Receive'}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleRequestRejectGrn(row);
-                                                            }}
-                                                            disabled={!isGrnRejectEligible(grnStatus) || Boolean(rejectingGrnId)}
-                                                            title={!isGrnRejectEligible(grnStatus) ? (isGrnReceived(grnStatus) ? "Cannot reject a GRN that has already been received into inventory" : "This GRN has already been rejected") : `Reject ${grnLabel}`}
-                                                            style={{
-                                                                background: !isGrnRejectEligible(grnStatus) ? '#f8fafc' : '#fff1f2',
-                                                                color: !isGrnRejectEligible(grnStatus) ? '#94a3b8' : '#e11d48',
-                                                                border: !isGrnRejectEligible(grnStatus) ? '1px solid #e2e8f0' : '1px solid #fecdd3',
-                                                                borderRadius: 6,
-                                                                padding: '6px 10px',
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: (!isGrnRejectEligible(grnStatus) || Boolean(rejectingGrnId)) ? 'not-allowed' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4,
-                                                                opacity: !isGrnRejectEligible(grnStatus) ? 0.6 : 1,
-                                                                pointerEvents: 'auto',
-                                                                position: 'relative',
-                                                                zIndex: 2
-                                                            }}
-                                                        >
-                                                            <BsXCircle size={12} /> {rejectingGrnId === grnId ? 'Rejecting...' : 'Reject'}
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleRequestDeleteGrn(row);
-                                                            }}
-                                                            disabled={isGrnReceived(row.status) || deletingGrnId === row.id}
-                                                            title={isGrnReceived(row.status) ? "Cannot delete a GRN that has already been received into inventory" : `Delete ${grnLabel}`}
-                                                            style={{
-                                                                background: isGrnReceived(row.status) ? '#f3f4f6' : '#fef2f2',
-                                                                color: isGrnReceived(row.status) ? '#9ca3af' : '#dc2626',
-                                                                border: isGrnReceived(row.status) ? '1px solid #e5e7eb' : '1px solid #fecaca',
-                                                                borderRadius: 6,
-                                                                padding: '6px 10px',
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                cursor: (isGrnReceived(row.status) || deletingGrnId === row.id) ? 'not-allowed' : 'pointer',
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                gap: 4,
-                                                                opacity: isGrnReceived(row.status) ? 0.6 : 1,
-                                                                pointerEvents: 'auto',
-                                                                position: 'relative',
-                                                                zIndex: 2
-                                                            }}
-                                                        >
-                                                            <BsTrash size={12} /> {deletingGrnId === row.id ? 'Deleting...' : 'Delete'}
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
                 </div>
 
-                {/* CREATE INWARD GRN MODAL */}
-                {isCreateModalOpen && (
+                {loading ? (
+                    <div style={{ padding: '60px 20px', textAlign: 'center', color: '#64748b' }}>
+                        <BsClockHistory size={28} style={{ animation: 'spin 1.2s linear infinite', marginBottom: 12, color: '#6366f1' }} />
+                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#334155' }}>Loading Goods Received Notes...</p>
+                        <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#94a3b8' }}>Fetching real-time inventory records</p>
+                    </div>
+                ) : grns.length === 0 ? (
+                    <div style={{ padding: '56px 20px', textAlign: 'center', color: '#64748b' }}>
+                        <div style={{ width: 56, height: 56, borderRadius: '50%', background: '#f1f5f9', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14, color: '#94a3b8' }}>
+                            <BsTruck size={28} />
+                        </div>
+                        <p style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>No GRN records found</p>
+                        <p style={{ margin: '6px 0 16px 0', fontSize: 13, color: '#64748b', maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' }}>
+                            {hasActiveFilters
+                                ? 'No GRN records match your selected filter criteria. Try adjusting or clearing your filters.'
+                                : 'No Goods Received Notes have been recorded yet.'}
+                        </p>
+                        {hasActiveFilters ? (
+                            <button
+                                onClick={handleResetFilters}
+                                style={{
+                                    background: '#f8fafc', color: '#334155', border: '1px solid #d1d5db', padding: '8px 18px',
+                                    borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                }}
+                            >
+                                <BsX size={16} /> Clear Filters
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleOpenCreateModal}
+                                style={{
+                                    background: '#6366f1', color: '#fff', border: 'none', padding: '9px 18px',
+                                    borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                                    boxShadow: '0 2px 5px rgba(99, 102, 241, 0.25)'
+                                }}
+                            >
+                                <BsPlus size={16} /> Create Inward GRN
+                            </button>
+                        )}
+                    </div>
+                ) : (
+                    <div className="grn-table-container" style={{ overflowX: 'auto' }}>
+                        <table className="grn-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                            <thead style={{ background: '#f8fafc', borderBottom: '1.5px solid #e2e8f0', color: '#475569' }}>
+                                <tr>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>GRN #</th>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PO Reference</th>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Supplier</th>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Warehouse / Store</th>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Invoice</th>
+                                    <th style={{ padding: '13px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Items / Quantities</th>
+                                    <th style={{ padding: '13px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Value</th>
+                                    <th style={{ padding: '13px 16px', textAlign: 'center', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                                    <th style={{ padding: '13px 16px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</th>
+                                    <th style={{ padding: '13px 16px', textAlign: 'center', minWidth: 335, whiteSpace: 'nowrap', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {paginatedGrns.map((row, i) => {
+                                    const grnId = row.id ?? row.grn_id;
+                                    const grnLabel = row.grn_number || (grnId ? `GRN-${grnId}` : '-');
+                                    const grnStatus = row.status ?? row.grn_status ?? '';
+                                    const eligible = isGrnReceiveEligible(grnStatus);
+                                    const isReceiveDisabled = !eligible || Boolean(receivingGrnId);
+
+                                    console.log("GRN Receive Debug:", {
+                                        id: grnId,
+                                        status: grnStatus,
+                                        eligible: eligible,
+                                        receivingGrnId,
+                                        disabled: isReceiveDisabled
+                                    });
+
+                                    const poLabel = row.purchase_order_number || (row.purchase_order_id ? `PO-${row.purchase_order_id}` : '-');
+                                    const supplierName = row.supplier_name || row.supplier?.name || '-';
+                                    const warehouseName = row.warehouse_name || row.warehouse?.name || (row.warehouse_id ? `WH #${row.warehouse_id}` : '-');
+                                    const storeName = row.store_name || row.store?.name || (row.store_id ? `Store #${row.store_id}` : '');
+                                    const invoiceNo = row.invoice_number || '-';
+                                    const invoiceDate = row.invoice_date || '';
+                                    const itemsCount = row.total_items_count ?? (Array.isArray(row.items) ? row.items.length : 0);
+                                    const receivedQty = row.total_received_quantity ?? 0;
+                                    const acceptedQty = row.total_accepted_quantity ?? 0;
+                                    const rejectedQty = row.total_rejected_quantity ?? 0;
+                                    const totalCostValue = row.total_cost_value;
+                                    const receivedAt = row.received_at;
+                                    const createdAt = row.created_at;
+
+                                    return (
+                                        <tr key={grnId || i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                <div style={{ fontWeight: 700, color: '#4f46e5', fontSize: 13 }}>{grnLabel}</div>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10.5, color: '#64748b', background: '#f1f5f9', padding: '1px 6px', borderRadius: 4, fontWeight: 600, marginTop: 4 }}>
+                                                    ID: #{grnId ?? '-'}
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '14px 16px', color: '#1e293b', fontWeight: 600, fontSize: 13, verticalAlign: 'middle' }}>
+                                                {poLabel}
+                                            </td>
+                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 13 }}>{supplierName}</div>
+                                            </td>
+                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{warehouseName}</div>
+                                                {storeName && <div style={{ fontSize: 11.5, color: '#64748b', marginTop: 2 }}>{storeName}</div>}
+                                            </td>
+                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                <div style={{ fontWeight: 600, color: '#1e293b', fontSize: 13 }}>{invoiceNo}</div>
+                                                {invoiceDate && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{invoiceDate}</div>}
+                                            </td>
+                                            <td style={{ padding: '14px 16px', textAlign: 'right', verticalAlign: 'middle' }}>
+                                                <div style={{ fontWeight: 700, color: '#0f172a', fontSize: 13 }}>
+                                                    {itemsCount} {itemsCount === 1 ? 'item' : 'items'} <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 500 }}>({receivedQty} pcs)</span>
+                                                </div>
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                                                    <span style={{ fontSize: 11, color: '#15803d', fontWeight: 700, background: '#ecfdf5', padding: '1px 6px', borderRadius: 4 }}>
+                                                        Acc: {acceptedQty}
+                                                    </span>
+                                                    {Number(rejectedQty) > 0 && (
+                                                        <span style={{ fontSize: 11, color: '#b91c1c', fontWeight: 700, background: '#fef2f2', padding: '1px 6px', borderRadius: 4 }}>
+                                                            Rej: {rejectedQty}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: 700, color: '#0f172a', fontSize: 13.5, verticalAlign: 'middle' }}>
+                                                {totalCostValue ? `₹${Number(totalCostValue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00'}
+                                            </td>
+                                            <td style={{ padding: '14px 16px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'center' }}>
+                                                    {renderStatusBadge(grnStatus)}
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '14px 16px', verticalAlign: 'middle' }}>
+                                                <div style={{ color: '#1e293b', fontWeight: 600, fontSize: 12.5 }}>
+                                                    {receivedAt ? new Date(receivedAt).toLocaleDateString() : (createdAt ? new Date(createdAt).toLocaleDateString() : '-')}
+                                                </div>
+                                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+                                                    {receivedAt ? 'Received' : (createdAt ? 'Created' : '')}
+                                                </div>
+                                            </td>
+                                            <td style={{ padding: '10px 16px', textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', minWidth: 335, pointerEvents: 'auto', position: 'relative', zIndex: 1 }}>
+                                                <div className="grn-actions-row" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, flexWrap: 'nowrap', pointerEvents: 'auto', position: 'relative', zIndex: 2 }}>
+                                                    {/* 1. View Note */}
+                                                    <button
+                                                        type="button"
+                                                        className="grn-action-btn grn-btn-view"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleViewGrn(row);
+                                                        }}
+                                                        data-tooltip="View Note"
+                                                        title="View Note"
+                                                        aria-label="View Note"
+                                                    >
+                                                        <BsEye size={15} />
+                                                    </button>
+
+                                                    {/* 2. History */}
+                                                    <button
+                                                        type="button"
+                                                        className="grn-action-btn grn-btn-history"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleViewHistory(row);
+                                                        }}
+                                                        data-tooltip="History"
+                                                        title="History"
+                                                        aria-label="History"
+                                                    >
+                                                        <BsClockHistory size={15} />
+                                                    </button>
+
+                                                    {/* 3. PDF */}
+                                                    <button
+                                                        type="button"
+                                                        className="grn-action-btn grn-btn-pdf"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDownloadPdf(row);
+                                                        }}
+                                                        disabled={downloadingPdfGrnId === grnId}
+                                                        data-tooltip={downloadingPdfGrnId === grnId ? "Downloading PDF..." : "PDF"}
+                                                        title={downloadingPdfGrnId === grnId ? "Downloading PDF..." : "PDF"}
+                                                        aria-label="PDF"
+                                                    >
+                                                        {downloadingPdfGrnId === grnId ? (
+                                                            <div style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                                        ) : (
+                                                            <BsFileEarmarkPdf size={15} />
+                                                        )}
+                                                    </button>
+
+                                                    {/* 4. Print Slip */}
+                                                    <button
+                                                        type="button"
+                                                        className="grn-action-btn grn-btn-slip"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleOpenPrintSlip(row);
+                                                        }}
+                                                        disabled={fetchingSlipGrnId === grnId}
+                                                        data-tooltip={fetchingSlipGrnId === grnId ? "Loading Print Slip..." : "Print Slip"}
+                                                        title={fetchingSlipGrnId === grnId ? "Loading Print Slip..." : "Print Slip"}
+                                                        aria-label="Print Slip"
+                                                    >
+                                                        {fetchingSlipGrnId === grnId ? (
+                                                            <div style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                                        ) : (
+                                                            <BsPrinter size={15} />
+                                                        )}
+                                                    </button>
+
+                                                    {/* Delicate visual divider between document and workflow actions */}
+                                                    <span className="grn-action-divider" style={{ width: 1.5, height: 18, background: '#cbd5e1', margin: '0 2px', flexShrink: 0 }} />
+
+                                                    {/* 5. Quality Check */}
+                                                    <button
+                                                        type="button"
+                                                        className="grn-action-btn grn-btn-qc"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleOpenQcModal(row);
+                                                        }}
+                                                        disabled={!isGrnQcEligible(grnStatus)}
+                                                        data-tooltip="Quality Check"
+                                                        title="Quality Check"
+                                                        aria-label="Quality Check"
+                                                    >
+                                                        <BsShieldCheck size={15} />
+                                                    </button>
+
+                                                    {/* 6. Result */}
+                                                    <button
+                                                        type="button"
+                                                        className="grn-action-btn grn-btn-result"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleRequestRejectGrn(row);
+                                                        }}
+                                                        disabled={!isGrnRejectEligible(grnStatus) || Boolean(rejectingGrnId)}
+                                                        data-tooltip={rejectingGrnId === grnId ? "Rejecting..." : "Result"}
+                                                        title={rejectingGrnId === grnId ? "Rejecting..." : "Result"}
+                                                        aria-label="Result"
+                                                    >
+                                                        {rejectingGrnId === grnId ? (
+                                                            <div style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                                        ) : (
+                                                            <BsClipboardData size={15} />
+                                                        )}
+                                                    </button>
+
+                                                    {/* 7. Received */}
+                                                    <button
+                                                        type="button"
+                                                        className="grn-action-btn grn-btn-receive"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            console.log('[GRN Receive Button Click] Clicked Receive on Main GRN table row:', row);
+                                                            handleReceiveGrn(row);
+                                                        }}
+                                                        disabled={isReceiveDisabled}
+                                                        data-tooltip={receivingGrnId === grnId ? "Receiving..." : "Received"}
+                                                        title={receivingGrnId === grnId ? "Receiving..." : "Received"}
+                                                        aria-label="Received"
+                                                    >
+                                                        {receivingGrnId === grnId ? (
+                                                            <div style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                                        ) : (
+                                                            <BsBoxSeam size={15} />
+                                                        )}
+                                                    </button>
+
+                                                    {/* 8. Delete */}
+                                                    <button
+                                                        type="button"
+                                                        className="grn-action-btn grn-btn-delete"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleRequestDeleteGrn(row);
+                                                        }}
+                                                        disabled={isGrnReceived(row.status) || deletingGrnId === row.id}
+                                                        data-tooltip={deletingGrnId === row.id ? "Deleting..." : "Delete"}
+                                                        title={deletingGrnId === row.id ? "Deleting..." : "Delete"}
+                                                        aria-label="Delete"
+                                                    >
+                                                        {deletingGrnId === row.id ? (
+                                                            <div style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                                                        ) : (
+                                                            <BsTrash size={15} />
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {/* GRN List Pagination Controls */}
+                {!loading && grns.length > 0 && (
                     <div style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: 16
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '14px 20px',
+                        borderTop: '1px solid #e2e8f0',
+                        background: '#ffffff',
+                        flexWrap: 'wrap',
+                        gap: 12
                     }}>
-                        <div style={{
-                            background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 840,
-                            maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                            border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column'
-                        }}>
-                            {/* Header */}
-                            <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{ width: 36, height: 36, borderRadius: 8, background: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <BsTruck size={18} />
-                                    </div>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#1e293b' }}>Create Inward GRN</h3>
-                                        <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Post physical receipt against purchase order into warehouse inventory</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={handleCloseCreateModal}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }}
-                                >
-                                    <BsX size={24} />
-                                </button>
-                            </div>
+                        {/* Left: Rows Per Page Selector */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 12.5, color: '#64748b', fontWeight: 600 }}>Rows per page:</span>
+                            <select
+                                value={pageSize}
+                                onChange={(e) => {
+                                    setPageSize(Number(e.target.value));
+                                    setCurrentPage(1);
+                                }}
+                                style={{
+                                    height: 32,
+                                    padding: '0 10px',
+                                    border: '1.5px solid #e2e8f0',
+                                    borderRadius: 7,
+                                    fontSize: 12.5,
+                                    background: '#ffffff',
+                                    color: '#1e293b',
+                                    outline: 'none',
+                                    cursor: 'pointer',
+                                    fontWeight: 500
+                                }}
+                                aria-label="Select rows per page"
+                            >
+                                <option value={5}>5</option>
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
 
-                            {/* Modal Body */}
-                            <form onSubmit={handleSubmitGrn} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-                                {/* Alert Messages */}
-                                {formError && (
-                                    <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                                        <BsExclamationTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
-                                        <div>{formError}</div>
-                                    </div>
-                                )}
+                        {/* Right: Page Navigation Controls */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <button
+                                type="button"
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage <= 1}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    height: 34,
+                                    padding: '0 12px',
+                                    borderRadius: 8,
+                                    border: '1.5px solid #cbd5e1',
+                                    background: currentPage <= 1 ? '#f8fafc' : '#ffffff',
+                                    color: currentPage <= 1 ? '#94a3b8' : '#334155',
+                                    fontSize: 12.5,
+                                    fontWeight: 600,
+                                    cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                aria-label="Previous Page"
+                            >
+                                <BsChevronLeft size={12} /> Previous
+                            </button>
 
-                                {formSuccess && (
-                                    <div style={{ padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8, color: '#059669', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <BsCheckCircle size={18} style={{ flexShrink: 0 }} />
-                                        <div>{formSuccess}</div>
-                                    </div>
-                                )}
-
-                                {poWarning && (
-                                    <div style={{ padding: '12px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, color: '#b45309', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                                        <BsExclamationTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
-                                        <div>
-                                            <strong>409 Conflict Prevention:</strong> {poWarning}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Section 1: Order & Destination Selection */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                                            Purchase Order <span style={{ color: '#ef4444' }}>*</span>
-                                        </label>
-                                        <select
-                                            value={selectedPoId}
-                                            onChange={e => handleSelectPo(e.target.value)}
-                                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, outline: 'none', background: '#fff' }}
-                                            required
-                                        >
-                                            <option value="">-- Select Real Purchase Order --</option>
-                                            {purchaseOrders.map(po => {
-                                                const poNum = po.po_number || `PO-${po.id}`;
-                                                const supplier = po.supplier_name || po.supplier?.name || `Supplier #${po.supplier_id || ''}`;
-                                                const isRecv = isPoCompletedOrReceived(po);
-                                                return (
-                                                    <option key={po.id} value={po.id}>
-                                                        #{poNum} - {supplier} {isRecv ? '(Fully Received)' : '(Pending)'}
-                                                    </option>
-                                                );
-                                            })}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                                            Receiving Warehouse <span style={{ color: '#ef4444' }}>*</span>
-                                        </label>
-                                        <select
-                                            value={selectedWarehouseId}
-                                            onChange={e => setSelectedWarehouseId(e.target.value)}
-                                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, outline: 'none', background: '#fff' }}
-                                            required
-                                        >
-                                            <option value="">-- Select Warehouse --</option>
-                                            {warehouses.map(wh => (
-                                                <option key={wh.id} value={wh.id}>{wh.name || `Warehouse #${wh.id}`}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                                            Store <span style={{ color: '#ef4444' }}>*</span>
-                                        </label>
-                                        <select
-                                            value={selectedStoreId}
-                                            onChange={e => setSelectedStoreId(e.target.value)}
-                                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, outline: 'none', background: '#fff' }}
-                                            required
-                                        >
-                                            <option value="">-- Select Store --</option>
-                                            {stores.map(st => (
-                                                <option key={st.id} value={st.id}>{st.name || `Store #${st.id}`}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                {/* Section 2: Invoice & Logistics Metadata */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                                            Invoice Number <span style={{ color: '#ef4444' }}>*</span>
-                                        </label>
-                                        <input
-                                            type="text"
-                                            placeholder="e.g. INV-2026-001"
-                                            value={invoiceNumber}
-                                            onChange={e => {
-                                                setInvoiceNumber(e.target.value);
-                                                if (formError && formError.toLowerCase().includes('invoice')) {
-                                                    setFormError(null);
-                                                }
-                                            }}
+                            {getPageNumbers().map((p, idx) => {
+                                if (p === '...') {
+                                    return (
+                                        <span
+                                            key={`ellipsis-${idx}`}
                                             style={{
-                                                width: '100%', padding: '9px 12px',
-                                                border: (formError && formError.toLowerCase().includes('invoice')) ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                                                borderRadius: 8, fontSize: 13, boxSizing: 'border-box'
+                                                minWidth: 28,
+                                                height: 34,
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: '#94a3b8',
+                                                fontSize: 13,
+                                                fontWeight: 600
                                             }}
-                                            required
-                                        />
-                                    </div>
+                                        >
+                                            …
+                                        </span>
+                                    );
+                                }
+                                const isActive = p === currentPage;
+                                return (
+                                    <button
+                                        key={p}
+                                        type="button"
+                                        onClick={() => setCurrentPage(p)}
+                                        style={{
+                                            minWidth: 34,
+                                            height: 34,
+                                            padding: '0 8px',
+                                            borderRadius: 8,
+                                            border: isActive ? '1.5px solid #4f46e5' : '1.5px solid #cbd5e1',
+                                            background: isActive ? '#4f46e5' : '#ffffff',
+                                            color: isActive ? '#ffffff' : '#334155',
+                                            fontSize: 12.5,
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            boxShadow: isActive ? '0 2px 6px rgba(79, 70, 229, 0.28)' : 'none',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                        aria-current={isActive ? 'page' : undefined}
+                                    >
+                                        {p}
+                                    </button>
+                                );
+                            })}
+
+                            <button
+                                type="button"
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage >= totalPages}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    height: 34,
+                                    padding: '0 12px',
+                                    borderRadius: 8,
+                                    border: '1.5px solid #cbd5e1',
+                                    background: currentPage >= totalPages ? '#f8fafc' : '#ffffff',
+                                    color: currentPage >= totalPages ? '#94a3b8' : '#334155',
+                                    fontSize: 12.5,
+                                    fontWeight: 600,
+                                    cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
+                                    transition: 'all 0.15s ease'
+                                }}
+                                aria-label="Next Page"
+                            >
+                                Next <BsChevronRight size={12} />
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* CREATE INWARD GRN MODAL */}
+            {isCreateModalOpen && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: 16
+                }}>
+                    <div style={{
+                        background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 840,
+                        maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column'
+                    }}>
+                        {/* Header */}
+                        <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#fff', zIndex: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 8, background: '#e0e7ff', color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <BsTruck size={18} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#1e293b' }}>Create Inward GRN</h3>
+                                    <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>Post physical receipt against purchase order into warehouse inventory</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleCloseCreateModal}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: 4 }}
+                            >
+                                <BsX size={24} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <form onSubmit={handleSubmitGrn} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+                            {/* Alert Messages */}
+                            {formError && (
+                                <div style={{ padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                    <BsExclamationTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+                                    <div>{formError}</div>
+                                </div>
+                            )}
+
+                            {formSuccess && (
+                                <div style={{ padding: '12px 16px', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 8, color: '#059669', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                    <BsCheckCircle size={18} style={{ flexShrink: 0 }} />
+                                    <div>{formSuccess}</div>
+                                </div>
+                            )}
+
+                            {poWarning && (
+                                <div style={{ padding: '12px 16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, color: '#b45309', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                                    <BsExclamationTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                                            Invoice Date <span style={{ color: '#ef4444' }}>*</span>
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={invoiceDate}
-                                            onChange={e => setInvoiceDate(e.target.value)}
-                                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
-                                            required
-                                        />
+                                        <strong>409 Conflict Prevention:</strong> {poWarning}
                                     </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                                            Vehicle Number
-                                        </label>
-                                        <input
-                                            type="text"
-                                            placeholder="e.g. MH15AB1234"
-                                            value={vehicleNumber}
-                                            onChange={e => setVehicleNumber(e.target.value)}
-                                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                                            Transporter Name
-                                        </label>
-                                        <input
-                                            type="text"
-                                            placeholder="e.g. Nashik Logistics"
-                                            value={transporterName}
-                                            onChange={e => setTransporterName(e.target.value)}
-                                            style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
-                                        />
-                                    </div>
+                                </div>
+                            )}
+
+                            {/* Section 1: Order & Destination Selection */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                                        Purchase Order <span style={{ color: '#ef4444' }}>*</span>
+                                    </label>
+                                    <select
+                                        value={selectedPoId}
+                                        onChange={e => handleSelectPo(e.target.value)}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, outline: 'none', background: '#fff' }}
+                                        required
+                                    >
+                                        <option value="">-- Select Real Purchase Order --</option>
+                                        {purchaseOrders.map(po => {
+                                            const poNum = po.po_number || `PO-${po.id}`;
+                                            const supplier = po.supplier_name || po.supplier?.name || `Supplier #${po.supplier_id || ''}`;
+                                            const isRecv = isPoCompletedOrReceived(po);
+                                            return (
+                                                <option key={po.id} value={po.id}>
+                                                    #{poNum} - {supplier} {isRecv ? '(Fully Received)' : '(Pending)'}
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
                                 </div>
 
                                 <div>
                                     <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                                        Receipt Remarks
+                                        Receiving Warehouse <span style={{ color: '#ef4444' }}>*</span>
+                                    </label>
+                                    <select
+                                        value={selectedWarehouseId}
+                                        onChange={e => setSelectedWarehouseId(e.target.value)}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, outline: 'none', background: '#fff' }}
+                                        required
+                                    >
+                                        <option value="">-- Select Warehouse --</option>
+                                        {warehouses.map(wh => (
+                                            <option key={wh.id} value={wh.id}>
+                                                {wh.warehouse_name || wh.name || (wh.code ? `${wh.code} - Warehouse` : `Warehouse #${wh.id}`)}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                                        Store <span style={{ color: '#ef4444' }}>*</span>
+                                    </label>
+                                    <select
+                                        value={selectedStoreId}
+                                        onChange={e => setSelectedStoreId(e.target.value)}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, outline: 'none', background: '#fff' }}
+                                        required
+                                    >
+                                        <option value="">-- Select Store --</option>
+                                        {stores.map(st => (
+                                            <option key={st.id} value={st.id}>{st.name || `Store #${st.id}`}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Section 2: Invoice & Logistics Metadata */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                                        Invoice Number <span style={{ color: '#ef4444' }}>*</span>
                                     </label>
                                     <input
                                         type="text"
-                                        placeholder="e.g. Goods received in good condition at dock 2"
-                                        value={remarks}
-                                        onChange={e => setRemarks(e.target.value)}
+                                        placeholder="e.g. INV-2026-001"
+                                        value={invoiceNumber}
+                                        onChange={e => {
+                                            setInvoiceNumber(e.target.value);
+                                            if (formError && formError.toLowerCase().includes('invoice')) {
+                                                setFormError(null);
+                                            }
+                                        }}
+                                        style={{
+                                            width: '100%', padding: '9px 12px',
+                                            border: (formError && formError.toLowerCase().includes('invoice')) ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                                            borderRadius: 8, fontSize: 13, boxSizing: 'border-box'
+                                        }}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                                        Invoice Date <span style={{ color: '#ef4444' }}>*</span>
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={invoiceDate}
+                                        onChange={e => setInvoiceDate(e.target.value)}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                                        Vehicle Number
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. MH15AB1234"
+                                        value={vehicleNumber}
+                                        onChange={e => setVehicleNumber(e.target.value)}
                                         style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
                                     />
                                 </div>
-
-                                {/* Section 3: Line Items Table */}
                                 <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                        <label style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
-                                            Purchase Order Line Items ({items.length})
-                                        </label>
-                                        <span style={{ fontSize: 12, color: '#64748b' }}>
-                                            Accepted + Rejected must equal Received Quantity
-                                        </span>
+                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                                        Transporter Name
+                                    </label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. Nashik Logistics"
+                                        value={transporterName}
+                                        onChange={e => setTransporterName(e.target.value)}
+                                        style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                                    Receipt Remarks
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="e.g. Goods received in good condition at dock 2"
+                                    value={remarks}
+                                    onChange={e => setRemarks(e.target.value)}
+                                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
+                                />
+                            </div>
+
+                            {/* Section 3: Line Items Table */}
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <label style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>
+                                        Purchase Order Line Items ({items.length})
+                                    </label>
+                                    <span style={{ fontSize: 12, color: '#64748b' }}>
+                                        Accepted + Rejected must equal Received Quantity
+                                    </span>
+                                </div>
+
+                                {loadingPoDetails ? (
+                                    <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', background: '#f8fafc', borderRadius: 8 }}>
+                                        Loading line items for selected PO...
+                                    </div>
+                                ) : items.length === 0 ? (
+                                    <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', background: '#f8fafc', borderRadius: 8, border: '1px dashed #cbd5e1' }}>
+                                        {selectedPoId ? 'No product line items found for this Purchase Order.' : 'Please select a Purchase Order above to load products.'}
+                                    </div>
+                                ) : (
+                                    <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                            <thead style={{ background: '#f1f5f9', color: '#334155', fontWeight: 600 }}>
+                                                <tr>
+                                                    <th style={{ padding: '10px 12px', textAlign: 'left' }}>Product</th>
+                                                    <th style={{ padding: '10px 8px', width: 80, textAlign: 'right' }}>Ord Qty</th>
+                                                    <th style={{ padding: '10px 8px', width: 90, textAlign: 'right' }}>Recv Qty</th>
+                                                    <th style={{ padding: '10px 8px', width: 90, textAlign: 'right' }}>Accept</th>
+                                                    <th style={{ padding: '10px 8px', width: 90, textAlign: 'right' }}>Reject</th>
+                                                    <th style={{ padding: '10px 8px', width: 90, textAlign: 'right' }}>Unit Cost</th>
+                                                    <th style={{ padding: '10px 8px', width: 100 }}>Batch #</th>
+                                                    <th style={{ padding: '10px 8px', width: 110 }}>Expiry Date</th>
+                                                    <th style={{ padding: '10px 8px', width: 130 }}>Damage Reason</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {items.map((it, idx) => (
+                                                    <tr key={it.product_id || idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                        <td style={{ padding: '8px 12px', fontWeight: 600, color: '#1e293b' }}>
+                                                            {it.product_name}
+                                                            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>ID: {it.product_id}</div>
+                                                        </td>
+                                                        <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600, color: '#475569' }}>
+                                                            {it.ordered_quantity}
+                                                        </td>
+                                                        <td style={{ padding: '8px' }}>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                value={it.received_quantity}
+                                                                onChange={e => handleItemChange(idx, 'received_quantity', e.target.value)}
+                                                                style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, textAlign: 'right', boxSizing: 'border-box' }}
+                                                            />
+                                                        </td>
+                                                        <td style={{ padding: '8px' }}>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                value={it.accepted_quantity}
+                                                                onChange={e => handleItemChange(idx, 'accepted_quantity', e.target.value)}
+                                                                style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, textAlign: 'right', boxSizing: 'border-box' }}
+                                                            />
+                                                        </td>
+                                                        <td style={{ padding: '8px' }}>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                value={it.rejected_quantity}
+                                                                onChange={e => handleItemChange(idx, 'rejected_quantity', e.target.value)}
+                                                                style={{ width: '100%', padding: '6px 8px', border: Number(it.rejected_quantity) > 0 ? '1px solid #f87171' : '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, textAlign: 'right', boxSizing: 'border-box' }}
+                                                            />
+                                                        </td>
+                                                        <td style={{ padding: '8px' }}>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                value={it.unit_cost}
+                                                                onChange={e => handleItemChange(idx, 'unit_cost', e.target.value)}
+                                                                style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, textAlign: 'right', boxSizing: 'border-box' }}
+                                                            />
+                                                        </td>
+                                                        <td style={{ padding: '8px' }}>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="BATCH-..."
+                                                                value={it.batch_number}
+                                                                onChange={e => handleItemChange(idx, 'batch_number', e.target.value)}
+                                                                style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
+                                                            />
+                                                        </td>
+                                                        <td style={{ padding: '8px' }}>
+                                                            <input
+                                                                type="date"
+                                                                min={new Date().toISOString().split('T')[0]}
+                                                                value={it.expiry_date}
+                                                                onChange={e => handleItemChange(idx, 'expiry_date', e.target.value)}
+                                                                style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
+                                                            />
+                                                        </td>
+                                                        <td style={{ padding: '8px' }}>
+                                                            <input
+                                                                type="text"
+                                                                placeholder={Number(it.rejected_quantity) > 0 ? "Reason required" : "Optional"}
+                                                                value={it.damage_reason}
+                                                                onChange={e => handleItemChange(idx, 'damage_reason', e.target.value)}
+                                                                style={{
+                                                                    width: '100%', padding: '6px 8px',
+                                                                    border: Number(it.rejected_quantity) > 0 && !it.damage_reason.trim() ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                                                                    borderRadius: 6, fontSize: 12, boxSizing: 'border-box'
+                                                                }}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Modal Footer Actions */}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleCloseCreateModal}
+                                    disabled={isSubmitting}
+                                    style={{
+                                        padding: '10px 18px', background: '#f1f5f9', border: '1px solid #cbd5e1',
+                                        borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting || isPoFullyReceived || items.length === 0}
+                                    style={{
+                                        padding: '10px 22px',
+                                        background: (isSubmitting || isPoFullyReceived || items.length === 0) ? '#94a3b8' : '#6366f1',
+                                        border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#ffffff',
+                                        cursor: (isSubmitting || isPoFullyReceived || items.length === 0) ? 'not-allowed' : 'pointer',
+                                        display: 'flex', alignItems: 'center', gap: 8
+                                    }}
+                                    title={isPoFullyReceived ? "This Purchase Order has already been fully received." : ""}
+                                >
+                                    {isSubmitting ? 'Submitting GRN...' : 'Post & Inward GRN'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* VIEW GRN NOTE DETAILS MODAL (Populated dynamically via GET /api/v1/grn/{grn_id} with by-number fallback) */}
+            {selectedGrn && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: 16
+                }}>
+                    <div style={{
+                        background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 860,
+                        maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #e2e8f0'
+                    }}>
+                        <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{ width: 38, height: 38, borderRadius: 8, background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <BsTruck size={20} />
+                                </div>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#1e293b' }}>
+                                            Goods Received Note: {selectedGrn.grn_number || (selectedGrn.id ? `GRN-${selectedGrn.id}` : '—')}
+                                        </h3>
+                                        {detailLoading && (
+                                            <span style={{ fontSize: 11, background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                                                <BsArrowRepeat size={12} /> Loading details...
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>
+                                        Status: {selectedGrn.status || 'Verified'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={handleCloseDetailModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
+                                <BsX size={26} />
+                            </button>
+                        </div>
+
+                        {/* Modal Navigation Tabs */}
+                        <div style={{
+                            display: 'flex',
+                            borderBottom: '1px solid #e2e8f0',
+                            background: '#f8fafc',
+                            padding: '0 24px',
+                            gap: 12
+                        }}>
+                            <button
+                                type="button"
+                                onClick={() => setDetailTab('details')}
+                                style={{
+                                    padding: '12px 16px',
+                                    background: 'none',
+                                    border: 'none',
+                                    borderBottom: detailTab === 'details' ? '2px solid #6366f1' : '2px solid transparent',
+                                    color: detailTab === 'details' ? '#4f46e5' : '#64748b',
+                                    fontWeight: detailTab === 'details' ? 700 : 600,
+                                    fontSize: 13,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6
+                                }}
+                            >
+                                <BsEye size={14} /> Overview & Line Items
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setDetailTab('history');
+                                    const rawId = selectedGrn.id ?? selectedGrn.grn_id;
+                                    if (rawId && (!historyData || historyGrnId !== Number(rawId))) {
+                                        fetchGrnHistory(rawId, selectedGrn);
+                                    }
+                                }}
+                                style={{
+                                    padding: '12px 16px',
+                                    background: 'none',
+                                    border: 'none',
+                                    borderBottom: detailTab === 'history' ? '2px solid #6366f1' : '2px solid transparent',
+                                    color: detailTab === 'history' ? '#4f46e5' : '#64748b',
+                                    fontWeight: detailTab === 'history' ? 700 : 600,
+                                    fontSize: 13,
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6
+                                }}
+                            >
+                                <BsClockHistory size={14} /> History & Timeline
+                                {historyLoading && (
+                                    <span style={{ fontSize: 10.5, background: '#eff6ff', color: '#2563eb', padding: '1px 6px', borderRadius: 8, fontWeight: 700 }}>
+                                        Loading...
+                                    </span>
+                                )}
+                            </button>
+                        </div>
+
+                        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            {receiveGrnError && (
+                                <div style={{
+                                    padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
+                                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <BsExclamationTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                                        <span><strong>Error:</strong> {receiveGrnError}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReceiveGrnError(null)}
+                                        style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 2 }}
+                                    >
+                                        <BsX size={18} />
+                                    </button>
+                                </div>
+                            )}
+
+                            {receiveGrnSuccess && (
+                                <div style={{
+                                    padding: '10px 14px', background: '#ecfdf5', border: '1px solid #a7f3d0',
+                                    borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <BsCheckCircle size={16} style={{ color: '#059669', flexShrink: 0 }} />
+                                        <span><strong>Received:</strong> {receiveGrnSuccess}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setReceiveGrnSuccess(null)}
+                                        style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 2 }}
+                                    >
+                                        <BsX size={18} />
+                                    </button>
+                                </div>
+                            )}
+
+                            {rejectGrnSuccess && (
+                                <div style={{
+                                    padding: '10px 14px', background: '#ecfdf5', border: '1px solid #a7f3d0',
+                                    borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <BsCheckCircle size={16} style={{ color: '#059669', flexShrink: 0 }} />
+                                        <span><strong>Rejected:</strong> {rejectGrnSuccess}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRejectGrnSuccess(null)}
+                                        style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 2 }}
+                                    >
+                                        <BsX size={18} />
+                                    </button>
+                                </div>
+                            )}
+
+                            {rejectGrnError && (
+                                <div style={{
+                                    padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
+                                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <BsExclamationTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                                        <span><strong>Error:</strong> {rejectGrnError}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setRejectGrnError(null)}
+                                        style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 2 }}
+                                    >
+                                        <BsX size={18} />
+                                    </button>
+                                </div>
+                            )}
+
+                            {pdfDownloadSuccess && (
+                                <div style={{
+                                    padding: '10px 14px', background: '#ecfdf5', border: '1px solid #a7f3d0',
+                                    borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <BsCheckCircle size={16} style={{ color: '#059669', flexShrink: 0 }} />
+                                        <span><strong>Downloaded:</strong> {pdfDownloadSuccess}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPdfDownloadSuccess(null)}
+                                        style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 2 }}
+                                    >
+                                        <BsX size={18} />
+                                    </button>
+                                </div>
+                            )}
+
+                            {pdfDownloadError && (
+                                <div style={{
+                                    padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
+                                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <BsExclamationTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                                        <span><strong>PDF Download Error:</strong> {pdfDownloadError}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPdfDownloadError(null)}
+                                        style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 2 }}
+                                    >
+                                        <BsX size={18} />
+                                    </button>
+                                </div>
+                            )}
+
+                            {printSlipError && (
+                                <div style={{
+                                    padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
+                                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <BsExclamationTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
+                                        <span><strong>Print Slip Error:</strong> {printSlipError}</span>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPrintSlipError(null)}
+                                        style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 2 }}
+                                    >
+                                        <BsX size={18} />
+                                    </button>
+                                </div>
+                            )}
+
+                            {detailTab === 'details' ? (
+                                <>
+                                    {/* API Error Banner with Retry */}
+                                    {detailError && (
+                                        <div style={{
+                                            padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+                                            borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex',
+                                            justifyContent: 'space-between', alignItems: 'center'
+                                        }}>
+                                            <span><strong>Error loading details:</strong> {detailError}</span>
+                                            <button
+                                                type="button"
+                                                onClick={handleRetryDetail}
+                                                style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                            >
+                                                Retry
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* GRN Overview Attributes Grid */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, background: '#f8fafc', padding: 14, borderRadius: 8, border: '1px solid #f1f5f9' }}>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>GRN #</span><strong>{selectedGrn.grn_number || (selectedGrn.id ? `GRN-${selectedGrn.id}` : '—')}</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>System ID</span><strong>{selectedGrn.id != null ? `#${selectedGrn.id}` : '—'}</strong></div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>PO Reference</span>
+                                            <strong>{selectedGrn.purchase_order_number || (selectedGrn.purchase_order_id ? `PO-${selectedGrn.purchase_order_id}` : '—')}</strong>
+                                            {selectedGrn.purchase_order_id != null && <span style={{ fontSize: 10.5, color: '#94a3b8', display: 'block' }}>ID: #{selectedGrn.purchase_order_id}</span>}
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Supplier</span>
+                                            <strong>{selectedGrn.supplier_name || selectedGrn.supplier?.name || '—'}</strong>
+                                            {selectedGrn.supplier_id != null && <span style={{ fontSize: 10.5, color: '#94a3b8', display: 'block' }}>ID: #{selectedGrn.supplier_id}</span>}
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Warehouse</span>
+                                            <strong>{selectedGrn.warehouse_name || selectedGrn.warehouse?.name || (selectedGrn.warehouse_id ? `WH #${selectedGrn.warehouse_id}` : '—')}</strong>
+                                            {selectedGrn.warehouse_id != null && <span style={{ fontSize: 10.5, color: '#94a3b8', display: 'block' }}>ID: #{selectedGrn.warehouse_id}</span>}
+                                        </div>
+                                        <div>
+                                            <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Store</span>
+                                            <strong>{selectedGrn.store_name || selectedGrn.store?.name || (selectedGrn.store_id ? `Store #${selectedGrn.store_id}` : '—')}</strong>
+                                            {selectedGrn.store_id != null && <span style={{ fontSize: 10.5, color: '#94a3b8', display: 'block' }}>ID: #{selectedGrn.store_id}</span>}
+                                        </div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Status</span><div>{renderStatusBadge(selectedGrn.status)}</div></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Invoice Number</span><strong>{selectedGrn.invoice_number || '—'}</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Invoice Date</span><strong>{formatGrnDate(selectedGrn.invoice_date)}</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Transporter</span><strong>{selectedGrn.transporter_name || '—'}</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Vehicle #</span><strong>{selectedGrn.vehicle_number || '—'}</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Created By</span><strong>{selectedGrn.created_by_name || '—'}</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Received By</span><strong>{selectedGrn.received_by_name || '—'}</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Total Items Count</span><strong>{selectedGrn.total_items_count ?? (Array.isArray(selectedGrn.items) ? selectedGrn.items.length : 0)} items</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Ordered Quantity</span><strong>{selectedGrn.total_ordered_quantity ?? 0} pcs</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Received Quantity</span><strong style={{ color: '#059669' }}>{selectedGrn.total_received_quantity ?? 0} pcs</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Accepted Quantity</span><strong style={{ color: '#059669' }}>{selectedGrn.total_accepted_quantity != null ? `${selectedGrn.total_accepted_quantity} pcs` : '—'}</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Rejected Quantity</span><strong style={{ color: Number(selectedGrn.total_rejected_quantity) > 0 ? '#dc2626' : '#64748b' }}>{selectedGrn.total_rejected_quantity ?? 0} pcs</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Total Cost Value</span><strong>{selectedGrn.total_cost_value != null ? `₹${Number(selectedGrn.total_cost_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00'}</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Received At</span><strong>{formatGrnDate(selectedGrn.received_at, true)}</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Created At</span><strong>{formatGrnDate(selectedGrn.created_at, true)}</strong></div>
+                                        <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Updated At</span><strong>{formatGrnDate(selectedGrn.updated_at, true)}</strong></div>
+                                        <div style={{ gridColumn: '1 / -1' }}><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Remarks</span><strong>{selectedGrn.remarks || '—'}</strong></div>
+                                        {selectedGrn.rejection_reason && (
+                                            <div style={{ gridColumn: '1 / -1', background: '#fef2f2', padding: '8px 12px', borderRadius: 6, border: '1px solid #fecaca' }}>
+                                                <span style={{ fontSize: 11, color: '#dc2626', display: 'block', fontWeight: 600 }}>Rejection Reason</span>
+                                                <strong style={{ color: '#dc2626' }}>{selectedGrn.rejection_reason}</strong>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {loadingPoDetails ? (
-                                        <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', background: '#f8fafc', borderRadius: 8 }}>
-                                            Loading line items for selected PO...
+                                    {/* Itemized Received Breakdown */}
+                                    <div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                            <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Received Items Breakdown</h4>
+                                            <span style={{ fontSize: 11, color: '#64748b' }}>
+                                                {Array.isArray(selectedGrn.items) ? `${selectedGrn.items.length} items recorded` : '0 items'}
+                                            </span>
                                         </div>
-                                    ) : items.length === 0 ? (
-                                        <div style={{ padding: '24px', textAlign: 'center', color: '#64748b', background: '#f8fafc', borderRadius: 8, border: '1px dashed #cbd5e1' }}>
-                                            {selectedPoId ? 'No product line items found for this Purchase Order.' : 'Please select a Purchase Order above to load products.'}
+                                        {Array.isArray(selectedGrn.items) && selectedGrn.items.length > 0 ? (
+                                            <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                                    <thead style={{ background: '#f1f5f9', fontWeight: 600, color: '#475569' }}>
+                                                        <tr>
+                                                            <th style={{ padding: '8px 10px', textAlign: 'left' }}>Product</th>
+                                                            <th style={{ padding: '8px 10px', textAlign: 'left' }}>SKU</th>
+                                                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Ordered</th>
+                                                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Received</th>
+                                                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Accepted</th>
+                                                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Rejected</th>
+                                                            <th style={{ padding: '8px 10px', textAlign: 'right' }}>Unit Cost</th>
+                                                            <th style={{ padding: '8px 10px', textAlign: 'center' }}>Batch</th>
+                                                            <th style={{ padding: '8px 10px', textAlign: 'center' }}>Expiry</th>
+                                                            <th style={{ padding: '8px 10px', textAlign: 'left' }}>Remarks</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {selectedGrn.items.map((it, idx) => {
+                                                            const prodName = it.product_name || (it.product_id != null ? `Product #${it.product_id}` : '—');
+                                                            const prodSku = it.product_sku || '—';
+                                                            const ordQty = it.ordered_quantity != null ? String(it.ordered_quantity) : '—';
+                                                            const recQty = it.received_quantity != null ? String(it.received_quantity) : '—';
+                                                            const accQty = it.accepted_quantity != null ? String(it.accepted_quantity) : '—';
+                                                            const rejQty = it.rejected_quantity != null ? String(it.rejected_quantity) : '0';
+                                                            const costFormatted = it.unit_cost != null ? `₹${Number(it.unit_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
+                                                            const batchNo = it.batch_number || '—';
+                                                            const expDate = formatGrnDate(it.expiry_date);
+                                                            const itemRemarks = it.remarks || '—';
+
+                                                            return (
+                                                                <tr key={it.id || idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                                                    <td style={{ padding: '8px 10px', fontWeight: 600 }}>
+                                                                        <div>{prodName}</div>
+                                                                        {it.product_id != null && <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 400 }}>ID: #{it.product_id}</div>}
+                                                                    </td>
+                                                                    <td style={{ padding: '8px 10px', color: '#475569', fontSize: 11.5 }}>{prodSku}</td>
+                                                                    <td style={{ padding: '8px 10px', textAlign: 'right' }}>{ordQty}</td>
+                                                                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600, color: '#059669' }}>{recQty}</td>
+                                                                    <td style={{ padding: '8px 10px', textAlign: 'right' }}>{accQty}</td>
+                                                                    <td style={{ padding: '8px 10px', textAlign: 'right', color: Number(it.rejected_quantity) > 0 ? '#dc2626' : '#475569' }}>
+                                                                        {rejQty}
+                                                                        {it.damage_reason ? ` (${it.damage_reason})` : ''}
+                                                                    </td>
+                                                                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{costFormatted}</td>
+                                                                    <td style={{ padding: '8px 10px', textAlign: 'center' }}>{batchNo}</td>
+                                                                    <td style={{ padding: '8px 10px', textAlign: 'center' }}>{expDate}</td>
+                                                                    <td style={{ padding: '8px 10px', color: '#64748b', fontSize: 11.5 }}>{itemRemarks}</td>
+                                                                </tr>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ) : (
+                                            <p style={{ margin: 0, fontSize: 13, color: '#64748b', textAlign: 'center', padding: '16px 0', background: '#f8fafc', borderRadius: 8 }}>
+                                                No itemized breakdown recorded on this note.
+                                            </p>
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                /* History & Audit Timeline View */
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                    {/* History Meta Overview */}
+                                    <div style={{
+                                        background: '#f8fafc',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: 10,
+                                        padding: '16px 18px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 12
+                                    }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                                            <div>
+                                                <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1e293b' }}>
+                                                    GRN Audit & Lifecycle History
+                                                </h4>
+                                                <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>
+                                                    Chronological record of status transitions, inwarding actions, and operator details
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const rawId = selectedGrn.id ?? selectedGrn.grn_id;
+                                                    fetchGrnHistory(rawId, selectedGrn);
+                                                }}
+                                                disabled={historyLoading}
+                                                style={{
+                                                    background: '#ffffff',
+                                                    border: '1px solid #d1d5db',
+                                                    borderRadius: 6,
+                                                    padding: '6px 12px',
+                                                    fontSize: 12,
+                                                    fontWeight: 600,
+                                                    color: '#374151',
+                                                    cursor: historyLoading ? 'not-allowed' : 'pointer',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: 6,
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                }}
+                                            >
+                                                <BsArrowRepeat size={13} style={{ animation: historyLoading ? 'spin 1s linear infinite' : 'none' }} />
+                                                {historyLoading ? 'Refreshing...' : 'Refresh Timeline'}
+                                            </button>
                                         </div>
-                                    ) : (
-                                        <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                                                <thead style={{ background: '#f1f5f9', color: '#334155', fontWeight: 600 }}>
-                                                    <tr>
-                                                        <th style={{ padding: '10px 12px', textAlign: 'left' }}>Product</th>
-                                                        <th style={{ padding: '10px 8px', width: 80, textAlign: 'right' }}>Ord Qty</th>
-                                                        <th style={{ padding: '10px 8px', width: 90, textAlign: 'right' }}>Recv Qty</th>
-                                                        <th style={{ padding: '10px 8px', width: 90, textAlign: 'right' }}>Accept</th>
-                                                        <th style={{ padding: '10px 8px', width: 90, textAlign: 'right' }}>Reject</th>
-                                                        <th style={{ padding: '10px 8px', width: 90, textAlign: 'right' }}>Unit Cost</th>
-                                                        <th style={{ padding: '10px 8px', width: 100 }}>Batch #</th>
-                                                        <th style={{ padding: '10px 8px', width: 110 }}>Expiry Date</th>
-                                                        <th style={{ padding: '10px 8px', width: 130 }}>Damage Reason</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {items.map((it, idx) => (
-                                                        <tr key={it.product_id || idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                                            <td style={{ padding: '8px 12px', fontWeight: 600, color: '#1e293b' }}>
-                                                                {it.product_name}
-                                                                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>ID: {it.product_id}</div>
+
+                                        {/* Overview Metadata Grid */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, paddingTop: 6, borderTop: '1px solid #edf2f7' }}>
+                                            <div>
+                                                <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>GRN Number</span>
+                                                <strong>{historyData?.grn_number || selectedGrn.grn_number || (selectedGrn.id ? `GRN-${selectedGrn.id}` : '—')}</strong>
+                                            </div>
+                                            <div>
+                                                <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Current Status</span>
+                                                <div>{renderStatusBadge(historyData?.status || selectedGrn.status)}</div>
+                                            </div>
+                                            <div>
+                                                <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Created Date</span>
+                                                <strong>{formatGrnDate(historyData?.created_at || selectedGrn.created_at, true)}</strong>
+                                            </div>
+                                            <div>
+                                                <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Received Date</span>
+                                                <strong>{(historyData?.received_at || selectedGrn.received_at) ? formatGrnDate(historyData?.received_at || selectedGrn.received_at, true) : 'Not received yet'}</strong>
+                                            </div>
+                                            <div>
+                                                <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Created By</span>
+                                                <strong>{historyData?.created_by_name || selectedGrn.created_by_name || 'System Operator'}</strong>
+                                            </div>
+                                            <div>
+                                                <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Received By</span>
+                                                <strong>{historyData?.received_by_name || selectedGrn.received_by_name || '—'}</strong>
+                                            </div>
+                                        </div>
+
+                                        {(historyData?.rejection_reason || selectedGrn.rejection_reason) && (
+                                            <div style={{
+                                                background: '#fef2f2',
+                                                border: '1px solid #fecaca',
+                                                borderRadius: 6,
+                                                padding: '8px 12px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 8,
+                                                color: '#dc2626',
+                                                fontSize: 12.5
+                                            }}>
+                                                <BsExclamationTriangle size={15} style={{ flexShrink: 0 }} />
+                                                <div>
+                                                    <strong>Rejection Reason:</strong> {historyData?.rejection_reason || selectedGrn.rejection_reason}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* History Error Banner */}
+                                    {historyError && (
+                                        <div style={{
+                                            padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+                                            borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex',
+                                            justifyContent: 'space-between', alignItems: 'center'
+                                        }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <BsExclamationTriangle size={16} style={{ flexShrink: 0 }} />
+                                                <span><strong>Error loading history:</strong> {historyError}</span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const rawId = selectedGrn.id ?? selectedGrn.grn_id;
+                                                    fetchGrnHistory(rawId, selectedGrn);
+                                                }}
+                                                style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+                                            >
+                                                Retry
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* History Loading Indicator */}
+                                    {historyLoading && !historyData && (
+                                        <div style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b' }}>
+                                            <BsClockHistory size={26} style={{ animation: 'spin 1.5s linear infinite', color: '#6366f1', marginBottom: 10 }} />
+                                            <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#374151' }}>Loading GRN history & event timeline...</p>
+                                            <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#9ca3af' }}>Fetching audit records from backend API</p>
+                                        </div>
+                                    )}
+
+                                    {/* Empty Timeline Fallback */}
+                                    {!historyLoading && !historyError && (!historyData?.timeline || historyData.timeline.length === 0) && (
+                                        <div style={{ padding: '36px 20px', textAlign: 'center', background: '#f8fafc', borderRadius: 8, border: '1px dashed #cbd5e1' }}>
+                                            <BsClockHistory size={30} style={{ color: '#94a3b8', marginBottom: 10 }} />
+                                            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#374151' }}>
+                                                No history events available for this GRN.
+                                            </p>
+                                            <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#64748b' }}>
+                                                Events will appear here as the GRN progresses through creation, quality checks, and inventory inwarding.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Vertical Event Timeline */}
+                                    {Array.isArray(historyData?.timeline) && historyData.timeline.length > 0 && (
+                                        <div style={{ padding: '8px 4px 16px 4px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                {([...historyData.timeline].sort((a, b) => {
+                                                    const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                                                    const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                                                    return tA - tB;
+                                                })).map((item, idx, arr) => {
+                                                    const eventStr = String(item.event || '').toLowerCase();
+                                                    let badgeBg = '#eef2ff';
+                                                    let badgeColor = '#4f46e5';
+                                                    let badgeBorder = '#c7d2fe';
+                                                    let icon = <BsClockHistory size={15} />;
+
+                                                    if (eventStr.includes('received') || eventStr.includes('inward')) {
+                                                        badgeBg = '#ecfdf5';
+                                                        badgeColor = '#059669';
+                                                        badgeBorder = '#a7f3d0';
+                                                        icon = <BsCheckCircleFill size={15} />;
+                                                    } else if (eventStr.includes('reject')) {
+                                                        badgeBg = '#fef2f2';
+                                                        badgeColor = '#dc2626';
+                                                        badgeBorder = '#fecaca';
+                                                        icon = <BsXCircleFill size={15} />;
+                                                    } else if (eventStr.includes('qc') || eventStr.includes('quality')) {
+                                                        badgeBg = '#eff6ff';
+                                                        badgeColor = '#2563eb';
+                                                        badgeBorder = '#bfdbfe';
+                                                        icon = <BsShieldLock size={15} />;
+                                                    } else if (eventStr.includes('creat') || eventStr.includes('init')) {
+                                                        badgeBg = '#eef2ff';
+                                                        badgeColor = '#4f46e5';
+                                                        badgeBorder = '#c7d2fe';
+                                                        icon = <BsPlus size={18} />;
+                                                    }
+
+                                                    return (
+                                                        <div key={idx} style={{ display: 'flex', gap: 16, position: 'relative' }}>
+                                                            {/* Vertical Connector Line */}
+                                                            {idx < arr.length - 1 && (
+                                                                <div style={{
+                                                                    position: 'absolute',
+                                                                    left: 17,
+                                                                    top: 36,
+                                                                    bottom: -8,
+                                                                    width: 2,
+                                                                    background: '#e2e8f0',
+                                                                    zIndex: 0
+                                                                }} />
+                                                            )}
+
+                                                            {/* Icon Circle */}
+                                                            <div style={{
+                                                                width: 36,
+                                                                height: 36,
+                                                                borderRadius: '50%',
+                                                                background: badgeBg,
+                                                                color: badgeColor,
+                                                                border: `2px solid ${badgeBorder}`,
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                flexShrink: 0,
+                                                                zIndex: 1,
+                                                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                                                            }}>
+                                                                {icon}
+                                                            </div>
+
+                                                            {/* Event Card */}
+                                                            <div style={{
+                                                                flex: 1,
+                                                                background: '#ffffff',
+                                                                border: '1px solid #e2e8f0',
+                                                                borderRadius: 10,
+                                                                padding: '14px 18px',
+                                                                marginBottom: 16,
+                                                                boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                                                            }}>
+                                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+                                                                    <h5 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#1e293b' }}>
+                                                                        {item.event || 'System Event'}
+                                                                    </h5>
+                                                                    <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                                        <BsClockHistory size={11} /> {formatGrnDate(item.timestamp, true)}
+                                                                    </span>
+                                                                </div>
+
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', marginBottom: 8 }}>
+                                                                    <span style={{ fontWeight: 600, color: '#64748b' }}>Performed By:</span>
+                                                                    <span style={{
+                                                                        background: '#f1f5f9',
+                                                                        color: '#334155',
+                                                                        padding: '2px 8px',
+                                                                        borderRadius: 4,
+                                                                        fontWeight: 600,
+                                                                        fontSize: 11.5
+                                                                    }}>
+                                                                        {item.performed_by || 'System Operator'}
+                                                                    </span>
+                                                                </div>
+
+                                                                {item.details && (
+                                                                    <div style={{
+                                                                        fontSize: 12.5,
+                                                                        color: '#334155',
+                                                                        background: '#f8fafc',
+                                                                        padding: '10px 14px',
+                                                                        borderRadius: 6,
+                                                                        border: '1px solid #f1f5f9',
+                                                                        wordBreak: 'break-word',
+                                                                        lineHeight: 1.5
+                                                                    }}>
+                                                                        {item.details}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {(() => {
+                                const modalGrnId = selectedGrn.id ?? selectedGrn.grn_id;
+                                const modalGrnStatus = selectedGrn.status ?? selectedGrn.grn_status ?? '';
+                                const modalEligible = isGrnReceiveEligible(modalGrnStatus);
+                                const isModalDisabled = !modalEligible || Boolean(receivingGrnId);
+
+                                console.log("GRN Receive Debug:", {
+                                    id: modalGrnId,
+                                    status: modalGrnStatus,
+                                    eligible: modalEligible,
+                                    receivingGrnId,
+                                    disabled: isModalDisabled
+                                });
+                                return null;
+                            })()}
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDownloadPdf(selectedGrn)}
+                                        disabled={downloadingPdfGrnId === (selectedGrn.id ?? selectedGrn.grn_id)}
+                                        title={`Download PDF for ${selectedGrn.grn_number || (selectedGrn.id ? `GRN-${selectedGrn.id}` : 'this GRN')}`}
+                                        style={{
+                                            padding: '8px 16px',
+                                            background: '#f8fafc',
+                                            color: '#1e293b',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: 6,
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            cursor: downloadingPdfGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 6
+                                        }}
+                                    >
+                                        <BsDownload size={14} /> {downloadingPdfGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'Downloading PDF...' : 'Download PDF'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenPrintSlip(selectedGrn)}
+                                        disabled={fetchingSlipGrnId === (selectedGrn.id ?? selectedGrn.grn_id)}
+                                        title={`Open Print Slip for ${selectedGrn.grn_number || (selectedGrn.id ? `GRN-${selectedGrn.id}` : 'this GRN')}`}
+                                        style={{
+                                            padding: '8px 16px',
+                                            background: '#f8fafc',
+                                            color: '#1e293b',
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: 6,
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            cursor: fetchingSlipGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 6
+                                        }}
+                                    >
+                                        <BsPrinter size={14} /> {fetchingSlipGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'Loading Slip...' : 'Print Slip'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenQcModal(selectedGrn)}
+                                        disabled={!isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status)}
+                                        title={!isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status) ? "Quality check can only be performed on pending GRN records" : "Perform Quality Check"}
+                                        style={{
+                                            padding: '8px 16px',
+                                            background: !isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#f1f5f9' : '#4f46e5',
+                                            color: !isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#94a3b8' : '#ffffff',
+                                            border: 'none',
+                                            borderRadius: 6,
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            cursor: !isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status) ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            opacity: !isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status) ? 0.6 : 1
+                                        }}
+                                    >
+                                        <BsShieldLock size={14} /> Quality Check
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            console.log('[GRN Receive Button Click] Clicked Receive in GRN Detail Modal:', selectedGrn);
+                                            handleReceiveGrn(selectedGrn);
+                                        }}
+                                        disabled={!isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) || Boolean(receivingGrnId)}
+                                        title={!isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) ? (isGrnReceived(selectedGrn.status ?? selectedGrn.grn_status) ? "This GRN has already been received and inventory has been updated" : "Cannot receive a rejected GRN") : "Receive items into inventory"}
+                                        style={{
+                                            padding: '8px 16px',
+                                            background: !isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#f1f5f9' : '#059669',
+                                            color: !isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#94a3b8' : '#ffffff',
+                                            border: 'none',
+                                            borderRadius: 6,
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            cursor: (!isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) || Boolean(receivingGrnId)) ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            opacity: !isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) ? 0.6 : 1
+                                        }}
+                                    >
+                                        <BsBoxSeam size={14} /> {receivingGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'Receiving...' : 'Receive GRN'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRequestRejectGrn(selectedGrn)}
+                                        disabled={!isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) || Boolean(rejectingGrnId)}
+                                        title={!isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) ? (isGrnReceived(selectedGrn.status ?? selectedGrn.grn_status) ? "Cannot reject a GRN that has already been received into inventory" : "This GRN has already been rejected") : "Reject this Goods Received Note"}
+                                        style={{
+                                            padding: '8px 16px',
+                                            background: !isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#f1f5f9' : '#dc2626',
+                                            color: !isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#94a3b8' : '#ffffff',
+                                            border: 'none',
+                                            borderRadius: 6,
+                                            fontSize: 13,
+                                            fontWeight: 600,
+                                            cursor: (!isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) || Boolean(rejectingGrnId)) ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            opacity: !isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) ? 0.6 : 1
+                                        }}
+                                    >
+                                        <BsXCircle size={14} /> {rejectingGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'Rejecting...' : 'Reject GRN'}
+                                    </button>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleCloseDetailModal}
+                                    style={{ padding: '8px 18px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                    Close Note
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* QUALITY CHECK (QC) MODAL */}
+            {isQcModalOpen && qcGrn && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1220, padding: 16
+                }}>
+                    <div style={{
+                        background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 960,
+                        maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            padding: '18px 24px', borderBottom: '1px solid #e2e8f0',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            position: 'sticky', top: 0, background: '#fff', zIndex: 10
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 38, height: 38, borderRadius: 8, background: '#e0e7ff',
+                                    color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}>
+                                    <BsShieldLock size={20} />
+                                </div>
+                                <div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#1e293b' }}>
+                                            Quality Check: {qcGrn.grn_number || (qcGrn.id ? `GRN-${qcGrn.id}` : 'Note')}
+                                        </h3>
+                                        <span style={{ fontSize: 11, background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
+                                            Status: {qcGrn.status || 'Pending'}
+                                        </span>
+                                    </div>
+                                    <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>
+                                        Inspect incoming shipment items, approve accepted stock, specify rejected quantities with reasons, and assign batch / expiry.
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCloseQcModal}
+                                disabled={qcSubmitting}
+                                style={{
+                                    background: 'none', border: 'none', cursor: qcSubmitting ? 'not-allowed' : 'pointer',
+                                    color: '#94a3b8', padding: 4
+                                }}
+                            >
+                                <BsX size={26} />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            {/* Error Banner */}
+                            {qcError && (
+                                <div style={{
+                                    padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
+                                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8
+                                }}>
+                                    <BsExclamationTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+                                    <div style={{ flex: 1, wordBreak: 'break-word', fontWeight: 600 }}>
+                                        {qcError}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Shipment Context Cards */}
+                            <div style={{
+                                display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                                gap: 12, background: '#f8fafc', padding: 14, borderRadius: 8, border: '1px solid #f1f5f9', fontSize: 12
+                            }}>
+                                <div>
+                                    <span style={{ color: '#64748b', display: 'block', fontSize: 11 }}>PO Reference</span>
+                                    <strong>{qcGrn.purchase_order_number || (qcGrn.purchase_order_id ? `PO-${qcGrn.purchase_order_id}` : '—')}</strong>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#64748b', display: 'block', fontSize: 11 }}>Supplier</span>
+                                    <strong>{qcGrn.supplier_name || '—'}</strong>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#64748b', display: 'block', fontSize: 11 }}>Receiving Warehouse</span>
+                                    <strong>{qcGrn.warehouse_name || '—'}</strong>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#64748b', display: 'block', fontSize: 11 }}>Store</span>
+                                    <strong>{qcGrn.store_name || '—'}</strong>
+                                </div>
+                            </div>
+
+                            {/* Line Items Table */}
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                    <h4 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#334155' }}>
+                                        Line Items to Inspect ({qcItems.length})
+                                    </h4>
+                                    <span style={{ fontSize: 11, color: '#64748b' }}>
+                                        Item ID maps to backend GRN Item ID
+                                    </span>
+                                </div>
+
+                                {qcLoadingItems ? (
+                                    <div style={{ padding: '36px 20px', textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
+                                        <BsClockHistory size={20} style={{ animation: 'spin 1.5s linear infinite', marginBottom: 6, color: '#6366f1' }} />
+                                        <p style={{ margin: 0 }}>Loading line item details from backend...</p>
+                                    </div>
+                                ) : qcItems.length === 0 ? (
+                                    <div style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', borderRadius: 8, color: '#64748b', fontSize: 13 }}>
+                                        No line items found for Quality Check on this note.
+                                    </div>
+                                ) : (
+                                    <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
+                                            <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
+                                                <tr>
+                                                    <th style={{ padding: '10px 12px' }}>Product</th>
+                                                    <th style={{ padding: '10px 12px', textAlign: 'right' }}>Recv Qty</th>
+                                                    <th style={{ padding: '10px 12px', width: 100 }}>Accepted *</th>
+                                                    <th style={{ padding: '10px 12px', width: 100 }}>Rejected</th>
+                                                    <th style={{ padding: '10px 12px', minWidth: 150 }}>Damage Reason</th>
+                                                    <th style={{ padding: '10px 12px', width: 110 }}>Batch #</th>
+                                                    <th style={{ padding: '10px 12px', width: 125 }}>Expiry Date</th>
+                                                    <th style={{ padding: '10px 12px', minWidth: 130 }}>Item Remarks</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {qcItems.map((it, idx) => {
+                                                    const recQty = Number(it.received_quantity ?? 0);
+                                                    const accQty = Number(it.accepted_quantity ?? 0);
+                                                    const rejQty = Number(it.rejected_quantity ?? 0);
+                                                    const isQtyExceeded = recQty > 0 && (accQty + rejQty) > recQty;
+                                                    const isDamageRequired = rejQty > 0 && !it.damage_reason.trim();
+
+                                                    return (
+                                                        <tr key={it.item_id || idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#fff' : '#fcfcfd' }}>
+                                                            <td style={{ padding: '8px 12px' }}>
+                                                                <div style={{ fontWeight: 600, color: '#1e293b' }}>{it.product_name}</div>
+                                                                <div style={{ fontSize: 10.5, color: '#64748b' }}>
+                                                                    SKU: {it.product_sku || '—'}
+                                                                </div>
                                                             </td>
-                                                            <td style={{ padding: '8px', textAlign: 'right', fontWeight: 600, color: '#475569' }}>
-                                                                {it.ordered_quantity}
+                                                            <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#059669' }}>
+                                                                {recQty}
                                                             </td>
-                                                            <td style={{ padding: '8px' }}>
+                                                            <td style={{ padding: '6px 8px' }}>
                                                                 <input
                                                                     type="number"
                                                                     min="0"
-                                                                    value={it.received_quantity}
-                                                                    onChange={e => handleItemChange(idx, 'received_quantity', e.target.value)}
-                                                                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, textAlign: 'right', boxSizing: 'border-box' }}
-                                                                />
-                                                            </td>
-                                                            <td style={{ padding: '8px' }}>
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
+                                                                    step="1"
                                                                     value={it.accepted_quantity}
-                                                                    onChange={e => handleItemChange(idx, 'accepted_quantity', e.target.value)}
-                                                                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, textAlign: 'right', boxSizing: 'border-box' }}
-                                                                />
-                                                            </td>
-                                                            <td style={{ padding: '8px' }}>
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    value={it.rejected_quantity}
-                                                                    onChange={e => handleItemChange(idx, 'rejected_quantity', e.target.value)}
-                                                                    style={{ width: '100%', padding: '6px 8px', border: Number(it.rejected_quantity) > 0 ? '1px solid #f87171' : '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, textAlign: 'right', boxSizing: 'border-box' }}
-                                                                />
-                                                            </td>
-                                                            <td style={{ padding: '8px' }}>
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    step="0.01"
-                                                                    value={it.unit_cost}
-                                                                    onChange={e => handleItemChange(idx, 'unit_cost', e.target.value)}
-                                                                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, textAlign: 'right', boxSizing: 'border-box' }}
-                                                                />
-                                                            </td>
-                                                            <td style={{ padding: '8px' }}>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="BATCH-..."
-                                                                    value={it.batch_number}
-                                                                    onChange={e => handleItemChange(idx, 'batch_number', e.target.value)}
-                                                                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
-                                                                />
-                                                            </td>
-                                                            <td style={{ padding: '8px' }}>
-                                                                <input
-                                                                    type="date"
-                                                                    min={new Date().toISOString().split('T')[0]}
-                                                                    value={it.expiry_date}
-                                                                    onChange={e => handleItemChange(idx, 'expiry_date', e.target.value)}
-                                                                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
-                                                                />
-                                                            </td>
-                                                            <td style={{ padding: '8px' }}>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder={Number(it.rejected_quantity) > 0 ? "Reason required" : "Optional"}
-                                                                    value={it.damage_reason}
-                                                                    onChange={e => handleItemChange(idx, 'damage_reason', e.target.value)}
+                                                                    onChange={e => handleQcItemChange(idx, 'accepted_quantity', e.target.value)}
                                                                     style={{
                                                                         width: '100%', padding: '6px 8px',
-                                                                        border: Number(it.rejected_quantity) > 0 && !it.damage_reason.trim() ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                                                                        border: isQtyExceeded ? '1px solid #ef4444' : '1px solid #cbd5e1',
                                                                         borderRadius: 6, fontSize: 12, boxSizing: 'border-box'
                                                                     }}
                                                                 />
                                                             </td>
+                                                            <td style={{ padding: '6px 8px' }}>
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    step="1"
+                                                                    value={it.rejected_quantity}
+                                                                    onChange={e => handleQcItemChange(idx, 'rejected_quantity', e.target.value)}
+                                                                    style={{
+                                                                        width: '100%', padding: '6px 8px',
+                                                                        border: isQtyExceeded || isDamageRequired ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                                                                        borderRadius: 6, fontSize: 12, boxSizing: 'border-box'
+                                                                    }}
+                                                                />
+                                                            </td>
+                                                            <td style={{ padding: '6px 8px' }}>
+                                                                <input
+                                                                    type="text"
+                                                                    maxLength={255}
+                                                                    placeholder={rejQty > 0 ? "Required (damage reason)" : "Optional"}
+                                                                    value={it.damage_reason}
+                                                                    onChange={e => handleQcItemChange(idx, 'damage_reason', e.target.value)}
+                                                                    style={{
+                                                                        width: '100%', padding: '6px 8px',
+                                                                        border: isDamageRequired ? '1px solid #ef4444' : '1px solid #cbd5e1',
+                                                                        borderRadius: 6, fontSize: 12, boxSizing: 'border-box'
+                                                                    }}
+                                                                />
+                                                            </td>
+                                                            <td style={{ padding: '6px 8px' }}>
+                                                                <input
+                                                                    type="text"
+                                                                    maxLength={100}
+                                                                    placeholder="BATCH-..."
+                                                                    value={it.batch_number}
+                                                                    onChange={e => handleQcItemChange(idx, 'batch_number', e.target.value)}
+                                                                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
+                                                                />
+                                                            </td>
+                                                            <td style={{ padding: '6px 8px' }}>
+                                                                <input
+                                                                    type="date"
+                                                                    min={new Date().toISOString().split('T')[0]}
+                                                                    value={it.expiry_date}
+                                                                    onChange={e => handleQcItemChange(idx, 'expiry_date', e.target.value)}
+                                                                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
+                                                                />
+                                                            </td>
+                                                            <td style={{ padding: '6px 8px' }}>
+                                                                <input
+                                                                    type="text"
+                                                                    maxLength={500}
+                                                                    placeholder="Remarks..."
+                                                                    value={it.remarks}
+                                                                    onChange={e => handleQcItemChange(idx, 'remarks', e.target.value)}
+                                                                    style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
+                                                                />
+                                                            </td>
                                                         </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Modal Footer Actions */}
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
-                                    <button
-                                        type="button"
-                                        onClick={handleCloseCreateModal}
-                                        disabled={isSubmitting}
-                                        style={{
-                                            padding: '10px 18px', background: '#f1f5f9', border: '1px solid #cbd5e1',
-                                            borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer'
-                                        }}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={isSubmitting || isPoFullyReceived || items.length === 0}
-                                        style={{
-                                            padding: '10px 22px',
-                                            background: (isSubmitting || isPoFullyReceived || items.length === 0) ? '#94a3b8' : '#6366f1',
-                                            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#ffffff',
-                                            cursor: (isSubmitting || isPoFullyReceived || items.length === 0) ? 'not-allowed' : 'pointer',
-                                            display: 'flex', alignItems: 'center', gap: 8
-                                        }}
-                                        title={isPoFullyReceived ? "This Purchase Order has already been fully received." : ""}
-                                    >
-                                        {isSubmitting ? 'Submitting GRN...' : 'Post & Inward GRN'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    </div>
-                )}
-
-                {/* VIEW GRN NOTE DETAILS MODAL (Populated dynamically via GET /api/v1/grn/{grn_id} with by-number fallback) */}
-                {selectedGrn && (
-                    <div style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: 16
-                    }}>
-                        <div style={{
-                            background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 860,
-                            maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                            border: '1px solid #e2e8f0'
-                        }}>
-                            <div style={{ padding: '18px 24px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{ width: 38, height: 38, borderRadius: 8, background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <BsTruck size={20} />
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
                                     </div>
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#1e293b' }}>
-                                                Goods Received Note: {selectedGrn.grn_number || (selectedGrn.id ? `GRN-${selectedGrn.id}` : '—')}
-                                            </h3>
-                                            {detailLoading && (
-                                                <span style={{ fontSize: 11, background: '#eff6ff', color: '#2563eb', padding: '2px 8px', borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
-                                                    <BsArrowRepeat size={12} /> Loading details...
-                                                </span>
-                                            )}
-                                        </div>
-                                        <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>
-                                            Status: {selectedGrn.status || 'Verified'}
-                                        </p>
-                                    </div>
-                                </div>
-                                <button onClick={handleCloseDetailModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
-                                    <BsX size={26} />
-                                </button>
+                                )}
                             </div>
 
-                            {/* Modal Navigation Tabs */}
-                            <div style={{
-                                display: 'flex',
-                                borderBottom: '1px solid #e2e8f0',
-                                background: '#f8fafc',
-                                padding: '0 24px',
-                                gap: 12
-                            }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setDetailTab('details')}
+                            {/* Overall QC Remarks */}
+                            <div>
+                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
+                                    Overall Quality Inspection Remarks
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    maxLength={1000}
+                                    placeholder="Enter inspection summary, overall consignment condition, or warehouse manager approval notes..."
+                                    value={qcRemarks}
+                                    onChange={e => setQcRemarks(e.target.value)}
                                     style={{
-                                        padding: '12px 16px',
-                                        background: 'none',
-                                        border: 'none',
-                                        borderBottom: detailTab === 'details' ? '2px solid #6366f1' : '2px solid transparent',
-                                        color: detailTab === 'details' ? '#4f46e5' : '#64748b',
-                                        fontWeight: detailTab === 'details' ? 700 : 600,
-                                        fontSize: 13,
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 6
+                                        width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1',
+                                        borderRadius: 8, fontSize: 12.5, boxSizing: 'border-box', outline: 'none', resize: 'vertical'
                                     }}
-                                >
-                                    <BsEye size={14} /> Overview & Line Items
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setDetailTab('history');
-                                        const rawId = selectedGrn.id ?? selectedGrn.grn_id;
-                                        if (rawId && (!historyData || historyGrnId !== Number(rawId))) {
-                                            fetchGrnHistory(rawId, selectedGrn);
-                                        }
-                                    }}
-                                    style={{
-                                        padding: '12px 16px',
-                                        background: 'none',
-                                        border: 'none',
-                                        borderBottom: detailTab === 'history' ? '2px solid #6366f1' : '2px solid transparent',
-                                        color: detailTab === 'history' ? '#4f46e5' : '#64748b',
-                                        fontWeight: detailTab === 'history' ? 700 : 600,
-                                        fontSize: 13,
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 6
-                                    }}
-                                >
-                                    <BsClockHistory size={14} /> History & Timeline
-                                    {historyLoading && (
-                                        <span style={{ fontSize: 10.5, background: '#eff6ff', color: '#2563eb', padding: '1px 6px', borderRadius: 8, fontWeight: 700 }}>
-                                            Loading...
-                                        </span>
-                                    )}
-                                </button>
+                                />
                             </div>
 
-                            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                {receiveGrnError && (
-                                    <div style={{
-                                        padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
-                                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <BsExclamationTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
-                                            <span><strong>Error:</strong> {receiveGrnError}</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setReceiveGrnError(null)}
-                                            style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 2 }}
-                                        >
-                                            <BsX size={18} />
-                                        </button>
-                                    </div>
-                                )}
-
-                                {receiveGrnSuccess && (
-                                    <div style={{
-                                        padding: '10px 14px', background: '#ecfdf5', border: '1px solid #a7f3d0',
-                                        borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <BsCheckCircle size={16} style={{ color: '#059669', flexShrink: 0 }} />
-                                            <span><strong>Received:</strong> {receiveGrnSuccess}</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setReceiveGrnSuccess(null)}
-                                            style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 2 }}
-                                        >
-                                            <BsX size={18} />
-                                        </button>
-                                    </div>
-                                )}
-
-                                {rejectGrnSuccess && (
-                                    <div style={{
-                                        padding: '10px 14px', background: '#ecfdf5', border: '1px solid #a7f3d0',
-                                        borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <BsCheckCircle size={16} style={{ color: '#059669', flexShrink: 0 }} />
-                                            <span><strong>Rejected:</strong> {rejectGrnSuccess}</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setRejectGrnSuccess(null)}
-                                            style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 2 }}
-                                        >
-                                            <BsX size={18} />
-                                        </button>
-                                    </div>
-                                )}
-
-                                {rejectGrnError && (
-                                    <div style={{
-                                        padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
-                                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <BsExclamationTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
-                                            <span><strong>Error:</strong> {rejectGrnError}</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setRejectGrnError(null)}
-                                            style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 2 }}
-                                        >
-                                            <BsX size={18} />
-                                        </button>
-                                    </div>
-                                )}
-
-                                {pdfDownloadSuccess && (
-                                    <div style={{
-                                        padding: '10px 14px', background: '#ecfdf5', border: '1px solid #a7f3d0',
-                                        borderRadius: 8, color: '#065f46', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <BsCheckCircle size={16} style={{ color: '#059669', flexShrink: 0 }} />
-                                            <span><strong>Downloaded:</strong> {pdfDownloadSuccess}</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPdfDownloadSuccess(null)}
-                                            style={{ background: 'transparent', color: '#065f46', border: 'none', cursor: 'pointer', padding: 2 }}
-                                        >
-                                            <BsX size={18} />
-                                        </button>
-                                    </div>
-                                )}
-
-                                {pdfDownloadError && (
-                                    <div style={{
-                                        padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
-                                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <BsExclamationTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
-                                            <span><strong>PDF Download Error:</strong> {pdfDownloadError}</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPdfDownloadError(null)}
-                                            style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 2 }}
-                                        >
-                                            <BsX size={18} />
-                                        </button>
-                                    </div>
-                                )}
-
-                                {printSlipError && (
-                                    <div style={{
-                                        padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca',
-                                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                            <BsExclamationTriangle size={16} style={{ color: '#dc2626', flexShrink: 0 }} />
-                                            <span><strong>Print Slip Error:</strong> {printSlipError}</span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPrintSlipError(null)}
-                                            style={{ background: 'transparent', color: '#dc2626', border: 'none', cursor: 'pointer', padding: 2 }}
-                                        >
-                                            <BsX size={18} />
-                                        </button>
-                                    </div>
-                                )}
-
-                                {detailTab === 'details' ? (
-                                    <>
-                                        {/* API Error Banner with Retry */}
-                                        {detailError && (
-                                            <div style={{
-                                                padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
-                                                borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex',
-                                                justifyContent: 'space-between', alignItems: 'center'
-                                            }}>
-                                                <span><strong>Error loading details:</strong> {detailError}</span>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleRetryDetail}
-                                                    style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                                                >
-                                                    Retry
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {/* GRN Overview Attributes Grid */}
-                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, background: '#f8fafc', padding: 14, borderRadius: 8, border: '1px solid #f1f5f9' }}>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>GRN #</span><strong>{selectedGrn.grn_number || (selectedGrn.id ? `GRN-${selectedGrn.id}` : '—')}</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>System ID</span><strong>{selectedGrn.id != null ? `#${selectedGrn.id}` : '—'}</strong></div>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>PO Reference</span>
-                                                <strong>{selectedGrn.purchase_order_number || (selectedGrn.purchase_order_id ? `PO-${selectedGrn.purchase_order_id}` : '—')}</strong>
-                                                {selectedGrn.purchase_order_id != null && <span style={{ fontSize: 10.5, color: '#94a3b8', display: 'block' }}>ID: #{selectedGrn.purchase_order_id}</span>}
-                                            </div>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Supplier</span>
-                                                <strong>{selectedGrn.supplier_name || selectedGrn.supplier?.name || '—'}</strong>
-                                                {selectedGrn.supplier_id != null && <span style={{ fontSize: 10.5, color: '#94a3b8', display: 'block' }}>ID: #{selectedGrn.supplier_id}</span>}
-                                            </div>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Warehouse</span>
-                                                <strong>{selectedGrn.warehouse_name || selectedGrn.warehouse?.name || (selectedGrn.warehouse_id ? `WH #${selectedGrn.warehouse_id}` : '—')}</strong>
-                                                {selectedGrn.warehouse_id != null && <span style={{ fontSize: 10.5, color: '#94a3b8', display: 'block' }}>ID: #{selectedGrn.warehouse_id}</span>}
-                                            </div>
-                                            <div>
-                                                <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Store</span>
-                                                <strong>{selectedGrn.store_name || selectedGrn.store?.name || (selectedGrn.store_id ? `Store #${selectedGrn.store_id}` : '—')}</strong>
-                                                {selectedGrn.store_id != null && <span style={{ fontSize: 10.5, color: '#94a3b8', display: 'block' }}>ID: #{selectedGrn.store_id}</span>}
-                                            </div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Status</span><div>{renderStatusBadge(selectedGrn.status)}</div></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Invoice Number</span><strong>{selectedGrn.invoice_number || '—'}</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Invoice Date</span><strong>{formatGrnDate(selectedGrn.invoice_date)}</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Transporter</span><strong>{selectedGrn.transporter_name || '—'}</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Vehicle #</span><strong>{selectedGrn.vehicle_number || '—'}</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Created By</span><strong>{selectedGrn.created_by_name || '—'}</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Received By</span><strong>{selectedGrn.received_by_name || '—'}</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Total Items Count</span><strong>{selectedGrn.total_items_count ?? (Array.isArray(selectedGrn.items) ? selectedGrn.items.length : 0)} items</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Ordered Quantity</span><strong>{selectedGrn.total_ordered_quantity ?? 0} pcs</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Received Quantity</span><strong style={{ color: '#059669' }}>{selectedGrn.total_received_quantity ?? 0} pcs</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Accepted Quantity</span><strong style={{ color: '#059669' }}>{selectedGrn.total_accepted_quantity != null ? `${selectedGrn.total_accepted_quantity} pcs` : '—'}</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Rejected Quantity</span><strong style={{ color: Number(selectedGrn.total_rejected_quantity) > 0 ? '#dc2626' : '#64748b' }}>{selectedGrn.total_rejected_quantity ?? 0} pcs</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Total Cost Value</span><strong>{selectedGrn.total_cost_value != null ? `₹${Number(selectedGrn.total_cost_value || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '₹0.00'}</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Received At</span><strong>{formatGrnDate(selectedGrn.received_at, true)}</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Created At</span><strong>{formatGrnDate(selectedGrn.created_at, true)}</strong></div>
-                                            <div><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Updated At</span><strong>{formatGrnDate(selectedGrn.updated_at, true)}</strong></div>
-                                            <div style={{ gridColumn: '1 / -1' }}><span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Remarks</span><strong>{selectedGrn.remarks || '—'}</strong></div>
-                                            {selectedGrn.rejection_reason && (
-                                                <div style={{ gridColumn: '1 / -1', background: '#fef2f2', padding: '8px 12px', borderRadius: 6, border: '1px solid #fecaca' }}>
-                                                    <span style={{ fontSize: 11, color: '#dc2626', display: 'block', fontWeight: 600 }}>Rejection Reason</span>
-                                                    <strong style={{ color: '#dc2626' }}>{selectedGrn.rejection_reason}</strong>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Itemized Received Breakdown */}
-                                        <div>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                                <h4 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Received Items Breakdown</h4>
-                                                <span style={{ fontSize: 11, color: '#64748b' }}>
-                                                    {Array.isArray(selectedGrn.items) ? `${selectedGrn.items.length} items recorded` : '0 items'}
-                                                </span>
-                                            </div>
-                                            {Array.isArray(selectedGrn.items) && selectedGrn.items.length > 0 ? (
-                                                <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
-                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                                                        <thead style={{ background: '#f1f5f9', fontWeight: 600, color: '#475569' }}>
-                                                            <tr>
-                                                                <th style={{ padding: '8px 10px', textAlign: 'left' }}>Product</th>
-                                                                <th style={{ padding: '8px 10px', textAlign: 'left' }}>SKU</th>
-                                                                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Ordered</th>
-                                                                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Received</th>
-                                                                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Accepted</th>
-                                                                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Rejected</th>
-                                                                <th style={{ padding: '8px 10px', textAlign: 'right' }}>Unit Cost</th>
-                                                                <th style={{ padding: '8px 10px', textAlign: 'center' }}>Batch</th>
-                                                                <th style={{ padding: '8px 10px', textAlign: 'center' }}>Expiry</th>
-                                                                <th style={{ padding: '8px 10px', textAlign: 'left' }}>Remarks</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {selectedGrn.items.map((it, idx) => {
-                                                                const prodName = it.product_name || (it.product_id != null ? `Product #${it.product_id}` : '—');
-                                                                const prodSku = it.product_sku || '—';
-                                                                const ordQty = it.ordered_quantity != null ? String(it.ordered_quantity) : '—';
-                                                                const recQty = it.received_quantity != null ? String(it.received_quantity) : '—';
-                                                                const accQty = it.accepted_quantity != null ? String(it.accepted_quantity) : '—';
-                                                                const rejQty = it.rejected_quantity != null ? String(it.rejected_quantity) : '0';
-                                                                const costFormatted = it.unit_cost != null ? `₹${Number(it.unit_cost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—';
-                                                                const batchNo = it.batch_number || '—';
-                                                                const expDate = formatGrnDate(it.expiry_date);
-                                                                const itemRemarks = it.remarks || '—';
-
-                                                                return (
-                                                                    <tr key={it.id || idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                                                                        <td style={{ padding: '8px 10px', fontWeight: 600 }}>
-                                                                            <div>{prodName}</div>
-                                                                            {it.product_id != null && <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 400 }}>ID: #{it.product_id}</div>}
-                                                                        </td>
-                                                                        <td style={{ padding: '8px 10px', color: '#475569', fontSize: 11.5 }}>{prodSku}</td>
-                                                                        <td style={{ padding: '8px 10px', textAlign: 'right' }}>{ordQty}</td>
-                                                                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600, color: '#059669' }}>{recQty}</td>
-                                                                        <td style={{ padding: '8px 10px', textAlign: 'right' }}>{accQty}</td>
-                                                                        <td style={{ padding: '8px 10px', textAlign: 'right', color: Number(it.rejected_quantity) > 0 ? '#dc2626' : '#475569' }}>
-                                                                            {rejQty}
-                                                                            {it.damage_reason ? ` (${it.damage_reason})` : ''}
-                                                                        </td>
-                                                                        <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>{costFormatted}</td>
-                                                                        <td style={{ padding: '8px 10px', textAlign: 'center' }}>{batchNo}</td>
-                                                                        <td style={{ padding: '8px 10px', textAlign: 'center' }}>{expDate}</td>
-                                                                        <td style={{ padding: '8px 10px', color: '#64748b', fontSize: 11.5 }}>{itemRemarks}</td>
-                                                                    </tr>
-                                                                );
-                                                            })}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            ) : (
-                                                <p style={{ margin: 0, fontSize: 13, color: '#64748b', textAlign: 'center', padding: '16px 0', background: '#f8fafc', borderRadius: 8 }}>
-                                                    No itemized breakdown recorded on this note.
-                                                </p>
-                                            )}
-                                        </div>
-                                    </>
-                                ) : (
-                                    /* History & Audit Timeline View */
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                        {/* History Meta Overview */}
-                                        <div style={{
-                                            background: '#f8fafc',
-                                            border: '1px solid #e2e8f0',
-                                            borderRadius: 10,
-                                            padding: '16px 18px',
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            gap: 12
-                                        }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                                                <div>
-                                                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#1e293b' }}>
-                                                        GRN Audit & Lifecycle History
-                                                    </h4>
-                                                    <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>
-                                                        Chronological record of status transitions, inwarding actions, and operator details
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const rawId = selectedGrn.id ?? selectedGrn.grn_id;
-                                                        fetchGrnHistory(rawId, selectedGrn);
-                                                    }}
-                                                    disabled={historyLoading}
-                                                    style={{
-                                                        background: '#ffffff',
-                                                        border: '1px solid #d1d5db',
-                                                        borderRadius: 6,
-                                                        padding: '6px 12px',
-                                                        fontSize: 12,
-                                                        fontWeight: 600,
-                                                        color: '#374151',
-                                                        cursor: historyLoading ? 'not-allowed' : 'pointer',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: 6,
-                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                    }}
-                                                >
-                                                    <BsArrowRepeat size={13} style={{ animation: historyLoading ? 'spin 1s linear infinite' : 'none' }} />
-                                                    {historyLoading ? 'Refreshing...' : 'Refresh Timeline'}
-                                                </button>
-                                            </div>
-
-                                            {/* Overview Metadata Grid */}
-                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, paddingTop: 6, borderTop: '1px solid #edf2f7' }}>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>GRN Number</span>
-                                                    <strong>{historyData?.grn_number || selectedGrn.grn_number || (selectedGrn.id ? `GRN-${selectedGrn.id}` : '—')}</strong>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Current Status</span>
-                                                    <div>{renderStatusBadge(historyData?.status || selectedGrn.status)}</div>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Created Date</span>
-                                                    <strong>{formatGrnDate(historyData?.created_at || selectedGrn.created_at, true)}</strong>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Received Date</span>
-                                                    <strong>{(historyData?.received_at || selectedGrn.received_at) ? formatGrnDate(historyData?.received_at || selectedGrn.received_at, true) : 'Not received yet'}</strong>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Created By</span>
-                                                    <strong>{historyData?.created_by_name || selectedGrn.created_by_name || 'System Operator'}</strong>
-                                                </div>
-                                                <div>
-                                                    <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>Received By</span>
-                                                    <strong>{historyData?.received_by_name || selectedGrn.received_by_name || '—'}</strong>
-                                                </div>
-                                            </div>
-
-                                            {(historyData?.rejection_reason || selectedGrn.rejection_reason) && (
-                                                <div style={{
-                                                    background: '#fef2f2',
-                                                    border: '1px solid #fecaca',
-                                                    borderRadius: 6,
-                                                    padding: '8px 12px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 8,
-                                                    color: '#dc2626',
-                                                    fontSize: 12.5
-                                                }}>
-                                                    <BsExclamationTriangle size={15} style={{ flexShrink: 0 }} />
-                                                    <div>
-                                                        <strong>Rejection Reason:</strong> {historyData?.rejection_reason || selectedGrn.rejection_reason}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* History Error Banner */}
-                                        {historyError && (
-                                            <div style={{
-                                                padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
-                                                borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex',
-                                                justifyContent: 'space-between', alignItems: 'center'
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                    <BsExclamationTriangle size={16} style={{ flexShrink: 0 }} />
-                                                    <span><strong>Error loading history:</strong> {historyError}</span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const rawId = selectedGrn.id ?? selectedGrn.grn_id;
-                                                        fetchGrnHistory(rawId, selectedGrn);
-                                                    }}
-                                                    style={{ background: '#dc2626', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
-                                                >
-                                                    Retry
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {/* History Loading Indicator */}
-                                        {historyLoading && !historyData && (
-                                            <div style={{ padding: '48px 20px', textAlign: 'center', color: '#64748b' }}>
-                                                <BsClockHistory size={26} style={{ animation: 'spin 1.5s linear infinite', color: '#6366f1', marginBottom: 10 }} />
-                                                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#374151' }}>Loading GRN history & event timeline...</p>
-                                                <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#9ca3af' }}>Fetching audit records from backend API</p>
-                                            </div>
-                                        )}
-
-                                        {/* Empty Timeline Fallback */}
-                                        {!historyLoading && !historyError && (!historyData?.timeline || historyData.timeline.length === 0) && (
-                                            <div style={{ padding: '36px 20px', textAlign: 'center', background: '#f8fafc', borderRadius: 8, border: '1px dashed #cbd5e1' }}>
-                                                <BsClockHistory size={30} style={{ color: '#94a3b8', marginBottom: 10 }} />
-                                                <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#374151' }}>
-                                                    No history events available for this GRN.
-                                                </p>
-                                                <p style={{ margin: '4px 0 0 0', fontSize: 12, color: '#64748b' }}>
-                                                    Events will appear here as the GRN progresses through creation, quality checks, and inventory inwarding.
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        {/* Vertical Event Timeline */}
-                                        {Array.isArray(historyData?.timeline) && historyData.timeline.length > 0 && (
-                                            <div style={{ padding: '8px 4px 16px 4px' }}>
-                                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                                    {([...historyData.timeline].sort((a, b) => {
-                                                        const tA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-                                                        const tB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-                                                        return tA - tB;
-                                                    })).map((item, idx, arr) => {
-                                                        const eventStr = String(item.event || '').toLowerCase();
-                                                        let badgeBg = '#eef2ff';
-                                                        let badgeColor = '#4f46e5';
-                                                        let badgeBorder = '#c7d2fe';
-                                                        let icon = <BsClockHistory size={15} />;
-
-                                                        if (eventStr.includes('received') || eventStr.includes('inward')) {
-                                                            badgeBg = '#ecfdf5';
-                                                            badgeColor = '#059669';
-                                                            badgeBorder = '#a7f3d0';
-                                                            icon = <BsCheckCircleFill size={15} />;
-                                                        } else if (eventStr.includes('reject')) {
-                                                            badgeBg = '#fef2f2';
-                                                            badgeColor = '#dc2626';
-                                                            badgeBorder = '#fecaca';
-                                                            icon = <BsXCircleFill size={15} />;
-                                                        } else if (eventStr.includes('qc') || eventStr.includes('quality')) {
-                                                            badgeBg = '#eff6ff';
-                                                            badgeColor = '#2563eb';
-                                                            badgeBorder = '#bfdbfe';
-                                                            icon = <BsShieldLock size={15} />;
-                                                        } else if (eventStr.includes('creat') || eventStr.includes('init')) {
-                                                            badgeBg = '#eef2ff';
-                                                            badgeColor = '#4f46e5';
-                                                            badgeBorder = '#c7d2fe';
-                                                            icon = <BsPlus size={18} />;
-                                                        }
-
-                                                        return (
-                                                            <div key={idx} style={{ display: 'flex', gap: 16, position: 'relative' }}>
-                                                                {/* Vertical Connector Line */}
-                                                                {idx < arr.length - 1 && (
-                                                                    <div style={{
-                                                                        position: 'absolute',
-                                                                        left: 17,
-                                                                        top: 36,
-                                                                        bottom: -8,
-                                                                        width: 2,
-                                                                        background: '#e2e8f0',
-                                                                        zIndex: 0
-                                                                    }} />
-                                                                )}
-
-                                                                {/* Icon Circle */}
-                                                                <div style={{
-                                                                    width: 36,
-                                                                    height: 36,
-                                                                    borderRadius: '50%',
-                                                                    background: badgeBg,
-                                                                    color: badgeColor,
-                                                                    border: `2px solid ${badgeBorder}`,
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'center',
-                                                                    flexShrink: 0,
-                                                                    zIndex: 1,
-                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                                                                }}>
-                                                                    {icon}
-                                                                </div>
-
-                                                                {/* Event Card */}
-                                                                <div style={{
-                                                                    flex: 1,
-                                                                    background: '#ffffff',
-                                                                    border: '1px solid #e2e8f0',
-                                                                    borderRadius: 10,
-                                                                    padding: '14px 18px',
-                                                                    marginBottom: 16,
-                                                                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                                                                }}>
-                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
-                                                                        <h5 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#1e293b' }}>
-                                                                            {item.event || 'System Event'}
-                                                                        </h5>
-                                                                        <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                                                            <BsClockHistory size={11} /> {formatGrnDate(item.timestamp, true)}
-                                                                        </span>
-                                                                    </div>
-
-                                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', marginBottom: 8 }}>
-                                                                        <span style={{ fontWeight: 600, color: '#64748b' }}>Performed By:</span>
-                                                                        <span style={{
-                                                                            background: '#f1f5f9',
-                                                                            color: '#334155',
-                                                                            padding: '2px 8px',
-                                                                            borderRadius: 4,
-                                                                            fontWeight: 600,
-                                                                            fontSize: 11.5
-                                                                        }}>
-                                                                            {item.performed_by || 'System Operator'}
-                                                                        </span>
-                                                                    </div>
-
-                                                                    {item.details && (
-                                                                        <div style={{
-                                                                            fontSize: 12.5,
-                                                                            color: '#334155',
-                                                                            background: '#f8fafc',
-                                                                            padding: '10px 14px',
-                                                                            borderRadius: 6,
-                                                                            border: '1px solid #f1f5f9',
-                                                                            wordBreak: 'break-word',
-                                                                            lineHeight: 1.5
-                                                                        }}>
-                                                                            {item.details}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {(() => {
-                                    const modalGrnId = selectedGrn.id ?? selectedGrn.grn_id;
-                                    const modalGrnStatus = selectedGrn.status ?? selectedGrn.grn_status ?? '';
-                                    const modalEligible = isGrnReceiveEligible(modalGrnStatus);
-                                    const isModalDisabled = !modalEligible || Boolean(receivingGrnId);
-
-                                    console.log("GRN Receive Debug:", {
-                                        id: modalGrnId,
-                                        status: modalGrnStatus,
-                                        eligible: modalEligible,
-                                        receivingGrnId,
-                                        disabled: isModalDisabled
-                                    });
-                                    return null;
-                                })()}
-
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleDownloadPdf(selectedGrn)}
-                                            disabled={downloadingPdfGrnId === (selectedGrn.id ?? selectedGrn.grn_id)}
-                                            title={`Download PDF for ${selectedGrn.grn_number || (selectedGrn.id ? `GRN-${selectedGrn.id}` : 'this GRN')}`}
-                                            style={{
-                                                padding: '8px 16px',
-                                                background: '#f8fafc',
-                                                color: '#1e293b',
-                                                border: '1px solid #cbd5e1',
-                                                borderRadius: 6,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: downloadingPdfGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'not-allowed' : 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6
-                                            }}
-                                        >
-                                            <BsDownload size={14} /> {downloadingPdfGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'Downloading PDF...' : 'Download PDF'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleOpenPrintSlip(selectedGrn)}
-                                            disabled={fetchingSlipGrnId === (selectedGrn.id ?? selectedGrn.grn_id)}
-                                            title={`Open Print Slip for ${selectedGrn.grn_number || (selectedGrn.id ? `GRN-${selectedGrn.id}` : 'this GRN')}`}
-                                            style={{
-                                                padding: '8px 16px',
-                                                background: '#f8fafc',
-                                                color: '#1e293b',
-                                                border: '1px solid #cbd5e1',
-                                                borderRadius: 6,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: fetchingSlipGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'not-allowed' : 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6
-                                            }}
-                                        >
-                                            <BsPrinter size={14} /> {fetchingSlipGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'Loading Slip...' : 'Print Slip'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleOpenQcModal(selectedGrn)}
-                                            disabled={!isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status)}
-                                            title={!isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status) ? "Quality check can only be performed on pending GRN records" : "Perform Quality Check"}
-                                            style={{
-                                                padding: '8px 16px',
-                                                background: !isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#f1f5f9' : '#4f46e5',
-                                                color: !isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#94a3b8' : '#ffffff',
-                                                border: 'none',
-                                                borderRadius: 6,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: !isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status) ? 'not-allowed' : 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                opacity: !isGrnQcEligible(selectedGrn.status ?? selectedGrn.grn_status) ? 0.6 : 1
-                                            }}
-                                        >
-                                            <BsShieldLock size={14} /> Quality Check
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                console.log('[GRN Receive Button Click] Clicked Receive in GRN Detail Modal:', selectedGrn);
-                                                handleReceiveGrn(selectedGrn);
-                                            }}
-                                            disabled={!isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) || Boolean(receivingGrnId)}
-                                            title={!isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) ? (isGrnReceived(selectedGrn.status ?? selectedGrn.grn_status) ? "This GRN has already been received and inventory has been updated" : "Cannot receive a rejected GRN") : "Receive items into inventory"}
-                                            style={{
-                                                padding: '8px 16px',
-                                                background: !isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#f1f5f9' : '#059669',
-                                                color: !isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#94a3b8' : '#ffffff',
-                                                border: 'none',
-                                                borderRadius: 6,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: (!isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) || Boolean(receivingGrnId)) ? 'not-allowed' : 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                opacity: !isGrnReceiveEligible(selectedGrn.status ?? selectedGrn.grn_status) ? 0.6 : 1
-                                            }}
-                                        >
-                                            <BsBoxSeam size={14} /> {receivingGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'Receiving...' : 'Receive GRN'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRequestRejectGrn(selectedGrn)}
-                                            disabled={!isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) || Boolean(rejectingGrnId)}
-                                            title={!isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) ? (isGrnReceived(selectedGrn.status ?? selectedGrn.grn_status) ? "Cannot reject a GRN that has already been received into inventory" : "This GRN has already been rejected") : "Reject this Goods Received Note"}
-                                            style={{
-                                                padding: '8px 16px',
-                                                background: !isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#f1f5f9' : '#dc2626',
-                                                color: !isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) ? '#94a3b8' : '#ffffff',
-                                                border: 'none',
-                                                borderRadius: 6,
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: (!isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) || Boolean(rejectingGrnId)) ? 'not-allowed' : 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                opacity: !isGrnRejectEligible(selectedGrn.status ?? selectedGrn.grn_status) ? 0.6 : 1
-                                            }}
-                                        >
-                                            <BsXCircle size={14} /> {rejectingGrnId === (selectedGrn.id ?? selectedGrn.grn_id) ? 'Rejecting...' : 'Reject GRN'}
-                                        </button>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleCloseDetailModal}
-                                        style={{ padding: '8px 18px', background: '#6366f1', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-                                    >
-                                        Close Note
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* QUALITY CHECK (QC) MODAL */}
-                {isQcModalOpen && qcGrn && (
-                    <div style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1220, padding: 16
-                    }}>
-                        <div style={{
-                            background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 960,
-                            maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                            border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column'
-                        }}>
-                            {/* Header */}
-                            <div style={{
-                                padding: '18px 24px', borderBottom: '1px solid #e2e8f0',
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                position: 'sticky', top: 0, background: '#fff', zIndex: 10
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 38, height: 38, borderRadius: 8, background: '#e0e7ff',
-                                        color: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                    }}>
-                                        <BsShieldLock size={20} />
-                                    </div>
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#1e293b' }}>
-                                                Quality Check: {qcGrn.grn_number || (qcGrn.id ? `GRN-${qcGrn.id}` : 'Note')}
-                                            </h3>
-                                            <span style={{ fontSize: 11, background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
-                                                Status: {qcGrn.status || 'Pending'}
-                                            </span>
-                                        </div>
-                                        <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#64748b' }}>
-                                            Inspect incoming shipment items, approve accepted stock, specify rejected quantities with reasons, and assign batch / expiry.
-                                        </p>
-                                    </div>
-                                </div>
+                            {/* Footer Actions */}
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 14, borderTop: '1px solid #e2e8f0' }}>
                                 <button
                                     type="button"
                                     onClick={handleCloseQcModal}
                                     disabled={qcSubmitting}
                                     style={{
-                                        background: 'none', border: 'none', cursor: qcSubmitting ? 'not-allowed' : 'pointer',
-                                        color: '#94a3b8', padding: 4
-                                    }}
-                                >
-                                    <BsX size={26} />
-                                </button>
-                            </div>
-
-                            {/* Modal Body */}
-                            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                                {/* Error Banner */}
-                                {qcError && (
-                                    <div style={{
-                                        padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca',
-                                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8
-                                    }}>
-                                        <BsExclamationTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-                                        <div style={{ flex: 1, wordBreak: 'break-word', fontWeight: 600 }}>
-                                            {qcError}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Shipment Context Cards */}
-                                <div style={{
-                                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                                    gap: 12, background: '#f8fafc', padding: 14, borderRadius: 8, border: '1px solid #f1f5f9', fontSize: 12
-                                }}>
-                                    <div>
-                                        <span style={{ color: '#64748b', display: 'block', fontSize: 11 }}>PO Reference</span>
-                                        <strong>{qcGrn.purchase_order_number || (qcGrn.purchase_order_id ? `PO-${qcGrn.purchase_order_id}` : '—')}</strong>
-                                    </div>
-                                    <div>
-                                        <span style={{ color: '#64748b', display: 'block', fontSize: 11 }}>Supplier</span>
-                                        <strong>{qcGrn.supplier_name || '—'}</strong>
-                                    </div>
-                                    <div>
-                                        <span style={{ color: '#64748b', display: 'block', fontSize: 11 }}>Receiving Warehouse</span>
-                                        <strong>{qcGrn.warehouse_name || '—'}</strong>
-                                    </div>
-                                    <div>
-                                        <span style={{ color: '#64748b', display: 'block', fontSize: 11 }}>Store</span>
-                                        <strong>{qcGrn.store_name || '—'}</strong>
-                                    </div>
-                                </div>
-
-                                {/* Line Items Table */}
-                                <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                        <h4 style={{ margin: 0, fontSize: 13.5, fontWeight: 700, color: '#334155' }}>
-                                            Line Items to Inspect ({qcItems.length})
-                                        </h4>
-                                        <span style={{ fontSize: 11, color: '#64748b' }}>
-                                            Item ID maps to backend GRN Item ID
-                                        </span>
-                                    </div>
-
-                                    {qcLoadingItems ? (
-                                        <div style={{ padding: '36px 20px', textAlign: 'center', color: '#6b7280', fontSize: 13 }}>
-                                            <BsClockHistory size={20} style={{ animation: 'spin 1.5s linear infinite', marginBottom: 6, color: '#6366f1' }} />
-                                            <p style={{ margin: 0 }}>Loading line item details from backend...</p>
-                                        </div>
-                                    ) : qcItems.length === 0 ? (
-                                        <div style={{ padding: '24px', textAlign: 'center', background: '#f8fafc', borderRadius: 8, color: '#64748b', fontSize: 13 }}>
-                                            No line items found for Quality Check on this note.
-                                        </div>
-                                    ) : (
-                                        <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
-                                                <thead style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 600 }}>
-                                                    <tr>
-                                                        <th style={{ padding: '10px 12px' }}>Product</th>
-                                                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Recv Qty</th>
-                                                        <th style={{ padding: '10px 12px', width: 100 }}>Accepted *</th>
-                                                        <th style={{ padding: '10px 12px', width: 100 }}>Rejected</th>
-                                                        <th style={{ padding: '10px 12px', minWidth: 150 }}>Damage Reason</th>
-                                                        <th style={{ padding: '10px 12px', width: 110 }}>Batch #</th>
-                                                        <th style={{ padding: '10px 12px', width: 125 }}>Expiry Date</th>
-                                                        <th style={{ padding: '10px 12px', minWidth: 130 }}>Item Remarks</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {qcItems.map((it, idx) => {
-                                                        const recQty = Number(it.received_quantity ?? 0);
-                                                        const accQty = Number(it.accepted_quantity ?? 0);
-                                                        const rejQty = Number(it.rejected_quantity ?? 0);
-                                                        const isQtyExceeded = recQty > 0 && (accQty + rejQty) > recQty;
-                                                        const isDamageRequired = rejQty > 0 && !it.damage_reason.trim();
-
-                                                        return (
-                                                            <tr key={it.item_id || idx} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#fff' : '#fcfcfd' }}>
-                                                                <td style={{ padding: '8px 12px' }}>
-                                                                    <div style={{ fontWeight: 600, color: '#1e293b' }}>{it.product_name}</div>
-                                                                    <div style={{ fontSize: 10.5, color: '#64748b' }}>
-                                                                        SKU: {it.product_sku || '—'} | <span style={{ color: '#4f46e5' }}>Item ID: #{it.item_id}</span>
-                                                                    </div>
-                                                                </td>
-                                                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#059669' }}>
-                                                                    {recQty}
-                                                                </td>
-                                                                <td style={{ padding: '6px 8px' }}>
-                                                                    <input
-                                                                        type="number"
-                                                                        min="0"
-                                                                        step="1"
-                                                                        value={it.accepted_quantity}
-                                                                        onChange={e => handleQcItemChange(idx, 'accepted_quantity', e.target.value)}
-                                                                        style={{
-                                                                            width: '100%', padding: '6px 8px',
-                                                                            border: isQtyExceeded ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                                                                            borderRadius: 6, fontSize: 12, boxSizing: 'border-box'
-                                                                        }}
-                                                                    />
-                                                                </td>
-                                                                <td style={{ padding: '6px 8px' }}>
-                                                                    <input
-                                                                        type="number"
-                                                                        min="0"
-                                                                        step="1"
-                                                                        value={it.rejected_quantity}
-                                                                        onChange={e => handleQcItemChange(idx, 'rejected_quantity', e.target.value)}
-                                                                        style={{
-                                                                            width: '100%', padding: '6px 8px',
-                                                                            border: isQtyExceeded || isDamageRequired ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                                                                            borderRadius: 6, fontSize: 12, boxSizing: 'border-box'
-                                                                        }}
-                                                                    />
-                                                                </td>
-                                                                <td style={{ padding: '6px 8px' }}>
-                                                                    <input
-                                                                        type="text"
-                                                                        maxLength={255}
-                                                                        placeholder={rejQty > 0 ? "Required (damage reason)" : "Optional"}
-                                                                        value={it.damage_reason}
-                                                                        onChange={e => handleQcItemChange(idx, 'damage_reason', e.target.value)}
-                                                                        style={{
-                                                                            width: '100%', padding: '6px 8px',
-                                                                            border: isDamageRequired ? '1px solid #ef4444' : '1px solid #cbd5e1',
-                                                                            borderRadius: 6, fontSize: 12, boxSizing: 'border-box'
-                                                                        }}
-                                                                    />
-                                                                </td>
-                                                                <td style={{ padding: '6px 8px' }}>
-                                                                    <input
-                                                                        type="text"
-                                                                        maxLength={100}
-                                                                        placeholder="BATCH-..."
-                                                                        value={it.batch_number}
-                                                                        onChange={e => handleQcItemChange(idx, 'batch_number', e.target.value)}
-                                                                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
-                                                                    />
-                                                                </td>
-                                                                <td style={{ padding: '6px 8px' }}>
-                                                                    <input
-                                                                        type="date"
-                                                                        min={new Date().toISOString().split('T')[0]}
-                                                                        value={it.expiry_date}
-                                                                        onChange={e => handleQcItemChange(idx, 'expiry_date', e.target.value)}
-                                                                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
-                                                                    />
-                                                                </td>
-                                                                <td style={{ padding: '6px 8px' }}>
-                                                                    <input
-                                                                        type="text"
-                                                                        maxLength={500}
-                                                                        placeholder="Remarks..."
-                                                                        value={it.remarks}
-                                                                        onChange={e => handleQcItemChange(idx, 'remarks', e.target.value)}
-                                                                        style={{ width: '100%', padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}
-                                                                    />
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Overall QC Remarks */}
-                                <div>
-                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>
-                                        Overall Quality Inspection Remarks
-                                    </label>
-                                    <textarea
-                                        rows={3}
-                                        maxLength={1000}
-                                        placeholder="Enter inspection summary, overall consignment condition, or warehouse manager approval notes..."
-                                        value={qcRemarks}
-                                        onChange={e => setQcRemarks(e.target.value)}
-                                        style={{
-                                            width: '100%', padding: '8px 12px', border: '1px solid #cbd5e1',
-                                            borderRadius: 8, fontSize: 12.5, boxSizing: 'border-box', outline: 'none', resize: 'vertical'
-                                        }}
-                                    />
-                                </div>
-
-                                {/* Footer Actions */}
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingTop: 14, borderTop: '1px solid #e2e8f0' }}>
-                                    <button
-                                        type="button"
-                                        onClick={handleCloseQcModal}
-                                        disabled={qcSubmitting}
-                                        style={{
-                                            padding: '9px 18px', background: '#f1f5f9', border: '1px solid #cbd5e1',
-                                            borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#475569',
-                                            cursor: qcSubmitting ? 'not-allowed' : 'pointer'
-                                        }}
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={handleSubmitQc}
-                                        disabled={qcSubmitting || qcLoadingItems || qcItems.length === 0}
-                                        style={{
-                                            padding: '9px 22px',
-                                            background: (qcSubmitting || qcLoadingItems || qcItems.length === 0) ? '#94a3b8' : '#4f46e5',
-                                            border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#ffffff',
-                                            cursor: (qcSubmitting || qcLoadingItems || qcItems.length === 0) ? 'not-allowed' : 'pointer',
-                                            display: 'flex', alignItems: 'center', gap: 8,
-                                            boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)'
-                                        }}
-                                    >
-                                        <BsCheckCircleFill size={15} />
-                                        {qcSubmitting ? 'Submitting QC...' : 'Submit Quality Check'}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* DELETE GRN CONFIRMATION MODAL */}
-                {grnToDelete && (
-                    <div style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1250, padding: 16
-                    }}>
-                        <div style={{
-                            background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 480,
-                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                            border: '1px solid #e2e8f0', overflow: 'hidden'
-                        }}>
-                            {/* Header */}
-                            <div style={{
-                                padding: '16px 20px', borderBottom: '1px solid #fee2e2',
-                                background: '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 36, height: 36, borderRadius: 8, background: '#fee2e2',
-                                        color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                    }}>
-                                        <BsExclamationTriangle size={18} />
-                                    </div>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#991b1b' }}>
-                                            Confirm GRN Deletion
-                                        </h3>
-                                        <div style={{ fontSize: 12, color: '#b91c1c' }}>
-                                            Permanent deletion of Goods Receipt Note
-                                        </div>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleCancelDeleteGrn}
-                                    disabled={Boolean(deletingGrnId)}
-                                    style={{
-                                        background: 'none', border: 'none', cursor: deletingGrnId ? 'not-allowed' : 'pointer',
-                                        color: '#9ca3af', padding: 4
-                                    }}
-                                >
-                                    <BsX size={22} />
-                                </button>
-                            </div>
-
-                            {/* Body */}
-                            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                                {/* Deletion Error / 409 Conflict Banner */}
-                                {deleteGrnError && (
-                                    <div style={{
-                                        padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca',
-                                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8
-                                    }}>
-                                        <BsExclamationTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-                                        <div style={{ flex: 1, wordBreak: 'break-word', fontWeight: 600 }}>
-                                            {deleteGrnError}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <p style={{ margin: 0, fontSize: 13.5, color: '#374151', lineHeight: 1.5 }}>
-                                    Are you sure you want to delete Goods Receipt Note{' '}
-                                    <strong style={{ color: '#111827' }}>
-                                        {grnToDelete.grn_number || (grnToDelete.id ? `GRN-${grnToDelete.id}` : '—')}
-                                    </strong>
-                                    {grnToDelete.id && <span style={{ color: '#6b7280' }}> (ID: #{grnToDelete.id})</span>}?
-                                </p>
-
-                                {/* Summary Box */}
-                                <div style={{
-                                    background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8,
-                                    padding: '12px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12
-                                }}>
-                                    <div>
-                                        <span style={{ color: '#6b7280', display: 'block' }}>PO Reference:</span>
-                                        <strong style={{ color: '#1f2937' }}>
-                                            {grnToDelete.purchase_order_number || (grnToDelete.purchase_order_id ? `PO-${grnToDelete.purchase_order_id}` : '—')}
-                                        </strong>
-                                    </div>
-                                    <div>
-                                        <span style={{ color: '#6b7280', display: 'block' }}>Status:</span>
-                                        <div>{renderStatusBadge(grnToDelete.status)}</div>
-                                    </div>
-                                    <div>
-                                        <span style={{ color: '#6b7280', display: 'block' }}>Supplier:</span>
-                                        <span style={{ color: '#1f2937', fontWeight: 600 }}>
-                                            {grnToDelete.supplier_name || '—'}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <span style={{ color: '#6b7280', display: 'block' }}>Received Qty:</span>
-                                        <span style={{ color: '#1f2937', fontWeight: 600 }}>
-                                            {grnToDelete.total_received_quantity ?? 0} pcs
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div style={{
-                                    fontSize: 12, color: '#64748b', background: '#f8fafc',
-                                    padding: '8px 12px', borderRadius: 6, border: '1px dashed #cbd5e1'
-                                }}>
-                                    <strong>Notice:</strong> Received inventory cannot be deleted once inwarded. This action will permanently remove this note record from Retail OS.
-                                </div>
-                            </div>
-
-                            {/* Footer */}
-                            <div style={{
-                                padding: '14px 20px', borderTop: '1px solid #e5e7eb', background: '#f9fafb',
-                                display: 'flex', justifyContent: 'flex-end', gap: 10
-                            }}>
-                                <button
-                                    type="button"
-                                    onClick={handleCancelDeleteGrn}
-                                    disabled={Boolean(deletingGrnId)}
-                                    style={{
-                                        padding: '8px 16px', background: '#ffffff', border: '1px solid #d1d5db',
-                                        borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#374151',
-                                        cursor: deletingGrnId ? 'not-allowed' : 'pointer'
+                                        padding: '9px 18px', background: '#f1f5f9', border: '1px solid #cbd5e1',
+                                        borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#475569',
+                                        cursor: qcSubmitting ? 'not-allowed' : 'pointer'
                                     }}
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={handleConfirmDeleteGrn}
-                                    disabled={Boolean(deletingGrnId)}
+                                    onClick={handleSubmitQc}
+                                    disabled={qcSubmitting || qcLoadingItems || qcItems.length === 0}
                                     style={{
-                                        padding: '8px 18px', background: deletingGrnId ? '#94a3b8' : '#dc2626',
-                                        border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#ffffff',
-                                        cursor: deletingGrnId ? 'not-allowed' : 'pointer', display: 'flex',
-                                        alignItems: 'center', gap: 6, boxShadow: '0 1px 2px rgba(220, 38, 38, 0.2)'
+                                        padding: '9px 22px',
+                                        background: (qcSubmitting || qcLoadingItems || qcItems.length === 0) ? '#94a3b8' : '#4f46e5',
+                                        border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, color: '#ffffff',
+                                        cursor: (qcSubmitting || qcLoadingItems || qcItems.length === 0) ? 'not-allowed' : 'pointer',
+                                        display: 'flex', alignItems: 'center', gap: 8,
+                                        boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)'
                                     }}
                                 >
-                                    <BsTrash size={14} />
-                                    {deletingGrnId ? 'Deleting...' : 'Delete GRN'}
+                                    <BsCheckCircleFill size={15} />
+                                    {qcSubmitting ? 'Submitting QC...' : 'Submit Quality Check'}
                                 </button>
                             </div>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* REJECT GRN CONFIRMATION MODAL */}
-                {grnToReject && (
+            {/* DELETE GRN CONFIRMATION MODAL */}
+            {grnToDelete && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1250, padding: 16
+                }}>
                     <div style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1250, padding: 16
+                        background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 480,
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #e2e8f0', overflow: 'hidden'
                     }}>
+                        {/* Header */}
                         <div style={{
-                            background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 480,
-                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                            border: '1px solid #e2e8f0', overflow: 'hidden'
+                            padding: '16px 20px', borderBottom: '1px solid #fee2e2',
+                            background: '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                         }}>
-                            {/* Header */}
-                            <div style={{
-                                padding: '16px 20px', borderBottom: '1px solid #fee2e2',
-                                background: '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 36, height: 36, borderRadius: 8, background: '#fee2e2',
-                                        color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                    }}>
-                                        <BsXCircle size={18} />
-                                    </div>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#991b1b' }}>
-                                            Reject Goods Receipt Note
-                                        </h3>
-                                        <div style={{ fontSize: 12, color: '#b91c1c' }}>
-                                            Confirm rejection and provide mandatory reason
-                                        </div>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleCancelRejectGrn}
-                                    disabled={Boolean(rejectingGrnId)}
-                                    style={{
-                                        background: 'none', border: 'none', cursor: rejectingGrnId ? 'not-allowed' : 'pointer',
-                                        color: '#9ca3af', padding: 4
-                                    }}
-                                >
-                                    <BsX size={22} />
-                                </button>
-                            </div>
-
-                            {/* Body */}
-                            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                                {/* Rejection Error Banner */}
-                                {rejectGrnError && (
-                                    <div style={{
-                                        padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca',
-                                        borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8
-                                    }}>
-                                        <BsExclamationTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
-                                        <div style={{ flex: 1, wordBreak: 'break-word', fontWeight: 600 }}>
-                                            {rejectGrnError}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <p style={{ margin: 0, fontSize: 13.5, color: '#374151', lineHeight: 1.5 }}>
-                                    Are you sure you want to reject Goods Receipt Note{' '}
-                                    <strong style={{ color: '#111827' }}>
-                                        {grnToReject.grn_number || (grnToReject.id ? `GRN-${grnToReject.id}` : '—')}
-                                    </strong>
-                                    {grnToReject.id && <span style={{ color: '#6b7280' }}> (ID: #{grnToReject.id})</span>}?
-                                </p>
-
-                                {/* Summary Box */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                 <div style={{
-                                    background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8,
-                                    padding: '12px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12
+                                    width: 36, height: 36, borderRadius: 8, background: '#fee2e2',
+                                    color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center'
                                 }}>
-                                    <div>
-                                        <span style={{ color: '#6b7280', display: 'block' }}>PO Reference:</span>
-                                        <strong style={{ color: '#1f2937' }}>
-                                            {grnToReject.purchase_order_number || (grnToReject.purchase_order_id ? `PO-${grnToReject.purchase_order_id}` : '—')}
-                                        </strong>
-                                    </div>
-                                    <div>
-                                        <span style={{ color: '#6b7280', display: 'block' }}>Current Status:</span>
-                                        <div>{renderStatusBadge(grnToReject.status)}</div>
-                                    </div>
-                                    <div>
-                                        <span style={{ color: '#6b7280', display: 'block' }}>Supplier:</span>
-                                        <span style={{ color: '#1f2937', fontWeight: 600 }}>
-                                            {grnToReject.supplier_name || '—'}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <span style={{ color: '#6b7280', display: 'block' }}>Received Qty:</span>
-                                        <span style={{ color: '#1f2937', fontWeight: 600 }}>
-                                            {grnToReject.total_received_quantity ?? 0} pcs
-                                        </span>
-                                    </div>
+                                    <BsExclamationTriangle size={18} />
                                 </div>
-
-                                {/* Reason Input */}
                                 <div>
-                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
-                                        Rejection Reason <span style={{ color: '#dc2626' }}>*</span>
-                                    </label>
-                                    <textarea
-                                        rows={3}
-                                        maxLength={500}
-                                        placeholder="Enter specific reason for rejecting this GRN shipment (e.g. damaged goods, wrong specification, missing invoice)..."
-                                        value={rejectReason}
-                                        onChange={(e) => {
-                                            setRejectReason(e.target.value);
-                                            if (rejectGrnError) setRejectGrnError(null);
-                                        }}
-                                        disabled={Boolean(rejectingGrnId)}
-                                        style={{
-                                            width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1',
-                                            borderRadius: 8, fontSize: 13, boxSizing: 'border-box', outline: 'none', resize: 'vertical',
-                                            background: rejectingGrnId ? '#f1f5f9' : '#fff'
-                                        }}
-                                    />
-                                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, textAlign: 'right' }}>
-                                        {rejectReason.length}/500
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#991b1b' }}>
+                                        Confirm GRN Deletion
+                                    </h3>
+                                    <div style={{ fontSize: 12, color: '#b91c1c' }}>
+                                        Permanent deletion of Goods Receipt Note
                                     </div>
                                 </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCancelDeleteGrn}
+                                disabled={Boolean(deletingGrnId)}
+                                style={{
+                                    background: 'none', border: 'none', cursor: deletingGrnId ? 'not-allowed' : 'pointer',
+                                    color: '#9ca3af', padding: 4
+                                }}
+                            >
+                                <BsX size={22} />
+                            </button>
+                        </div>
 
+                        {/* Body */}
+                        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            {/* Deletion Error / 409 Conflict Banner */}
+                            {deleteGrnError && (
                                 <div style={{
-                                    fontSize: 12, color: '#64748b', background: '#f8fafc',
-                                    padding: '8px 12px', borderRadius: 6, border: '1px dashed #cbd5e1'
+                                    padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca',
+                                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8
                                 }}>
-                                    <strong>Notice:</strong> Once rejected, this GRN cannot be received into inventory.
+                                    <BsExclamationTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+                                    <div style={{ flex: 1, wordBreak: 'break-word', fontWeight: 600 }}>
+                                        {deleteGrnError}
+                                    </div>
+                                </div>
+                            )}
+
+                            <p style={{ margin: 0, fontSize: 13.5, color: '#374151', lineHeight: 1.5 }}>
+                                Are you sure you want to delete Goods Receipt Note{' '}
+                                <strong style={{ color: '#111827' }}>
+                                    {grnToDelete.grn_number || (grnToDelete.id ? `GRN-${grnToDelete.id}` : '—')}
+                                </strong>
+                                {grnToDelete.id && <span style={{ color: '#6b7280' }}> (ID: #{grnToDelete.id})</span>}?
+                            </p>
+
+                            {/* Summary Box */}
+                            <div style={{
+                                background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8,
+                                padding: '12px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12
+                            }}>
+                                <div>
+                                    <span style={{ color: '#6b7280', display: 'block' }}>PO Reference:</span>
+                                    <strong style={{ color: '#1f2937' }}>
+                                        {grnToDelete.purchase_order_number || (grnToDelete.purchase_order_id ? `PO-${grnToDelete.purchase_order_id}` : '—')}
+                                    </strong>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#6b7280', display: 'block' }}>Status:</span>
+                                    <div>{renderStatusBadge(grnToDelete.status)}</div>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#6b7280', display: 'block' }}>Supplier:</span>
+                                    <span style={{ color: '#1f2937', fontWeight: 600 }}>
+                                        {grnToDelete.supplier_name || '—'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#6b7280', display: 'block' }}>Received Qty:</span>
+                                    <span style={{ color: '#1f2937', fontWeight: 600 }}>
+                                        {grnToDelete.total_received_quantity ?? 0} pcs
+                                    </span>
                                 </div>
                             </div>
 
-                            {/* Footer */}
                             <div style={{
-                                padding: '14px 20px', borderTop: '1px solid #e5e7eb', background: '#f9fafb',
-                                display: 'flex', justifyContent: 'flex-end', gap: 10
+                                fontSize: 12, color: '#64748b', background: '#f8fafc',
+                                padding: '8px 12px', borderRadius: 6, border: '1px dashed #cbd5e1'
                             }}>
-                                <button
-                                    type="button"
-                                    onClick={handleCancelRejectGrn}
-                                    disabled={Boolean(rejectingGrnId)}
-                                    style={{
-                                        padding: '8px 16px', background: '#ffffff', border: '1px solid #d1d5db',
-                                        borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#374151',
-                                        cursor: rejectingGrnId ? 'not-allowed' : 'pointer'
-                                    }}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleConfirmRejectGrn}
-                                    disabled={Boolean(rejectingGrnId) || !rejectReason.trim()}
-                                    style={{
-                                        padding: '8px 18px',
-                                        background: (Boolean(rejectingGrnId) || !rejectReason.trim()) ? '#94a3b8' : '#dc2626',
-                                        border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#ffffff',
-                                        cursor: (Boolean(rejectingGrnId) || !rejectReason.trim()) ? 'not-allowed' : 'pointer',
-                                        display: 'flex', alignItems: 'center', gap: 6,
-                                        boxShadow: '0 1px 2px rgba(220, 38, 38, 0.2)'
-                                    }}
-                                >
-                                    <BsXCircle size={14} />
-                                    {rejectingGrnId ? 'Rejecting...' : 'Confirm Reject'}
-                                </button>
+                                <strong>Notice:</strong> Received inventory cannot be deleted once inwarded. This action will permanently remove this note record from Retail OS.
                             </div>
                         </div>
-                    </div>
-                )}
 
-                {/* GRN PRINT SLIP PREVIEW MODAL */}
-                {isPrintSlipModalOpen && printSlipHtml && (
-                    <div style={{
-                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: 'rgba(15, 23, 42, 0.75)', zIndex: 1250,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        padding: 16, backdropFilter: 'blur(3px)'
-                    }}>
+                        {/* Footer */}
                         <div style={{
-                            background: '#ffffff', borderRadius: 12,
-                            width: '100%', maxWidth: '980px', maxHeight: '94vh',
-                            display: 'flex', flexDirection: 'column',
-                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                            border: '1px solid #e2e8f0', overflow: 'hidden'
+                            padding: '14px 20px', borderTop: '1px solid #e5e7eb', background: '#f9fafb',
+                            display: 'flex', justifyContent: 'flex-end', gap: 10
                         }}>
-                            {/* Header */}
-                            <div style={{
-                                padding: '16px 24px', borderBottom: '1px solid #e2e8f0',
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                background: '#f8fafc', flexWrap: 'wrap', gap: 12
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                    <div style={{
-                                        width: 38, height: 38, borderRadius: 8,
-                                        background: '#e0e7ff', color: '#4338ca',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                    }}>
-                                        <BsPrinter size={20} />
-                                    </div>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
-                                            Goods Received Note Slip: {printSlipGrn?.grn_number || (printSlipGrn?.id ? `GRN-${printSlipGrn.id}` : 'Printable')}
-                                        </h3>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                                            <span style={{ fontSize: 11.5, color: '#64748b' }}>
-                                                Status: <strong>{printSlipGrn?.status || 'Active'}</strong>
-                                            </span>
-                                            <span style={{ fontSize: 11, color: '#94a3b8' }}>•</span>
-                                            <span style={{ fontSize: 11.5, color: '#64748b' }}>
-                                                Isolated A4 Document Preview
-                                            </span>
-                                        </div>
+                            <button
+                                type="button"
+                                onClick={handleCancelDeleteGrn}
+                                disabled={Boolean(deletingGrnId)}
+                                style={{
+                                    padding: '8px 16px', background: '#ffffff', border: '1px solid #d1d5db',
+                                    borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#374151',
+                                    cursor: deletingGrnId ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmDeleteGrn}
+                                disabled={Boolean(deletingGrnId)}
+                                style={{
+                                    padding: '8px 18px', background: deletingGrnId ? '#94a3b8' : '#dc2626',
+                                    border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#ffffff',
+                                    cursor: deletingGrnId ? 'not-allowed' : 'pointer', display: 'flex',
+                                    alignItems: 'center', gap: 6, boxShadow: '0 1px 2px rgba(220, 38, 38, 0.2)'
+                                }}
+                            >
+                                <BsTrash size={14} />
+                                {deletingGrnId ? 'Deleting...' : 'Delete GRN'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* REJECT GRN CONFIRMATION MODAL */}
+            {grnToReject && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.65)', backdropFilter: 'blur(3px)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1250, padding: 16
+                }}>
+                    <div style={{
+                        background: '#ffffff', borderRadius: 14, width: '100%', maxWidth: 480,
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #e2e8f0', overflow: 'hidden'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            padding: '16px 20px', borderBottom: '1px solid #fee2e2',
+                            background: '#fef2f2', display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 36, height: 36, borderRadius: 8, background: '#fee2e2',
+                                    color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}>
+                                    <BsXCircle size={18} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#991b1b' }}>
+                                        Reject Goods Receipt Note
+                                    </h3>
+                                    <div style={{ fontSize: 12, color: '#b91c1c' }}>
+                                        Confirm rejection and provide mandatory reason
                                     </div>
                                 </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCancelRejectGrn}
+                                disabled={Boolean(rejectingGrnId)}
+                                style={{
+                                    background: 'none', border: 'none', cursor: rejectingGrnId ? 'not-allowed' : 'pointer',
+                                    color: '#9ca3af', padding: 4
+                                }}
+                            >
+                                <BsX size={22} />
+                            </button>
+                        </div>
 
-                                {/* Header Actions */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                                    <button
-                                        type="button"
-                                        onClick={handleTriggerPrintSlipIframe}
-                                        style={{
-                                            padding: '8px 16px', background: '#4f46e5', color: '#ffffff',
-                                            border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600,
-                                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
-                                            boxShadow: '0 1px 2px rgba(79, 70, 229, 0.2)'
-                                        }}
-                                        title="Open browser print dialog for this GRN slip"
-                                    >
-                                        <BsPrinter size={15} /> Print Slip
-                                    </button>
-                                    {printSlipGrn && (
-                                        <button
-                                            type="button"
-                                            onClick={() => handleDownloadPdf(printSlipGrn)}
-                                            disabled={downloadingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id)}
-                                            style={{
-                                                padding: '8px 14px', background: '#f8fafc', color: '#334155',
-                                                border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, fontWeight: 600,
-                                                cursor: downloadingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'not-allowed' : 'pointer',
-                                                display: 'inline-flex', alignItems: 'center', gap: 6
-                                            }}
-                                            title="Download original backend PDF binary"
-                                        >
-                                            <BsDownload size={14} /> {downloadingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'Downloading...' : 'PDF'}
-                                        </button>
-                                    )}
-                                    <button
-                                        type="button"
-                                        onClick={handleOpenSlipInNewTab}
-                                        style={{
-                                            padding: '8px 12px', background: '#f8fafc', color: '#475569',
-                                            border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 12.5, fontWeight: 600,
-                                            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6
-                                        }}
-                                        title="Open preview in a separate browser tab"
-                                    >
-                                        New Tab
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setIsPrintSlipModalOpen(false);
-                                            setPrintSlipHtml('');
-                                            setPrintSlipGrn(null);
-                                        }}
-                                        style={{
-                                            background: 'transparent', border: 'none',
-                                            cursor: 'pointer', color: '#64748b', padding: 4, display: 'flex'
-                                        }}
-                                        title="Close preview"
-                                    >
-                                        <BsX size={24} />
-                                    </button>
+                        {/* Body */}
+                        <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                            {/* Rejection Error Banner */}
+                            {rejectGrnError && (
+                                <div style={{
+                                    padding: '12px 14px', background: '#fef2f2', border: '1px solid #fecaca',
+                                    borderRadius: 8, color: '#dc2626', fontSize: 13, display: 'flex', alignItems: 'flex-start', gap: 8
+                                }}>
+                                    <BsExclamationTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+                                    <div style={{ flex: 1, wordBreak: 'break-word', fontWeight: 600 }}>
+                                        {rejectGrnError}
+                                    </div>
+                                </div>
+                            )}
+
+                            <p style={{ margin: 0, fontSize: 13.5, color: '#374151', lineHeight: 1.5 }}>
+                                Are you sure you want to reject Goods Receipt Note{' '}
+                                <strong style={{ color: '#111827' }}>
+                                    {grnToReject.grn_number || (grnToReject.id ? `GRN-${grnToReject.id}` : '—')}
+                                </strong>
+                                {grnToReject.id && <span style={{ color: '#6b7280' }}> (ID: #{grnToReject.id})</span>}?
+                            </p>
+
+                            {/* Summary Box */}
+                            <div style={{
+                                background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8,
+                                padding: '12px 14px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12
+                            }}>
+                                <div>
+                                    <span style={{ color: '#6b7280', display: 'block' }}>PO Reference:</span>
+                                    <strong style={{ color: '#1f2937' }}>
+                                        {grnToReject.purchase_order_number || (grnToReject.purchase_order_id ? `PO-${grnToReject.purchase_order_id}` : '—')}
+                                    </strong>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#6b7280', display: 'block' }}>Current Status:</span>
+                                    <div>{renderStatusBadge(grnToReject.status)}</div>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#6b7280', display: 'block' }}>Supplier:</span>
+                                    <span style={{ color: '#1f2937', fontWeight: 600 }}>
+                                        {grnToReject.supplier_name || '—'}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span style={{ color: '#6b7280', display: 'block' }}>Received Qty:</span>
+                                    <span style={{ color: '#1f2937', fontWeight: 600 }}>
+                                        {grnToReject.total_received_quantity ?? 0} pcs
+                                    </span>
                                 </div>
                             </div>
 
-                            {/* Sandboxed Iframe Container */}
-                            <div style={{ flex: 1, padding: 12, background: '#f8fafc', overflow: 'hidden', display: 'flex' }}>
-                                <iframe
-                                    ref={printSlipIframeRef}
-                                    srcDoc={preparePrintSlipHtml(printSlipHtml)}
-                                    title={`GRN Slip ${printSlipGrn?.grn_number || ''}`}
-                                    sandbox="allow-scripts allow-modals"
+                            {/* Reason Input */}
+                            <div>
+                                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: '#374151', marginBottom: 6 }}>
+                                    Rejection Reason <span style={{ color: '#dc2626' }}>*</span>
+                                </label>
+                                <textarea
+                                    rows={3}
+                                    maxLength={500}
+                                    placeholder="Enter specific reason for rejecting this GRN shipment (e.g. damaged goods, wrong specification, missing invoice)..."
+                                    value={rejectReason}
+                                    onChange={(e) => {
+                                        setRejectReason(e.target.value);
+                                        if (rejectGrnError) setRejectGrnError(null);
+                                    }}
+                                    disabled={Boolean(rejectingGrnId)}
                                     style={{
-                                        width: '100%', height: '72vh', border: '1px solid #cbd5e1',
-                                        borderRadius: 8, background: '#ffffff'
+                                        width: '100%', padding: '9px 12px', border: '1px solid #cbd5e1',
+                                        borderRadius: 8, fontSize: 13, boxSizing: 'border-box', outline: 'none', resize: 'vertical',
+                                        background: rejectingGrnId ? '#f1f5f9' : '#fff'
                                     }}
                                 />
+                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, textAlign: 'right' }}>
+                                    {rejectReason.length}/500
+                                </div>
                             </div>
 
-                            {/* Footer */}
                             <div style={{
-                                padding: '12px 24px', borderTop: '1px solid #e2e8f0', background: '#ffffff',
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                                fontSize: 12, color: '#64748b', background: '#f8fafc',
+                                padding: '8px 12px', borderRadius: 6, border: '1px dashed #cbd5e1'
                             }}>
-                                <span style={{ fontSize: 12, color: '#64748b' }}>
-                                    Tip: You can print directly using the <strong>Print Slip</strong> button above or the print button inside the slip.
-                                </span>
+                                <strong>Notice:</strong> Once rejected, this GRN cannot be received into inventory.
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            padding: '14px 20px', borderTop: '1px solid #e5e7eb', background: '#f9fafb',
+                            display: 'flex', justifyContent: 'flex-end', gap: 10
+                        }}>
+                            <button
+                                type="button"
+                                onClick={handleCancelRejectGrn}
+                                disabled={Boolean(rejectingGrnId)}
+                                style={{
+                                    padding: '8px 16px', background: '#ffffff', border: '1px solid #d1d5db',
+                                    borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#374151',
+                                    cursor: rejectingGrnId ? 'not-allowed' : 'pointer'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmRejectGrn}
+                                disabled={Boolean(rejectingGrnId) || !rejectReason.trim()}
+                                style={{
+                                    padding: '8px 18px',
+                                    background: (Boolean(rejectingGrnId) || !rejectReason.trim()) ? '#94a3b8' : '#dc2626',
+                                    border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#ffffff',
+                                    cursor: (Boolean(rejectingGrnId) || !rejectReason.trim()) ? 'not-allowed' : 'pointer',
+                                    display: 'flex', alignItems: 'center', gap: 6,
+                                    boxShadow: '0 1px 2px rgba(220, 38, 38, 0.2)'
+                                }}
+                            >
+                                <BsXCircle size={14} />
+                                {rejectingGrnId ? 'Rejecting...' : 'Confirm Reject'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* GRN PRINT SLIP PREVIEW MODAL */}
+            {isPrintSlipModalOpen && printSlipHtml && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(15, 23, 42, 0.75)', zIndex: 1250,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: 16, backdropFilter: 'blur(3px)'
+                }}>
+                    <div style={{
+                        background: '#ffffff', borderRadius: 12,
+                        width: '100%', maxWidth: '980px', maxHeight: '94vh',
+                        display: 'flex', flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        border: '1px solid #e2e8f0', overflow: 'hidden'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            padding: '16px 24px', borderBottom: '1px solid #e2e8f0',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            background: '#f8fafc', flexWrap: 'wrap', gap: 12
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <div style={{
+                                    width: 38, height: 38, borderRadius: 8,
+                                    background: '#e0e7ff', color: '#4338ca',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                }}>
+                                    <BsPrinter size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e293b' }}>
+                                        Goods Received Note Slip: {printSlipGrn?.grn_number || (printSlipGrn?.id ? `GRN-${printSlipGrn.id}` : 'Printable')}
+                                    </h3>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                                        <span style={{ fontSize: 11.5, color: '#64748b' }}>
+                                            Status: <strong>{printSlipGrn?.status || 'Active'}</strong>
+                                        </span>
+                                        <span style={{ fontSize: 11, color: '#94a3b8' }}>•</span>
+                                        <span style={{ fontSize: 11.5, color: '#64748b' }}>
+                                            Isolated A4 Document Preview
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Header Actions */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                <button
+                                    type="button"
+                                    onClick={handleTriggerPrintSlipIframe}
+                                    style={{
+                                        padding: '8px 16px', background: '#4f46e5', color: '#ffffff',
+                                        border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600,
+                                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        boxShadow: '0 1px 2px rgba(79, 70, 229, 0.2)'
+                                    }}
+                                    title="Open browser print dialog for this GRN slip"
+                                >
+                                    <BsPrinter size={15} /> Print Slip
+                                </button>
+                                {printSlipGrn && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDownloadPdf(printSlipGrn)}
+                                        disabled={downloadingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id)}
+                                        style={{
+                                            padding: '8px 14px', background: '#f8fafc', color: '#334155',
+                                            border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, fontWeight: 600,
+                                            cursor: downloadingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex', alignItems: 'center', gap: 6
+                                        }}
+                                        title="Download original backend PDF binary"
+                                    >
+                                        <BsDownload size={14} /> {downloadingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'Downloading...' : 'PDF'}
+                                    </button>
+                                )}
+                                {printSlipGrn && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handlePreviewPdf(printSlipGrn)}
+                                        disabled={previewingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id)}
+                                        style={{
+                                            padding: '8px 14px', background: '#f8fafc', color: '#334155',
+                                            border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, fontWeight: 600,
+                                            cursor: previewingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex', alignItems: 'center', gap: 6
+                                        }}
+                                        title="Preview GRN PDF document in a new window"
+                                    >
+                                        <BsEye size={14} /> {previewingPdfGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'Loading...' : 'PDF Preview'}
+                                    </button>
+                                )}
+                                {printSlipGrn && (
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSlipDownloadCsv(printSlipGrn)}
+                                        disabled={downloadingCsvSlipGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id)}
+                                        style={{
+                                            padding: '8px 14px', background: '#f8fafc', color: '#334155',
+                                            border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, fontWeight: 600,
+                                            cursor: downloadingCsvSlipGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex', alignItems: 'center', gap: 6
+                                        }}
+                                        title="Export GRN as CSV file"
+                                    >
+                                        <BsDownload size={14} /> {downloadingCsvSlipGrnId === (printSlipGrn.id ?? printSlipGrn.grn_id) ? 'Exporting...' : 'CSV'}
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -9813,18 +10441,74 @@ export const GRNPage = () => {
                                         setPrintSlipGrn(null);
                                     }}
                                     style={{
-                                        padding: '7px 18px', background: '#f1f5f9', border: '1px solid #d1d5db',
-                                        borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#334155', cursor: 'pointer'
+                                        background: 'transparent', border: 'none',
+                                        cursor: 'pointer', color: '#64748b', padding: 4, display: 'flex'
                                     }}
+                                    title="Close preview"
                                 >
-                                    Close
+                                    <BsX size={24} />
                                 </button>
                             </div>
                         </div>
-                    </div>
-                )}
 
-            </ModuleContainer>
+                        {printSlipError && (
+                            <div style={{
+                                padding: '8px 24px', background: '#fef2f2', borderBottom: '1px solid #fee2e2',
+                                color: '#b91c1c', fontSize: 12.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                            }}>
+                                <span>{printSlipError}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setPrintSlipError(null)}
+                                    style={{ background: 'transparent', border: 'none', color: '#b91c1c', cursor: 'pointer', fontWeight: 700 }}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Sandboxed Iframe Container */}
+                        <div style={{ flex: 1, padding: 12, background: '#f8fafc', overflow: 'hidden', display: 'flex' }}>
+                            <iframe
+                                ref={printSlipIframeRef}
+                                srcDoc={preparePrintSlipHtml(printSlipHtml)}
+                                title={`GRN Slip ${printSlipGrn?.grn_number || ''}`}
+                                sandbox="allow-scripts allow-modals"
+                                style={{
+                                    width: '100%', height: '72vh', border: '1px solid #cbd5e1',
+                                    borderRadius: 8, background: '#ffffff'
+                                }}
+                            />
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            padding: '12px 24px', borderTop: '1px solid #e2e8f0', background: '#ffffff',
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}>
+                            <span style={{ fontSize: 12, color: '#64748b' }}>
+                                Tip: You can print directly using the <strong>Print Slip</strong> button above or the print button inside the slip.
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setIsPrintSlipModalOpen(false);
+                                    setPrintSlipHtml('');
+                                    setPrintSlipGrn(null);
+                                }}
+                                style={{
+                                    padding: '7px 18px', background: '#f1f5f9', border: '1px solid #d1d5db',
+                                    borderRadius: 6, fontSize: 13, fontWeight: 600, color: '#334155', cursor: 'pointer'
+                                }}
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+        </ModuleContainer>
         </div>
     );
 };
@@ -9832,6 +10516,13 @@ export const GRNPage = () => {
 /* ─────────────────────────────────────────────────────────────
    7. INVENTORY: Purchase Returns
 ───────────────────────────────────────────────────────────── */
+
+
+/* ─────────────────────────────────────────────────────────────
+   7. INVENTORY: Purchase Returns
+───────────────────────────────────────────────────────────── */
+
+
 export const PurchaseReturnsPage = (props) => <PurchaseOrderReturns {...props} />;
 
 

@@ -57,13 +57,21 @@ const InventoryCards = ({
                     <div className="inventory-card-content">
                         <h3>{card.title}</h3>
                         <h2
+                            title={typeof card.value === "string" || typeof card.value === "number" ? String(card.value) : undefined}
                             style={
                                 card.type === "value"
                                     ? {
                                           fontSize:
-                                              String(card.value || "").length >= 14
-                                                  ? "clamp(12px, 0.95vw + 1px, 15px)"
-                                                  : "clamp(13px, 1.05vw + 1px, 18px)",
+                                              String(card.value || "").length >= 16
+                                                  ? "clamp(11px, 0.8vw + 2px, 13.5px)"
+                                                  : String(card.value || "").length >= 13
+                                                  ? "clamp(12px, 0.9vw + 2px, 15px)"
+                                                  : "clamp(13px, 1.05vw + 2px, 17.5px)",
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          whiteSpace: "nowrap",
+                                          maxWidth: "100%",
+                                          boxSizing: "border-box"
                                       }
                                     : undefined
                             }

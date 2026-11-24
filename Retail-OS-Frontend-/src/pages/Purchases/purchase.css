@@ -1096,3 +1096,505 @@
     gap: 10px !important;
   }
 }
+
+/* =====================================================
+   ENTERPRISE SAAS REDESIGN ENHANCEMENTS
+   Toolbar, Filters, KPI Cards, Modern Table, & Action Buttons
+===================================================== */
+
+/* Toolbar Container - Unified Single Horizontal Row */
+.purchase-page-content .purchase-toolbar-container {
+  padding: 12px 18px !important;
+  background: #ffffff !important;
+  border-radius: 12px !important;
+  border-bottom: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.purchase-page-content .purchase-toolbar-row {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 12px !important;
+  width: 100% !important;
+}
+
+/* 1. Search Box */
+.purchase-page-content .purchase-search-box {
+  position: relative !important;
+  flex: 1 1 240px !important;
+  min-width: 200px !important;
+  max-width: 320px !important;
+  height: 38px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.purchase-page-content .purchase-search-icon {
+  position: absolute !important;
+  left: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  color: #64748b !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
+}
+
+.purchase-page-content .purchase-search-input {
+  width: 100% !important;
+  height: 38px !important;
+  padding: 0 32px 0 34px !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  outline: none !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-sizing: border-box !important;
+}
+
+.purchase-page-content .purchase-search-input::placeholder {
+  color: #64748b !important;
+  opacity: 1 !important;
+  font-weight: 400 !important;
+}
+
+.purchase-page-content .purchase-search-input:hover {
+  border-color: #94a3b8 !important;
+  background: #ffffff !important;
+}
+
+.purchase-page-content .purchase-search-input:focus {
+  background: #ffffff !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+}
+
+.purchase-page-content .purchase-search-clear-btn {
+  position: absolute !important;
+  right: 8px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  background: #e2e8f0 !important;
+  border: none !important;
+  border-radius: 50% !important;
+  width: 20px !important;
+  height: 20px !important;
+  cursor: pointer !important;
+  color: #475569 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  transition: all 0.15s ease !important;
+  z-index: 2 !important;
+}
+
+.purchase-page-content .purchase-search-clear-btn:hover {
+  background: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+/* 2 & 3. Filter Wrappers */
+.purchase-page-content .purchase-filter-wrapper {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  height: 38px !important;
+}
+
+.purchase-page-content .purchase-status-wrapper {
+  min-width: 150px !important;
+  max-width: 180px !important;
+  flex: 1 1 160px !important;
+}
+
+.purchase-page-content .purchase-supplier-wrapper {
+  min-width: 180px !important;
+  max-width: 250px !important;
+  flex: 1 1 200px !important;
+}
+
+.purchase-page-content .purchase-filter-prefix-icon {
+  position: absolute !important;
+  left: 11px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
+}
+
+.purchase-page-content .purchase-filter-select {
+  width: 100% !important;
+  height: 38px !important;
+  padding: 0 28px 0 32px !important;
+  border: 1.5px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  outline: none !important;
+  cursor: pointer !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-sizing: border-box !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.purchase-page-content .purchase-filter-select:hover {
+  border-color: #94a3b8 !important;
+  background: #f8fafc !important;
+}
+
+.purchase-page-content .purchase-filter-select:focus {
+  background: #ffffff !important;
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
+}
+
+.purchase-page-content .purchase-filter-select.is-active {
+  background: #eef2ff !important;
+  border-color: #6366f1 !important;
+  color: #3730a3 !important;
+  font-weight: 600 !important;
+}
+
+.purchase-page-content .purchase-select-icon {
+  position: absolute !important;
+  right: 10px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  color: #64748b !important;
+  pointer-events: none !important;
+  z-index: 2 !important;
+}
+
+/* 4. Active Filters & Reset */
+.purchase-page-content .purchase-filter-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin-left: auto !important;
+  flex-wrap: wrap !important;
+}
+
+.purchase-page-content .purchase-active-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 5px 10px !important;
+  background: #eef2ff !important;
+  color: #4338ca !important;
+  border: 1px solid #c7d2fe !important;
+  border-radius: 6px !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  height: 32px !important;
+  box-sizing: border-box !important;
+  white-space: nowrap !important;
+}
+
+.purchase-page-content .purchase-reset-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  height: 38px !important;
+  padding: 0 12px !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  color: #b91c1c !important;
+  background: #fef2f2 !important;
+  border: 1px solid #fecaca !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  white-space: nowrap !important;
+  box-sizing: border-box !important;
+}
+
+.purchase-page-content .purchase-reset-btn:hover {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+  border-color: #fca5a5 !important;
+}
+
+/* KPI Card Micro-interactions */
+.purchase-page-content .purchase-stat-card {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.purchase-page-content .purchase-stat-card--clickable:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08) !important;
+  border-color: #cbd5e1 !important;
+}
+
+.purchase-page-content .purchase-stat-card--selected {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+}
+
+/* Table Enhancements */
+.purchase-page-content .purchase-table th {
+  padding: 12px 14px !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+  white-space: nowrap !important;
+}
+
+.purchase-page-content .purchase-table tbody tr {
+  border-bottom: 1px solid #f1f5f9 !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.purchase-page-content .purchase-table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+
+.purchase-page-content .purchase-table td {
+  padding: 12px 14px !important;
+  vertical-align: middle !important;
+}
+
+/* Action Buttons */
+.purchase-page-content .adm-btn-action {
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 7px !important;
+  font-size: 13px !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  border: 1.5px solid transparent !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
+  position: relative !important;
+  outline: none !important;
+}
+
+.purchase-page-content .adm-btn-action:active {
+  transform: translateY(0) !important;
+}
+
+/* View Button */
+.purchase-page-content .adm-btn-action.adm-btn-view {
+  background: #eef2ff !important;
+  color: #4f46e5 !important;
+  border-color: #c7d2fe !important;
+}
+
+.purchase-page-content .adm-btn-action.adm-btn-view:hover {
+  background: #4f46e5 !important;
+  color: #ffffff !important;
+  border-color: #4f46e5 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25) !important;
+}
+
+/* Edit Button */
+.purchase-page-content .adm-btn-action.adm-btn-edit {
+  background: #f0f9ff !important;
+  color: #0284c7 !important;
+  border-color: #bae6fd !important;
+}
+
+.purchase-page-content .adm-btn-action.adm-btn-edit:hover {
+  background: #0284c7 !important;
+  color: #ffffff !important;
+  border-color: #0284c7 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25) !important;
+}
+
+/* Approve Button */
+.purchase-page-content .adm-btn-action.adm-btn-approve {
+  background: #ecfdf5 !important;
+  color: #059669 !important;
+  border-color: #a7f3d0 !important;
+}
+
+.purchase-page-content .adm-btn-action.adm-btn-approve:hover:not(:disabled) {
+  background: #059669 !important;
+  color: #ffffff !important;
+  border-color: #059669 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25) !important;
+}
+
+/* Receive Button */
+.purchase-page-content .adm-btn-action.adm-btn-receive {
+  background: #f0fdf4 !important;
+  color: #16a34a !important;
+  border-color: #bbf7d0 !important;
+}
+
+.purchase-page-content .adm-btn-action.adm-btn-receive:hover:not(:disabled) {
+  background: #16a34a !important;
+  color: #ffffff !important;
+  border-color: #16a34a !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25) !important;
+}
+
+/* Cancel Button */
+.purchase-page-content .adm-btn-action.adm-btn-cancel {
+  background: #fffbeb !important;
+  color: #d97706 !important;
+  border-color: #fde68a !important;
+}
+
+.purchase-page-content .adm-btn-action.adm-btn-cancel:hover:not(:disabled) {
+  background: #d97706 !important;
+  color: #ffffff !important;
+  border-color: #d97706 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25) !important;
+}
+
+/* PDF Button */
+.purchase-page-content .adm-btn-action.adm-btn-pdf {
+  background: #f5f3ff !important;
+  color: #7c3aed !important;
+  border-color: #ddd6fe !important;
+}
+
+.purchase-page-content .adm-btn-action.adm-btn-pdf:hover:not(:disabled) {
+  background: #7c3aed !important;
+  color: #ffffff !important;
+  border-color: #7c3aed !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.25) !important;
+}
+
+/* Delete Button */
+.purchase-page-content .adm-btn-action.adm-btn-delete {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+  border-color: #fecaca !important;
+}
+
+.purchase-page-content .adm-btn-action.adm-btn-delete:hover:not(:disabled) {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border-color: #dc2626 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25) !important;
+}
+
+.purchase-page-content .adm-btn-action:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Action Tooltips */
+.purchase-page-content .adm-btn-action[data-tooltip]::after,
+.purchase-page-content .adm-btn-action[aria-label]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%) translateY(3px);
+  padding: 5px 9px;
+  background: #0f172a;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.28);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  z-index: 99999;
+  transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+}
+
+.purchase-page-content .adm-btn-action[data-tooltip]::before,
+.purchase-page-content .adm-btn-action[aria-label]::before {
+  content: "";
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px 5px 0 5px;
+  border-style: solid;
+  border-color: #0f172a transparent transparent transparent;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  z-index: 99999;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.purchase-page-content .adm-btn-action[data-tooltip]:hover::after,
+.purchase-page-content .adm-btn-action[data-tooltip]:hover::before,
+.purchase-page-content .adm-btn-action[aria-label]:hover::after,
+.purchase-page-content .adm-btn-action[aria-label]:hover::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* First 2 rows tooltip flips downward */
+.purchase-page-content tbody tr:nth-child(-n+2) td:last-child .adm-btn-action[data-tooltip]::after,
+.purchase-page-content tbody tr:nth-child(-n+2) td:last-child .adm-btn-action[aria-label]::after {
+  bottom: auto;
+  top: calc(100% + 7px);
+  transform: translateX(-50%) translateY(-3px);
+}
+
+.purchase-page-content tbody tr:nth-child(-n+2) td:last-child .adm-btn-action[data-tooltip]::before,
+.purchase-page-content tbody tr:nth-child(-n+2) td:last-child .adm-btn-action[aria-label]::before {
+  bottom: auto;
+  top: calc(100% + 2px);
+  border-width: 0 5px 5px 5px;
+  border-color: transparent transparent #0f172a transparent;
+}
+
+.purchase-page-content tbody tr:nth-child(-n+2) td:last-child .adm-btn-action[data-tooltip]:hover::after,
+.purchase-page-content tbody tr:nth-child(-n+2) td:last-child .adm-btn-action[aria-label]:hover::after {
+  transform: translateX(-50%) translateY(0);
+}
+
+/* Rightmost button tooltip edge alignment */
+.purchase-page-content td:last-child .adm-btn-action:last-child[data-tooltip]::after,
+.purchase-page-content td:last-child .adm-btn-action:last-child[aria-label]::after {
+  left: auto;
+  right: 0;
+  transform: translateY(3px);
+}
+
+.purchase-page-content td:last-child .adm-btn-action:last-child[data-tooltip]::before,
+.purchase-page-content td:last-child .adm-btn-action:last-child[aria-label]::before {
+  left: auto;
+  right: 11px;
+  transform: none;
+}
+
+.purchase-page-content td:last-child .adm-btn-action:last-child[data-tooltip]:hover::after,
+.purchase-page-content td:last-child .adm-btn-action:last-child[aria-label]:hover::after {
+  transform: translateY(0);
+}

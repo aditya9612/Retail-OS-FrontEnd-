@@ -154,3 +154,31 @@ export const deleteSupplier = async (id) => {
   );
   return response.data;
 };
+
+export const getSupplierProducts = async (supplierId, params = {}) => {
+  const sId = parseInt(supplierId, 10);
+  if (!sId || sId <= 0) {
+    throw new Error("Valid supplier ID greater than zero is required");
+  }
+  const cleanParams = {};
+  if (params.page && Number(params.page) >= 1) cleanParams.page = Number(params.page);
+  if (params.page_size && Number(params.page_size) >= 1) {
+    cleanParams.page_size = Math.min(100, Number(params.page_size));
+  }
+  const response = await axiosInstance.get(`/suppliers/${sId}/products`, {
+    params: cleanParams,
+  });
+  return response.data;
+};
+
+export const updateSupplierStatus = async (supplierId, isActive) => {
+  const sId = parseInt(supplierId, 10);
+  if (!sId || sId <= 0) {
+    throw new Error("Valid supplier ID greater than zero is required");
+  }
+  const response = await axiosInstance.patch(`/suppliers/${sId}/status`, {
+    is_active: Boolean(isActive),
+  });
+  return response.data;
+};
+

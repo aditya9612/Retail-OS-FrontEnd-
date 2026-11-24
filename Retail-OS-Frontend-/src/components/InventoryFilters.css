@@ -67,6 +67,7 @@
   align-items: flex-end;
   gap: 12px;
   width: 100%;
+  flex-wrap: wrap;
 }
 
 .inventory-filters .filter-group {
@@ -315,74 +316,74 @@
 
 
 /* =========================================================
-   COMMON ACTION BUTTON
+   COMMON ACTION BUTTONS (FILTER, CLEAR, EXPORT)
 ========================================================= */
 
-.inventory-filters .reset-btn {
+.inventory-filters .filter-actions-btn-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  flex-wrap: nowrap;
+}
+
+.inventory-filters .filter-btn,
+.inventory-filters .search-btn,
+.inventory-filters .clear-btn,
+.inventory-filters .reset-btn,
+.inventory-filters .export-btn {
+  position: relative;
   height: 38px;
   min-height: 38px;
-  padding: 0 14px;
+  width: auto;
+  min-width: 38px;
+  padding: 0 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #475569;
+  border-radius: 7px;
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
+  line-height: 1;
   white-space: nowrap;
-  box-sizing: border-box;
-  transition: all 0.15s ease;
-}
-
-.inventory-filters .search-btn,
-.inventory-filters .export-btn {
-  position: relative;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border-radius: 6px;
-  font-family: inherit;
   cursor: pointer;
   box-sizing: border-box;
   transition: all 0.15s ease;
 }
-
 
 /* =========================================================
    BUTTON ICONS
 ========================================================= */
 
-.inventory-filters .reset-btn svg,
+.inventory-filters .filter-btn svg,
 .inventory-filters .search-btn svg,
+.inventory-filters .clear-btn svg,
+.inventory-filters .reset-btn svg,
 .inventory-filters .export-btn svg {
-  width: 15px;
-  height: 15px;
-
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
   pointer-events: none;
 }
 
-.inventory-filters .reset-btn:hover,
+.inventory-filters .filter-btn:hover,
 .inventory-filters .search-btn:hover,
+.inventory-filters .clear-btn:hover,
+.inventory-filters .reset-btn:hover,
 .inventory-filters .export-btn:hover {
   z-index: 1000;
 }
-
 
 /* =========================================================
    TOOLTIP
 ========================================================= */
 
-.inventory-filters .reset-btn[aria-label]::after,
+.inventory-filters .filter-btn[aria-label]::after,
 .inventory-filters .search-btn[aria-label]::after,
+.inventory-filters .clear-btn[aria-label]::after,
+.inventory-filters .reset-btn[aria-label]::after,
 .inventory-filters .export-btn[aria-label]::after {
   content: attr(aria-label);
   position: absolute;
@@ -411,8 +412,10 @@
     transform 0.15s ease;
 }
 
-.inventory-filters .reset-btn[aria-label]::before,
+.inventory-filters .filter-btn[aria-label]::before,
 .inventory-filters .search-btn[aria-label]::before,
+.inventory-filters .clear-btn[aria-label]::before,
+.inventory-filters .reset-btn[aria-label]::before,
 .inventory-filters .export-btn[aria-label]::before {
   content: "";
   position: absolute;
@@ -432,81 +435,83 @@
     visibility 0.15s ease;
 }
 
-.inventory-filters .reset-btn[aria-label]:hover::after,
-.inventory-filters .reset-btn[aria-label]:hover::before,
+.inventory-filters .filter-btn[aria-label]:hover::after,
+.inventory-filters .filter-btn[aria-label]:hover::before,
 .inventory-filters .search-btn[aria-label]:hover::after,
 .inventory-filters .search-btn[aria-label]:hover::before,
+.inventory-filters .clear-btn[aria-label]:hover::after,
+.inventory-filters .clear-btn[aria-label]:hover::before,
+.inventory-filters .reset-btn[aria-label]:hover::after,
+.inventory-filters .reset-btn[aria-label]:hover::before,
 .inventory-filters .export-btn[aria-label]:hover::after,
 .inventory-filters .export-btn[aria-label]:hover::before,
-.inventory-filters .reset-btn[aria-label]:focus-visible::after,
-.inventory-filters .reset-btn[aria-label]:focus-visible::before,
+.inventory-filters .filter-btn[aria-label]:focus-visible::after,
+.inventory-filters .filter-btn[aria-label]:focus-visible::before,
 .inventory-filters .search-btn[aria-label]:focus-visible::after,
 .inventory-filters .search-btn[aria-label]:focus-visible::before,
+.inventory-filters .clear-btn[aria-label]:focus-visible::after,
+.inventory-filters .clear-btn[aria-label]:focus-visible::before,
+.inventory-filters .reset-btn[aria-label]:focus-visible::after,
+.inventory-filters .reset-btn[aria-label]:focus-visible::before,
 .inventory-filters .export-btn[aria-label]:focus-visible::after,
 .inventory-filters .export-btn[aria-label]:focus-visible::before {
   opacity: 1;
   visibility: visible;
 }
 
-.inventory-filters .reset-btn[aria-label]:hover::after,
+.inventory-filters .filter-btn[aria-label]:hover::after,
 .inventory-filters .search-btn[aria-label]:hover::after,
+.inventory-filters .clear-btn[aria-label]:hover::after,
+.inventory-filters .reset-btn[aria-label]:hover::after,
 .inventory-filters .export-btn[aria-label]:hover::after,
-.inventory-filters .reset-btn[aria-label]:focus-visible::after,
+.inventory-filters .filter-btn[aria-label]:focus-visible::after,
 .inventory-filters .search-btn[aria-label]:focus-visible::after,
+.inventory-filters .clear-btn[aria-label]:focus-visible::after,
+.inventory-filters .reset-btn[aria-label]:focus-visible::after,
 .inventory-filters .export-btn[aria-label]:focus-visible::after {
   transform: translateX(-50%) translateY(0);
 }
 
-
 /* =========================================================
-   RESET BUTTON
+   CLEAR BUTTON (RESET)
 ========================================================= */
 
+.inventory-filters .clear-btn,
 .inventory-filters .reset-btn {
   color: #475569;
-
   background: #ffffff;
-
   border: 1px solid #d1d5db;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
+.inventory-filters .clear-btn:hover:not(:disabled),
 .inventory-filters .reset-btn:hover:not(:disabled) {
   color: #1f2937;
-
   background: #f8fafc;
-
-  border-color: #b8c1ce;
-
+  border-color: #94a3b8;
   transform: translateY(-1px);
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.08);
 }
-
 
 /* =========================================================
-   SEARCH BUTTON
+   FILTER BUTTON (SEARCH / APPLY)
 ========================================================= */
 
+.inventory-filters .filter-btn,
 .inventory-filters .search-btn {
   color: #ffffff;
-
   background: #4f46e5;
-
-  border: 1px solid #4f46e5;
-
-  box-shadow:
-    0 1px 2px rgba(79, 70, 229, 0.12);
+  border: 1px solid #4338ca;
+  box-shadow: 0 1px 2px rgba(79, 70, 229, 0.15);
 }
 
+.inventory-filters .filter-btn:hover:not(:disabled),
 .inventory-filters .search-btn:hover:not(:disabled) {
   background: #4338ca;
-
-  border-color: #4338ca;
-
-  box-shadow:
-    0 3px 7px rgba(79, 70, 229, 0.16);
-
+  border-color: #3730a3;
+  box-shadow: 0 3px 8px rgba(79, 70, 229, 0.25);
   transform: translateY(-1px);
 }
-
 
 /* =========================================================
    EXPORT BUTTON
@@ -514,22 +519,16 @@
 
 .inventory-filters .export-btn {
   color: #047857;
-
-  background: #ffffff;
-
+  background: #ecfdf5;
   border: 1px solid #a7f3d0;
+  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.08);
 }
 
 .inventory-filters .export-btn:hover:not(:disabled) {
-  color: #047857;
-
-  background: #ecfdf5;
-
+  color: #065f46;
+  background: #d1fae5;
   border-color: #6ee7b7;
-
-  box-shadow:
-    0 3px 7px rgba(16, 185, 129, 0.09);
-
+  box-shadow: 0 3px 8px rgba(16, 185, 129, 0.2);
   transform: translateY(-1px);
 }
 
@@ -624,7 +623,6 @@
 @media (max-width: 768px) {
   .inventory-filters {
     padding: 11px 12px 12px;
-
     gap: 11px;
   }
 
@@ -632,18 +630,36 @@
     gap: 10px;
   }
 
-  .inventory-filters .filters-row-top,
-  .inventory-filters .filters-row-middle {
+  .inventory-filters .filters-row-top {
     grid-template-columns: 1fr;
   }
 
+  .inventory-filters .filters-row-middle {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
   .inventory-filters .filter-group {
+    flex: 1 1 calc(50% - 10px);
+    min-width: 140px;
+  }
+
+  .inventory-filters .filter-group.filter-action-group {
+    flex: 1 1 100%;
     width: 100%;
+    margin-top: 4px;
+  }
+
+  .inventory-filters .filter-actions-btn-group {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
   }
 
   .inventory-filters .filter-actions {
     justify-content: flex-start;
-
     padding-top: 10px;
   }
 }
@@ -656,7 +672,6 @@
 @media (max-width: 576px) {
   .inventory-filters {
     padding: 10px;
-
     gap: 10px;
   }
 
@@ -666,6 +681,8 @@
 
   .inventory-filters .filter-group {
     gap: 4px;
+    flex: 1 1 100%;
+    min-width: 100%;
   }
 
   .inventory-filters .filter-group label {
@@ -676,11 +693,8 @@
   .inventory-filters .filter-group input,
   .inventory-filters .filter-group select {
     height: 37px;
-
     padding-left: 10px;
-
     border-radius: 7px;
-
     font-size: 11px;
   }
 
@@ -693,26 +707,45 @@
     padding-right: 30px;
   }
 
+  .inventory-filters .filter-group.filter-action-group {
+    flex: 1 1 100%;
+    width: 100%;
+    margin-top: 4px;
+  }
+
+  .inventory-filters .filter-actions-btn-group {
+    width: 100%;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
   .inventory-filters .filter-actions {
     gap: 6px;
-
     padding-top: 9px;
   }
 
+  .inventory-filters .filter-btn,
+  .inventory-filters .clear-btn,
   .inventory-filters .reset-btn,
   .inventory-filters .search-btn,
   .inventory-filters .export-btn {
-    width: 33px;
-    height: 33px;
-
-    flex-basis: 33px;
+    width: auto;
+    min-width: 33px;
+    height: 35px;
+    min-height: 35px;
+    padding: 0 10px;
+    font-size: 11px;
+    flex: 1 1 auto;
   }
 
+  .inventory-filters .filter-btn svg,
+  .inventory-filters .clear-btn svg,
   .inventory-filters .reset-btn svg,
   .inventory-filters .search-btn svg,
   .inventory-filters .export-btn svg {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
   }
 }
 
