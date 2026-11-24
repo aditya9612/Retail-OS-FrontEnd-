@@ -13,9 +13,10 @@ import categoryService from '../../services/categoryService';
 const PAGE_SIZE = 10;
 const fmt = (n) => '₹' + Number(n || 0).toLocaleString('en-IN');
 
-const STATUS_ALL = ['All', 'Active', 'Inactive', 'Out of Stock'];
+const STATUS_ALL = ['All', 'In Stock', 'Active', 'Inactive', 'Out of Stock'];
 
 const statusCfg = {
+    'In Stock': { color: '#10b981', bg: '#ecfdf5', icon: <BsCheckCircleFill size={10} />, label: 'In Stock' },
     Active: { color: '#10b981', bg: '#ecfdf5', icon: <BsCheckCircleFill size={10} />, label: 'Active' },
     'Out of Stock': { color: '#f59e0b', bg: '#fffbeb', icon: <BsExclamationTriangleFill size={10} />, label: 'Out of Stock' },
     Inactive: { color: '#9ca3af', bg: '#f3f4f6', icon: <BsPauseFill size={10} />, label: 'Inactive' },
@@ -165,7 +166,7 @@ const ProductModal = ({ product, categories = [], onClose, onSave }) => {
     const [form, setForm] = useState(() => {
         if (!product) {
             return {
-                name: '', sku: '', category: categories.find(c => c === 'Electronics & Mobiles') || categories[1] || 'General', brand: '', price: '', mrp: '',
+                name: '', sku: '', category: categories.find(c => c === 'Electronics & Mobiles') || categories[1] || 'General', brand: '', price: '', cost_price: '', mrp: '',
                 stock: '', status: 'Active', featured: false,
             };
         }
@@ -174,11 +175,16 @@ const ProductModal = ({ product, categories = [], onClose, onSave }) => {
         if ((pNameLower.includes('airdopes') || pNameLower.includes('boat') || pNameLower.includes('earbuds') || pNameLower.includes('headphones')) && category.toLowerCase().includes('beauty')) {
             category = 'Electronics & Mobiles';
         }
+        const isOut = product.status === 'Out of Stock' || product.stock_status === 'out of stock';
+        const isInactive = product.status === 'Inactive' || product.is_active === false;
+        const initialStatus = isOut ? 'Out of Stock' : (isInactive ? 'Inactive' : (product.status || (product.stock_status === 'in stock' ? 'In Stock' : 'Active')));
         return {
             ...product,
+            cost_price: product.cost_price !== undefined && product.cost_price !== null ? product.cost_price : (product.costPrice ?? product.cost ?? 0),
+            mrp: (product.mrp !== undefined && product.mrp !== null && Number(product.mrp) > 0) ? product.mrp : '',
             sku: formatStandardSku(product.sku, product.id),
             category,
-            status: Number(product.stock || 0) <= 0 ? 'Out of Stock' : (product.status === 'Inactive' ? 'Inactive' : 'Active'),
+            status: initialStatus,
         };
     });
     const [errors, setErrors] = useState({});
@@ -326,7 +332,7 @@ const ProductModal = ({ product, categories = [], onClose, onSave }) => {
                         <input className="ec-input" value={form.brand} onChange={e => set('brand', e.target.value)} placeholder="Brand name" />
                     </div>
                 </div>
-                <div className="ec-form-row">
+                <div className="ec-form-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
                     <div className="ec-field">
                         <label>Selling Price (₹) <span style={{ color: '#ef4444' }}>*</span></label>
                         <input
@@ -342,6 +348,16 @@ const ProductModal = ({ product, categories = [], onClose, onSave }) => {
                                 <BsExclamationCircleFill size={11} /> {errors.price}
                             </p>
                         )}
+                    </div>
+                    <div className="ec-field">
+                        <label>Cost Price (₹)</label>
+                        <input
+                            className="ec-input"
+                            type="number"
+                            value={form.cost_price !== undefined && form.cost_price !== null ? form.cost_price : ''}
+                            onChange={e => set('cost_price', e.target.value)}
+                            placeholder="0"
+                        />
                     </div>
                     <div className="ec-field">
                         <label>MRP (₹)</label>
@@ -381,20 +397,14 @@ const ProductModal = ({ product, categories = [], onClose, onSave }) => {
                         <label>Listing Status</label>
                         <select
                             className="ec-input"
-                            value={Number(form.stock || 0) <= 0 ? 'Out of Stock' : form.status}
+                            value={form.status || 'In Stock'}
                             onChange={e => set('status', e.target.value)}
                         >
-                            <option value="Active" disabled={Number(form.stock || 0) <= 0}>
-                                Active {Number(form.stock || 0) <= 0 ? '— (Disabled: 0 Stock)' : ''}
-                            </option>
-                            <option value="Inactive" disabled={Number(form.stock || 0) <= 0}>Inactive</option>
+                            <option value="In Stock">In Stock</option>
+                            <option value="Active">Active</option>
+                            <option value="Inactive">Inactive</option>
                             <option value="Out of Stock">Out of Stock</option>
                         </select>
-                        {Number(form.stock || 0) <= 0 && (
-                            <span style={{ fontSize: 11, color: '#ea580c', marginTop: 4, display: 'inline-block', fontWeight: 600 }}>
-                                ⚠️ Stock is 0 — Status is locked to Out of Stock. System does not allow Active with 0 stock to prevent failed customer orders.
-                            </span>
-                        )}
                     </div>
                 </div>
 
@@ -463,9 +473,32 @@ const ProductCatalog = () => {
                 .filter(Boolean);
 
             const mapped = prodList.map(p => {
-                const stock = Number(p.stock ?? p.current_stock ?? p.quantity ?? p.inventory ?? p.qty ?? (p.variants?.stock) ?? 0);
+                const stockCandidates = [
+                    p.stock,
+                    p.current_stock,
+                    p.quantity,
+                    p.available_quantity,
+                    p.inventory,
+                    p.qty,
+                    p.inventory_quantity,
+                    p.stock_quantity,
+                ];
+                let rawStock = stockCandidates.find(v => v !== undefined && v !== null && v !== '');
+                if (rawStock === undefined && Array.isArray(p.variants) && p.variants.length > 0) {
+                    const varSum = p.variants.reduce((acc, v) => {
+                        const vQty = v?.stock ?? v?.quantity ?? v?.available_quantity ?? v?.current_stock ?? v?.qty;
+                        return vQty !== undefined && vQty !== null ? acc + Number(vQty) : acc;
+                    }, 0);
+                    if (varSum > 0) rawStock = varSum;
+                }
+                const stock = rawStock !== undefined ? Number(rawStock) : 0;
                 const expDateStr = p.expiry_date || p.expiryDate || p.expiry || p.expire_date || p.variants?.expiry_date;
                 const isExpired = Boolean(expDateStr && new Date(expDateStr).getTime() < new Date().setHours(0, 0, 0, 0));
+
+                const rawStockStatus = (p.stock_status || p.stockStatus || '').toString().trim().toLowerCase();
+                const isBEInStock = rawStockStatus === 'in stock' || rawStockStatus === 'in_stock' || rawStockStatus === 'instock';
+                const isBEOutOfStock = rawStockStatus === 'out of stock' || rawStockStatus === 'out_of_stock' || rawStockStatus === 'outofstock';
+
                 const isExplicitInactive = Boolean(
                     p.is_active === false ||
                     p.is_active === 0 ||
@@ -478,18 +511,23 @@ const ProductCatalog = () => {
                     p.status === 'disabled' ||
                     isExpired
                 );
-                // Expected: If Stock is 0, Status should ALWAYS be Out of Stock. System should not allow Active with 0 stock.
+
+                // Reconcile status strictly respecting backend stock_status ('in stock' vs 'out of stock')
                 let status;
-                if (stock <= 0) {
-                    status = 'Out of Stock';
-                    // Auto-sync backend to deactivate 0-stock product from storefront so customers cannot order it
-                    if (p.is_active === true || p.status === 'Active') {
-                        productService.update(p.id, { is_active: false, status: 'Out of Stock' }).catch(() => {});
-                    }
-                } else if (isExplicitInactive) {
+                if (isExpired || isExplicitInactive) {
                     status = 'Inactive';
+                } else if (isBEInStock) {
+                    status = 'In Stock';
+                } else if (isBEOutOfStock) {
+                    status = 'Out of Stock';
+                } else if (p.status === 'In Stock' || p.status === 'Active') {
+                    status = p.status;
+                } else if (p.status === 'Out of Stock') {
+                    status = 'Out of Stock';
+                } else if (stock > 0 || p.is_active === true) {
+                    status = 'In Stock';
                 } else {
-                    status = 'Active';
+                    status = 'In Stock';
                 }
                 let rawName = (p.name || p.title || 'Product #' + p.id).trim();
                 let isSpellingFixed = false;
@@ -540,6 +578,10 @@ const ProductCatalog = () => {
                     productService.update(p.id, { sku: standardizedSku }).catch(() => {});
                 }
 
+                const cost_price = Number(p.cost_price ?? p.costPrice ?? p.cost ?? 0);
+                const sellingPrice = Number(p.selling_price ?? p.price ?? p.unit_price ?? 0);
+                const mrp = (p.mrp !== undefined && p.mrp !== null && p.mrp !== '') ? Number(p.mrp) : 0;
+
                 return {
                     id: p.id,
                     name: rawName,
@@ -548,14 +590,17 @@ const ProductCatalog = () => {
                     sku: standardizedSku,
                     category: catName,
                     brand,
-                    price: Number(p.price || p.unit_price || 0),
-                    mrp: Number(p.mrp || p.price || 0),
+                    price: sellingPrice,
+                    selling_price: sellingPrice,
+                    cost_price,
+                    mrp,
                     stock,
                     sold: Number(p.sold || p.sales_count || 0),
                     rating: (!isNaN(Number(p.rating)) && Number(p.rating) > 0) ? Number(p.rating) : 0,
                     reviews: (!isNaN(Number(p.reviews_count ?? p.reviews)) && Number(p.reviews_count ?? p.reviews) > 0) ? Number(p.reviews_count ?? p.reviews) : 0,
                     status,
-                    is_active: stock > 0 && status === 'Active',
+                    stock_status: p.stock_status || (status === 'Out of Stock' ? 'out of stock' : 'in stock'),
+                    is_active: status === 'Active' || status === 'In Stock',
                     featured: Boolean(p.featured || p.is_featured),
                     image: p.image_url || p.image || null,
                 };
@@ -591,9 +636,10 @@ const ProductCatalog = () => {
         const matchCat = filterCat === 'All Categories' || p.category === filterCat;
         const matchStatus = filterStatus === 'All' ? true
             : filterStatus === 'Featured' ? Boolean(p.featured)
-            : filterStatus === 'Active' ? (p.status === 'Active' && p.stock > 0)
+            : filterStatus === 'Active' ? (p.status === 'Active' || p.status === 'In Stock')
+            : filterStatus === 'In Stock' ? (p.status === 'In Stock' || p.status === 'Active')
             : filterStatus === 'Inactive' ? p.status === 'Inactive'
-            : filterStatus === 'Out of Stock' ? (p.status === 'Out of Stock' || p.stock <= 0)
+            : filterStatus === 'Out of Stock' ? p.status === 'Out of Stock'
             : p.status === filterStatus;
         return matchSearch && matchCat && matchStatus;
     });
@@ -609,7 +655,7 @@ const ProductCatalog = () => {
         }
         try {
             const stock = Number(form.stock || 0);
-            const status = stock <= 0 ? 'Out of Stock' : (form.status === 'Inactive' ? 'Inactive' : 'Active');
+            const status = form.status || (stock > 0 ? 'In Stock' : 'Out of Stock');
             const standardizedSku = formatStandardSku(form.sku, form.id);
             const payload = {
                 name: form.name,
@@ -617,9 +663,12 @@ const ProductCatalog = () => {
                 category: form.category,
                 brand: form.brand,
                 price: Number(form.price || 0),
+                selling_price: Number(form.price || 0),
+                cost_price: Number(form.cost_price || 0),
                 mrp: Number(form.mrp || 0),
                 stock,
-                is_active: status === 'Active',
+                stock_status: status === 'Out of Stock' ? 'out of stock' : 'in stock',
+                is_active: status === 'Active' || status === 'In Stock',
                 status,
                 featured: form.featured,
             };
@@ -628,8 +677,13 @@ const ProductCatalog = () => {
                 setProducts(prev => prev.map(p => p.id === form.id ? {
                     ...p,
                     ...form,
+                    price: Number(form.price || 0),
+                    selling_price: Number(form.price || 0),
+                    mrp: form.mrp ? Number(form.mrp) : 0,
+                    cost_price: Number(form.cost_price || 0),
                     sku: standardizedSku,
                     status,
+                    stock_status: status === 'Out of Stock' ? 'out of stock' : 'in stock',
                     stock,
                 } : p));
             } else {
@@ -637,11 +691,19 @@ const ProductCatalog = () => {
                 const newId = res?.id || `PRD-${Date.now().toString().slice(-4)}`;
                 setProducts(prev => [...prev, {
                     ...form,
-                    sku: standardizedSku,
                     id: newId,
+                    price: Number(form.price || 0),
+                    selling_price: Number(form.price || 0),
+                    mrp: form.mrp ? Number(form.mrp) : 0,
+                    cost_price: Number(form.cost_price || 0),
+                    sku: standardizedSku,
                     status,
+                    stock_status: status === 'Out of Stock' ? 'out of stock' : 'in stock',
                     stock,
-                    sold: 0, rating: 0, reviews: 0
+                    sold: 0,
+                    rating: 0,
+                    reviews: 0,
+                    is_active: status === 'Active' || status === 'In Stock',
                 }]);
             }
         } catch (err) {
@@ -664,28 +726,29 @@ const ProductCatalog = () => {
     const cycleStatus = async (id) => {
         const target = products.find(p => p.id === id);
         if (!target) return;
-        if (target.status === 'Inactive' && Number(target.stock || 0) <= 0) {
-            alert('Cannot activate product with 0 stock. Restock first.');
-            return;
-        }
-        const next = target.status === 'Active' ? 'Inactive' : 'Active';
+        const isCurrentActive = target.status === 'Active' || target.status === 'In Stock';
+        const next = isCurrentActive ? 'Inactive' : 'In Stock';
         try {
-            await productService.update(id, { is_active: next === 'Active', status: next }).catch(() => {});
+            await productService.update(id, {
+                is_active: next === 'In Stock' || next === 'Active',
+                status: next,
+                stock_status: next === 'In Stock' ? 'in stock' : 'out of stock',
+            }).catch(() => {});
         } catch (_) {}
-        setProducts(prev => prev.map(p => p.id === id ? { ...p, status: next } : p));
+        setProducts(prev => prev.map(p => p.id === id ? { ...p, status: next, stock_status: next === 'In Stock' ? 'in stock' : 'out of stock' } : p));
     };
 
     const activateProduct = async (id) => {
         const target = products.find(p => p.id === id);
         if (!target) return;
-        if (Number(target.stock || 0) <= 0) {
-            alert('Cannot activate product with 0 stock. Restock first.');
-            return;
-        }
         try {
-            await productService.update(id, { is_active: true, status: 'Active' }).catch(() => {});
+            await productService.update(id, {
+                is_active: true,
+                status: 'In Stock',
+                stock_status: 'in stock',
+            }).catch(() => {});
         } catch (_) {}
-        setProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'Active' } : p));
+        setProducts(prev => prev.map(p => p.id === id ? { ...p, status: 'In Stock', stock_status: 'in stock' } : p));
     };
 
     const deactivateProduct = async (id) => {
@@ -697,9 +760,10 @@ const ProductCatalog = () => {
 
     const counts = {
         all: products.length,
-        active: products.filter(p => p.status === 'Active' && p.stock > 0).length,
+        inStock: products.filter(p => p.status === 'In Stock' || p.status === 'Active').length,
+        active: products.filter(p => p.status === 'Active' || p.status === 'In Stock').length,
         inactive: products.filter(p => p.status === 'Inactive').length,
-        outOfStock: products.filter(p => p.status === 'Out of Stock' || p.stock <= 0).length,
+        outOfStock: products.filter(p => p.status === 'Out of Stock').length,
         featured: products.filter(p => p.featured).length,
     };
 
@@ -718,7 +782,7 @@ const ProductCatalog = () => {
 
     const getRowStyle = (p) => {
         if (p.status === 'Inactive') return { opacity: 0.6, background: '#fafafa' };
-        if (p.stock <= 0) return { background: '#fffbf0' };
+        if (p.status === 'Out of Stock') return { background: '#fffbf0' };
         return {};
     };
 
@@ -728,10 +792,10 @@ const ProductCatalog = () => {
             return;
         }
 
-        const allOutOfStock = filtered.every(p => Number(p.stock || 0) <= 0);
+        const allOutOfStock = filtered.every(p => p.status === 'Out of Stock');
         if (allOutOfStock) {
             const proceed = window.confirm(
-                `⚠️ Warning: All ${filtered.length} product(s) to be exported are currently Out of Stock (0 inventory).\n\nDo you want to proceed with exporting this out-of-stock list?`
+                `⚠️ Warning: All ${filtered.length} product(s) to be exported are currently Out of Stock.\n\nDo you want to proceed with exporting this out-of-stock list?`
             );
             if (!proceed) return;
         }
@@ -750,7 +814,7 @@ const ProductCatalog = () => {
             p.rating,
             p.reviews,
             p.status,
-            p.stock <= 0 ? 'Out of Stock' : 'In Stock',
+            p.stock_status || (p.status === 'Out of Stock' ? 'out of stock' : 'in stock'),
             p.featured ? 'Yes' : 'No',
         ]);
         const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
@@ -826,10 +890,10 @@ const ProductCatalog = () => {
                 {STATUS_ALL.map(s => {
                     const isActive = filterStatus === s;
                     const cnt = s === 'All' ? counts.all
-                        : s === 'Active' ? counts.active
+                        : (s === 'In Stock' || s === 'Active') ? counts.inStock
                         : s === 'Inactive' ? counts.inactive
                         : counts.outOfStock;
-                    const color = s === 'Active' ? '#10b981' : s === 'Inactive' ? '#9ca3af' : s === 'Out of Stock' ? '#f59e0b' : '#6366f1';
+                    const color = (s === 'Active' || s === 'In Stock') ? '#10b981' : s === 'Inactive' ? '#9ca3af' : s === 'Out of Stock' ? '#f59e0b' : '#6366f1';
                     return (
                         <button
                             key={s}
@@ -847,7 +911,7 @@ const ProductCatalog = () => {
                         >
                             {s === 'Inactive' && <BsPauseFill size={12} />}
                             {s === 'Out of Stock' && <BsExclamationTriangleFill size={12} />}
-                            {s === 'Active' && <BsCheckCircleFill size={12} />}
+                            {(s === 'Active' || s === 'In Stock') && <BsCheckCircleFill size={12} />}
                             {s}
                             <span style={{
                                 minWidth: 20, height: 20, borderRadius: 10, background: isActive ? color : '#e5e7eb',
@@ -894,6 +958,7 @@ const ProductCatalog = () => {
                         onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
                     >
                         <option value="All">All Statuses</option>
+                        <option value="In Stock">In Stock</option>
                         <option value="Active">Active</option>
                         <option value="Inactive">Inactive</option>
                         <option value="Out of Stock">Out of Stock</option>
@@ -914,9 +979,26 @@ const ProductCatalog = () => {
             <div className="chart-card" style={{ padding: 0, overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
-                        <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e8eaf0' }}>
+                        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                             {['Product', 'SKU', 'Category', 'Price', 'Stock', 'Sales', 'Rating', 'Status', 'Actions'].map(h => (
-                                <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                                <th
+                                    key={h}
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#64748b',
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.06em',
+                                        padding: '12px 16px',
+                                        textAlign: 'left',
+                                        whiteSpace: 'nowrap',
+                                        borderBottom: '1px solid #e2e8f0',
+                                        verticalAlign: 'middle',
+                                    }}
+                                >
+                                    {h}
+                                </th>
                             ))}
                         </tr>
                     </thead>
@@ -930,13 +1012,16 @@ const ProductCatalog = () => {
                         )}
                         {!loading && paginated.map((p, i) => {
                             const sc = statusCfg[p.status] || statusCfg['Active'];
-                            const discount = p.mrp > 0 ? Math.round(((p.mrp - p.price) / p.mrp) * 100) : 0;
+                            const numPrice = Number(p.price || 0);
+                            const numMrp = Number(p.mrp || 0);
+                            const hasDiscount = numMrp > numPrice && numPrice >= 0 && numMrp > 0;
+                            const discount = hasDiscount ? Math.round(((numMrp - numPrice) / numMrp) * 100) : 0;
                             const rowStyle = getRowStyle(p);
                             return (
                                 <tr
                                     key={p.id}
                                     style={{ borderBottom: '1px solid #f3f4f6', transition: 'background 0.1s', ...rowStyle }}
-                                    onMouseEnter={e => e.currentTarget.style.background = p.status === 'Inactive' ? '#f0f0f0' : p.stock <= 0 ? '#fffbeb' : '#fafafa'}
+                                    onMouseEnter={e => e.currentTarget.style.background = p.status === 'Inactive' ? '#f0f0f0' : p.status === 'Out of Stock' ? '#fffbeb' : '#fafafa'}
                                     onMouseLeave={e => e.currentTarget.style.background = rowStyle.background || ''}
                                 >
                                     <td style={{ padding: '12px 16px' }}>
@@ -966,7 +1051,7 @@ const ProductCatalog = () => {
                                                         <BsPauseFill size={8} color="#fff" />
                                                     </div>
                                                 )}
-                                                {(p.status === 'Out of Stock' || p.stock <= 0) && (
+                                                {p.status === 'Out of Stock' && (
                                                     <div style={{
                                                         position: 'absolute', top: -4, right: -4,
                                                         background: '#f59e0b', borderRadius: '50%',
@@ -1025,9 +1110,24 @@ const ProductCatalog = () => {
                                         <span style={{ fontSize: 11, background: '#eef2ff', color: '#6366f1', padding: '3px 8px', borderRadius: 20, fontWeight: 600 }}>{p.category}</span>
                                     </td>
                                     <td style={{ padding: '12px 16px' }}>
-                                        <p style={{ fontSize: 13, fontWeight: 700, color: p.status === 'Inactive' ? '#9ca3af' : '#111827' }}>{fmt(p.price)}</p>
-                                        <p style={{ fontSize: 11, color: '#9ca3af', textDecoration: 'line-through' }}>{fmt(p.mrp)}</p>
-                                        {discount > 0 && <p style={{ fontSize: 10, color: '#10b981', fontWeight: 700 }}>{discount}% off</p>}
+                                        <p style={{ fontSize: 13, fontWeight: 700, color: p.status === 'Inactive' ? '#9ca3af' : '#111827' }}>
+                                            {fmt(numPrice)}
+                                        </p>
+                                        {hasDiscount && (
+                                            <p style={{ fontSize: 11, color: '#9ca3af', textDecoration: 'line-through', margin: '1px 0 0 0' }}>
+                                                {fmt(numMrp)}
+                                            </p>
+                                        )}
+                                        {hasDiscount && discount > 0 && (
+                                            <p style={{ fontSize: 10, color: '#10b981', fontWeight: 700, marginTop: 1 }}>
+                                                {discount}% off
+                                            </p>
+                                        )}
+                                        {p.cost_price !== undefined && p.cost_price !== null && Number(p.cost_price) > 0 && (
+                                            <p style={{ fontSize: 10, color: '#64748b', fontWeight: 600, marginTop: 2 }}>
+                                                Cost: {fmt(p.cost_price)}
+                                            </p>
+                                        )}
                                     </td>
                                     <td style={{ padding: '12px 16px' }}>
                                         <p style={{ fontSize: 13, fontWeight: 600, color: p.stock === 0 ? '#ef4444' : p.stock < 20 ? '#f59e0b' : '#111827' }}>
@@ -1059,7 +1159,7 @@ const ProductCatalog = () => {
                                         )}
                                     </td>
                                     <td style={{ padding: '12px 16px' }}>
-                                        {p.status === 'Out of Stock' || p.stock <= 0 ? (
+                                        {p.status === 'Out of Stock' ? (
                                             <span style={{
                                                 display: 'inline-flex', alignItems: 'center', gap: 5,
                                                 padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
@@ -1087,7 +1187,7 @@ const ProductCatalog = () => {
                                                 border: '1px solid #a7f3d0',
                                             }}>
                                                 <BsCheckCircleFill size={10} color="#10b981" />
-                                                Active
+                                                {p.status === 'Active' ? 'Active' : 'In Stock'}
                                             </span>
                                         )}
                                     </td>
@@ -1104,42 +1204,23 @@ const ProductCatalog = () => {
                                             </button>
 
                                             {/* Activate / Deactivate toggle */}
-                                            {p.stock <= 0 ? (
+                                            {p.status === 'Inactive' || p.status === 'Out of Stock' ? (
                                                 <button
-                                                    disabled
-                                                    title="Active toggle disabled for Out of Stock product. Restock required before activating for storefront."
-                                                    style={{
-                                                        padding: '4px 8px',
-                                                        borderRadius: 8,
-                                                        border: '1px solid #fed7aa',
-                                                        background: '#fff7ed',
-                                                        cursor: 'not-allowed',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: 5,
-                                                        opacity: 0.85
-                                                    }}
+                                                    title="Activate listing"
+                                                    onClick={() => activateProduct(p.id)}
+                                                    style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid #fed7aa', background: '#fff7ed', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
                                                 >
-                                                    <BsToggleOff size={18} color="#9ca3af" />
-                                                    <span style={{ fontSize: 10, color: '#c2410c', fontWeight: 700 }}>Restock first</span>
+                                                    <BsToggleOff size={18} color="#f59e0b" />
+                                                    <span style={{ fontSize: 10, color: '#c2410c', fontWeight: 700 }}>Activate</span>
                                                 </button>
-                                            ) : p.status === 'Active' ? (
+                                            ) : (
                                                 <button
                                                     title="Deactivate listing"
                                                     onClick={() => deactivateProduct(p.id)}
                                                     style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid #d1fae5', background: '#ecfdf5', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
                                                 >
                                                     <BsToggleOn size={18} color="#10b981" />
-                                                    <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>Active</span>
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    title="Activate listing"
-                                                    onClick={() => activateProduct(p.id)}
-                                                    style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-                                                >
-                                                    <BsToggleOff size={18} color="#9ca3af" />
-                                                    <span style={{ fontSize: 10, color: '#6b7280', fontWeight: 700 }}>Inactive</span>
+                                                    <span style={{ fontSize: 10, color: '#059669', fontWeight: 700 }}>{p.status === 'Active' ? 'Active' : 'In Stock'}</span>
                                                 </button>
                                             )}
 

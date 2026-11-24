@@ -1757,44 +1757,78 @@ const ReviewManagement = () => {
                 })}
             </div>
 
-            {/* Filters */}
-            <div style={{ background: '#fff', border: '1px solid #e8eaf0', borderRadius: 12, padding: '14px 16px', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
-                    <BsSearch size={13} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-                    <input className="ec-input" style={{ paddingLeft: 32 }} placeholder="Search by product, customer, title, comment, or ID..."
-                        value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
+            {/* Filters (Arranged in One Line) */}
+            <div style={{
+                background: '#fff',
+                border: '1px solid #e8eaf0',
+                borderRadius: 12,
+                padding: '12px 16px',
+                display: 'flex',
+                gap: 12,
+                alignItems: 'center',
+                flexWrap: 'nowrap',
+                overflowX: 'auto'
+            }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                    <BsSearch size={13} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+                    <input
+                        className="ec-input"
+                        style={{ paddingLeft: 34, width: '100%', height: 38 }}
+                        placeholder="Search by product, customer, title, comment, or ID..."
+                        value={search}
+                        onChange={e => { setSearch(e.target.value); setPage(1); }}
+                    />
                 </div>
                 {uniqueProductIds.length > 0 && (
-                    <select className="ec-input" style={{ minWidth: 150 }} value={filterProduct}
-                        onChange={e => { setFilterProduct(e.target.value); setPage(1); }}>
-                        <option value="All">All Products ({counts.all})</option>
-                        {uniqueProductIds.map(pid => (
-                            <option key={pid} value={pid}>Product #{pid}</option>
-                        ))}
-                    </select>
+                    <div style={{ width: 170, flexShrink: 0 }}>
+                        <select
+                            className="ec-input"
+                            style={{ width: '100%', height: 38, cursor: 'pointer' }}
+                            value={filterProduct}
+                            onChange={e => { setFilterProduct(e.target.value); setPage(1); }}
+                        >
+                            <option value="All">All Products ({counts.all})</option>
+                            {uniqueProductIds.map(pid => (
+                                <option key={pid} value={pid}>Product #{pid}</option>
+                            ))}
+                        </select>
+                    </div>
                 )}
-                <select className="ec-input" style={{ minWidth: 150 }} value={filterStatus}
-                    onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
-                    <option value="All">All Statuses ({counts.all})</option>
-                    <option value="Approved">Approved ({counts.approved})</option>
-                    <option value="Pending">Pending ({counts.pending})</option>
-                    <option value="Flagged">Flagged ({counts.flagged})</option>
-                    <option value="Rejected">Rejected ({counts.rejected})</option>
-                </select>
-                <select className="ec-input" style={{ minWidth: 150 }} value={filterRating}
-                    onChange={e => { setFilterRating(e.target.value); setPage(1); }}>
-                    <option value="All">All Ratings ({counts.all})</option>
-                    <option value="5">5 Star ({counts.rating5})</option>
-                    <option value="4">4 Star ({counts.rating4})</option>
-                    <option value="3">3 Star ({counts.rating3})</option>
-                    <option value="2">2 Star ({counts.rating2})</option>
-                    <option value="1">1 Star ({counts.rating1})</option>
-                </select>
+                <div style={{ width: 170, flexShrink: 0 }}>
+                    <select
+                        className="ec-input"
+                        style={{ width: '100%', height: 38, cursor: 'pointer' }}
+                        value={filterStatus}
+                        onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+                    >
+                        <option value="All">All Statuses ({counts.all})</option>
+                        <option value="Approved">Approved ({counts.approved})</option>
+                        <option value="Pending">Pending ({counts.pending})</option>
+                        <option value="Flagged">Flagged ({counts.flagged})</option>
+                        <option value="Rejected">Rejected ({counts.rejected})</option>
+                    </select>
+                </div>
+                <div style={{ width: 160, flexShrink: 0 }}>
+                    <select
+                        className="ec-input"
+                        style={{ width: '100%', height: 38, cursor: 'pointer' }}
+                        value={filterRating}
+                        onChange={e => { setFilterRating(e.target.value); setPage(1); }}
+                    >
+                        <option value="All">All Ratings ({counts.all})</option>
+                        <option value="5">5 Star ({counts.rating5})</option>
+                        <option value="4">4 Star ({counts.rating4})</option>
+                        <option value="3">3 Star ({counts.rating3})</option>
+                        <option value="2">2 Star ({counts.rating2})</option>
+                        <option value="1">1 Star ({counts.rating1})</option>
+                    </select>
+                </div>
                 {isFiltered && (
                     <button
+                        type="button"
                         className="adm-btn-secondary"
                         onClick={resetFilters}
-                        style={{ padding: '7px 12px', fontSize: 12, color: '#ef4444', borderColor: '#fca5a5', background: '#fef2f2' }}
+                        style={{ height: 38, padding: '0 12px', fontSize: 12, color: '#ef4444', borderColor: '#fca5a5', background: '#fef2f2', flexShrink: 0, whiteSpace: 'nowrap' }}
                     >
                         ✕ Clear Filters
                     </button>
