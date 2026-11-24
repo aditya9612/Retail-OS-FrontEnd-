@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import {
   BsSearch,
   BsPlus,
@@ -83,17 +83,18 @@ const SupplierFormModal = ({ supplier, onClose, onSave }) => {
       setDetailsError(null);
       const res = await supplierService.getById(supplier.id);
       console.log("Supplier Details API Response:", res);
-      const s = res?.data && typeof res.data === "object" ? res.data : res;
-      if (s) {
+      const raw = res?.data && typeof res.data === "object" && !Array.isArray(res.data) ? res.data : res;
+      const s = raw?.supplier && typeof raw.supplier === "object" ? raw.supplier : raw;
+      if (s && typeof s === "object") {
         setSupplierDetails(s);
-        setForm({
-          name: s.name ?? "",
-          contact_person: s.contact_person ?? "",
-          email: s.email ?? "",
-          phone: s.phone ?? "",
-          address: s.address ?? "",
-          gstin: s.gstin ?? "",
-        });
+        setForm((prev) => ({
+          name: s.name ?? s.supplier_name ?? prev.name ?? "",
+          contact_person: s.contact_person ?? s.contact_name ?? prev.contact_person ?? "",
+          email: s.email ?? s.supplier_email ?? prev.email ?? "",
+          phone: s.phone ?? s.phone_number ?? s.mobile ?? prev.phone ?? "",
+          address: s.address ?? s.supplier_address ?? prev.address ?? "",
+          gstin: s.gstin ?? s.gst_number ?? s.gst ?? prev.gstin ?? "",
+        }));
       }
     } catch (err) {
       console.error("Failed to load supplier details:", err);
@@ -372,6 +373,8 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
   const purchaseOrders = useMemo(() => {
     if (Array.isArray(data?.purchase_history)) return data.purchase_history;
     if (Array.isArray(data?.data?.purchase_history)) return data.data.purchase_history;
+    if (Array.isArray(data?.items)) return data.items;
+    if (Array.isArray(data?.data?.items)) return data.data.items;
     if (Array.isArray(data?.data)) return data.data;
     if (Array.isArray(data)) return data;
     return [];
@@ -959,6 +962,48 @@ const SupplierPurchaseHistoryModal = ({ supplier, onClose }) => {
   );
 };
 
+const extractSuppliers = (response) => {
+  if (Array.isArray(response)) return response;
+  if (!response || typeof response !== "object") return [];
+  if (Array.isArray(response.data)) return response.data;
+  if (Array.isArray(response.suppliers)) return response.suppliers;
+  if (Array.isArray(response.items)) return response.items;
+  if (Array.isArray(response.data?.suppliers)) return response.data.suppliers;
+  if (Array.isArray(response.data?.items)) return response.data.items;
+  if (Array.isArray(response.data?.data)) return response.data.data;
+  if (Array.isArray(response.results)) return response.results;
+  if (Array.isArray(response.data?.results)) return response.data.results;
+  return [];
+};
+
+const extractStats = (response) => {
+  if (!response || typeof response !== "object") return null;
+  if (response.data && typeof response.data === "object" && !Array.isArray(response.data)) {
+    return response.data;
+  }
+  if (response.summary && typeof response.summary === "object" && !Array.isArray(response.summary)) {
+    return response.summary;
+  }
+  if (response.stats && typeof response.stats === "object" && !Array.isArray(response.stats)) {
+    return response.stats;
+  }
+  if (!Array.isArray(response)) {
+    return response;
+  }
+  return null;
+};
+
+const isSupplierActive = (s) => {
+  if (!s) return false;
+  if (s.is_active !== undefined && s.is_active !== null) {
+    return s.is_active === true || s.is_active === "true" || s.is_active === 1 || s.is_active === "1";
+  }
+  if (s.status) {
+    return String(s.status).toLowerCase() === "active";
+  }
+  return true;
+};
+
 const Supplier = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -972,6 +1017,7 @@ const Supplier = () => {
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState(null);
+  const isFirstRender = useRef(true);
 
   // =========================
   // GET SUPPLIER SUMMARY
@@ -983,15 +1029,11 @@ const Supplier = () => {
       const response = await supplierService.getSummary();
       console.log("Supplier Summary API Response:", response);
 
-      const statsData =
-        response?.data && typeof response.data === "object"
-          ? response.data
-          : response;
-
+      const statsData = extractStats(response);
       setStats(statsData);
     } catch (error) {
       console.error("Failed to load supplier summary:", error);
-      if (error.response) {
+      if (error?.response) {
         console.log("Summary API Error Status:", error.response.status);
         console.log("Summary API Error Data:", error.response.data);
       }
@@ -1020,37 +1062,66 @@ const Supplier = () => {
       let response;
 
       if (trimmed) {
-        response = await supplierService.search(trimmed);
+        try {
+          response = await supplierService.search(trimmed);
+        } catch (searchErr) {
+          console.warn("Backend search failed, falling back to all suppliers:", searchErr);
+          response = await supplierService.getAll();
+        }
+
+        let list = extractSuppliers(response);
+
+        // If backend search returned empty, perform fallback client-side search across all suppliers
+        if (list.length === 0) {
+          try {
+            const allRes = await supplierService.getAll();
+            const allList = extractSuppliers(allRes);
+            const q = trimmed.toLowerCase();
+            list = allList.filter((s) => {
+              const name = String(s.name || s.supplier_name || "").toLowerCase();
+              const contact = String(s.contact_person || s.contact_name || "").toLowerCase();
+              const email = String(s.email || s.supplier_email || "").toLowerCase();
+              const phone = String(s.phone || s.phone_number || s.mobile || "").toLowerCase();
+              const address = String(s.address || s.supplier_address || "").toLowerCase();
+              const gstin = String(s.gstin || s.gst_number || s.gst || "").toLowerCase();
+              return (
+                name.includes(q) ||
+                contact.includes(q) ||
+                email.includes(q) ||
+                phone.includes(q) ||
+                address.includes(q) ||
+                gstin.includes(q)
+              );
+            });
+          } catch (_) {}
+        }
+        setSuppliers(list);
       } else {
         response = await supplierService.getAll();
+        setSuppliers(extractSuppliers(response));
       }
-
-      console.log("Suppliers API Response:", response);
-
-      const supplierData = Array.isArray(response)
-        ? response
-        : Array.isArray(response?.data)
-        ? response.data
-        : [];
-
-      console.log("Supplier Data:", supplierData);
-
-      setSuppliers(supplierData);
     } catch (error) {
       console.error("Failed to load suppliers:", error);
 
-      if (error.response) {
-        console.log("Status:", error.response.status);
-        console.log("Data:", error.response.data);
+      if (error?.response?.status === 404) {
+        setSuppliers([]);
+        setSuppliersError(null);
+      } else {
+        setSuppliers([]);
+        setSuppliersError(getErrorMessage(error, "Failed to load suppliers"));
       }
-      setSuppliers([]);
-      setSuppliersError(getErrorMessage(error, "Failed to load suppliers"));
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      loadSuppliers(search);
+      return;
+    }
+
     const timer = setTimeout(() => {
       loadSuppliers(search);
     }, 300);
@@ -1064,9 +1135,9 @@ const Supplier = () => {
   const filteredSuppliers = useMemo(() => {
     let list = Array.isArray(suppliers) ? suppliers : [];
     if (statusFilter === "active") {
-      list = list.filter((s) => s.is_active !== false);
+      list = list.filter(isSupplierActive);
     } else if (statusFilter === "inactive") {
-      list = list.filter((s) => s.is_active === false);
+      list = list.filter((s) => !isSupplierActive(s));
     }
     return list;
   }, [suppliers, statusFilter]);
@@ -1232,11 +1303,13 @@ const Supplier = () => {
             </div>
           </div>
           <div className="sup-kpi-value sup-kpi-value-indigo">
-            {stats && stats.total_suppliers !== undefined
+            {stats && stats.total_suppliers !== undefined && stats.total_suppliers !== null
               ? Number(stats.total_suppliers).toLocaleString("en-IN")
+              : Array.isArray(suppliers) && suppliers.length > 0
+              ? suppliers.length.toLocaleString("en-IN")
               : statsLoading
               ? "..."
-              : "-"}
+              : "0"}
           </div>
         </div>
 
@@ -1249,11 +1322,13 @@ const Supplier = () => {
             </div>
           </div>
           <div className="sup-kpi-value sup-kpi-value-emerald">
-            {stats && stats.active_suppliers !== undefined
+            {stats && stats.active_suppliers !== undefined && stats.active_suppliers !== null
               ? Number(stats.active_suppliers).toLocaleString("en-IN")
+              : Array.isArray(suppliers) && suppliers.length > 0
+              ? suppliers.filter(isSupplierActive).length.toLocaleString("en-IN")
               : statsLoading
               ? "..."
-              : "-"}
+              : "0"}
           </div>
         </div>
 
@@ -1266,11 +1341,13 @@ const Supplier = () => {
             </div>
           </div>
           <div className="sup-kpi-value sup-kpi-value-slate">
-            {stats && stats.inactive_suppliers !== undefined
+            {stats && stats.inactive_suppliers !== undefined && stats.inactive_suppliers !== null
               ? Number(stats.inactive_suppliers).toLocaleString("en-IN")
+              : Array.isArray(suppliers) && suppliers.length > 0
+              ? suppliers.filter((s) => !isSupplierActive(s)).length.toLocaleString("en-IN")
               : statsLoading
               ? "..."
-              : "-"}
+              : "0"}
           </div>
         </div>
 
@@ -1283,14 +1360,11 @@ const Supplier = () => {
             </div>
           </div>
           <div className="sup-kpi-value sup-kpi-value-blue" style={{ fontSize: 22 }}>
-            {stats && stats.total_spend !== undefined
-              ? `₹${Number(stats.total_spend || 0).toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}`
+            {stats && (stats.total_spend !== undefined || stats.total_procurement_spend !== undefined)
+              ? formatCurrency(stats.total_spend ?? stats.total_procurement_spend)
               : statsLoading
               ? "..."
-              : "-"}
+              : "₹0.00"}
           </div>
         </div>
 
@@ -1303,11 +1377,11 @@ const Supplier = () => {
             </div>
           </div>
           <div className="sup-kpi-value sup-kpi-value-amber">
-            {stats && stats.pending_orders_count !== undefined
-              ? Number(stats.pending_orders_count).toLocaleString("en-IN")
+            {stats && (stats.pending_orders_count !== undefined || stats.pending_orders !== undefined)
+              ? Number(stats.pending_orders_count ?? stats.pending_orders).toLocaleString("en-IN")
               : statsLoading
               ? "..."
-              : "-"}
+              : "0"}
           </div>
         </div>
       </div>
@@ -1439,116 +1513,128 @@ const Supplier = () => {
 
               {/* DATA */}
               {!loading &&
-                paginatedSuppliers.map((supplier) => (
-                  <tr key={supplier.id}>
-                    <td>
-                      <div className="sup-name-cell">
-                        <div className="sup-name-row">
-                          <span
-                            className="sup-primary-name sup-cell-truncate"
-                            title={supplier.name || "-"}
-                          >
-                            {supplier.name || "-"}
-                          </span>
-                          {supplier.is_active !== undefined && (
+                paginatedSuppliers.map((supplier) => {
+                  const supplierName = supplier.name || supplier.supplier_name || "-";
+                  const contactPerson = supplier.contact_person || supplier.contact_name || supplier.contact;
+                  const email = supplier.email || supplier.supplier_email;
+                  const phone = supplier.phone || supplier.phone_number || supplier.mobile || supplier.supplier_phone;
+                  const address = supplier.address || supplier.supplier_address;
+                  const gstin = supplier.gstin || supplier.gst_number || supplier.gst || supplier.supplier_gstin;
+                  const active = isSupplierActive(supplier);
+
+                  return (
+                    <tr key={supplier.id || supplierName}>
+                      <td>
+                        <div className="sup-name-cell">
+                          <div className="sup-name-row">
+                            <span
+                              className="sup-primary-name sup-cell-truncate"
+                              title={supplierName}
+                            >
+                              {supplierName}
+                            </span>
                             <span
                               className={`sup-badge ${
-                                supplier.is_active ? "sup-badge-active" : "sup-badge-inactive"
+                                active ? "sup-badge-active" : "sup-badge-inactive"
                               }`}
                             >
                               <span
                                 className={`sup-status-dot ${
-                                  supplier.is_active ? "sup-dot-active" : "sup-dot-inactive"
+                                  active ? "sup-dot-active" : "sup-dot-inactive"
                                 }`}
                               />
-                              {supplier.is_active ? "Active" : "Inactive"}
+                              {active ? "Active" : "Inactive"}
                             </span>
+                          </div>
+                          {contactPerson && (
+                            <div
+                              className="sup-contact-sub sup-cell-truncate"
+                              title={`Contact: ${contactPerson}`}
+                            >
+                              Contact: {contactPerson}
+                            </div>
                           )}
                         </div>
-                        {supplier.contact_person && (
-                          <div
-                            className="sup-contact-sub sup-cell-truncate"
-                            title={`Contact: ${supplier.contact_person}`}
-                          >
-                            Contact: {supplier.contact_person}
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                      </td>
 
-                    <td>
-                      <span
-                        className={`sup-cell-truncate ${supplier.email ? "sup-text-secondary" : "sup-text-muted"}`}
-                        title={supplier.email || "-"}
-                      >
-                        {supplier.email || "-"}
-                      </span>
-                    </td>
-
-                    <td>
-                      <span
-                        className={`sup-cell-truncate ${supplier.phone ? "sup-text-secondary" : "sup-text-muted"}`}
-                        title={supplier.phone || "-"}
-                      >
-                        {supplier.phone || "-"}
-                      </span>
-                    </td>
-
-                    <td>
-                      <div className="sup-name-cell">
+                      <td>
                         <span
-                          className={`sup-cell-truncate ${supplier.address ? "sup-text-secondary" : "sup-text-muted"}`}
-                          title={supplier.address || "-"}
+                          className={`sup-cell-truncate ${email ? "sup-text-secondary" : "sup-text-muted"}`}
+                          title={email || "-"}
                         >
-                          {supplier.address || "-"}
+                          {email || "-"}
                         </span>
-                        {supplier.gstin && (
-                          <div>
-                            <span className="sup-gstin-pill" title={`GSTIN: ${supplier.gstin}`}>
-                              GSTIN: {supplier.gstin}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
+                      </td>
 
-                    <td>
-                      <div className="sup-actions">
-                        {/* PURCHASE HISTORY */}
-                        <button
-                          type="button"
-                          className="sup-btn-action sup-btn-history"
-                          title="Purchase History"
-                          aria-label={`Purchase History for ${supplier.name || "supplier"}`}
-                          onClick={() => setHistorySupplier(supplier)}
+                      <td>
+                        <span
+                          className={`sup-cell-truncate ${phone ? "sup-text-secondary" : "sup-text-muted"}`}
+                          title={phone || "-"}
                         >
-                          <BsClockHistory size={13} />
-                          <span>Purchase History</span>
-                        </button>
+                          {phone || "-"}
+                        </span>
+                      </td>
 
-                        {/* EDIT */}
-                        <button
-                          className="sup-btn-action sup-btn-edit"
-                          title="Edit Supplier"
-                          onClick={() => setModal(supplier)}
-                        >
-                          <BsPencilFill size={13} />
-                          <span>Edit</span>
-                        </button>
+                      <td>
+                        <div className="sup-name-cell">
+                          <span
+                            className={`sup-cell-truncate ${address ? "sup-text-secondary" : "sup-text-muted"}`}
+                            title={address || "-"}
+                          >
+                            {address || "-"}
+                          </span>
+                          {gstin && (
+                            <div>
+                              <span className="sup-gstin-pill" title={`GSTIN: ${gstin}`}>
+                                GSTIN: {gstin}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
 
-                        {/* DELETE */}
-                        <button
-                          className="sup-btn-action sup-btn-delete"
-                          title="Delete Supplier"
-                          onClick={() => deleteSupplier(supplier.id)}
-                        >
-                          <BsTrashFill size={13} />
-                          <span>Delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td>
+                        <div className="sup-actions">
+                          {/* PURCHASE HISTORY */}
+                          <button
+                            type="button"
+                            className="sup-btn-action sup-btn-history"
+                            data-tooltip="Purchase History"
+                            title="Purchase History"
+                            aria-label={`Purchase History for ${supplierName}`}
+                            onClick={() => setHistorySupplier(supplier)}
+                          >
+                            <BsClockHistory size={14} />
+                          </button>
+
+                          {/* EDIT */}
+                          <button
+                            type="button"
+                            className="sup-btn-action sup-btn-edit"
+                            data-tooltip="Edit"
+                            title="Edit"
+                            aria-label={`Edit ${supplierName}`}
+                            onClick={() => setModal(supplier)}
+                          >
+                            <BsPencilFill size={13} />
+                          </button>
+
+                          {/* DELETE */}
+                          <button
+                            type="button"
+                            className="sup-btn-action sup-btn-delete"
+                            data-tooltip="Delete"
+                            title="Delete"
+                            aria-label={`Delete ${supplierName}`}
+                            onClick={() => deleteSupplier(supplier.id)}
+                          >
+                            <BsTrashFill size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
 
               {/* ERROR */}
               {!loading && suppliersError && (
@@ -1608,27 +1694,68 @@ const Supplier = () => {
               <strong>{filteredSuppliers.length}</strong> suppliers
             </div>
             <div className="sup-pagination-controls">
-              <button
-                className="sup-page-btn"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                title="Previous page"
-              >
-                <BsChevronLeft size={12} />
-                <span>Previous</span>
-              </button>
-              <span className="sup-page-current">
-                Page {page} of {totalPages}
-              </span>
-              <button
-                className="sup-page-btn"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                title="Next page"
-              >
-                <span>Next</span>
-                <BsChevronRight size={12} />
-              </button>
+              {(() => {
+                let pages = [];
+                if (totalPages <= 7) {
+                  pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+                } else {
+                  if (page <= 4) {
+                    pages = [1, 2, 3, 4, 5, '...', totalPages];
+                  } else if (page >= totalPages - 3) {
+                    pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+                  } else {
+                    pages = [1, '...', page - 1, page, page + 1, '...', totalPages];
+                  }
+                }
+                return pages.map((p, idx) => {
+                  if (p === '...') {
+                    return (
+                      <span
+                        key={`ellipsis-${idx}`}
+                        style={{
+                          minWidth: 28,
+                          height: 32,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#9ca3af',
+                          fontSize: 13,
+                          fontWeight: 600
+                        }}
+                      >
+                        …
+                      </span>
+                    );
+                  }
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      className={`sup-page-btn ${p === page ? "sup-page-btn--active" : ""}`}
+                      onClick={() => setPage(p)}
+                      style={{
+                        minWidth: 32,
+                        height: 32,
+                        padding: '0 6px',
+                        borderRadius: 6,
+                        border: p === page ? '1.5px solid #6366f1' : '1px solid #d1d5db',
+                        background: p === page ? '#eef2ff' : '#ffffff',
+                        color: p === page ? '#6366f1' : '#374151',
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.15s ease'
+                      }}
+                      aria-current={p === page ? 'page' : undefined}
+                    >
+                      {p}
+                    </button>
+                  );
+                });
+              })()}
             </div>
           </div>
         )}

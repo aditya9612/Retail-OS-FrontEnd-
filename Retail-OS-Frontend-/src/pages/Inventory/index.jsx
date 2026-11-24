@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { calculateStockStatus, getItemStock, getItemMinStock } from "../../utils/stockStatus";
 
 import InventoryHeader from "../../components/InventoryHeader";
@@ -809,6 +809,31 @@ const StockUpdateModal = ({
                   );
     }
 
+    const getModalTitle = () => {
+        if (action === "transfer") return "Transfer Stock";
+        if (action === "add") {
+            return item?.name === "Add Inventory" ? "Add Inventory" : "Stock In";
+        }
+        if (action === "remove") return "Stock Out";
+        if (action === "adjustment") return "Stock Adjustment";
+        if (action === "purchase") return "Purchase Stock";
+        return item?.name === "Add Inventory" ? "Add Inventory" : "Update Stock";
+    };
+
+    const getSubmitButtonLabel = () => {
+        if (modalLoading) {
+            return action === "transfer" ? "Transferring..." : "Saving...";
+        }
+        if (action === "transfer") return "Transfer Stock";
+        if (action === "add") {
+            return item?.name === "Add Inventory" ? "Add Inventory" : "Stock In";
+        }
+        if (action === "remove") return "Stock Out";
+        if (action === "adjustment") return "Save Adjustment";
+        if (action === "purchase") return "Confirm Purchase";
+        return "Update Stock";
+    };
+
     return (
         <div
             className="ec-modal-overlay"
@@ -819,35 +844,78 @@ const StockUpdateModal = ({
                 onClick={(e) =>
                     e.stopPropagation()
                 }
+                style={{
+                    maxWidth: '540px',
+                    width: '100%',
+                    maxHeight: '88vh',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    padding: '24px 24px 20px',
+                    boxSizing: 'border-box',
+                }}
             >
-                <div className="ec-modal-header">
+                <div
+                    className="ec-modal-header"
+                    style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        justifyContent: 'space-between',
+                        paddingBottom: '14px',
+                        marginBottom: 0,
+                        borderBottom: '1px solid #f3f4f6',
+                        flexShrink: 0,
+                    }}
+                >
                     <div>
-                        <h3 className="ec-modal-title">
-                            {item?.name === "Add Inventory"
-                                ? "Add Inventory"
-                                : "Update Stock"}
+                        <h3
+                            className="ec-modal-title"
+                            style={{
+                                fontSize: '18px',
+                                fontWeight: 700,
+                                color: '#111827',
+                                margin: 0,
+                                lineHeight: 1.3,
+                            }}
+                        >
+                            {getModalTitle()}
                         </h3>
 
-                        <p className="ec-modal-subtitle">
-                            {item?.name === "Add Inventory" && !item?.product_id ? (
-                                "Add new stock item to inventory"
+                        <div
+                            className="ec-modal-subtitle"
+                            style={{
+                                fontSize: '13px',
+                                color: '#6b7280',
+                                marginTop: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                flexWrap: 'wrap',
+                                gap: '6px',
+                            }}
+                        >
+                            {item?.name === "Add Inventory" && !item?.product_id && !selectedProduct ? (
+                                <span>Add new stock item to inventory</span>
                             ) : (
                                 <>
-                                    {item?.name ||
-                                        item?.product_name ||
-                                        `Product #${
-                                            item?.product_id ||
-                                            item?.id
-                                        }`}
-                                    {" · "}
-                                    Current:{" "}
-                                    <strong>
-                                        {currentStock}
-                                    </strong>{" "}
-                                    {item?.unit || "Pcs"}
+                                    <span style={{ fontWeight: 500, color: '#374151' }}>
+                                        {selectedProductData?.name ||
+                                            item?.name ||
+                                            item?.product_name ||
+                                            (selectedProduct ? `Product #${selectedProduct}` : `Product #${item?.product_id || item?.id || ''}`)}
+                                    </span>
+                                    <span style={{ color: '#d1d5db' }}>·</span>
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                        <span style={{ color: '#6b7280' }}>Current:</span>
+                                        <strong style={{ color: '#111827', fontWeight: 600 }}>
+                                            {action === "transfer" && fromStore > 0 && storeStockMap.has(Number(fromStore))
+                                                ? selectedSourceStock
+                                                : currentStock}
+                                        </strong>
+                                        <span style={{ color: '#6b7280' }}>{selectedProductData?.unit || item?.unit || "Pcs"}</span>
+                                    </span>
                                 </>
                             )}
-                        </p>
+                        </div>
                     </div>
 
                     <button
@@ -860,7 +928,15 @@ const StockUpdateModal = ({
                     </button>
                 </div>
 
-                <div className="ec-modal-body">
+                <div
+                    className="ec-modal-body"
+                    style={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        padding: '16px 0',
+                        minHeight: 0,
+                    }}
+                >
                     {modalError && (
                         <div className="ec-modal-error">
                             {modalError}
@@ -1275,41 +1351,756 @@ const StockUpdateModal = ({
 
                             <strong className="ec-new-stock-value">
                                 {newStock}{" "}
-                                {item?.unit ||
-                                    "Pcs"}
+                                {selectedProductData?.unit || item?.unit || "Pcs"}
                             </strong>
                         </div>
                     </div>
+                </div>
 
-                    {/* =================================================
-                       ACTION BUTTONS
-                    ================================================= */}
+                {/* =================================================
+                   ACTION BUTTONS (Pinned Footer)
+                ================================================= */}
 
-                    <div className="ec-modal-actions">
-                        <button
-                            className="adm-btn-secondary ec-cancel-btn"
-                            onClick={onClose}
-                            disabled={
-                                modalLoading
-                            }
-                            type="button"
+                <div
+                    className="ec-modal-actions"
+                    style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        gap: '12px',
+                        paddingTop: '16px',
+                        borderTop: '1px solid #f3f4f6',
+                        flexShrink: 0,
+                        background: '#fff',
+                    }}
+                >
+                    <button
+                        className="adm-btn-secondary ec-cancel-btn"
+                        onClick={onClose}
+                        disabled={
+                            modalLoading
+                        }
+                        type="button"
+                    >
+                        Cancel
+                    </button>
+
+                    <button
+                        className="adm-btn-primary ec-save-btn"
+                        onClick={handleSave}
+                        disabled={
+                            modalLoading
+                        }
+                        type="button"
+                    >
+                        {getSubmitButtonLabel()}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+/* =========================================================
+   PRODUCT STORE-WISE STOCK VIEW MODAL
+   GET /api/v1/inventory/product/{product_id}/stores
+========================================================= */
+
+const ProductStoreStockModal = ({ item, onClose }) => {
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [result, setResult] = useState(null);
+
+    const productId = Number(item?.product_id ?? item?.productId ?? item?.id);
+    const productName =
+        item?.name ||
+        item?.product_name ||
+        item?.productName ||
+        result?.product_name ||
+        `Product #${productId}`;
+    const productSku =
+        item?.sku ||
+        item?.product_sku ||
+        item?.productSku ||
+        result?.product_sku ||
+        "";
+
+    const fetchStoreStock = useCallback(async () => {
+        if (!productId || productId <= 0) {
+            setError("Invalid Product ID for store-wise stock lookup.");
+            setLoading(false);
+            return;
+        }
+
+        try {
+            setLoading(true);
+            setError("");
+            const res = await getProductMultiStoreStock(productId);
+            if (!res) {
+                setError("No response received from server.");
+            } else if (res?.detail || (res?.message && res.success === false)) {
+                setError(
+                    res?.detail ||
+                        res?.message ||
+                        "Failed to retrieve store stock details."
+                );
+            } else {
+                setResult(res);
+            }
+        } catch (err) {
+            console.error("ProductStoreStockModal error =>", err);
+            const msg =
+                err?.response?.data?.detail ||
+                err?.response?.data?.message ||
+                err?.message ||
+                "Failed to load store-wise inventory data.";
+            setError(msg);
+        } finally {
+            setLoading(false);
+        }
+    }, [productId]);
+
+    useEffect(() => {
+        fetchStoreStock();
+    }, [fetchStoreStock]);
+
+    const storeItems = Array.isArray(result?.data)
+        ? result.data
+        : Array.isArray(result?.stores)
+        ? result.stores
+        : Array.isArray(result)
+        ? result
+        : [];
+
+    const totalStock =
+        result?.total_stock ??
+        storeItems.reduce(
+            (acc, s) => acc + (Number(s?.quantity ?? s?.stock ?? 0) || 0),
+            0
+        );
+    const storesCount = result?.stores_count ?? storeItems.length;
+    const storesWithStock = storeItems.filter(
+        (s) => Number(s?.quantity ?? s?.stock ?? 0) > 0
+    ).length;
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose}>
+            <div
+                className="ec-modal"
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                    maxWidth: "720px",
+                    width: "100%",
+                    maxHeight: "88vh",
+                    display: "flex",
+                    flexDirection: "column",
+                    overflow: "hidden",
+                    padding: "24px 24px 20px",
+                    boxSizing: "border-box",
+                }}
+            >
+                {/* Header */}
+                <div
+                    className="ec-modal-header"
+                    style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        paddingBottom: "14px",
+                        marginBottom: 0,
+                        borderBottom: "1px solid #f3f4f6",
+                        flexShrink: 0,
+                    }}
+                >
+                    <div>
+                        <div
+                            style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                            }}
                         >
-                            Cancel
-                        </button>
+                            <span style={{ fontSize: "18px" }}>🏬</span>
+                            <h3
+                                className="ec-modal-title"
+                                style={{
+                                    fontSize: "18px",
+                                    fontWeight: 700,
+                                    color: "#111827",
+                                    margin: 0,
+                                    lineHeight: 1.3,
+                                }}
+                            >
+                                Store-wise Stock Availability
+                            </h3>
+                        </div>
 
-                        <button
-                            className="adm-btn-primary ec-save-btn"
-                            onClick={handleSave}
-                            disabled={
-                                modalLoading
-                            }
-                            type="button"
+                        <div
+                            className="ec-modal-subtitle"
+                            style={{
+                                fontSize: "13px",
+                                color: "#6b7280",
+                                marginTop: "6px",
+                                display: "flex",
+                                alignItems: "center",
+                                flexWrap: "wrap",
+                                gap: "6px",
+                            }}
                         >
-                            {modalLoading
-                                ? "Saving..."
-                                : "Update Stock"}
-                        </button>
+                            <strong
+                                style={{
+                                    fontWeight: 600,
+                                    color: "#374151",
+                                }}
+                            >
+                                {productName}
+                            </strong>
+                            {productSku && (
+                                <>
+                                    <span style={{ color: "#d1d5db" }}>•</span>
+                                    <span
+                                        style={{
+                                            fontFamily: "monospace",
+                                            fontSize: "12px",
+                                            background: "#f3f4f6",
+                                            padding: "2px 6px",
+                                            borderRadius: "4px",
+                                            color: "#4b5563",
+                                        }}
+                                    >
+                                        {productSku}
+                                    </span>
+                                </>
+                            )}
+                            <span style={{ color: "#d1d5db" }}>•</span>
+                            <span style={{ color: "#6b7280" }}>
+                                Product ID: #{productId}
+                            </span>
+                        </div>
                     </div>
+
+                    <button
+                        className="ec-modal-close"
+                        onClick={onClose}
+                        type="button"
+                        aria-label="Close modal"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                {/* Body */}
+                <div
+                    className="ec-modal-body"
+                    style={{
+                        flex: 1,
+                        overflowY: "auto",
+                        padding: "16px 0",
+                        minHeight: 0,
+                    }}
+                >
+                    {/* Summary Cards */}
+                    {!loading && !error && storeItems.length > 0 && (
+                        <div
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(3, 1fr)",
+                                gap: "12px",
+                                marginBottom: "16px",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    background: "#f8fafc",
+                                    border: "1px solid #e2e8f0",
+                                    borderRadius: "10px",
+                                    padding: "12px 14px",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontSize: "11px",
+                                        fontWeight: 600,
+                                        color: "#64748b",
+                                        textTransform: "uppercase",
+                                        letterSpacing: "0.04em",
+                                    }}
+                                >
+                                    Total Stock
+                                </div>
+                                <div
+                                    style={{
+                                        fontSize: "18px",
+                                        fontWeight: 700,
+                                        color: "#0f172a",
+                                        marginTop: "4px",
+                                    }}
+                                >
+                                    {totalStock}{" "}
+                                    <span
+                                        style={{
+                                            fontSize: "12px",
+                                            fontWeight: 500,
+                                            color: "#64748b",
+                                        }}
+                                    >
+                                        {item?.unit || "Pcs"}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div
+                                style={{
+                                    background: "#f8fafc",
+                                    border: "1px solid #e2e8f0",
+                                    borderRadius: "10px",
+                                    padding: "12px 14px",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontSize: "11px",
+                                        fontWeight: 600,
+                                        color: "#64748b",
+                                        textTransform: "uppercase",
+                                        letterSpacing: "0.04em",
+                                    }}
+                                >
+                                    Total Stores
+                                </div>
+                                <div
+                                    style={{
+                                        fontSize: "18px",
+                                        fontWeight: 700,
+                                        color: "#0f172a",
+                                        marginTop: "4px",
+                                    }}
+                                >
+                                    {storesCount}
+                                </div>
+                            </div>
+
+                            <div
+                                style={{
+                                    background: "#f8fafc",
+                                    border: "1px solid #e2e8f0",
+                                    borderRadius: "10px",
+                                    padding: "12px 14px",
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        fontSize: "11px",
+                                        fontWeight: 600,
+                                        color: "#64748b",
+                                        textTransform: "uppercase",
+                                        letterSpacing: "0.04em",
+                                    }}
+                                >
+                                    Stores With Stock
+                                </div>
+                                <div
+                                    style={{
+                                        fontSize: "18px",
+                                        fontWeight: 700,
+                                        color: "#059669",
+                                        marginTop: "4px",
+                                    }}
+                                >
+                                    {storesWithStock}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Loading State */}
+                    {loading && (
+                        <div
+                            style={{
+                                textAlign: "center",
+                                padding: "40px 20px",
+                                color: "#6b7280",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    display: "inline-block",
+                                    width: "32px",
+                                    height: "32px",
+                                    border: "3px solid #e5e7eb",
+                                    borderTopColor: "#6366f1",
+                                    borderRadius: "50%",
+                                    animation: "spin 0.8s linear infinite",
+                                    marginBottom: "12px",
+                                }}
+                            />
+                            <div
+                                style={{
+                                    fontSize: "14px",
+                                    fontWeight: 500,
+                                    color: "#374151",
+                                }}
+                            >
+                                Loading store-wise inventory data...
+                            </div>
+                            <div
+                                style={{
+                                    fontSize: "12px",
+                                    color: "#9ca3af",
+                                    marginTop: "4px",
+                                }}
+                            >
+                                Calling GET /api/v1/inventory/product/
+                                {productId}/stores
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Error State */}
+                    {!loading && error && (
+                        <div
+                            style={{
+                                background: "#fef2f2",
+                                border: "1px solid #fecaca",
+                                borderRadius: "10px",
+                                padding: "16px",
+                                color: "#991b1b",
+                                marginBottom: "16px",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "8px",
+                                    fontWeight: 600,
+                                }}
+                            >
+                                <span>⚠️</span>
+                                <span>Error Loading Store Stock</span>
+                            </div>
+                            <div style={{ fontSize: "13px", marginTop: "6px" }}>
+                                {error}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={fetchStoreStock}
+                                style={{
+                                    marginTop: "12px",
+                                    background: "#ef4444",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: "6px",
+                                    padding: "6px 14px",
+                                    fontSize: "12px",
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                }}
+                            >
+                                Retry
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Empty State */}
+                    {!loading && !error && storeItems.length === 0 && (
+                        <div
+                            style={{
+                                textAlign: "center",
+                                padding: "40px 20px",
+                                background: "#f9fafb",
+                                borderRadius: "10px",
+                                border: "1px dashed #e5e7eb",
+                                color: "#6b7280",
+                            }}
+                        >
+                            <div
+                                style={{
+                                    fontSize: "32px",
+                                    marginBottom: "8px",
+                                }}
+                            >
+                                📦
+                            </div>
+                            <div
+                                style={{
+                                    fontSize: "14px",
+                                    fontWeight: 600,
+                                    color: "#374151",
+                                }}
+                            >
+                                No store records found
+                            </div>
+                            <div
+                                style={{
+                                    fontSize: "12px",
+                                    color: "#9ca3af",
+                                    marginTop: "4px",
+                                }}
+                            >
+                                This product is currently not allocated to any
+                                stores.
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Stores Table */}
+                    {!loading && !error && storeItems.length > 0 && (
+                        <div
+                            style={{
+                                border: "1px solid #e5e7eb",
+                                borderRadius: "10px",
+                                overflow: "hidden",
+                            }}
+                        >
+                            <table
+                                style={{
+                                    width: "100%",
+                                    borderCollapse: "collapse",
+                                    fontSize: "13px",
+                                    textAlign: "left",
+                                }}
+                            >
+                                <thead>
+                                    <tr
+                                        style={{
+                                            background: "#f8fafc",
+                                            borderBottom:
+                                                "1px solid #e5e7eb",
+                                        }}
+                                    >
+                                        <th
+                                            style={{
+                                                padding: "10px 14px",
+                                                fontWeight: 600,
+                                                color: "#475569",
+                                            }}
+                                        >
+                                            Store Name & Code
+                                        </th>
+                                        <th
+                                            style={{
+                                                padding: "10px 14px",
+                                                fontWeight: 600,
+                                                color: "#475569",
+                                                textAlign: "right",
+                                            }}
+                                        >
+                                            Available Stock
+                                        </th>
+                                        <th
+                                            style={{
+                                                padding: "10px 14px",
+                                                fontWeight: 600,
+                                                color: "#475569",
+                                                textAlign: "center",
+                                            }}
+                                        >
+                                            Reorder / Min
+                                        </th>
+                                        <th
+                                            style={{
+                                                padding: "10px 14px",
+                                                fontWeight: 600,
+                                                color: "#475569",
+                                                textAlign: "center",
+                                            }}
+                                        >
+                                            Status
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {storeItems.map((st, idx) => {
+                                        const qty = Number(
+                                            st?.quantity ?? st?.stock ?? 0
+                                        );
+                                        const isLow = Boolean(st?.is_low_stock);
+                                        const isOutOfStock = qty <= 0;
+                                        const minStock = Number(
+                                            st?.min_stock_level ?? 0
+                                        );
+                                        const reorder = Number(
+                                            st?.reorder_point ?? 0
+                                        );
+
+                                        return (
+                                            <tr
+                                                key={st?.store_id ?? idx}
+                                                style={{
+                                                    borderBottom:
+                                                        idx ===
+                                                        storeItems.length - 1
+                                                            ? "none"
+                                                            : "1px solid #f1f5f9",
+                                                    background:
+                                                        idx % 2 === 0
+                                                            ? "#ffffff"
+                                                            : "#fafafa",
+                                                }}
+                                            >
+                                                <td
+                                                    style={{
+                                                        padding: "10px 14px",
+                                                    }}
+                                                >
+                                                    <div
+                                                        style={{
+                                                            fontWeight: 600,
+                                                            color: "#1e293b",
+                                                        }}
+                                                    >
+                                                        {st?.store_name ||
+                                                            `Store #${st?.store_id}`}
+                                                    </div>
+                                                    <div
+                                                        style={{
+                                                            fontSize: "11px",
+                                                            color: "#64748b",
+                                                            marginTop: "2px",
+                                                        }}
+                                                    >
+                                                        {st?.store_code
+                                                            ? `Code: ${st.store_code}`
+                                                            : `Store ID: #${st?.store_id}`}
+                                                    </div>
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "10px 14px",
+                                                        textAlign: "right",
+                                                    }}
+                                                >
+                                                    <span
+                                                        style={{
+                                                            fontWeight: 700,
+                                                            color: isOutOfStock
+                                                                ? "#94a3b8"
+                                                                : isLow
+                                                                ? "#d97706"
+                                                                : "#059669",
+                                                        }}
+                                                    >
+                                                        {qty}
+                                                    </span>{" "}
+                                                    <span
+                                                        style={{
+                                                            fontSize: "11px",
+                                                            color: "#64748b",
+                                                        }}
+                                                    >
+                                                        {item?.unit || "Pcs"}
+                                                    </span>
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "10px 14px",
+                                                        textAlign: "center",
+                                                        color: "#64748b",
+                                                        fontSize: "12px",
+                                                    }}
+                                                >
+                                                    {reorder > 0 || minStock > 0 ? (
+                                                        <span>
+                                                            {minStock} / {reorder}
+                                                        </span>
+                                                    ) : (
+                                                        <span>—</span>
+                                                    )}
+                                                </td>
+                                                <td
+                                                    style={{
+                                                        padding: "10px 14px",
+                                                        textAlign: "center",
+                                                    }}
+                                                >
+                                                    {isOutOfStock ? (
+                                                        <span
+                                                            style={{
+                                                                background:
+                                                                    "#f1f5f9",
+                                                                color: "#64748b",
+                                                                padding:
+                                                                    "3px 8px",
+                                                                borderRadius:
+                                                                    "12px",
+                                                                fontSize: "11px",
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            Out of Stock
+                                                        </span>
+                                                    ) : isLow ? (
+                                                        <span
+                                                            style={{
+                                                                background:
+                                                                    "#fef3c7",
+                                                                color: "#b45309",
+                                                                padding:
+                                                                    "3px 8px",
+                                                                borderRadius:
+                                                                    "12px",
+                                                                fontSize: "11px",
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            Low Stock
+                                                        </span>
+                                                    ) : (
+                                                        <span
+                                                            style={{
+                                                                background:
+                                                                    "#dcfce7",
+                                                                color: "#15803d",
+                                                                padding:
+                                                                    "3px 8px",
+                                                                borderRadius:
+                                                                    "12px",
+                                                                fontSize: "11px",
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            In Stock
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div
+                    className="ec-modal-actions"
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                        gap: "12px",
+                        paddingTop: "16px",
+                        borderTop: "1px solid #f3f4f6",
+                        flexShrink: 0,
+                        background: "#fff",
+                    }}
+                >
+                    <button
+                        className="adm-btn-secondary"
+                        onClick={onClose}
+                        type="button"
+                        style={{
+                            padding: "8px 20px",
+                            borderRadius: "8px",
+                            fontWeight: 500,
+                            fontSize: "13px",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Close
+                    </button>
                 </div>
             </div>
         </div>
@@ -1359,6 +2150,8 @@ const Inventory = () => {
         useState(8);
 
     const [stockModal, setStockModal] =
+        useState(null);
+    const [viewProductModal, setViewProductModal] =
         useState(null);
 
     const [products, setProducts] =
@@ -3668,6 +4461,9 @@ if (action === "transfer") {
                             setStockModal={
                                 setStockModal
                             }
+                            onView={(item) =>
+                                setViewProductModal(item)
+                            }
                         />
                     </div>
                 </section>
@@ -3809,17 +4605,8 @@ if (action === "transfer") {
 
                     {/* PAGINATION */}
                     <div className="inv-pagination">
+                        {/* LEFT: Rows per page */}
                         <div className="inv-pagination-left">
-                            <span className="inv-pagination-info">
-                                Showing{" "}
-                                <strong>
-                                    {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1}
-                                    {" – "}
-                                    {Math.min(page * pageSize, filtered.length)}
-                                </strong>{" "}
-                                of <strong>{filtered.length}</strong> items
-                            </span>
-
                             <div className="inv-page-size-select-wrap">
                                 <label htmlFor="inv-page-size" className="inv-page-size-label">Rows per page:</label>
                                 <select
@@ -3839,40 +4626,56 @@ if (action === "transfer") {
                             </div>
                         </div>
 
-                        {totalPages > 1 && (
-                            <div className="inv-page-buttons">
-                                <button
-                                    type="button"
-                                    className="inv-page-btn"
-                                    disabled={page === 1}
-                                    onClick={() => setPage(page - 1)}
-                                    aria-label="Previous page"
-                                >
-                                    <BsChevronLeft />
-                                </button>
+                        {/* CENTER: Pagination Summary Text */}
+                        <div className="inv-pagination-center">
+                            <span className="inv-pagination-info">
+                                Showing{" "}
+                                <strong>
+                                    {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1}
+                                    {" – "}
+                                    {Math.min(page * pageSize, filtered.length)}
+                                </strong>{" "}
+                                of <strong>{filtered.length}</strong> items
+                            </span>
+                        </div>
 
-                                {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                        {/* RIGHT: Page Buttons */}
+                        <div className="inv-pagination-right">
+                            {totalPages > 1 && (
+                                <div className="inv-page-buttons">
                                     <button
                                         type="button"
-                                        key={p}
-                                        className={`inv-page-btn ${p === page ? "active" : ""}`}
-                                        onClick={() => setPage(p)}
+                                        className="inv-page-btn"
+                                        disabled={page === 1}
+                                        onClick={() => setPage(page - 1)}
+                                        aria-label="Previous page"
                                     >
-                                        {p}
+                                        <BsChevronLeft />
                                     </button>
-                                ))}
 
-                                <button
-                                    type="button"
-                                    className="inv-page-btn"
-                                    disabled={page === totalPages}
-                                    onClick={() => setPage(page + 1)}
-                                    aria-label="Next page"
-                                >
-                                    <BsChevronRight />
-                                </button>
-                            </div>
-                        )}
+                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                                        <button
+                                            type="button"
+                                            key={p}
+                                            className={`inv-page-btn ${p === page ? "active" : ""}`}
+                                            onClick={() => setPage(p)}
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+
+                                    <button
+                                        type="button"
+                                        className="inv-page-btn"
+                                        disabled={page === totalPages}
+                                        onClick={() => setPage(page + 1)}
+                                        aria-label="Next page"
+                                    >
+                                        <BsChevronRight />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </section>
 
@@ -3900,6 +4703,14 @@ if (action === "transfer") {
                         onSave={
                             handleStockUpdate
                         }
+                    />
+                )}
+
+                {/* VIEW PRODUCT STORE-WISE STOCK MODAL */}
+                {viewProductModal && (
+                    <ProductStoreStockModal
+                        item={viewProductModal}
+                        onClose={() => setViewProductModal(null)}
                     />
                 )}
             </div>

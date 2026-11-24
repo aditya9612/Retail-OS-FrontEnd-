@@ -34,10 +34,18 @@ const request = async (url, options = {}) => {
 /**
  * Fetch all coupons.
  * GET /api/v1/coupons
+ * @param {Object} [params]
  * @returns {Promise<Array>} list of coupons
  */
-export const getCoupons = () =>
-    request(`${BASE_URL}/coupons/`, { method: 'GET' });
+export const getCoupons = (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params.page) searchParams.append('page', String(params.page));
+    if (params.page_size) searchParams.append('page_size', String(params.page_size));
+    if (params.is_active !== undefined && params.is_active !== null) searchParams.append('is_active', String(params.is_active));
+    if (params.search) searchParams.append('search', String(params.search));
+    const qs = searchParams.toString();
+    return request(`${BASE_URL}/coupons${qs ? `?${qs}` : ''}`, { method: 'GET' });
+};
 
 /**
  * Fetch a single coupon by ID.
@@ -109,58 +117,181 @@ export const getCouponStats = () =>
     request(`${BASE_URL}/coupons/stats`, { method: 'GET' });
 
 /**
+ * Toggle coupon active status.
+ * PATCH /api/v1/coupons/{coupon_id}/status
+ * @param {number|string} couponId
+ * @param {boolean} is_active
+ * @returns {Promise<Object>} updated coupon
+ */
+export const updateCouponStatus = (couponId, is_active) =>
+    request(`${BASE_URL}/coupons/${encodeURIComponent(couponId)}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: Boolean(is_active) }),
+    });
+
+/**
  * Activate a coupon by its ID.
- * PATCH /api/v1/coupons/{coupon_id}/activate
+ * PATCH /api/v1/coupons/{coupon_id}/status
  * @param {number|string} couponId
  * @returns {Promise<Object>} updated coupon with is_active: true
  */
-export const activateCoupon = (couponId) =>
-    request(`${BASE_URL}/coupons/${encodeURIComponent(couponId)}/activate`, {
-        method: 'PATCH',
-    });
+export const activateCoupon = (couponId) => updateCouponStatus(couponId, true);
 
 /**
  * Deactivate a coupon by its ID.
- * PATCH /api/v1/coupons/{coupon_id}/deactivate
+ * PATCH /api/v1/coupons/{coupon_id}/status
  * @param {number|string} couponId
  * @returns {Promise<Object>} updated coupon with is_active: false
  */
-export const deactivateCoupon = (couponId) =>
-    request(`${BASE_URL}/coupons/${encodeURIComponent(couponId)}/deactivate`, {
-        method: 'PATCH',
+export const deactivateCoupon = (couponId) => updateCouponStatus(couponId, false);
+
+/**
+ * 1. Get applicable and locked coupon recommendations for a cart amount.
+ * GET /api/v1/coupons/applicable
+ * @param {Object} params
+ * @param {number|string} params.order_amount - Current cart/order amount
+ * @param {number} [params.customer_id]
+ * @param {string} [params.customer_phone]
+ * @param {number} [params.store_id]
+ * @returns {Promise<Object>} { order_amount, applicable_coupons, locked_coupons }
+ */
+export const getApplicableCoupons = (params = {}) => {
+    const searchParams = new URLSearchParams();
+    if (params?.order_amount !== undefined && params?.order_amount !== null) {
+        searchParams.append('order_amount', String(params.order_amount));
+    }
+    if (params?.customer_id) searchParams.append('customer_id', String(params.customer_id));
+    if (params?.customer_phone) searchParams.append('customer_phone', String(params.customer_phone));
+    if (params?.store_id) searchParams.append('store_id', String(params.store_id));
+
+    return request(`${BASE_URL}/coupons/applicable?${searchParams.toString()}`, { method: 'GET' });
+};
+
+/**
+ * 2. Export coupons report to Excel, CSV or PDF.
+ * GET /api/v1/coupons/export
+ * @param {Object} [options]
+ * @param {'excel'|'csv'|'pdf'} [options.format='excel']
+ * @param {'active'|'expired'|'inactive'|'scheduled'} [options.status]
+ * @returns {Promise<{ blob: Blob, url: string, filename: string }>}
+ */
+export const exportCoupons = async ({ format = 'excel', status } = {}) => {
+    const searchParams = new URLSearchParams();
+    searchParams.append('format', format);
+    if (status && status !== 'all' && status !== 'All') {
+        searchParams.append('status', status.toLowerCase());
+    }
+
+    const token = getAccessToken();
+    const url = `${BASE_URL}/coupons/export?${searchParams.toString()}`;
+
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            Accept: format === 'pdf' ? 'application/pdf' : format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream',
+        },
+    });
+
+    if (!response.ok) {
+        let errorMsg = `Export failed (${response.status})`;
+        try {
+            const err = await response.json();
+            errorMsg = err?.detail?.message || err?.detail || errorMsg;
+        } catch (_) {}
+        throw new Error(errorMsg);
+    }
+
+    const blob = await response.blob();
+    const objectUrl = window.URL.createObjectURL(blob);
+    const extension = format === 'pdf' ? 'pdf' : format === 'csv' ? 'csv' : 'xlsx';
+    const filename = `Coupons_Export_${new Date().toISOString().split('T')[0]}.${extension}`;
+
+    return { blob, url: objectUrl, filename };
+};
+
+/**
+ * 3. Bulk generate unique single-use coupon codes.
+ * POST /api/v1/coupons/bulk-generate
+ * @param {Object} payload
+ * @returns {Promise<Object>} { success, message, generated_count, coupons }
+ */
+export const bulkGenerateCoupons = (payload) =>
+    request(`${BASE_URL}/coupons/bulk-generate`, {
+        method: 'POST',
+        body: JSON.stringify({
+            prefix: String(payload.prefix || 'COUPON').trim().toUpperCase(),
+            count: Number(payload.count) || 10,
+            description: payload.description || `${payload.prefix} Promotional Vouchers`,
+            discount_type: String(payload.discount_type || 'percentage').toLowerCase(),
+            discount_value: Number(payload.discount_value) || 0,
+            minimum_order_amount: Number(payload.minimum_order_amount) || 1,
+            maximum_discount: payload.maximum_discount ? Number(payload.maximum_discount) : null,
+            usage_limit: Number(payload.usage_limit) || 1,
+            usage_limit_per_customer: payload.usage_limit_per_customer !== undefined ? Number(payload.usage_limit_per_customer) : 1,
+            start_date: payload.start_date || new Date().toISOString().split('T')[0],
+            end_date: payload.end_date,
+        }),
     });
 
 /**
- * Validate a coupon code against an order amount.
+ * 4. Validate a coupon code against an order amount and customer.
  * POST /api/v1/coupons/validate
  * @param {string} coupon_code - The coupon code to check using exact casing
  * @param {string|number} order_amount - The total order amount logic checking
+ * @param {Object} [extra] - Optional customer and store context
  * @returns {Promise<Object>} { valid: boolean, message: string }
  */
-export const validateCoupon = (coupon_code, order_amount) =>
+export const validateCoupon = (coupon_code, order_amount, extra = {}) =>
     request(`${BASE_URL}/coupons/validate`, {
         method: 'POST',
         body: JSON.stringify({
-            coupon_code: coupon_code,
-            order_amount: String(order_amount)
+            coupon_code: String(coupon_code).trim().toUpperCase(),
+            order_amount: Number(order_amount) || 0,
+            ...(extra.customer_id ? { customer_id: Number(extra.customer_id) } : {}),
+            ...(extra.customer_phone ? { customer_phone: String(extra.customer_phone) } : {}),
+            ...(extra.store_id ? { store_id: Number(extra.store_id) } : {}),
         }),
     });
 
 /**
- * Apply a coupon code to an order amount to get final calculations.
+ * 5. Apply a coupon code to an order amount to get final calculations.
  * POST /api/v1/coupons/apply
  * @param {string} coupon_code - The coupon code to apply
  * @param {string|number} order_amount - The total order amount
+ * @param {Object} [extra] - Optional customer and store context
  * @returns {Promise<Object>} { coupon_code, original_amount, discount_amount, final_amount, message }
  */
-export const applyCoupon = (coupon_code, order_amount) =>
+export const applyCoupon = (coupon_code, order_amount, extra = {}) =>
     request(`${BASE_URL}/coupons/apply`, {
         method: 'POST',
         body: JSON.stringify({
-            coupon_code: coupon_code,
-            order_amount: String(order_amount)
+            coupon_code: String(coupon_code).trim().toUpperCase(),
+            order_amount: Number(order_amount) || 0,
+            ...(extra.customer_id ? { customer_id: Number(extra.customer_id) } : {}),
+            ...(extra.customer_phone ? { customer_phone: String(extra.customer_phone) } : {}),
+            ...(extra.store_id ? { store_id: Number(extra.store_id) } : {}),
         }),
     });
+
+/**
+ * 6. List customer redemptions for a specific coupon.
+ * GET /api/v1/coupons/{coupon_id}/redemptions
+ * @param {number|string} couponId
+ * @param {Object} [params]
+ * @param {number} [params.page=1]
+ * @param {number} [params.page_size=20]
+ * @returns {Promise<Array>} list of redemptions
+ */
+export const getCouponRedemptions = (couponId, params = { page: 1, page_size: 20 }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', String(params.page));
+    if (params?.page_size) searchParams.append('page_size', String(params.page_size));
+
+    return request(`${BASE_URL}/coupons/${encodeURIComponent(couponId)}/redemptions?${searchParams.toString()}`, {
+        method: 'GET',
+    });
+};
 
 /**
  * Verified active coupons registry for Retail-OS

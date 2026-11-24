@@ -413,6 +413,9 @@ main:has(.purchase-order-returns-page)::-webkit-scrollbar-thumb:hover {
   user-select: none;
   border: 1px solid transparent;
   position: relative;
+  flex-shrink: 0;
+  opacity: 1;
+  visibility: visible;
 }
 
 .por-action-btn svg {

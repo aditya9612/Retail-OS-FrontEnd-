@@ -6,10 +6,41 @@ import apiClient from './api';
  * Aligned with OpenAPI specifications
  */
 
+/**
+ * Normalizes logo URLs: converts relative backend paths to absolute URLs,
+ * handles edge cases like "null" / "undefined" / "Logo", and ensures secure image URLs.
+ */
+export const normalizeLogoUrl = (url) => {
+    if (!url || typeof url !== 'string') return null;
+    const trimmed = url.trim();
+    if (!trimmed || trimmed === 'null' || trimmed === 'undefined' || trimmed === 'false' || trimmed.toLowerCase() === 'logo') {
+        return null;
+    }
+    if (trimmed.startsWith('data:image/') || trimmed.startsWith('blob:')) {
+        return trimmed;
+    }
+    if (/^https?:\/\//i.test(trimmed)) {
+        return trimmed;
+    }
+
+    // Relative upload path: prepend backend API host
+    const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+    const rawApiUrl = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_URL) || 'https://api-testing.myretailos.com/api/v1';
+    const apiOrigin = rawApiUrl.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
+    return `${apiOrigin}${cleanPath}`;
+};
+
 export const getEffectiveBranding = async () => {
     try {
         const response = await apiClient.get('/document-settings/effective');
-        return response.data;
+        const data = response.data;
+        if (data && typeof data === 'object') {
+            return {
+                ...data,
+                logo_url: normalizeLogoUrl(data.logo_url),
+            };
+        }
+        return data;
     } catch (e) {
         console.warn('[documentSettingsService] getEffectiveBranding fallback to default:', e?.message || e);
         return {

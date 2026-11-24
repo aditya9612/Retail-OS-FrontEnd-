@@ -7,6 +7,7 @@ const CategoryHeader = ({
   inactive,
   onAdd,
   onExport,
+  isExporting = false,
   statusFilter,
   setStatusFilter,
 }) => {
@@ -22,8 +23,13 @@ const CategoryHeader = ({
       {/* Right */}
       <div className="category-header-right">
 
-        <button className="category-btn secondary-btn" type="button" onClick={onExport}>
-          Export
+        <button
+          className="category-btn secondary-btn"
+          type="button"
+          onClick={onExport}
+          disabled={isExporting}
+        >
+          {isExporting ? "Exporting..." : "Export"}
         </button>
 
         <button
@@ -32,41 +38,6 @@ const CategoryHeader = ({
         >
           + New Category
         </button>
-
-      </div>
-
-      {/* Bottom Tabs */}
-      <div className="category-tabs">
-
-        {/* All */}
-        <div
-          className={`category-tab ${
-            statusFilter === "All" ? "active-tab" : ""
-          }`}
-          onClick={() => setStatusFilter("All")}
-        >
-          All Categories ({total})
-        </div>
-
-        {/* Active */}
-        <div
-          className={`category-tab ${
-            statusFilter === "Active" ? "active-tab" : ""
-          }`}
-          onClick={() => setStatusFilter("Active")}
-        >
-          Active ({active})
-        </div>
-
-        {/* Inactive */}
-        <div
-          className={`category-tab ${
-            statusFilter === "Inactive" ? "active-tab" : ""
-          }`}
-          onClick={() => setStatusFilter("Inactive")}
-        >
-          Inactive ({inactive})
-        </div>
 
       </div>
     </div>

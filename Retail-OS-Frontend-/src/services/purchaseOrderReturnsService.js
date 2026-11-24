@@ -446,8 +446,9 @@ export const createPurchaseOrderReturn = async (data) => {
 // DELETE /api/v1/purchase-order-returns/{return_id}
 // =====================================================
 export const deletePurchaseOrderReturn = async (returnId) => {
+    const id = typeof returnId === "object" && returnId !== null ? returnId.id : returnId;
     const response = await apiClient.delete(
-        `${PURCHASE_ORDER_RETURNS_API}/${returnId}`
+        `${PURCHASE_ORDER_RETURNS_API}/${id}`
     );
 
     return response.data;

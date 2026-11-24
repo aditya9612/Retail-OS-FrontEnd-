@@ -46,7 +46,7 @@ const ExportDirectoryModal = ({ isOpen, onClose, customers = [] }) => {
             return customers.filter(c => c.status === 'Active' || c.status?.toLowerCase() === 'active');
         }
         if (status === 'Inactive') {
-            return customers.filter(c => c.status === 'Inactive' || c.status === 'Blocked' || c.status?.toLowerCase() !== 'active');
+            return customers.filter(c => c.status === 'Inactive' || c.status?.toLowerCase() !== 'active');
         }
         return customers;
     }, [customers, status]);
