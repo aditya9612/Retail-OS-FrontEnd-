@@ -11,6 +11,8 @@ import { getPurchaseOrders, getPurchaseOrder } from '../../api/purchaseOrdersApi
 import { listSuppliers } from '../../api/supplierApi';
 import PurchaseOrderReturns from '../PurchaseOrderReturns';
 import TransferStockModal from '../../components/TransferStockModel';
+import './Warehouse.css';
+import './StoreTransfers.css';
 import { getStoreTransfers, getStoreTransfersSummary, getStoreTransferById, approveStoreTransfer, rejectStoreTransfer, dispatchStoreTransfer, receiveStoreTransfer, receiveStoreTransferWithDiscrepancy, checkStoreActiveStatus } from '../../services/storeTransferService';
 
 import {
@@ -21,7 +23,7 @@ import {
     BsCreditCard2Front, BsBoxSeam, BsSend, BsGear, BsTag, BsExclamationTriangle,
     BsTrash, BsShop, BsChevronLeft, BsChevronRight, BsX, BsEye, BsCheckCircle, BsXCircle,
     BsChevronDown, BsChevronUp, BsActivity, BsTable, BsPencilFill, BsTrashFill, BsPlusCircle,
-    BsFileEarmarkPdf, BsShieldCheck, BsClipboardData, BsCalendarCheck, BsFunnel
+    BsFileEarmarkPdf, BsShieldCheck, BsClipboardData, BsCalendarCheck, BsFunnel, BsGeoAlt
 } from 'react-icons/bs';
 
 
@@ -459,7 +461,7 @@ export const WarehousesPage = () => {
     const [statusFilter, setStatusFilter] = useState("all");
     const [storeFilter, setStoreFilter] = useState("all");
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
+    const [pageSize, setPageSize] = useState(8);
     const [viewMode, setViewMode] = useState("table");
     const [togglingStatusId, setTogglingStatusId] = useState(null);
     const [statusToast, setStatusToast] = useState(null);
@@ -1269,746 +1271,116 @@ export const WarehousesPage = () => {
             ? formatWarehouseStockValue(dashboardData.total_stock_value)
             : "₹0.00";
 
-    const WarehouseStatCard = ({ label, value, sub, icon, iconBg, iconColor }) => (
-        <div className="wh-stat-card" style={{
-            background: '#ffffff',
-            borderRadius: 12,
-            padding: '18px 20px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            boxSizing: 'border-box'
-        }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <span style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: '#64748b',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em'
-                }}>
-                    {label}
-                </span>
-                <div style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: iconBg,
-                    color: iconColor,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                }}>
+    const WarehouseStatCard = ({ label, value, sub, icon, iconBg, iconColor, accentColor, trendType }) => (
+        <div className={`wh-stat-card wh-stat-card-${accentColor || 'indigo'}`}>
+            <div className="wh-stat-card-header">
+                <span className="wh-stat-label">{label}</span>
+                <div className="wh-stat-icon-wrapper" style={{ background: iconBg, color: iconColor }}>
                     {icon}
                 </div>
             </div>
-            <div>
-                <div style={{
-                    fontSize: 26,
-                    fontWeight: 800,
-                    color: '#0f172a',
-                    lineHeight: 1.15,
-                    letterSpacing: '-0.02em',
-                    marginBottom: 5,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                }}>
-                    {value}
-                </div>
-                {sub && (
-                    <div style={{
-                        fontSize: 11.5,
-                        fontWeight: 500,
-                        color: '#64748b',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                    }}>
-                        {sub}
-                    </div>
-                )}
+            <div className="wh-stat-value" title={String(value)}>
+                {value}
             </div>
+            {sub && (
+                <div className="wh-stat-sub">
+                    <span className={`wh-stat-dot wh-stat-dot-${trendType || 'neutral'}`} />
+                    <span>{sub}</span>
+                </div>
+            )}
         </div>
     );
 
     return (
-        <div className="warehouse-page-root" style={{ width: '100%', minHeight: '100%' }}>
-            <style>{`
-                /* Warehouse Page Full-Width & External Whitespace Elimination */
-                .warehouse-page-root {
-                    width: 100% !important;
-                    max-width: 100% !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    box-sizing: border-box !important;
-                }
-                .warehouse-page-root > div {
-                    max-width: 100% !important;
-                    width: 100% !important;
-                    margin: 0 !important;
-                    padding: 20px 24px !important;
-                    box-sizing: border-box !important;
-                }
-                @media (max-width: 768px) {
-                    .warehouse-page-root > div {
-                        padding: 14px 16px !important;
-                    }
-                }
+        <div className="warehouse-page-root">
+            <div className="wh-page-inner">
+                {/* 1. Page Header */}
+                <header className="wh-page-header">
+                    <div className="wh-header-left">
+                        <div className="wh-header-icon-box">
+                            <BsBuildings size={22} />
+                        </div>
+                        <div className="wh-header-text">
+                            <h1 className="wh-page-title">Warehouses &amp; Stock Locations</h1>
+                            <p className="wh-page-subtitle">Central depots, store stockrooms, transit hubs and multi-location inventory levels</p>
+                        </div>
+                    </div>
+                    <div className="wh-header-actions">
+                        <button
+                            type="button"
+                            onClick={handleRefresh}
+                            disabled={loading || dashboardLoading}
+                            title="Refresh Warehouses"
+                            className="wh-refresh-btn"
+                        >
+                            <BsArrowRepeat size={16} className={loading || dashboardLoading ? "wh-spin" : ""} />
+                            <span>Refresh</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleOpenAddModal}
+                            title="Add New Warehouse"
+                            className="wh-add-btn"
+                        >
+                            <BsPlus size={20} />
+                            <span>Add Warehouse</span>
+                        </button>
+                    </div>
+                </header>
 
-                /* Page-level vertical scrollbar enhancements */
-                .warehouse-main-scroll::-webkit-scrollbar,
-                main:has(.warehouse-page-root)::-webkit-scrollbar,
-                body:has(.warehouse-page-root) main::-webkit-scrollbar {
-                    width: 10px !important;
-                    height: 10px !important;
-                }
-                .warehouse-main-scroll::-webkit-scrollbar-track,
-                main:has(.warehouse-page-root)::-webkit-scrollbar-track,
-                body:has(.warehouse-page-root) main::-webkit-scrollbar-track {
-                    background: #f1f5f9 !important;
-                    border-radius: 6px;
-                    border: 1px solid #e2e8f0;
-                }
-                .warehouse-main-scroll::-webkit-scrollbar-thumb,
-                main:has(.warehouse-page-root)::-webkit-scrollbar-thumb,
-                body:has(.warehouse-page-root) main::-webkit-scrollbar-thumb {
-                    background: #94a3b8 !important;
-                    border-radius: 6px;
-                    border: 2px solid #f1f5f9;
-                }
-                .warehouse-main-scroll::-webkit-scrollbar-thumb:hover,
-                main:has(.warehouse-page-root)::-webkit-scrollbar-thumb:hover,
-                body:has(.warehouse-page-root) main::-webkit-scrollbar-thumb:hover {
-                    background: #64748b !important;
-                }
-                .warehouse-main-scroll,
-                main:has(.warehouse-page-root) {
-                    scrollbar-width: thin !important;
-                    scrollbar-color: #94a3b8 #f1f5f9 !important;
-                }
-
-                /* Table horizontal & vertical scrollbar enhancements */
-                .warehouse-page-root .warehouse-table-scroll {
-                    width: 100%;
-                    max-height: 480px;
-                    overflow-x: auto !important;
-                    overflow-y: auto !important;
-                    scrollbar-width: thin !important;
-                    scrollbar-color: #94a3b8 #f1f5f9 !important;
-                    -webkit-overflow-scrolling: touch;
-                    position: relative;
-                }
-                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar {
-                    width: 10px !important;
-                    height: 10px !important;
-                }
-                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-track {
-                    background: #f1f5f9 !important;
-                    border-radius: 6px;
-                    border: 1px solid #e2e8f0;
-                }
-                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-thumb {
-                    background: #94a3b8 !important;
-                    border-radius: 6px;
-                    border: 2px solid #f1f5f9;
-                }
-                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-thumb:hover {
-                    background: #64748b !important;
-                }
-                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-corner {
-                    background: #f1f5f9 !important;
-                }
-
-                /* Warehouse Stat Card Hover Interaction */
-                .wh-stat-card {
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                }
-                .wh-stat-card:hover {
-                    transform: translateY(-2px) !important;
-                    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08) !important;
-                    border-color: #cbd5e1 !important;
-                }
-
-                /* Professional SaaS Search Bar & Filters Styling - Unified Single Row */
-                .warehouse-page-root .wh-toolbar-container {
-                    padding: 14px 18px !important;
-                    background: #ffffff !important;
-                }
-
-                .warehouse-page-root .wh-toolbar-row {
-                    display: flex !important;
-                    align-items: center !important;
-                    flex-wrap: wrap !important;
-                    gap: 12px !important;
-                    width: 100% !important;
-                }
-
-                .warehouse-page-root .wh-search-form {
-                    display: flex !important;
-                    align-items: center !important;
-                    margin: 0 !important;
-                    flex: 1 1 280px !important;
-                    max-width: 360px !important;
-                    min-width: 240px !important;
-                }
-
-                .warehouse-page-root .wh-search-box {
-                    position: relative !important;
-                    width: 100% !important;
-                    display: flex !important;
-                    align-items: center !important;
-                }
-
-                .warehouse-page-root .wh-search-icon {
-                    position: absolute !important;
-                    left: 12px !important;
-                    top: 50% !important;
-                    transform: translateY(-50%) !important;
-                    color: #64748b !important;
-                    pointer-events: none !important;
-                }
-
-                .warehouse-page-root .wh-search-input {
-                    width: 100% !important;
-                    height: 38px !important;
-                    padding: 0 32px 0 34px !important;
-                    border: 1.5px solid #cbd5e1 !important;
-                    border-radius: 8px !important;
-                    font-size: 13px !important;
-                    font-weight: 500 !important;
-                    background: #f8fafc !important;
-                    color: #0f172a !important;
-                    outline: none !important;
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                    box-sizing: border-box !important;
-                }
-                .warehouse-page-root .wh-search-input::placeholder {
-                    color: #64748b !important;
-                    opacity: 1 !important;
-                    font-weight: 400 !important;
-                }
-                .warehouse-page-root .wh-search-input:hover {
-                    border-color: #94a3b8 !important;
-                    background: #ffffff !important;
-                }
-                .warehouse-page-root .wh-search-input:focus {
-                    background: #ffffff !important;
-                    border-color: #6366f1 !important;
-                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
-                }
-
-                .warehouse-page-root .wh-search-clear-btn {
-                    position: absolute !important;
-                    right: 8px !important;
-                    top: 50% !important;
-                    transform: translateY(-50%) !important;
-                    background: #e2e8f0 !important;
-                    border: none !important;
-                    border-radius: 50% !important;
-                    width: 20px !important;
-                    height: 20px !important;
-                    cursor: pointer !important;
-                    color: #475569 !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    padding: 0 !important;
-                    transition: all 0.15s ease !important;
-                }
-                .warehouse-page-root .wh-search-clear-btn:hover {
-                    background: #cbd5e1 !important;
-                    color: #0f172a !important;
-                }
-
-                /* Filter Dropdown Wrappers in Single Row */
-                .warehouse-page-root .wh-filter-wrapper {
-                    position: relative !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    height: 38px !important;
-                    flex: 0 1 auto !important;
-                }
-
-                .warehouse-page-root .wh-store-filter-wrapper {
-                    min-width: 200px !important;
-                    max-width: 260px !important;
-                    flex: 1 1 220px !important;
-                }
-
-                .warehouse-page-root .wh-status-filter-wrapper {
-                    min-width: 150px !important;
-                    max-width: 180px !important;
-                    flex: 1 1 160px !important;
-                }
-
-                .warehouse-page-root .wh-filter-prefix-icon {
-                    position: absolute !important;
-                    left: 11px !important;
-                    top: 50% !important;
-                    transform: translateY(-50%) !important;
-                    pointer-events: none !important;
-                    z-index: 2 !important;
-                }
-
-                .warehouse-page-root .wh-store-filter-wrapper .wh-filter-prefix-icon {
-                    color: #10b981 !important;
-                }
-
-                .warehouse-page-root .wh-status-filter-wrapper .wh-filter-prefix-icon {
-                    color: #6366f1 !important;
-                }
-
-                .warehouse-page-root .wh-filter-select {
-                    width: 100% !important;
-                    height: 38px !important;
-                    padding: 0 28px 0 32px !important;
-                    border: 1.5px solid #cbd5e1 !important;
-                    border-radius: 8px !important;
-                    font-size: 13px !important;
-                    font-weight: 500 !important;
-                    background: #ffffff !important;
-                    color: #0f172a !important;
-                    outline: none !important;
-                    cursor: pointer !important;
-                    appearance: none !important;
-                    -webkit-appearance: none !important;
-                    -moz-appearance: none !important;
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                    box-sizing: border-box !important;
-                    text-overflow: ellipsis !important;
-                    white-space: nowrap !important;
-                }
-                .warehouse-page-root .wh-filter-select:hover {
-                    border-color: #94a3b8 !important;
-                    background: #f8fafc !important;
-                }
-                .warehouse-page-root .wh-filter-select:focus {
-                    background: #ffffff !important;
-                    border-color: #6366f1 !important;
-                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
-                }
-                .warehouse-page-root .wh-filter-select.is-active {
-                    background: #eef2ff !important;
-                    border-color: #6366f1 !important;
-                    color: #3730a3 !important;
-                    font-weight: 600 !important;
-                }
-                .warehouse-page-root .wh-filter-select-icon {
-                    position: absolute !important;
-                    right: 10px !important;
-                    top: 50% !important;
-                    transform: translateY(-50%) !important;
-                    color: #64748b !important;
-                    pointer-events: none !important;
-                    z-index: 2 !important;
-                }
-
-                /* Active Filter Badge & Reset Button Group */
-                .warehouse-page-root .wh-filter-actions-group {
-                    display: flex !important;
-                    align-items: center !important;
-                    gap: 8px !important;
-                    margin-left: auto !important;
-                    flex-wrap: wrap !important;
-                }
-
-                .warehouse-page-root .wh-active-filter-badge {
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    gap: 5px !important;
-                    padding: 0 11px !important;
-                    height: 36px !important;
-                    background: #eef2ff !important;
-                    color: #4338ca !important;
-                    border: 1px solid #c7d2fe !important;
-                    border-radius: 20px !important;
-                    font-size: 12px !important;
-                    font-weight: 600 !important;
-                    white-space: nowrap !important;
-                }
-
-                .warehouse-page-root .wh-clear-btn {
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    gap: 4px !important;
-                    padding: 0 12px !important;
-                    height: 36px !important;
-                    font-size: 12.5px !important;
-                    font-weight: 600 !important;
-                    color: #b91c1c !important;
-                    background: #fef2f2 !important;
-                    border: 1px solid #fecaca !important;
-                    border-radius: 8px !important;
-                    cursor: pointer !important;
-                    transition: all 0.15s ease !important;
-                    white-space: nowrap !important;
-                }
-                .warehouse-page-root .wh-clear-btn:hover {
-                    background: #dc2626 !important;
-                    color: #ffffff !important;
-                    border-color: #dc2626 !important;
-                    transform: translateY(-1px) !important;
-                    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.2) !important;
-                }
-
-                /* Action Button & Tooltip Styles */
-                .wh-actions {
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 6px;
-                }
-                .wh-action-btn {
-                    position: relative;
-                    width: 32px;
-                    height: 32px;
-                    padding: 0;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 7px;
-                    font-size: 13px;
-                    cursor: pointer;
-                    transition: all 0.15s ease;
-                    border: 1px solid transparent;
-                    flex-shrink: 0;
-                    box-sizing: border-box;
-                }
-                .wh-action-btn:active {
-                    transform: translateY(0);
-                }
-                .wh-btn-view {
-                    background: #eef2ff;
-                    color: #4f46e5;
-                    border: 1.5px solid #c7d2fe;
-                }
-                .wh-btn-view:hover {
-                    background: #4f46e5;
-                    color: #ffffff;
-                    border-color: #4f46e5;
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
-                }
-                .wh-btn-create {
-                    background: #ecfdf5;
-                    color: #059669;
-                    border: 1.5px solid #a7f3d0;
-                }
-                .wh-btn-create:hover {
-                    background: #059669;
-                    color: #ffffff;
-                    border-color: #059669;
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
-                }
-                .wh-btn-edit {
-                    background: #f8fafc;
-                    color: #334155;
-                    border: 1.5px solid #cbd5e1;
-                }
-                .wh-btn-edit:hover {
-                    background: #0284c7;
-                    color: #ffffff;
-                    border-color: #0284c7;
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
-                }
-                .wh-btn-delete {
-                    background: #fef2f2;
-                    color: #dc2626;
-                    border: 1.5px solid #fecaca;
-                }
-                .wh-btn-delete:hover:not(:disabled) {
-                    background: #dc2626;
-                    color: #ffffff;
-                    border-color: #dc2626;
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
-                }
-                .wh-btn-delete:disabled {
-                    cursor: not-allowed;
-                    opacity: 0.5;
-                }
-
-                /* Tooltip base styling & stacking */
-                .wh-action-btn:hover,
-                .wh-action-btn:focus-visible {
-                    z-index: 1000 !important;
-                }
-                .warehouse-table tbody tr:hover td {
-                    z-index: 35 !important;
-                }
-
-                .wh-action-btn[data-tooltip]::after {
-                    content: attr(data-tooltip);
-                    position: absolute;
-                    top: calc(100% + 7px);
-                    bottom: auto;
-                    padding: 5px 9px;
-                    background: #0f172a;
-                    color: #ffffff;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                    font-size: 11px;
-                    font-weight: 600;
-                    line-height: 1.2;
-                    letter-spacing: 0.01em;
-                    white-space: nowrap;
-                    border-radius: 6px;
-                    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.28);
-                    pointer-events: none;
-                    opacity: 0;
-                    visibility: hidden;
-                    z-index: 99999;
-                    transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
-                }
-
-                .wh-action-btn[data-tooltip]::before {
-                    content: "";
-                    position: absolute;
-                    top: calc(100% + 2px);
-                    bottom: auto;
-                    border-width: 0 5px 5px 5px;
-                    border-style: solid;
-                    border-color: transparent transparent #0f172a transparent;
-                    pointer-events: none;
-                    opacity: 0;
-                    visibility: hidden;
-                    z-index: 99999;
-                    transition: opacity 0.15s ease, visibility 0.15s ease;
-                }
-
-                .wh-action-btn[data-tooltip]:hover::after,
-                .wh-action-btn[data-tooltip]:hover::before,
-                .wh-action-btn[data-tooltip]:focus-visible::after,
-                .wh-action-btn[data-tooltip]:focus-visible::before {
-                    opacity: 1;
-                    visibility: visible;
-                }
-
-                /* Header Action Button (Add Warehouse): opens downward, aligned to right edge of button */
-                .warehouse-table thead th .wh-btn-create[data-tooltip]::after {
-                    top: calc(100% + 7px);
-                    bottom: auto;
-                    left: auto;
-                    right: 0;
-                    transform: translateY(-3px);
-                }
-                .warehouse-table thead th .wh-btn-create[data-tooltip]:hover::after,
-                .warehouse-table thead th .wh-btn-create[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .warehouse-table thead th .wh-btn-create[data-tooltip]::before {
-                    top: calc(100% + 2px);
-                    bottom: auto;
-                    left: auto;
-                    right: 8px;
-                    transform: none;
-                    border-width: 0 5px 5px 5px;
-                    border-color: transparent transparent #0f172a transparent;
-                }
-
-                /* Row: View button (leftmost): opens downward, aligned to left edge of button */
-                .wh-actions .wh-btn-view[data-tooltip]::after {
-                    top: calc(100% + 7px);
-                    bottom: auto;
-                    left: 0;
-                    right: auto;
-                    transform: translateY(-3px);
-                }
-                .wh-actions .wh-btn-view[data-tooltip]:hover::after,
-                .wh-actions .wh-btn-view[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .wh-actions .wh-btn-view[data-tooltip]::before {
-                    top: calc(100% + 2px);
-                    bottom: auto;
-                    left: 11px;
-                    right: auto;
-                    transform: none;
-                    border-width: 0 5px 5px 5px;
-                    border-color: transparent transparent #0f172a transparent;
-                }
-
-                /* Row: Edit button (middle): opens downward, centered horizontally */
-                .wh-actions .wh-btn-edit[data-tooltip]::after {
-                    top: calc(100% + 7px);
-                    bottom: auto;
-                    left: 50%;
-                    right: auto;
-                    transform: translateX(-50%) translateY(-3px);
-                }
-                .wh-actions .wh-btn-edit[data-tooltip]:hover::after,
-                .wh-actions .wh-btn-edit[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .wh-actions .wh-btn-edit[data-tooltip]::before {
-                    top: calc(100% + 2px);
-                    bottom: auto;
-                    left: 50%;
-                    right: auto;
-                    transform: translateX(-50%);
-                    border-width: 0 5px 5px 5px;
-                    border-color: transparent transparent #0f172a transparent;
-                }
-
-                /* Row: Delete button (rightmost): opens downward, aligned to right edge of button */
-                .wh-actions .wh-btn-delete[data-tooltip]::after {
-                    top: calc(100% + 7px);
-                    bottom: auto;
-                    left: auto;
-                    right: 0;
-                    transform: translateY(-3px);
-                }
-                .wh-actions .wh-btn-delete[data-tooltip]:hover::after,
-                .wh-actions .wh-btn-delete[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .wh-actions .wh-btn-delete[data-tooltip]::before {
-                    top: calc(100% + 2px);
-                    bottom: auto;
-                    left: auto;
-                    right: 11px;
-                    transform: none;
-                    border-width: 0 5px 5px 5px;
-                    border-color: transparent transparent #0f172a transparent;
-                }
-
-                /* Bottom 2 rows of table: flip upward so tooltip never overflows bottom table boundary */
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]::after {
-                    top: auto;
-                    bottom: calc(100% + 7px);
-                    transform: translateY(3px);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]:hover::after,
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]::before {
-                    top: auto;
-                    bottom: calc(100% + 2px);
-                    border-width: 5px 5px 0 5px;
-                    border-color: #0f172a transparent transparent transparent;
-                }
-
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]::after {
-                    top: auto;
-                    bottom: calc(100% + 7px);
-                    transform: translateX(-50%) translateY(3px);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]:hover::after,
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]:focus-visible::after {
-                    transform: translateX(-50%) translateY(0);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]::before {
-                    top: auto;
-                    bottom: calc(100% + 2px);
-                    border-width: 5px 5px 0 5px;
-                    border-color: #0f172a transparent transparent transparent;
-                }
-
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]::after {
-                    top: auto;
-                    bottom: calc(100% + 7px);
-                    transform: translateY(3px);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]:hover::after,
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]::before {
-                    top: auto;
-                    bottom: calc(100% + 2px);
-                    border-width: 5px 5px 0 5px;
-                    border-color: #0f172a transparent transparent transparent;
-                }
-
-                @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-            `}</style>
-            <ModuleContainer
-                className="warehouse-page-container"
-                title="Warehouses & Stock Locations"
-                subtitle="Central depots, store stockrooms, transit hubs and multi-location inventory levels"
-                icon={<BsBuildings />}
-                headerStyle={{ marginBottom: 14, paddingBottom: 12 }}
-                style={{ width: '100%', maxWidth: '100%', margin: 0, padding: '16px 24px 20px 24px', boxSizing: 'border-box' }}
-                actionBtn={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <button
-                        onClick={handleRefresh}
-                        disabled={loading || dashboardLoading}
-                        title="Refresh Warehouses"
-                        style={{
-                            background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', padding: '10px 14px',
-                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: (loading || dashboardLoading) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                        }}
-                    >
-                        <BsArrowRepeat size={16} /> Refresh
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleOpenAddModal}
-                        title="Add New Warehouse"
-                        style={{
-                            background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                            transition: 'background-color 0.15s ease'
-                        }}
-                    >
-                        <BsPlus size={18} /> Add Warehouse
-                    </button>
+                {/* 2. SaaS KPI Summary Cards */}
+                <div className="wh-kpi-grid">
+                    <WarehouseStatCard
+                        label="Total Warehouses"
+                        value={dashboardLoading ? '...' : totalWarehouses}
+                        sub="Registered stock locations"
+                        icon={<BsBuildings size={18} />}
+                        iconBg="#eef2ff"
+                        iconColor="#4f46e5"
+                        accentColor="indigo"
+                        trendType="neutral"
+                    />
+                    <WarehouseStatCard
+                        label="Active Warehouses"
+                        value={dashboardLoading ? '...' : activeWarehouses}
+                        sub="Operational & ready"
+                        icon={<BsCheckCircleFill size={18} />}
+                        iconBg="#ecfdf5"
+                        iconColor="#059669"
+                        accentColor="emerald"
+                        trendType="success"
+                    />
+                    <WarehouseStatCard
+                        label="Inactive Warehouses"
+                        value={dashboardLoading ? '...' : inactiveWarehouses}
+                        sub={Number(inactiveWarehouses) > 0 ? "Requires attention" : "All operational"}
+                        icon={<BsExclamationTriangle size={18} />}
+                        iconBg={Number(inactiveWarehouses) > 0 ? "#fff1f2" : "#f8fafc"}
+                        iconColor={Number(inactiveWarehouses) > 0 ? "#e11d48" : "#64748b"}
+                        accentColor={Number(inactiveWarehouses) > 0 ? "rose" : "neutral"}
+                        trendType={Number(inactiveWarehouses) > 0 ? "danger" : "neutral"}
+                    />
+                    <WarehouseStatCard
+                        label="Total Stock Units"
+                        value={dashboardLoading ? '...' : totalStockUnits}
+                        sub="Units in warehouses"
+                        icon={<BsBoxSeam size={18} />}
+                        iconBg="#f0f9ff"
+                        iconColor="#0284c7"
+                        accentColor="sky"
+                        trendType="info"
+                    />
+                    <WarehouseStatCard
+                        label="Total Stock Value"
+                        value={dashboardLoading ? '...' : totalStockValue}
+                        sub="Inventory valuation"
+                        icon={<BsCashStack size={18} />}
+                        iconBg="#f5f3ff"
+                        iconColor="#7c3aed"
+                        accentColor="violet"
+                        trendType="purple"
+                    />
                 </div>
-            }
-        >
-            {/* Authoritative Warehouse SaaS KPI Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 24 }}>
-                <WarehouseStatCard
-                    label="Total Warehouses"
-                    value={dashboardLoading ? '...' : totalWarehouses}
-                    sub="Registered stock locations"
-                    icon={<BsBuildings size={17} />}
-                    iconBg="#eef2ff"
-                    iconColor="#4f46e5"
-                />
-                <WarehouseStatCard
-                    label="Active Warehouses"
-                    value={dashboardLoading ? '...' : activeWarehouses}
-                    sub="Operational & ready"
-                    icon={<BsCheckCircleFill size={17} />}
-                    iconBg="#ecfdf5"
-                    iconColor="#059669"
-                />
-                <WarehouseStatCard
-                    label="Inactive Warehouses"
-                    value={dashboardLoading ? '...' : inactiveWarehouses}
-                    sub={Number(inactiveWarehouses) > 0 ? "Requires attention" : "All operational"}
-                    icon={<BsExclamationTriangle size={17} />}
-                    iconBg={Number(inactiveWarehouses) > 0 ? "#fff1f2" : "#f8fafc"}
-                    iconColor={Number(inactiveWarehouses) > 0 ? "#e11d48" : "#64748b"}
-                />
-                <WarehouseStatCard
-                    label="Total Stock Units"
-                    value={dashboardLoading ? '...' : totalStockUnits}
-                    sub="Units in warehouses"
-                    icon={<BsBoxSeam size={17} />}
-                    iconBg="#f0f9ff"
-                    iconColor="#0284c7"
-                />
-                <WarehouseStatCard
-                    label="Total Stock Value"
-                    value={dashboardLoading ? '...' : totalStockValue}
-                    sub="Inventory valuation"
-                    icon={<BsCashStack size={17} />}
-                    iconBg="#f5f3ff"
-                    iconColor="#7c3aed"
-                />
-            </div>
 
             {dashboardError && (
                 <div style={{
@@ -2140,7 +1512,7 @@ export const WarehousesPage = () => {
 
 
             {/* Search and Filters Toolbar Container - Unified Single Horizontal Row */}
-            <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)', marginBottom: 20 }}>
+            <div className="wh-toolbar-card">
                 <div className="wh-toolbar-container">
                     <div className="wh-toolbar-row">
                         {/* 1. Search Input: compact & balanced */}
@@ -2336,80 +1708,29 @@ export const WarehousesPage = () => {
             ) : (
                 <>
                     {viewMode === "table" ? (
-                    <div style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        border: '1px solid #e5e7eb',
-                        overflow: 'hidden',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                    }}>
-                        <div
-                            className="warehouse-table-scroll custom-scrollbar"
-                            style={{
-                                maxHeight: '480px',
-                                overflowY: 'auto',
-                                overflowX: 'auto',
-                                scrollBehavior: 'smooth',
-                                position: 'relative'
-                            }}
-                        >
-                            <table
-                                className="warehouse-table"
-                                style={{
-                                    width: '100%',
-                                    minWidth: '1150px',
-                                    borderCollapse: 'separate',
-                                    borderSpacing: 0,
-                                    textAlign: 'left',
-                                    fontSize: 13
-                                }}
-                            >
-                                <thead style={{
-                                    position: 'sticky',
-                                    top: 0,
-                                    zIndex: 20,
-                                    background: '#f9fafb',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
-                                }}>
-                                    <tr>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Warehouse Code</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Warehouse Name</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Store</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', minWidth: 240, whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Address / Location</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Tenant ID</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Created Date</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Status</th>
-                                        <th style={{
-                                            position: 'sticky',
-                                            top: 0,
-                                            right: 0,
-                                            zIndex: 25,
-                                            background: '#f9fafb',
-                                            padding: '8px 14px',
-                                            textAlign: 'center',
-                                            whiteSpace: 'nowrap',
-                                            borderBottom: '1px solid #e5e7eb',
-                                            color: '#4b5563',
-                                            fontWeight: 600,
-                                            minWidth: 155,
-                                            width: 155,
-                                            boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                        }}>
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                                <span>Action</span>
-                                                <button
-                                                    type="button"
-                                                    className="wh-action-btn wh-btn-create"
-                                                    data-tooltip="Add Warehouse"
-                                                    title="Add Warehouse"
-                                                    aria-label="Add Warehouse"
-                                                    onClick={handleOpenAddModal}
-                                                    style={{ width: 26, height: 26, borderRadius: 6 }}
-                                                >
-                                                    <BsPlus size={18} />
-                                                </button>
-                                            </div>
-                                        </th>
+                    <div className="wh-table-card">
+                        <div className="warehouse-table-scroll custom-scrollbar">
+                            <table className="warehouse-table">
+                                <colgroup>
+                                    <col className="wh-col-code" style={{ width: '12%' }} />
+                                    <col className="wh-col-name" style={{ width: '16%' }} />
+                                    <col className="wh-col-store" style={{ width: '17%' }} />
+                                    <col className="wh-col-location" style={{ width: '23%' }} />
+                                    <col className="wh-col-tenant" style={{ width: '7%' }} />
+                                    <col className="wh-col-date" style={{ width: '10%' }} />
+                                    <col className="wh-col-status" style={{ width: '8%' }} />
+                                    <col className="wh-col-action" style={{ width: '7%' }} />
+                                </colgroup>
+                                <thead className="wh-thead">
+                                    <tr className="wh-thead-row">
+                                        <th className="wh-th wh-col-code" style={{ textAlign: 'left' }}>Warehouse Code</th>
+                                        <th className="wh-th wh-col-name" style={{ textAlign: 'left' }}>Warehouse Name</th>
+                                        <th className="wh-th wh-col-store" style={{ textAlign: 'left' }}>Store</th>
+                                        <th className="wh-th wh-col-location" style={{ textAlign: 'center' }}>Address / Location</th>
+                                        <th className="wh-th wh-col-tenant" style={{ textAlign: 'center' }}>Tenant ID</th>
+                                        <th className="wh-th wh-col-date" style={{ textAlign: 'center' }}>Created Date</th>
+                                        <th className="wh-th wh-col-status" style={{ textAlign: 'center' }}>Status</th>
+                                        <th className="wh-th wh-col-action" style={{ textAlign: 'center' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -2426,120 +1747,69 @@ export const WarehousesPage = () => {
                                         const isActive = wh.is_active === true || wh.status === "Active" || wh.status === "active";
 
                                         return (
-                                            <tr
-                                                key={wh.id || i}
-                                                style={{
-                                                    borderBottom: '1px solid #f3f4f6',
-                                                    transition: 'background-color 0.15s ease'
-                                                }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                            >
-                                                <td style={{ padding: '14px 18px' }}>
+                                            <tr key={wh.id || i} className="wh-tbody-row">
+                                                <td className="wh-col-code" style={{ textAlign: 'left' }}>
                                                     {code !== "—" ? (
-                                                        <span style={{
-                                                            fontSize: 12,
-                                                            fontWeight: 700,
-                                                            color: '#4f46e5',
-                                                            background: '#eef2ff',
-                                                            padding: '3px 8px',
-                                                            borderRadius: 6,
-                                                            display: 'inline-block',
-                                                            letterSpacing: '0.02em'
-                                                        }}>
-                                                            {code}
-                                                        </span>
+                                                        <span className="wh-code-badge">{code}</span>
                                                     ) : (
-                                                        <span style={{ color: '#9ca3af', fontWeight: 500 }}>—</span>
+                                                        <span className="wh-empty-dash">—</span>
                                                     )}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#111827' }}>
-                                                    {name}
+                                                <td className="wh-col-name" style={{ textAlign: 'left' }}>
+                                                    <div className="wh-name-wrap">
+                                                        <span className="wh-name-text" title={name}>{name}</span>
+                                                        {wh.id != null && <span className="wh-id-sub">ID: #{wh.id}</span>}
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#374151' }}>
-                                                    {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : '—')}
+                                                <td className="wh-col-store" style={{ textAlign: 'left' }}>
+                                                    <div className="wh-store-wrap" title={storeName || ''}>
+                                                        <BsShop className="wh-store-icon" size={13} />
+                                                        <span>
+                                                            {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : '—')}
+                                                        </span>
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#6b7280' }}>
-                                                    {address}
+                                                <td className="wh-col-location" style={{ textAlign: 'center' }}>
+                                                    <div className="wh-location-wrap">
+                                                        <div className="wh-location-row">
+                                                            <BsGeoAlt className="wh-location-icon" size={12} />
+                                                            <span className="wh-address-text" title={address}>{address}</span>
+                                                        </div>
+                                                        {wh.city && <span className="wh-city-sub">{wh.city}{wh.state ? `, ${wh.state}` : ''}</span>}
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#10b981', fontWeight: 600 }}>
-                                                    {tenantId !== undefined && tenantId !== null ? `#${tenantId}` : '—'}
+                                                <td className="wh-col-tenant" style={{ textAlign: 'center' }}>
+                                                    {tenantId !== undefined && tenantId !== null ? (
+                                                        <span className="wh-tenant-badge">#{tenantId}</span>
+                                                    ) : (
+                                                        <span className="wh-empty-dash">—</span>
+                                                    )}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#6b7280', fontSize: 12.5 }}>
-                                                    {wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '—'}
+                                                <td className="wh-col-date wh-td-date" style={{ textAlign: 'center' }}>
+                                                    {wh.created_at ? new Date(wh.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', whiteSpace: 'nowrap' }}>
+                                                <td className="wh-col-status" style={{ textAlign: 'center' }}>
                                                     <button
                                                         type="button"
                                                         onClick={() => handleToggleStatus(wh)}
                                                         disabled={togglingStatusId === wh.id}
                                                         title={togglingStatusId === wh.id ? "Updating status..." : `Click to change status to ${isActive ? 'Inactive' : 'Active'}`}
-                                                        style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 6,
-                                                            padding: '4px 12px',
-                                                            borderRadius: 20,
-                                                            fontSize: 12,
-                                                            fontWeight: 700,
-                                                            background: isActive ? '#ecfdf5' : '#fef2f2',
-                                                            color: isActive ? '#059669' : '#dc2626',
-                                                            border: '1px solid ' + (isActive ? '#a7f3d0' : '#fecaca'),
-                                                            cursor: togglingStatusId === wh.id ? 'wait' : 'pointer',
-                                                            transition: 'all 0.15s ease',
-                                                            outline: 'none',
-                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                                                        }}
-                                                        onMouseEnter={(e) => {
-                                                            if (togglingStatusId !== wh.id) {
-                                                                e.currentTarget.style.transform = 'scale(1.02)';
-                                                                e.currentTarget.style.boxShadow = '0 2px 5px rgba(0,0,0,0.08)';
-                                                            }
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.currentTarget.style.transform = 'scale(1)';
-                                                            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.03)';
-                                                        }}
+                                                        className={`wh-status-pill ${isActive ? 'is-active' : 'is-inactive'}`}
                                                     >
                                                         {togglingStatusId === wh.id ? (
                                                             <>
-                                                                <span style={{
-                                                                    display: 'inline-block',
-                                                                    width: 10,
-                                                                    height: 10,
-                                                                    border: '2px solid currentColor',
-                                                                    borderTopColor: 'transparent',
-                                                                    borderRadius: '50%',
-                                                                    animation: 'spin 0.8s linear infinite'
-                                                                }} />
+                                                                <span className="wh-spinner" />
                                                                 <span>Updating...</span>
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <span style={{
-                                                                    width: 7,
-                                                                    height: 7,
-                                                                    borderRadius: '50%',
-                                                                    background: isActive ? '#10b981' : '#ef4444',
-                                                                    boxShadow: isActive ? '0 0 0 2px rgba(16, 185, 129, 0.25)' : '0 0 0 2px rgba(239, 68, 68, 0.25)'
-                                                                }} />
+                                                                <span className={`wh-status-dot ${isActive ? 'is-active' : 'is-inactive'}`} />
                                                                 <span>{isActive ? 'Active' : 'Inactive'}</span>
                                                             </>
                                                         )}
                                                     </button>
                                                 </td>
-                                                <td style={{
-                                                    position: 'sticky',
-                                                    right: 0,
-                                                    zIndex: 10,
-                                                    background: '#ffffff',
-                                                    padding: '11px 16px',
-                                                    textAlign: 'center',
-                                                    whiteSpace: 'nowrap',
-                                                    minWidth: 155,
-                                                    width: 155,
-                                                    boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                                }}>
+                                                <td className="wh-col-action wh-td-action" style={{ textAlign: 'center' }}>
                                                     <div className="wh-actions">
                                                         {/* VIEW */}
                                                         <button
@@ -2585,8 +1855,7 @@ export const WarehousesPage = () => {
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                ) : (
+                    </div>) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
                         {paginatedWarehouses.map((wh, i) => {
                             const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
@@ -2749,74 +2018,61 @@ export const WarehousesPage = () => {
                 
                 {/* Warehouse Table Pagination Controls */}
                 {!loading && filteredWarehouses.length > 0 && (
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: totalPages > 1 ? 'space-between' : 'flex-start',
-                        padding: '14px 20px',
-                        borderTop: '1px solid #e2e8f0',
-                        background: '#ffffff',
-                        flexWrap: 'wrap',
-                        gap: 12
-                    }}>
-                        {/* Warehouse Showing Info */}
-                        <div style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>
+                    <div className="wh-pagination-container">
+                        {/* Left side: Rows Per Page dropdown */}
+                        <div className="wh-pagination-left">
+                            <select
+                                className="wh-rows-per-page-select"
+                                value={pageSize}
+                                onChange={(e) => {
+                                    setPageSize(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                                aria-label="Select rows per page"
+                            >
+                                <option value={8}>8</option>
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
+
+                        {/* Center: Record count info */}
+                        <div className="wh-pagination-center">
                             Showing <strong>{filteredWarehouses.length === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to <strong>{Math.min(filteredWarehouses.length, page * pageSize)}</strong> of <strong>{filteredWarehouses.length}</strong> {filteredWarehouses.length === 1 ? 'warehouse' : 'warehouses'}
                             {search.trim() ? ` matching "${search.trim()}"` : ''}
                         </div>
 
-                        {/* Page Numbers only (Rows per page & Previous/Next removed as requested) */}
-                        {totalPages > 1 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {getPageNumbers().map((p, idx) => {
-                                    if (p === '...') {
+                        {/* Right side: Page numbers (Previous and Next buttons completely removed) */}
+                        <div className="wh-pagination-right">
+                            {totalPages > 1 && (
+                                <div className="wh-page-numbers-group">
+                                    {getPageNumbers().map((p, idx) => {
+                                        if (p === '...') {
+                                            return (
+                                                <span key={`ellipsis-${idx}`} className="wh-page-ellipsis">
+                                                    …
+                                                </span>
+                                            );
+                                        }
+                                        const isActive = p === page;
                                         return (
-                                            <span
-                                                key={`ellipsis-${idx}`}
-                                                style={{
-                                                    minWidth: 28,
-                                                    height: 34,
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    color: '#94a3b8',
-                                                    fontSize: 13,
-                                                    fontWeight: 600
-                                                }}
+                                            <button
+                                                key={p}
+                                                type="button"
+                                                className={`wh-page-btn wh-page-num-btn ${isActive ? 'is-active' : ''}`}
+                                                onClick={() => setPage(p)}
+                                                aria-label={`Page ${p}`}
+                                                aria-current={isActive ? 'page' : undefined}
                                             >
-                                                …
-                                            </span>
+                                                {p}
+                                            </button>
                                         );
-                                    }
-                                    const isActive = p === page;
-                                    return (
-                                        <button
-                                            key={p}
-                                            type="button"
-                                            onClick={() => setPage(p)}
-                                            style={{
-                                                minWidth: 34,
-                                                height: 34,
-                                                padding: '0 8px',
-                                                borderRadius: 8,
-                                                border: isActive ? '1.5px solid #4f46e5' : '1.5px solid #cbd5e1',
-                                                background: isActive ? '#4f46e5' : '#ffffff',
-                                                color: isActive ? '#ffffff' : '#334155',
-                                                fontSize: 12.5,
-                                                fontWeight: 700,
-                                                cursor: 'pointer',
-                                                transition: 'all 0.15s ease',
-                                                boxShadow: isActive ? '0 1px 3px rgba(79, 70, 229, 0.3)' : 'none'
-                                            }}
-                                            aria-label={`Page ${p}`}
-                                            aria-current={isActive ? 'page' : undefined}
-                                        >
-                                            {p}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </>
@@ -4122,7 +3378,7 @@ export const WarehousesPage = () => {
                     </div>
                 </div>
             )}
-        </ModuleContainer>
+                    </div>
         </div>
     );
 };
@@ -7786,18 +7042,16 @@ export const GRNPage = () => {
                 {/* GRN List Pagination Controls */}
                 {!loading && grns.length > 0 && (
                     <div style={{
-                        display: 'flex',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr auto 1fr',
                         alignItems: 'center',
-                        justifyContent: 'space-between',
                         padding: '14px 20px',
                         borderTop: '1px solid #e2e8f0',
                         background: '#ffffff',
-                        flexWrap: 'wrap',
                         gap: 12
                     }}>
-                        {/* Left: Rows Per Page Selector */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 12.5, color: '#64748b', fontWeight: 600 }}>Rows per page:</span>
+                        {/* Left: Rows Per Page Selector (Dropdown only, no label) */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
                             <select
                                 value={pageSize}
                                 onChange={(e) => {
@@ -7807,18 +7061,20 @@ export const GRNPage = () => {
                                 style={{
                                     height: 32,
                                     padding: '0 10px',
-                                    border: '1.5px solid #e2e8f0',
-                                    borderRadius: 7,
-                                    fontSize: 12.5,
+                                    border: '1.5px solid #cbd5e1',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
                                     background: '#ffffff',
-                                    color: '#1e293b',
+                                    color: '#0f172a',
                                     outline: 'none',
                                     cursor: 'pointer',
-                                    fontWeight: 500
+                                    transition: 'all 0.15s ease'
                                 }}
                                 aria-label="Select rows per page"
                             >
                                 <option value={5}>5</option>
+                                <option value={8}>8</option>
                                 <option value={10}>10</option>
                                 <option value={20}>20</option>
                                 <option value={50}>50</option>
@@ -7826,32 +7082,41 @@ export const GRNPage = () => {
                             </select>
                         </div>
 
-                        {/* Right: Page Navigation Controls */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <button
-                                type="button"
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage <= 1}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    height: 34,
-                                    padding: '0 12px',
-                                    borderRadius: 8,
-                                    border: '1.5px solid #cbd5e1',
-                                    background: currentPage <= 1 ? '#f8fafc' : '#ffffff',
-                                    color: currentPage <= 1 ? '#94a3b8' : '#334155',
-                                    fontSize: 12.5,
-                                    fontWeight: 600,
-                                    cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                aria-label="Previous Page"
-                            >
-                                <BsChevronLeft size={12} /> Previous
-                            </button>
+                        {/* Center: Pagination Information */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            justifySelf: 'center',
+                            fontSize: 13,
+                            color: '#64748b',
+                            fontWeight: 500,
+                            whiteSpace: 'nowrap',
+                            textAlign: 'center'
+                        }}>
+                            Showing{' '}
+                            <strong style={{ color: '#0f172a', fontWeight: 700, margin: '0 4px' }}>
+                                {grns.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+                            </strong>{' '}
+                            to{' '}
+                            <strong style={{ color: '#0f172a', fontWeight: 700, margin: '0 4px' }}>
+                                {Math.min(grns.length, currentPage * pageSize)}
+                            </strong>{' '}
+                            of{' '}
+                            <strong style={{ color: '#0f172a', fontWeight: 700, margin: '0 4px' }}>
+                                {grns.length}
+                            </strong>{' '}
+                            {grns.length === 1 ? 'GRN' : 'GRNs'}
+                        </div>
 
+                        {/* Right: Page Navigation Controls (Page numbers with active highlight) */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            justifySelf: 'end',
+                            gap: 6
+                        }}>
                             {getPageNumbers().map((p, idx) => {
                                 if (p === '...') {
                                     return (
@@ -7896,35 +7161,12 @@ export const GRNPage = () => {
                                             transition: 'all 0.15s ease'
                                         }}
                                         aria-current={isActive ? 'page' : undefined}
+                                        aria-label={`Page ${p}`}
                                     >
                                         {p}
                                     </button>
                                 );
                             })}
-
-                            <button
-                                type="button"
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                disabled={currentPage >= totalPages}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    height: 34,
-                                    padding: '0 12px',
-                                    borderRadius: 8,
-                                    border: '1.5px solid #cbd5e1',
-                                    background: currentPage >= totalPages ? '#f8fafc' : '#ffffff',
-                                    color: currentPage >= totalPages ? '#94a3b8' : '#334155',
-                                    fontSize: 12.5,
-                                    fontWeight: 600,
-                                    cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                aria-label="Next Page"
-                            >
-                                Next <BsChevronRight size={12} />
-                            </button>
                         </div>
                     </div>
                 )}
@@ -9884,7 +9126,7 @@ export const StoreTransfersPage = () => {
 
     // Pagination State (Client view with skip/limit support)
     const [page, setPage] = useState(1);
-    const pageSize = 10;
+    const [pageSize, setPageSize] = useState(10);
 
     // Expandable item details state: set of expanded transfer IDs
     const [expandedTransferIds, setExpandedTransferIds] = useState(new Set());
@@ -10877,265 +10119,33 @@ export const StoreTransfersPage = () => {
         setPage(1);
     }, [searchTerm, statusFilter, selectedStoreId]);
 
+    // Ensure page stays within totalPages bounds
+    useEffect(() => {
+        if (page > totalPages && totalPages > 0) {
+            setPage(totalPages);
+        }
+    }, [page, totalPages]);
+
     return (
         <div className="store-transfers-page-root" style={{ width: '100%', minHeight: '100%' }}>
-            <style>{`
-                /* Store Transfers Page Full-Width & External Whitespace Elimination */
-                .store-transfers-page-root {
-                    width: 100% !important;
-                    max-width: 100% !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    box-sizing: border-box !important;
-                }
-                .store-transfers-page-root > div {
-                    max-width: 100% !important;
-                    width: 100% !important;
-                    margin: 0 !important;
-                    padding: 20px 24px !important;
-                    box-sizing: border-box !important;
-                }
-                @media (max-width: 768px) {
-                    .store-transfers-page-root > div {
-                        padding: 14px 16px !important;
-                    }
-                }
-
-                /* Page-level and table custom scrollbars */
-                main:has(.store-transfers-page-root)::-webkit-scrollbar,
-                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar {
-                    width: 8px !important;
-                    height: 8px !important;
-                }
-                main:has(.store-transfers-page-root)::-webkit-scrollbar-track,
-                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-track {
-                    background: #f1f5f9 !important;
-                    border-radius: 4px;
-                }
-                main:has(.store-transfers-page-root)::-webkit-scrollbar-thumb,
-                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-thumb {
-                    background: #cbd5e1 !important;
-                    border-radius: 4px;
-                }
-                main:has(.store-transfers-page-root)::-webkit-scrollbar-thumb:hover,
-                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-thumb:hover {
-                    background: #94a3b8 !important;
-                }
-                .store-transfers-page-root .store-transfers-table-container {
-                    scrollbar-width: thin !important;
-                    scrollbar-color: #cbd5e1 #f1f5f9 !important;
-                }
-
-                /* Clean, modern icon-only action buttons with hover tooltips */
-                .store-transfers-page-root .store-transfer-action-btn {
-                    position: relative !important;
-                    width: 32px !important;
-                    height: 32px !important;
-                    min-width: 32px !important;
-                    padding: 0 !important;
-                    font-size: 13px !important;
-                    border-radius: 7px !important;
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    cursor: pointer !important;
-                    transition: all 0.15s ease !important;
-                    box-sizing: border-box !important;
-                    flex-shrink: 0 !important;
-                    border: 1px solid transparent;
-                }
-                .store-transfers-page-root .store-transfer-action-btn svg {
-                    width: 14px !important;
-                    height: 14px !important;
-                    flex-shrink: 0 !important;
-                }
-                .store-transfers-page-root .store-transfer-action-btn:hover:not(:disabled) {
-                    transform: translateY(-1px);
-                }
-                .store-transfers-page-root .store-transfer-action-btn:active {
-                    transform: translateY(0);
-                }
-
-                /* Tooltip bubble (default: opens upwards) */
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]::after {
-                    content: attr(data-tooltip);
-                    position: absolute;
-                    bottom: calc(100% + 7px);
-                    left: 50%;
-                    transform: translateX(-50%) translateY(3px);
-                    padding: 5px 8px;
-                    background: #0f172a;
-                    color: #ffffff;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                    font-size: 11px;
-                    font-weight: 600;
-                    line-height: 1;
-                    white-space: nowrap;
-                    border-radius: 6px;
-                    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
-                    pointer-events: none;
-                    opacity: 0;
-                    visibility: hidden;
-                    z-index: 99999;
-                    transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
-                }
-
-                /* Tooltip caret / arrow */
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]::before {
-                    content: "";
-                    position: absolute;
-                    bottom: calc(100% + 2px);
-                    left: 50%;
-                    transform: translateX(-50%);
-                    border-width: 5px 5px 0 5px;
-                    border-style: solid;
-                    border-color: #0f172a transparent transparent transparent;
-                    pointer-events: none;
-                    opacity: 0;
-                    visibility: hidden;
-                    z-index: 99999;
-                    transition: opacity 0.15s ease, visibility 0.15s ease;
-                }
-
-                /* Show tooltip on hover or keyboard focus */
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::after,
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::before,
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::after,
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::before {
-                    opacity: 1;
-                    visibility: visible;
-                }
-
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::after,
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::after {
-                    transform: translateX(-50%) translateY(0);
-                }
-
-                /* First 2 rows: open downward to avoid clipping by sticky header or table boundary */
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]::after {
-                    bottom: auto;
-                    top: calc(100% + 7px);
-                    transform: translateX(-50%) translateY(-3px);
-                }
-
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]:hover::after,
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]:focus-visible::after {
-                    transform: translateX(-50%) translateY(0);
-                }
-
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]::before {
-                    bottom: auto;
-                    top: calc(100% + 2px);
-                    border-width: 0 5px 5px 5px;
-                    border-color: transparent transparent #0f172a transparent;
-                }
-
-                /* Rightmost button alignment to prevent right-edge clipping */
-                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::after {
-                    left: auto;
-                    right: 0;
-                    transform: translateY(3px);
-                }
-                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:hover::after,
-                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::before {
-                    left: auto;
-                    right: 11px;
-                }
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::after {
-                    left: auto;
-                    right: 0;
-                    transform: translateY(-3px);
-                }
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:hover::after,
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .store-transfers-page-root table tbody tr:hover td {
-                    background-color: #f8fafc;
-                }
-                .store-transfers-page-root table tbody tr:hover td.store-transfers-actions-cell {
-                    background-color: #f8fafc !important;
-                }
-
-                /* Store Transfers Pagination Grid & Exact Centering */
-                .store-transfers-pagination-footer {
-                    display: grid !important;
-                    grid-template-columns: 1fr auto 1fr !important;
-                    align-items: center !important;
-                    margin-top: 16px !important;
-                    padding: 8px 4px !important;
-                    width: 100% !important;
-                    box-sizing: border-box !important;
-                }
-                .store-transfers-pagination-left {
-                    display: flex;
-                    align-items: center;
-                    justify-self: start;
-                }
-                .store-transfers-pagination-center {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    justify-self: center;
-                    text-align: center;
-                }
-                .store-transfers-pagination-right {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    justify-self: end;
-                }
-                @media (max-width: 640px) {
-                    .store-transfers-pagination-footer {
-                        display: flex !important;
-                        flex-direction: column !important;
-                        gap: 10px !important;
-                        align-items: center !important;
-                        justify-content: center !important;
-                    }
-                    .store-transfers-pagination-left {
-                        display: none !important;
-                    }
-                    .store-transfers-pagination-center {
-                        width: 100% !important;
-                        text-align: center !important;
-                        justify-content: center !important;
-                        order: 1 !important;
-                    }
-                    .store-transfers-pagination-right {
-                        width: 100% !important;
-                        justify-content: center !important;
-                        order: 2 !important;
-                    }
-                }
-            `}</style>
-        <ModuleContainer
+            <ModuleContainer
             title="Inter-Store Stock Transfers"
             subtitle="Transfer products between retail outlets, generate gate passes and track in-transit stock"
             icon={<BsArrowLeftRight />}
             actionBtn={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div className="st-header-actions">
                     <button
                         onClick={handleRefresh}
                         disabled={loading}
                         title="Refresh Transfers & Summary Analytics"
-                        style={{
-                            background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', padding: '10px 14px',
-                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                        }}
+                        className="st-header-btn st-header-btn-refresh"
                     >
                         <BsArrowRepeat size={16} /> {loading ? "Refreshing..." : "Refresh"}
                     </button>
                     <button
                         type="button"
                         onClick={() => setIsCreateModalOpen(true)}
-                        style={{
-                            background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                        }}
+                        className="st-header-btn st-header-btn-create"
                     >
                         <BsPlus size={18} /> Request Stock Transfer
                     </button>
@@ -11572,213 +10582,134 @@ export const StoreTransfersPage = () => {
                 </div>
             )}
 
-            {/* Authoritative Summary Cards */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: 16,
-                marginBottom: 24
-            }}>
-                <StatCard
-                    label="Total Transfers"
-                    value={loading && !summary ? "..." : `${totalTransfersVal} Transfers`}
-                    sub={totalUnitsVal != null ? `${Number(totalUnitsVal).toLocaleString('en-IN')} units transferred` : (selectedStoreId === "all" ? "Company-wide transfers" : `Store #${selectedStoreId} volume`)}
-                    color="#6366f1"
-                />
-                <StatCard
-                    label="Pending Transfers"
-                    value={loading && !summary ? "..." : `${pendingTransfersVal} Transfers`}
-                    sub="Awaiting dispatch or check-in"
-                    color="#f59e0b"
-                />
-                <StatCard
-                    label="Received Transfers"
-                    value={loading && !summary ? "..." : `${receivedTransfersVal} Transfers`}
-                    sub="Successfully received"
-                    color="#10b981"
-                />
-                <StatCard
-                    label="Rejected Transfers"
-                    value={loading && !summary ? "..." : `${rejectedTransfersVal} Transfers`}
-                    sub="Declined or cancelled"
-                    color="#ef4444"
-                />
-                {summary && (inTransitTransfersVal + approvedTransfersVal + dispatchedTransfersVal) > 0 && (
-                    <StatCard
-                        label="In Transit / Active"
-                        value={`${inTransitTransfersVal + approvedTransfersVal + dispatchedTransfersVal} Transfers`}
-                        sub={`In Transit: ${inTransitTransfersVal} • Dispatched: ${dispatchedTransfersVal} • Approved: ${approvedTransfersVal}`}
-                        color="#8b5cf6"
-                    />
-                )}
-            </div>
+
 
             {/* Store Transfer Analytics & Insights (from GET /api/v1/store-transfers/summary) */}
             {summary && (
-                <div style={{
-                    background: '#fff',
-                    borderRadius: 12,
-                    border: '1px solid #e5e7eb',
-                    padding: '16px 20px',
-                    marginBottom: 20,
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-                }}>
+                <div className="st-analytics-panel">
                     <div
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            marginBottom: showAnalytics ? 16 : 0,
-                            cursor: 'pointer'
-                        }}
+                        className="st-analytics-panel-header"
                         onClick={() => setShowAnalytics(!showAnalytics)}
                     >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div className="st-analytics-title-group">
                             <span style={{ fontSize: 18, color: '#6366f1' }}>📊</span>
                             <div>
-                                <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: '#111827' }}>
+                                <h3 className="st-analytics-main-title">
                                     Transfer Analytics & Insights
                                 </h3>
-                                <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280' }}>
+                                <p className="st-analytics-sub-title">
                                     Route volume, top transferred products, and recent transfer activity
                                 </p>
                             </div>
                         </div>
                         <button
                             type="button"
-                            style={{
-                                background: '#f3f4f6',
-                                border: '1px solid #d1d5db',
-                                borderRadius: 6,
-                                padding: '4px 10px',
-                                fontSize: 12,
-                                fontWeight: 600,
-                                color: '#374151',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 4
-                            }}
+                            className="st-analytics-toggle-btn"
                         >
                             {showAnalytics ? <>Collapse Insights <BsChevronUp size={12} /></> : <>Expand Insights <BsChevronDown size={12} /></>}
                         </button>
                     </div>
 
                     {showAnalytics && (
-                        <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))',
-                            gap: 16
-                        }}>
-                            {/* 1. Top Store Routes (Source & Destination) */}
-                            <div style={{ background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb', padding: 14 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, borderBottom: '1px solid #e5e7eb', paddingBottom: 8 }}>
-                                    <BsShop style={{ color: '#6366f1' }} />
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>
-                                        Top Store Routes
+                        <div className="st-analytics-grid-4">
+                            {/* 1. Top Source Stores */}
+                            <div className="st-analytics-card">
+                                <div className="st-analytics-card-header">
+                                    <BsShop style={{ color: '#6366f1' }} size={14} />
+                                    <span className="st-analytics-card-title">
+                                        Top Source Stores
                                     </span>
                                 </div>
-
-                                {/* Top Source Stores */}
-                                <div style={{ marginBottom: 12 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>
-                                        Top Source Stores
+                                {Array.isArray(summary.top_source_stores) && summary.top_source_stores.length > 0 ? (
+                                    <div className="st-analytics-list">
+                                        {summary.top_source_stores.slice(0, 5).map((st, i) => (
+                                            <div key={st.store_id || i} className="st-analytics-row">
+                                                <span className="st-analytics-store-name" title={st.store_name}>
+                                                    {st.store_name}
+                                                </span>
+                                                <span className="st-analytics-badge-source">
+                                                    {st.transfer_count} transfers
+                                                </span>
+                                            </div>
+                                        ))}
                                     </div>
-                                    {Array.isArray(summary.top_source_stores) && summary.top_source_stores.length > 0 ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                            {summary.top_source_stores.map((st, i) => (
-                                                <div key={st.store_id || i} style={{
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                    background: '#fff', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12.5
-                                                }}>
-                                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>{st.store_name}</span>
-                                                    <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 10, fontWeight: 700, fontSize: 11.5 }}>
-                                                        {st.transfer_count} transfers
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic' }}>No source store data</div>
-                                    )}
-                                </div>
-
-                                {/* Top Destination Stores */}
-                                <div>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>
-                                        Top Destination Stores
-                                    </div>
-                                    {Array.isArray(summary.top_destination_stores) && summary.top_destination_stores.length > 0 ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                            {summary.top_destination_stores.map((st, i) => (
-                                                <div key={st.store_id || i} style={{
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                    background: '#fff', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12.5
-                                                }}>
-                                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>{st.store_name}</span>
-                                                    <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 10, fontWeight: 700, fontSize: 11.5 }}>
-                                                        {st.transfer_count} transfers
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic' }}>No destination store data</div>
-                                    )}
-                                </div>
+                                ) : (
+                                    <div className="st-analytics-empty">No source store data</div>
+                                )}
                             </div>
 
-                            {/* 2. Top Transferred Products */}
-                            <div style={{ background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb', padding: 14 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, borderBottom: '1px solid #e5e7eb', paddingBottom: 8 }}>
-                                    <BsBoxSeam style={{ color: '#0ea5e9' }} />
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>
+                            {/* 2. Top Destination Stores */}
+                            <div className="st-analytics-card">
+                                <div className="st-analytics-card-header">
+                                    <BsShop style={{ color: '#10b981' }} size={14} />
+                                    <span className="st-analytics-card-title">
+                                        Top Destination Stores
+                                    </span>
+                                </div>
+                                {Array.isArray(summary.top_destination_stores) && summary.top_destination_stores.length > 0 ? (
+                                    <div className="st-analytics-list">
+                                        {summary.top_destination_stores.slice(0, 5).map((st, i) => (
+                                            <div key={st.store_id || i} className="st-analytics-row">
+                                                <span className="st-analytics-store-name" title={st.store_name}>
+                                                    {st.store_name}
+                                                </span>
+                                                <span className="st-analytics-badge-dest">
+                                                    {st.transfer_count} transfers
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="st-analytics-empty">No destination store data</div>
+                                )}
+                            </div>
+
+                            {/* 3. Top Transferred Products */}
+                            <div className="st-analytics-card">
+                                <div className="st-analytics-card-header">
+                                    <BsBoxSeam style={{ color: '#0ea5e9' }} size={14} />
+                                    <span className="st-analytics-card-title">
                                         Top Transferred Products
                                     </span>
                                 </div>
-
                                 {Array.isArray(summary.top_transferred_products) && summary.top_transferred_products.length > 0 ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                        {summary.top_transferred_products.map((p, i) => (
-                                            <div key={p.product_id || i} style={{
-                                                background: '#fff', borderRadius: 6, border: '1px solid #e5e7eb',
-                                                padding: '7px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-                                            }}>
-                                                <div style={{ minWidth: 0, flex: 1, paddingRight: 8 }}>
-                                                    <div style={{ fontWeight: 600, fontSize: 12.5, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    <div className="st-analytics-list">
+                                        {summary.top_transferred_products.slice(0, 5).map((p, i) => (
+                                            <div key={p.product_id || i} className="st-analytics-row">
+                                                <div className="st-analytics-prod-info">
+                                                    <div className="st-analytics-prod-name" title={p.product_name}>
                                                         {p.product_name}
                                                     </div>
-                                                    <div style={{ fontSize: 11, color: '#64748b' }}>
+                                                    <div className="st-analytics-prod-sku">
                                                         {p.sku ? `SKU: ${p.sku}` : `ID: #${p.product_id}`}
                                                     </div>
                                                 </div>
-                                                <div style={{ textAlign: 'right' }}>
-                                                    <div style={{ fontWeight: 700, fontSize: 13, color: '#0284c7' }}>
+                                                <div className="st-analytics-prod-qty">
+                                                    <span className="st-analytics-qty-num">
                                                         {Number(p.total_quantity || 0).toLocaleString('en-IN')}
-                                                    </div>
-                                                    <div style={{ fontSize: 10.5, color: '#64748b' }}>units</div>
+                                                    </span>
+                                                    <span className="st-analytics-qty-unit">units</span>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
-                                    <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic', padding: '12px 0', textAlign: 'center' }}>
+                                    <div className="st-analytics-empty">
                                         No product transfer metrics available
                                     </div>
                                 )}
                             </div>
 
-                            {/* 3. Recent Transfers Snapshot */}
-                            <div style={{ background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb', padding: 14 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, borderBottom: '1px solid #e5e7eb', paddingBottom: 8 }}>
-                                    <BsClockHistory style={{ color: '#f59e0b' }} />
-                                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>
+                            {/* 4. Recent Activity Snapshot */}
+                            <div className="st-analytics-card">
+                                <div className="st-analytics-card-header">
+                                    <BsClockHistory style={{ color: '#f59e0b' }} size={14} />
+                                    <span className="st-analytics-card-title">
                                         Recent Activity Snapshot
                                     </span>
                                 </div>
-
                                 {Array.isArray(summary.recent_transfers) && summary.recent_transfers.length > 0 ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    <div className="st-analytics-list">
                                         {summary.recent_transfers.slice(0, 5).map((rt, i) => {
                                             const stNorm = normalizeStatus(rt.status);
                                             let badgeBg = '#fef3c7';
@@ -11789,26 +10720,31 @@ export const StoreTransfersPage = () => {
                                             } else if (stNorm === 'rejected') {
                                                 badgeBg = '#fee2e2';
                                                 badgeColor = '#b91c1c';
+                                            } else if (stNorm === 'approved' || stNorm === 'dispatched') {
+                                                badgeBg = '#e0e7ff';
+                                                badgeColor = '#4338ca';
                                             }
                                             return (
-                                                <div key={rt.id || i} style={{
-                                                    background: '#fff', borderRadius: 6, border: '1px solid #e5e7eb',
-                                                    padding: '7px 10px', fontSize: 12
-                                                }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-                                                        <span style={{ fontWeight: 700, color: '#4f46e5' }}>
+                                                <div key={rt.id || i} className="st-analytics-activity-row">
+                                                    <div className="st-analytics-activity-head">
+                                                        <span className="st-analytics-activity-tr">
                                                             {rt.transfer_number || `#${rt.id}`}
                                                         </span>
-                                                        <span style={{ background: badgeBg, color: badgeColor, padding: '2px 6px', borderRadius: 8, fontSize: 10.5, fontWeight: 700 }}>
+                                                        <span
+                                                            className="st-analytics-activity-status"
+                                                            style={{ background: badgeBg, color: badgeColor }}
+                                                        >
                                                             {rt.status || 'Pending'}
                                                         </span>
                                                     </div>
-                                                    <div style={{ color: '#475569', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                        <span>{rt.source_store_name || 'Source'}</span>
-                                                        <span>→</span>
-                                                        <span style={{ fontWeight: 600, color: '#047857' }}>{rt.destination_store_name || 'Destination'}</span>
+                                                    <div className="st-analytics-activity-route">
+                                                        <span className="st-truncate-text">{rt.source_store_name || 'Source'}</span>
+                                                        <span style={{ color: '#94a3b8', flexShrink: 0 }}>→</span>
+                                                        <span className="st-truncate-text" style={{ fontWeight: 600, color: '#047857' }}>
+                                                            {rt.destination_store_name || 'Destination'}
+                                                        </span>
                                                     </div>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 3, fontSize: 10.5, color: '#94a3b8' }}>
+                                                    <div className="st-analytics-activity-meta">
                                                         <span>{rt.total_items} item{rt.total_items === 1 ? '' : 's'}</span>
                                                         <span>{formatDateTime(rt.created_at)}</span>
                                                     </div>
@@ -11817,7 +10753,7 @@ export const StoreTransfersPage = () => {
                                         })}
                                     </div>
                                 ) : (
-                                    <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic', padding: '12px 0', textAlign: 'center' }}>
+                                    <div className="st-analytics-empty">
                                         No recent transfer snapshots found
                                     </div>
                                 )}
@@ -11828,57 +10764,30 @@ export const StoreTransfersPage = () => {
             )}
 
             {/* Search, Store Selector & Status Filter Toolbar */}
-            <div style={{
-                background: '#fff',
-                borderRadius: 12,
-                border: '1px solid #e5e7eb',
-                padding: '14px 18px',
-                marginBottom: 20,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: 12
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flex: 1 }}>
+            <div className="st-toolbar-card">
+                <div className="st-toolbar-controls">
                     {/* Search Input */}
-                    <div style={{ position: 'relative', minWidth: 260, flex: 1 }}>
-                        <BsSearch size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
+                    <div className="st-search-box">
+                        <BsSearch size={14} className="st-search-icon" />
                         <input
                             type="text"
                             placeholder="Search by transfer #, store, product, SKU, or approver..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            style={{
-                                width: '100%',
-                                padding: '8px 12px 8px 34px',
-                                borderRadius: 8,
-                                border: '1px solid #d1d5db',
-                                fontSize: 13,
-                                outline: 'none'
-                            }}
+                            className="st-search-input"
                         />
                     </div>
 
                     {/* Store Selector (Dynamic from stores list, no hardcoded store_id=1) */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <label style={{ fontSize: 12.5, fontWeight: 600, color: '#4b5563', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div className="st-filter-group">
+                        <label className="st-filter-label" htmlFor="st-store-filter">
                             <BsShop size={14} /> Store:
                         </label>
                         <select
+                            id="st-store-filter"
                             value={selectedStoreId}
                             onChange={(e) => setSelectedStoreId(e.target.value)}
-                            style={{
-                                padding: '8px 12px',
-                                borderRadius: 8,
-                                border: '1px solid #d1d5db',
-                                fontSize: 13,
-                                color: '#111827',
-                                background: '#fff',
-                                outline: 'none',
-                                cursor: 'pointer',
-                                minWidth: 160
-                            }}
+                            className="st-filter-select"
                         >
                             <option value="all">All Stores (Company-wide)</option>
                             {Array.isArray(stores) && stores.map((st) => (
@@ -11890,23 +10799,15 @@ export const StoreTransfersPage = () => {
                     </div>
 
                     {/* Status Filter */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <label style={{ fontSize: 12.5, fontWeight: 600, color: '#4b5563', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <div className="st-filter-group">
+                        <label className="st-filter-label" htmlFor="st-status-filter">
                             <BsFilter size={15} /> Status:
                         </label>
                         <select
+                            id="st-status-filter"
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value)}
-                            style={{
-                                padding: '8px 12px',
-                                borderRadius: 8,
-                                border: '1px solid #d1d5db',
-                                fontSize: 13,
-                                color: '#111827',
-                                background: '#fff',
-                                outline: 'none',
-                                cursor: 'pointer'
-                            }}
+                            className="st-filter-select"
                         >
                             <option value="all">All Status ({safeTransfers.length})</option>
                             <option value="Pending">Pending ({pendingTransfersVal})</option>
@@ -11918,52 +10819,39 @@ export const StoreTransfersPage = () => {
                     </div>
                 </div>
 
-                <span style={{ fontSize: 12, color: '#6b7280' }}>
+                <span className="st-toolbar-badge">
                     Store Transfer Directory
                 </span>
             </div>
 
             {/* Store Transfers Table Container */}
-            <div style={{
-                background: '#fff',
-                borderRadius: 12,
-                border: '1px solid #e5e7eb',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
-                overflow: 'hidden'
-            }}>
-                <div
-                    className="store-transfers-table-container custom-scrollbar"
-                    style={{
-                        overflowX: 'auto',
-                        overflowY: 'auto',
-                        maxHeight: '680px',
-                        position: 'relative'
-                    }}
-                >
-                    <table style={{
-                        width: '100%',
-                        minWidth: '1440px',
-                        borderCollapse: 'separate',
-                        borderSpacing: 0,
-                        textAlign: 'left',
-                        fontSize: 13
-                    }}>
-                        <thead style={{
-                            background: '#f9fafb',
-                            color: '#4b5563',
-                            fontWeight: 600
-                        }}>
-                            <tr>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 150, whiteSpace: 'nowrap' }}>Transfer Number</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 140 }}>Source Store</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 140 }}>Destination Store</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 200 }}>Product Details</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', textAlign: 'center', minWidth: 100, whiteSpace: 'nowrap' }}>Total Items</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', textAlign: 'right', minWidth: 110, whiteSpace: 'nowrap' }}>Quantity</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 130 }}>Status</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 150, whiteSpace: 'nowrap' }}>Created Date</th>
-                                <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 140 }}>Approved By</th>
-                                <th style={{ position: 'sticky', top: 0, right: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', textAlign: 'center', minWidth: 160, whiteSpace: 'nowrap', boxShadow: '-3px 0 6px rgba(0,0,0,0.04)' }}>Actions</th>
+            <div className="store-transfers-table-card">
+                <div className="store-transfers-table-container custom-scrollbar">
+                    <table className="store-transfers-table">
+                        <colgroup>
+                            <col className="st-col-tr-num" style={{ width: '10%' }} />
+                            <col className="st-col-src-store" style={{ width: '11%' }} />
+                            <col className="st-col-dst-store" style={{ width: '11%' }} />
+                            <col className="st-col-product" style={{ width: '17%' }} />
+                            <col className="st-col-items" style={{ width: '6%' }} />
+                            <col className="st-col-qty" style={{ width: '7%' }} />
+                            <col className="st-col-status" style={{ width: '9%' }} />
+                            <col className="st-col-date" style={{ width: '11%' }} />
+                            <col className="st-col-approver" style={{ width: '9%' }} />
+                            <col className="st-col-actions" style={{ width: '9%' }} />
+                        </colgroup>
+                        <thead className="st-thead">
+                            <tr className="st-thead-row">
+                                <th className="st-th st-col-tr-num">Transfer Number</th>
+                                <th className="st-th st-col-src-store">Source Store</th>
+                                <th className="st-th st-col-dst-store">Destination Store</th>
+                                <th className="st-th st-col-product">Product Details</th>
+                                <th className="st-th st-col-items st-th-center">Total Items</th>
+                                <th className="st-th st-col-qty st-th-center">Quantity</th>
+                                <th className="st-th st-col-status st-th-center">Status</th>
+                                <th className="st-th st-col-date st-th-center">Created Date</th>
+                                <th className="st-th st-col-approver">Approved By</th>
+                                <th className="st-th st-col-actions st-th-center">Actions</th>
                             </tr>
                         </thead>
                     <tbody>
@@ -12007,7 +10895,7 @@ export const StoreTransfersPage = () => {
                             </tr>
                         ) : paginatedTransfers.length === 0 ? (
                             <tr>
-                                <td colSpan="10" style={{ textAlign: 'center', padding: '36px 16px', color: '#6b7280', fontSize: 14 }}>
+                                <td colSpan="10" style={{ textAlign: 'center', padding: '36px 16px', color: '#6b7280', fontSize: 13.5 }}>
                                     {searchTerm || statusFilter !== "all"
                                         ? "No store transfers found matching your filters."
                                         : "No store transfers found."}
@@ -12036,89 +10924,26 @@ export const StoreTransfersPage = () => {
                                 const approvedBy = tr.approved_by_name || '—';
                                 const isExpanded = expandedTransferIds.has(trId);
 
-                                // Determine exact badge styling without altering status values
-                                let badgeStyle = {
-                                    padding: '3px 10px',
-                                    borderRadius: 12,
-                                    fontSize: 11.5,
-                                    fontWeight: 700,
-                                    display: 'inline-block',
-                                    background: '#fef3c7',
-                                    color: '#b45309',
-                                    border: '1px solid #fde68a'
-                                };
-
-                                if (statusNorm === 'received') {
-                                    badgeStyle = {
-                                        padding: '3px 10px',
-                                        borderRadius: 12,
-                                        fontSize: 11.5,
-                                        fontWeight: 700,
-                                        display: 'inline-block',
-                                        background: '#d1fae5',
-                                        color: '#047857',
-                                        border: '1px solid #a7f3d0'
-                                    };
-                                } else if (statusNorm === 'rejected') {
-                                    badgeStyle = {
-                                        padding: '3px 10px',
-                                        borderRadius: 12,
-                                        fontSize: 11.5,
-                                        fontWeight: 700,
-                                        display: 'inline-block',
-                                        background: '#fee2e2',
-                                        color: '#b91c1c',
-                                        border: '1px solid #fecaca'
-                                    };
-                                } else if (statusNorm === 'approved') {
-                                    badgeStyle = {
-                                        padding: '3px 10px',
-                                        borderRadius: 12,
-                                        fontSize: 11.5,
-                                        fontWeight: 700,
-                                        display: 'inline-block',
-                                        background: '#eff6ff',
-                                        color: '#1d4ed8',
-                                        border: '1px solid #bfdbfe'
-                                    };
-                                } else if (statusNorm === 'dispatched' || statusNorm === 'in-transit') {
-                                    badgeStyle = {
-                                        padding: '3px 10px',
-                                        borderRadius: 12,
-                                        fontSize: 11.5,
-                                        fontWeight: 700,
-                                        display: 'inline-block',
-                                        background: '#f3e8ff',
-                                        color: '#7e22ce',
-                                        border: '1px solid #e9d5ff'
-                                    };
-                                }
-
                                 return (
                                     <React.Fragment key={trId || trNum}>
-                                        <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid #f3f4f6', background: isExpanded ? '#fafafa' : '#fff' }}>
+                                        <tr className="st-tbody-row" style={{ borderBottom: isExpanded ? 'none' : '1px solid #f1f5f9', background: isExpanded ? '#fafafa' : '#fff' }}>
                                             {/* Transfer Number */}
-                                            <td style={{ padding: '12px 16px' }}>
-                                                <div style={{ fontWeight: 700, color: '#6366f1' }}>{trNum}</div>
-                                                {trId && <div style={{ fontSize: 11, color: '#9ca3af' }}>ID: #{trId}</div>}
+                                            <td className="st-col-tr-num">
+                                                <div className="st-tr-num-wrap">
+                                                    <span className="st-code-badge">{trNum}</span>
+                                                    {trId && <span className="st-id-sub">ID: #{trId}</span>}
+                                                </div>
                                             </td>
 
                                             {/* Source Store */}
-                                            <td style={{ padding: '12px 16px', fontWeight: 500, color: '#1f2937' }}>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                                    <span>{srcStore}</span>
+                                            <td className="st-col-src-store">
+                                                <div className="st-store-cell">
+                                                    <BsShop className="st-store-icon st-icon-src" size={13} />
+                                                    <span className="st-store-name" title={srcStore}>{srcStore}</span>
                                                     {isSrcInactive && (
                                                         <span
+                                                            className="st-inactive-badge"
                                                             title="Source store is inactive or has been deleted"
-                                                            style={{
-                                                                padding: '1px 6px',
-                                                                borderRadius: 4,
-                                                                fontSize: 10.5,
-                                                                fontWeight: 700,
-                                                                background: '#fee2e2',
-                                                                color: '#dc2626',
-                                                                border: '1px solid #fecaca'
-                                                            }}
                                                         >
                                                             Inactive
                                                         </span>
@@ -12127,83 +10952,73 @@ export const StoreTransfersPage = () => {
                                             </td>
 
                                             {/* Destination Store */}
-                                            <td style={{ padding: '12px 16px', fontWeight: 600, color: '#047857' }}>
-                                                {dstStore}
+                                            <td className="st-col-dst-store">
+                                                <div className="st-store-cell">
+                                                    <BsShop className="st-store-icon st-icon-dst" size={13} />
+                                                    <span className="st-store-name" title={dstStore}>{dstStore}</span>
+                                                </div>
                                             </td>
 
                                             {/* Product Details */}
-                                            <td style={{ padding: '12px 16px' }}>
+                                            <td className="st-col-product">
                                                 {itemsArray.length > 0 ? (
-                                                    <div>
-                                                        <div style={{ fontWeight: 600, color: '#0f172a' }}>
+                                                    <div className="st-product-wrap">
+                                                        <span className="st-product-name" title={itemsArray[0].product_name || `Product #${itemsArray[0].product_id}`}>
                                                             {itemsArray[0].product_name || `Product #${itemsArray[0].product_id}`}
-                                                        </div>
-                                                        <div style={{ fontSize: 11, color: '#64748b' }}>
-                                                            {itemsArray[0].sku ? `SKU: ${itemsArray[0].sku}` : ''}
+                                                        </span>
+                                                        <div className="st-product-sub">
+                                                            {itemsArray[0].sku && <span>SKU: {itemsArray[0].sku}</span>}
                                                             {itemsArray.length > 1 && (
-                                                                <span style={{ color: '#6366f1', marginLeft: 4, fontWeight: 500 }}>
-                                                                    (+{itemsArray.length - 1} more item{itemsArray.length > 2 ? 's' : ''})
+                                                                <span className="st-more-items-badge">
+                                                                    +{itemsArray.length - 1} more item{itemsArray.length > 2 ? 's' : ''}
                                                                 </span>
                                                             )}
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <span style={{ color: '#9ca3af' }}>—</span>
+                                                    <span className="st-empty-dash">—</span>
                                                 )}
                                             </td>
 
                                             {/* Total Items */}
-                                            <td style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, color: '#374151' }}>
-                                                {totalItems}
+                                            <td className="st-col-items st-td-center">
+                                                <span className="st-items-count">{totalItems}</span>
                                             </td>
 
                                             {/* Quantity */}
-                                            <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
-                                                {Number(totalQuantity).toLocaleString()}
+                                            <td className="st-col-qty st-td-center">
+                                                <span className="st-quantity-val">{Number(totalQuantity).toLocaleString()}</span>
                                             </td>
 
                                             {/* Status Badge */}
-                                            <td style={{ padding: '12px 16px' }}>
-                                                <span style={badgeStyle}>
-                                                    {statusRaw}
+                                            <td className="st-col-status st-td-center">
+                                                <span className={`st-status-badge st-status-${statusNorm}`}>
+                                                    <span className="st-status-dot" />
+                                                    <span>{statusRaw}</span>
                                                 </span>
                                             </td>
 
                                             {/* Created Date */}
-                                            <td style={{ padding: '12px 16px', color: '#4b5563', fontSize: 12.5, whiteSpace: 'nowrap' }}>
-                                                {createdDate}
+                                            <td className="st-col-date st-td-center">
+                                                <span className="st-date-text">{createdDate}</span>
                                             </td>
 
                                             {/* Approved By */}
-                                            <td style={{ padding: '12px 16px', color: approvedBy !== '—' ? '#047857' : '#9ca3af', fontWeight: approvedBy !== '—' ? 600 : 400 }}>
-                                                {approvedBy}
+                                            <td className="st-col-approver">
+                                                {approvedBy !== '—' ? (
+                                                    <div className="st-approver-wrap">
+                                                        <BsShieldCheck className="st-approver-icon" size={13} />
+                                                        <span className="st-approver-name" title={approvedBy}>{approvedBy}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="st-empty-dash">—</span>
+                                                )}
                                             </td>
 
                                             {/* Transfer Actions */}
-                                            <td
-                                                className="store-transfers-actions-cell"
-                                                style={{
-                                                    position: 'sticky',
-                                                    right: 0,
-                                                    zIndex: 10,
-                                                    background: isExpanded ? '#fafafa' : '#ffffff',
-                                                    padding: '10px 16px',
-                                                    textAlign: 'center',
-                                                    whiteSpace: 'nowrap',
-                                                    boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                                }}
-                                            >
-                                                <div
-                                                    className="store-transfers-actions-wrapper"
-                                                    style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: 6,
-                                                        flexWrap: 'nowrap'
-                                                    }}
-                                                >
-                                                    {/* 1. View button - Logical primary inspection action across ALL statuses */}
+                                            <td className="st-col-actions st-td-center">
+                                                <div className="st-actions-wrapper">
+                                                    {/* 1. View button */}
                                                     <button
                                                         type="button"
                                                         className="store-transfer-action-btn store-transfer-btn-view"
@@ -12217,11 +11032,10 @@ export const StoreTransfersPage = () => {
 
                                                     {/* Subtle visual divider before status progression buttons */}
                                                     {['pending', 'approved', 'dispatched'].includes(statusNorm) && (
-                                                        <span className="store-transfers-action-divider" style={{ width: 1, height: 16, background: '#e2e8f0', margin: '0 3px', flexShrink: 0 }} />
+                                                        <span className="st-action-divider" />
                                                     )}
 
                                                     {/* 2. Status-based Workflow Progression Actions */}
-
                                                     {/* Pending transfers: Approve */}
                                                     {statusNorm === 'pending' && (
                                                         <button
@@ -12325,22 +11139,8 @@ export const StoreTransfersPage = () => {
                                         {isExpanded && (
                                             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
                                                 <td colSpan="10" style={{ padding: '14px 20px' }}>
-                                                    <div style={{
-                                                        background: '#fff',
-                                                        borderRadius: 10,
-                                                        border: '1px solid #e2e8f0',
-                                                        padding: 14,
-                                                        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)'
-                                                    }}>
-                                                        <div style={{
-                                                            fontSize: 13,
-                                                            fontWeight: 700,
-                                                            color: '#1e293b',
-                                                            marginBottom: 10,
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'space-between'
-                                                        }}>
+                                                    <div className="st-expandable-card">
+                                                        <div className="st-expandable-header">
                                                             <span>
                                                                 📦 Products in Transfer {trNum}
                                                             </span>
@@ -12351,28 +11151,28 @@ export const StoreTransfersPage = () => {
 
                                                         {itemsArray.length > 0 ? (
                                                             <div className="custom-scrollbar" style={{ overflowX: 'auto' }}>
-                                                                <table style={{ width: '100%', minWidth: '550px', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                                                                <table className="st-sub-table">
                                                                     <thead>
-                                                                        <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', textAlign: 'left', background: '#f8fafc' }}>
-                                                                            <th style={{ padding: '8px 12px' }}>Product ID</th>
-                                                                            <th style={{ padding: '8px 12px' }}>Product Details</th>
-                                                                            <th style={{ padding: '8px 12px' }}>SKU</th>
-                                                                            <th style={{ padding: '8px 12px', textAlign: 'right' }}>Quantity</th>
+                                                                        <tr>
+                                                                            <th>Product ID</th>
+                                                                            <th>Product Details</th>
+                                                                            <th>SKU</th>
+                                                                            <th style={{ textAlign: 'right' }}>Quantity</th>
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody>
                                                                         {itemsArray.map((item, idx) => (
-                                                                            <tr key={item.product_id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                                                <td style={{ padding: '8px 12px', color: '#6366f1', fontWeight: 600 }}>
+                                                                            <tr key={item.product_id || idx}>
+                                                                                <td style={{ color: '#4f46e5', fontWeight: 600 }}>
                                                                                     #{item.product_id}
                                                                                 </td>
-                                                                                <td style={{ padding: '8px 12px', fontWeight: 500, color: '#0f172a' }}>
+                                                                                <td style={{ fontWeight: 500, color: '#0f172a' }}>
                                                                                     {item.product_name || '—'}
                                                                                 </td>
-                                                                                <td style={{ padding: '8px 12px', color: '#64748b' }}>
+                                                                                <td style={{ color: '#64748b' }}>
                                                                                     {item.sku || '—'}
                                                                                 </td>
-                                                                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                                                                                <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
                                                                                     {Number(item.quantity).toLocaleString()}
                                                                                 </td>
                                                                             </tr>
@@ -12399,81 +11199,72 @@ export const StoreTransfersPage = () => {
             </div>
 
             {/* Pagination Toolbar */}
-            {totalPages > 1 && (
+            {!loading && filteredTransfers.length > 0 && (
                 <div className="store-transfers-pagination-footer">
-                    {/* Left column placeholder */}
-                    <div className="store-transfers-pagination-left" />
-
-                    {/* Centered Record Count */}
-                    <div className="store-transfers-pagination-center">
-                        <span style={{ fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>
-                            Showing {Math.min(filteredTransfers.length, (page - 1) * pageSize + 1)} to {Math.min(filteredTransfers.length, page * pageSize)} of {filteredTransfers.length} records
-                        </span>
+                    {/* Left side: Rows Per Page dropdown (no label) */}
+                    <div className="store-transfers-pagination-left">
+                        <select
+                            className="st-page-size-select"
+                            value={pageSize}
+                            onChange={(e) => {
+                                setPageSize(Number(e.target.value));
+                                setPage(1);
+                            }}
+                            aria-label="Select rows per page"
+                        >
+                            <option value={8}>8</option>
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
                     </div>
 
-                    {/* Right column pagination controls */}
+                    {/* Middle: Centered Record Count */}
+                    <div className="store-transfers-pagination-center">
+                        Showing <strong>{filteredTransfers.length === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to <strong>{Math.min(filteredTransfers.length, page * pageSize)}</strong> of <strong>{filteredTransfers.length}</strong> {filteredTransfers.length === 1 ? 'record' : 'records'}
+                    </div>
+
+                    {/* Right side: Page Navigation Controls (Page numbers with active page highlighted, no Previous/Next) */}
                     <div className="store-transfers-pagination-right">
-                        {(() => {
-                            let pages = [];
-                            if (totalPages <= 7) {
-                                pages = Array.from({ length: totalPages }, (_, i) => i + 1);
-                            } else {
-                                if (page <= 4) {
-                                    pages = [1, 2, 3, 4, 5, '...', totalPages];
-                                } else if (page >= totalPages - 3) {
-                                    pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+                        <div className="st-page-numbers-group">
+                            {(() => {
+                                let pages = [];
+                                if (totalPages <= 7) {
+                                    pages = Array.from({ length: totalPages }, (_, i) => i + 1);
                                 } else {
-                                    pages = [1, '...', page - 1, page, page + 1, '...', totalPages];
+                                    if (page <= 4) {
+                                        pages = [1, 2, 3, 4, 5, '...', totalPages];
+                                    } else if (page >= totalPages - 3) {
+                                        pages = [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+                                    } else {
+                                        pages = [1, '...', page - 1, page, page + 1, '...', totalPages];
+                                    }
                                 }
-                            }
-                            return pages.map((p, idx) => {
-                                if (p === '...') {
+                                return pages.map((p, idx) => {
+                                    if (p === '...') {
+                                        return (
+                                            <span key={`ellipsis-${idx}`} className="st-page-ellipsis">
+                                                …
+                                            </span>
+                                        );
+                                    }
+                                    const isActive = p === page;
                                     return (
-                                        <span
-                                            key={`ellipsis-${idx}`}
-                                            style={{
-                                                minWidth: 28,
-                                                height: 32,
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                color: '#9ca3af',
-                                                fontSize: 13,
-                                                fontWeight: 600
-                                            }}
+                                        <button
+                                            key={p}
+                                            type="button"
+                                            onClick={() => setPage(p)}
+                                            className={`st-page-btn st-page-num-btn ${isActive ? 'is-active' : ''}`}
+                                            aria-label={`Page ${p}`}
+                                            aria-current={isActive ? 'page' : undefined}
                                         >
-                                            …
-                                        </span>
+                                            {p}
+                                        </button>
                                     );
-                                }
-                                return (
-                                    <button
-                                        key={p}
-                                        type="button"
-                                        onClick={() => setPage(p)}
-                                        style={{
-                                            minWidth: 32,
-                                            height: 32,
-                                            padding: '0 6px',
-                                            borderRadius: 6,
-                                            border: p === page ? '1.5px solid #6366f1' : '1px solid #d1d5db',
-                                            background: p === page ? '#eef2ff' : '#ffffff',
-                                            color: p === page ? '#6366f1' : '#374151',
-                                            fontSize: 12.5,
-                                            fontWeight: 600,
-                                            cursor: 'pointer',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                        aria-current={p === page ? 'page' : undefined}
-                                    >
-                                        {p}
-                                    </button>
-                                );
-                            });
-                        })()}
+                                });
+                            })()}
+                        </div>
                     </div>
                 </div>
             )}

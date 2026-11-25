@@ -185,27 +185,16 @@
 
 
 /* =========================================================
-   4. SUPPLIER (Col 4)
+   4. STORE NAME (Col 4)
 ========================================================= */
 
 .inventory-table th:nth-child(4),
 .inventory-table td:nth-child(4) {
-  min-width: 140px;
-  width: 140px;
-}
-
-
-/* =========================================================
-   5. STORE NAME (Col 5)
-========================================================= */
-
-.inventory-table th:nth-child(5),
-.inventory-table td:nth-child(5) {
   min-width: 190px;
   width: 190px;
 }
 
-.inventory-table td:nth-child(5) {
+.inventory-table td:nth-child(4) {
   max-width: 220px;
   white-space: normal;
   overflow: visible;
@@ -217,11 +206,11 @@
 
 
 /* =========================================================
-   6. STORE ID (Col 6)
+   5. STORE ID (Col 5)
 ========================================================= */
 
-.inventory-table th:nth-child(6),
-.inventory-table td:nth-child(6) {
+.inventory-table th:nth-child(5),
+.inventory-table td:nth-child(5) {
   min-width: 85px;
   width: 85px;
   text-align: center;
@@ -231,88 +220,88 @@
 
 
 /* =========================================================
-   7. AVAILABLE QTY (Col 7)
+   6. AVAILABLE QTY (Col 6)
 ========================================================= */
 
-.inventory-table th:nth-child(7),
-.inventory-table td:nth-child(7) {
+.inventory-table th:nth-child(6),
+.inventory-table td:nth-child(6) {
   min-width: 130px;
   width: 130px;
 }
 
 
 /* =========================================================
-   8. REORDER LEVEL (Col 8)
+   7. REORDER LEVEL (Col 7)
 ========================================================= */
 
-.inventory-table th:nth-child(8),
-.inventory-table td:nth-child(8) {
+.inventory-table th:nth-child(7),
+.inventory-table td:nth-child(7) {
   min-width: 125px;
   width: 125px;
 }
 
 
 /* =========================================================
-   9. EXPIRY DATE (Col 9)
+   8. EXPIRY DATE (Col 8)
 ========================================================= */
 
-.inventory-table th:nth-child(9),
-.inventory-table td:nth-child(9) {
+.inventory-table th:nth-child(8),
+.inventory-table td:nth-child(8) {
   min-width: 135px;
   width: 135px;
 }
 
 
 /* =========================================================
-   10. MRP PRICE (Col 10)
+   9. MRP PRICE (Col 9)
 ========================================================= */
 
-.inventory-table th:nth-child(10),
-.inventory-table td:nth-child(10) {
+.inventory-table th:nth-child(9),
+.inventory-table td:nth-child(9) {
   min-width: 115px;
   width: 115px;
 }
 
 
 /* =========================================================
-   11. SELLING PRICE (Col 11)
+   10. SELLING PRICE (Col 10)
 ========================================================= */
 
-.inventory-table th:nth-child(11),
-.inventory-table td:nth-child(11) {
+.inventory-table th:nth-child(10),
+.inventory-table td:nth-child(10) {
   min-width: 120px;
   width: 120px;
 }
 
 
 /* =========================================================
-   12. MARGIN (Col 12)
+   11. MARGIN (Col 11)
 ========================================================= */
 
-.inventory-table th:nth-child(12),
-.inventory-table td:nth-child(12) {
+.inventory-table th:nth-child(11),
+.inventory-table td:nth-child(11) {
   min-width: 100px;
   width: 100px;
 }
 
 
 /* =========================================================
-   13. STATUS (Col 13)
+   12. STATUS (Col 12)
 ========================================================= */
 
-.inventory-table th:nth-child(13),
-.inventory-table td:nth-child(13) {
+.inventory-table th:nth-child(12),
+.inventory-table td:nth-child(12) {
   min-width: 125px;
   width: 125px;
 }
 
 
 /* =========================================================
-   14. ACTIONS (Col 14)
+   13. ACTIONS (Col 13)
 ========================================================= */
 
-.inventory-table th:nth-child(14),
-.inventory-table td:nth-child(14) {
+.inventory-table th:nth-child(13),
+.inventory-table td:nth-child(13) {
   min-width: 175px;
   width: 175px;
   text-align: center;
@@ -654,8 +643,8 @@
     padding-left: 14px !important;
   }
 
-  .inventory-table th:nth-child(5),
-  .inventory-table td:nth-child(5) {
+  .inventory-table th:nth-child(4),
+  .inventory-table td:nth-child(4) {
     min-width: 180px;
     width: 180px;
   }
@@ -733,13 +722,13 @@
 
   /* Store name */
 
-  .inventory-table th:nth-child(5),
-  .inventory-table td:nth-child(5) {
+  .inventory-table th:nth-child(4),
+  .inventory-table td:nth-child(4) {
     min-width: 175px;
     width: 175px;
   }
 
-  .inventory-table td:nth-child(5) {
+  .inventory-table td:nth-child(4) {
     max-width: 200px;
     white-space: normal;
     overflow: visible;
@@ -783,8 +772,8 @@
 
   /* Store */
 
-  .inventory-table th:nth-child(5),
-  .inventory-table td:nth-child(5) {
+  .inventory-table th:nth-child(4),
+  .inventory-table td:nth-child(4) {
     min-width: 170px;
     width: 170px;
   }

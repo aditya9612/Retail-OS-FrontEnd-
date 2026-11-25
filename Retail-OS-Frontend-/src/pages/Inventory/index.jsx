@@ -4684,25 +4684,23 @@ if (action === "transfer") {
                 
                     {/* PAGINATION */}
                     <div className="inv-pagination">
-                        {/* LEFT: Rows per page */}
+                        {/* LEFT: Rows per page (dropdown only, label removed) */}
                         <div className="inv-pagination-left">
-                            <div className="inv-page-size-select-wrap">
-                                <label htmlFor="inv-page-size" className="inv-page-size-label">Rows per page:</label>
-                                <select
-                                    id="inv-page-size"
-                                    className="inv-page-size-select"
-                                    value={pageSize}
-                                    onChange={(e) => {
-                                        setPageSize(Number(e.target.value));
-                                        setPage(1);
-                                    }}
-                                >
-                                    <option value={8}>8</option>
-                                    <option value={15}>15</option>
-                                    <option value={25}>25</option>
-                                    <option value={50}>50</option>
-                                </select>
-                            </div>
+                            <select
+                                id="inv-page-size"
+                                className="inv-page-size-select"
+                                value={pageSize}
+                                onChange={(e) => {
+                                    setPageSize(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                                aria-label="Select rows per page"
+                            >
+                                <option value={8}>8</option>
+                                <option value={15}>15</option>
+                                <option value={25}>25</option>
+                                <option value={50}>50</option>
+                            </select>
                         </div>
 
                         {/* CENTER: Pagination Summary Text */}
@@ -4729,19 +4727,44 @@ if (action === "transfer") {
                                         onClick={() => setPage(page - 1)}
                                         aria-label="Previous page"
                                     >
-                                        <BsChevronLeft />
+                                        <BsChevronLeft size={12} />
                                     </button>
 
-                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                                        <button
-                                            type="button"
-                                            key={p}
-                                            className={`inv-page-btn ${p === page ? "active" : ""}`}
-                                            onClick={() => setPage(p)}
-                                        >
-                                            {p}
-                                        </button>
-                                    ))}
+                                    {(() => {
+                                        let pages = [];
+                                        if (totalPages <= 5) {
+                                            pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+                                        } else {
+                                            if (page <= 3) {
+                                                pages = [1, 2, 3, 4, '...', totalPages];
+                                            } else if (page >= totalPages - 2) {
+                                                pages = [1, '...', totalPages - 2, totalPages - 1, totalPages];
+                                            } else {
+                                                pages = [1, '...', page - 1, page, page + 1, '...', totalPages];
+                                            }
+                                        }
+                                        return pages.map((p, idx) => {
+                                            if (p === '...') {
+                                                return (
+                                                    <span key={`ellipsis-${idx}`} className="inv-page-ellipsis">
+                                                        …
+                                                    </span>
+                                                );
+                                            }
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    key={p}
+                                                    className={`inv-page-btn ${p === page ? "active" : ""}`}
+                                                    onClick={() => setPage(p)}
+                                                    aria-label={`Page ${p}`}
+                                                    aria-current={p === page ? "page" : undefined}
+                                                >
+                                                    {p}
+                                                </button>
+                                            );
+                                        });
+                                    })()}
 
                                     <button
                                         type="button"
@@ -4750,7 +4773,7 @@ if (action === "transfer") {
                                         onClick={() => setPage(page + 1)}
                                         aria-label="Next page"
                                     >
-                                        <BsChevronRight />
+                                        <BsChevronRight size={12} />
                                     </button>
                                 </div>
                             )}
