@@ -103,13 +103,15 @@ const SearchableSelect = ({
                 }}
                 style={{
                     width: '100%',
-                    padding: '9px 10px',
+                    height: 40,
+                    minHeight: 40,
+                    padding: '0 12px',
                     borderRadius: 8,
                     border: `1px solid ${hasError ? '#ef4444' : isOpen ? '#4f46e5' : '#cbd5e1'}`,
                     background: disabled ? '#f8fafc' : '#fff',
                     color: displayValue ? '#0f172a' : '#94a3b8',
-                    fontSize: 12,
-                    fontWeight: displayValue ? 600 : 400,
+                    fontSize: 13,
+                    fontWeight: displayValue ? 500 : 400,
                     cursor: disabled ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
