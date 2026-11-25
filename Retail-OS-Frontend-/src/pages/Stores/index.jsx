@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import storeService from '../../services/storeService';
 import storeTargetService from '../../services/storeTargetService';
@@ -36,7 +36,7 @@ import {
     BsShieldCheck,
     BsShieldX
 } from 'react-icons/bs';
-import { INDIAN_STATES, getCitiesForState, isKnownCity, findCanonicalCityName } from '../../utils/indiaLocationData';
+import { INDIAN_STATES, getCitiesForState, isKnownCity, findCanonicalCityName, getDistrictsForState, getGstStateCodes } from '../../utils/indiaLocationData';
 import SearchableSelect from '../../components/Common/SearchableSelect';
 
 // Backend TargetType enum options (Requirements 27 & 28)
@@ -152,6 +152,9 @@ const Stores = () => {
         return Array.from(set).sort();
     }, [stores]);
 
+    // Current primary main store if any
+    const currentMainStore = useMemo(() => stores.find(s => s.is_main), [stores]);
+
     // Filtered Stores (Requirement 10 & Clickable KPI Cards: name, code, location, type, status, kpi)
     const filteredStores = useMemo(() => {
         return stores.filter(store => {
@@ -211,6 +214,7 @@ const Stores = () => {
         phone: '',
         email: '',
         address: '',
+        district: '',
         city: '',
         state: 'Maharashtra',
         pincode: '',
@@ -225,6 +229,17 @@ const Stores = () => {
         return getCitiesForState(storeFormData.state);
     }, [storeFormData.state]);
 
+    // Dynamic verified districts list for the currently selected state
+    const availableDistricts = useMemo(() => {
+        if (!storeFormData.state) return [];
+        const baseList = getDistrictsForState(storeFormData.state);
+        // Requirement 3: Do not overwrite existing district values if they are not present in the new dataset
+        if (storeFormData.district && !baseList.includes(storeFormData.district)) {
+            return [storeFormData.district, ...baseList];
+        }
+        return baseList;
+    }, [storeFormData.state, storeFormData.district]);
+
     const openCreateStore = () => {
         setEditingStore(null);
         setIsCustomCity(false);
@@ -235,6 +250,7 @@ const Stores = () => {
             phone: '',
             email: '',
             address: '',
+            district: '',
             city: '',
             state: 'Maharashtra',
             pincode: '',
@@ -286,6 +302,7 @@ const Stores = () => {
                 phone: fresh.phone || '',
                 email: fresh.email || '',
                 address: fresh.address || '',
+                district: fresh.district || '',
                 city: selectedCity,
                 state: stateVal,
                 pincode: fresh.pincode || '',
@@ -306,7 +323,10 @@ const Stores = () => {
 
     const validateStoreForm = () => {
         const errors = {};
-        const trimmedName = (storeFormData.name || '').trim();
+
+        // 1. Store Name Validation
+        const rawName = storeFormData.name || '';
+        const trimmedName = rawName.trim();
         if (!trimmedName) {
             errors.name = 'Store name is required';
         } else if (trimmedName.length < 2) {
@@ -317,21 +337,49 @@ const Stores = () => {
             errors.name = 'Store name cannot contain only numbers';
         } else if (!/[a-zA-Z]/.test(trimmedName)) {
             errors.name = 'Store name must contain at least one letter';
+        } else if (!/^[a-zA-Z0-9\s&'()./,-]+$/.test(trimmedName)) {
+            errors.name = 'Store name contains invalid special characters';
+        } else {
+            // Disallowed generic/placeholder names
+            const disallowedPlaceholders = [
+                'test', 'store', 'shop', 'retail', 'sample', 'dummy', 'placeholder',
+                'null', 'undefined', 'unknown', 'n/a', 'na', 'string'
+            ];
+            if (disallowedPlaceholders.includes(trimmedName.toLowerCase())) {
+                errors.name = 'Please enter a valid, specific store name';
+            } else {
+                // Check repetitive meaningless strings (e.g. AAAAAA)
+                const letters = trimmedName.toLowerCase().replace(/[^a-z]/g, '');
+                if (letters.length >= 4 && new Set(letters).size < 2) {
+                    errors.name = 'Store name contains invalid repetitive characters';
+                } else {
+                    // Check duplicate store names against loaded stores
+                    const isDuplicate = stores.some(s =>
+                        s.name && s.name.trim().toLowerCase() === trimmedName.toLowerCase() &&
+                        s.id !== editingStore?.id
+                    );
+                    if (isDuplicate) {
+                        errors.name = 'Store name already exists. Please choose a different name';
+                    }
+                }
+            }
         }
 
-        const trimmedCode = (storeFormData.code || '').trim();
+        // 2. Store Code Validation (Optional, but if provided must follow rules)
+        const trimmedCode = (storeFormData.code || '').trim().toUpperCase();
         if (trimmedCode) {
             if (trimmedCode.length < 2) {
                 errors.code = 'Store code must be at least 2 characters';
             } else if (trimmedCode.length > 20) {
                 errors.code = 'Store code must not exceed 20 characters';
-            } else if (!/^[a-zA-Z]/.test(trimmedCode)) {
+            } else if (!/^[A-Z]/.test(trimmedCode)) {
                 errors.code = 'Store code must start with a letter';
-            } else if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(trimmedCode)) {
+            } else if (!/^[A-Z][A-Z0-9_-]*$/.test(trimmedCode)) {
                 errors.code = 'Store code can only contain letters, numbers, hyphens, and underscores';
             } else {
+                // Prevent duplicate store codes
                 const isDuplicate = stores.some(s =>
-                    s.code && s.code.trim().toLowerCase() === trimmedCode.toLowerCase() &&
+                    s.code && s.code.trim().toUpperCase() === trimmedCode &&
                     s.id !== editingStore?.id
                 );
                 if (isDuplicate) {
@@ -340,6 +388,7 @@ const Stores = () => {
             }
         }
 
+        // 3. Contact Phone Validation (Optional, exactly 10 digits, starts with 6-9)
         if (storeFormData.phone && storeFormData.phone.trim()) {
             const cleanPhone = storeFormData.phone.trim();
             if (!/^\d+$/.test(cleanPhone)) {
@@ -353,33 +402,133 @@ const Stores = () => {
             }
         }
 
-        if (storeFormData.email && storeFormData.email.trim()) {
-            const cleanEmail = storeFormData.email.trim();
-            if (cleanEmail.length > 100) {
-                errors.email = 'Email must not exceed 100 characters';
-            } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(cleanEmail)) {
-                errors.email = 'Please enter a valid email address';
+        // 4. Store Email – Strict Validation (Optional, standard RFC & domain checks)
+        if (storeFormData.email !== undefined && storeFormData.email !== null) {
+            const rawEmailStr = String(storeFormData.email);
+            if (rawEmailStr.length > 0) {
+                // Reject leading/trailing spaces and internal whitespace
+                if (/\s/.test(rawEmailStr)) {
+                    errors.email = 'Email address cannot contain spaces.';
+                } else {
+                    const cleanEmail = rawEmailStr.trim();
+                    if (!cleanEmail) {
+                        errors.email = 'Email address cannot contain spaces.';
+                    } else if (cleanEmail.length > 254) {
+                        errors.email = 'Email address is too long.';
+                    } else {
+                        // Check single @ symbol
+                        const atMatches = cleanEmail.match(/@/g);
+                        if (!atMatches || atMatches.length !== 1) {
+                            errors.email = 'Please enter a valid email address.';
+                        } else if (cleanEmail.includes('..')) {
+                            // Prevent invalid consecutive dots anywhere
+                            errors.email = 'Please enter a valid email address.';
+                        } else {
+                            const [localPart, domainPart] = cleanEmail.split('@');
+                            // Local-part checks
+                            if (!localPart || localPart.length > 64 || localPart.startsWith('.') || localPart.endsWith('.')) {
+                                errors.email = 'Please enter a valid email address.';
+                            } else if (localPart.startsWith('-') || localPart.endsWith('-')) {
+                                errors.email = 'Please enter a valid email address.';
+                            } else if (!domainPart || domainPart.length > 253 || domainPart.startsWith('.') || domainPart.endsWith('.') || domainPart.startsWith('-') || domainPart.endsWith('-')) {
+                                errors.email = 'Please enter a valid email address.';
+                            } else {
+                                // Domain structure: must have valid extension (TLD >= 2 letters)
+                                const domainParts = domainPart.split('.');
+                                if (domainParts.length < 2) {
+                                    errors.email = 'Please enter a valid email address.';
+                                } else {
+                                    const tld = domainParts[domainParts.length - 1];
+                                    if (!/^[a-zA-Z]{2,}$/.test(tld)) {
+                                        errors.email = 'Please enter a valid email address.';
+                                    } else {
+                                        // Validate each domain label
+                                        const validDomainLabels = domainParts.every(label =>
+                                            /^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(label)
+                                        );
+                                        // Validate local-part characters
+                                        const validLocal = /^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*$/.test(localPart);
+
+                                        if (!validLocal || !validDomainLabels) {
+                                            errors.email = 'Please enter a valid email address.';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
+        // 5. GSTIN Validation (Optional, 15 chars, pattern + state code matching)
         if (storeFormData.gstin && storeFormData.gstin.trim()) {
             const cleanGstin = storeFormData.gstin.trim().toUpperCase();
             if (cleanGstin.length !== 15) {
                 errors.gstin = 'GSTIN must be exactly 15 characters';
             } else if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(cleanGstin)) {
                 errors.gstin = 'Invalid GSTIN format (e.g. 27AAPFU0939F1ZV)';
+            } else {
+                const gstinPrefix = cleanGstin.slice(0, 2);
+                const prefixNum = parseInt(gstinPrefix, 10);
+                if (isNaN(prefixNum) || !((prefixNum >= 1 && prefixNum <= 38) || prefixNum === 97 || prefixNum === 99)) {
+                    errors.gstin = `Invalid GST state code "${gstinPrefix}" in GSTIN`;
+                } else if (storeFormData.state) {
+                    const validStateCodes = getGstStateCodes(storeFormData.state);
+                    if (validStateCodes.length > 0 && !validStateCodes.includes(gstinPrefix)) {
+                        errors.gstin = `GSTIN state code (${gstinPrefix}) does not match selected state (${storeFormData.state})`;
+                    }
+                }
             }
         }
 
-        if (storeFormData.address && storeFormData.address.trim()) {
-            const cleanAddress = storeFormData.address.trim();
-            if (cleanAddress.length < 3) {
-                errors.address = 'Street address must be at least 3 characters';
-            } else if (cleanAddress.length > 255) {
-                errors.address = 'Street address must not exceed 255 characters';
+        // 6. Street Address – Strict Validation (Optional, meaningful physical address)
+        if (storeFormData.address !== undefined && storeFormData.address !== null) {
+            const rawAddressStr = String(storeFormData.address);
+            if (rawAddressStr.length > 0) {
+                const cleanAddress = rawAddressStr.trim();
+                if (!cleanAddress) {
+                    errors.address = 'Please enter a valid street address.';
+                } else if (cleanAddress.length > 250) {
+                    errors.address = 'Address cannot exceed the maximum allowed length.';
+                } else if (cleanAddress.length < 5) {
+                    errors.address = 'Address must contain at least 5 characters.';
+                } else if (!/[a-zA-Z]/.test(cleanAddress)) {
+                    // Prevent addresses containing only numbers or special characters
+                    errors.address = 'Address cannot contain only numbers or special characters.';
+                } else if (!/^[a-zA-Z0-9\s,./#()\-&']+$/.test(cleanAddress)) {
+                    // Reject unsupported special characters
+                    errors.address = 'Please enter a valid street address.';
+                } else if (/[,#/\-]{2,}|\.{3,}/.test(cleanAddress)) {
+                    // Reject excessive repeated punctuation
+                    errors.address = 'Please enter a valid street address.';
+                } else {
+                    // Check meaningful characters count (excluding spaces & punctuation)
+                    const meaningfulChars = cleanAddress.replace(/[^a-zA-Z0-9]/g, '');
+                    if (meaningfulChars.length < 5) {
+                        errors.address = 'Address must contain at least 5 characters.';
+                    }
+                }
             }
         }
 
+        // 7. State Validation (Required, must be in INDIAN_STATES)
+        const cleanState = (storeFormData.state || '').trim();
+        if (!cleanState) {
+            errors.state = 'State is required';
+        } else if (!INDIAN_STATES.includes(cleanState)) {
+            errors.state = 'Please select a valid Indian State / UT from the list';
+        }
+
+        // 8. District Validation (Optional, but if selected must correspond to selected state)
+        if (storeFormData.district && storeFormData.district.trim()) {
+            const cleanDistrict = storeFormData.district.trim();
+            if (availableDistricts.length > 0 && !availableDistricts.includes(cleanDistrict)) {
+                errors.district = 'Selected district does not belong to the chosen state';
+            }
+        }
+
+        // 9. City Validation (Dynamic per state/district or custom city validation)
         if (isCustomCity) {
             const trimmedCustom = (customCityName || '').trim();
             if (!trimmedCustom) {
@@ -408,15 +557,7 @@ const Stores = () => {
             }
         }
 
-        if (storeFormData.state && storeFormData.state.trim()) {
-            const cleanState = storeFormData.state.trim();
-            if (!INDIAN_STATES.includes(cleanState)) {
-                errors.state = 'Please select a valid Indian State / UT';
-            }
-        } else {
-            errors.state = 'State is required';
-        }
-
+        // 10. Pincode Validation (Optional, exactly 6 digits, non-zero start, non-sequential)
         if (storeFormData.pincode && storeFormData.pincode.trim()) {
             const cleanPin = storeFormData.pincode.trim();
             if (!/^\d+$/.test(cleanPin)) {
@@ -439,7 +580,10 @@ const Stores = () => {
     const handleSaveStore = async (e) => {
         e.preventDefault();
         if (storeFormSubmitting) return;
-        if (!validateStoreForm()) return;
+        if (!validateStoreForm()) {
+            showError('Please correct the highlighted validation errors before submitting.');
+            return;
+        }
 
         setStoreFormSubmitting(true);
         setErrorMsg('');
@@ -450,13 +594,14 @@ const Stores = () => {
 
             const trimmedPayload = {
                 name: storeFormData.name.trim(),
-                code: storeFormData.code?.trim() || null,
+                code: storeFormData.code?.trim()?.toUpperCase() || null,
                 address: storeFormData.address?.trim() || null,
+                district: storeFormData.district?.trim() || null,
                 city: effectiveCity,
                 state: storeFormData.state || null,
                 pincode: storeFormData.pincode?.trim() || null,
                 phone: storeFormData.phone?.trim() || null,
-                email: storeFormData.email?.trim() || null,
+                email: storeFormData.email?.trim() ? storeFormData.email.trim().toLowerCase() : null,
                 gstin: storeFormData.gstin?.trim()?.toUpperCase() || null,
                 is_warehouse: Boolean(storeFormData.is_warehouse),
             };
@@ -478,23 +623,61 @@ const Stores = () => {
             fetchStores();
         } catch (err) {
             console.error('Save Store Error:', err);
-            // Map backend 422 validation detail array to inline field errors
-            if (err.response?.status === 422 && Array.isArray(err.response?.data?.detail)) {
-                const backendErrors = {};
-                err.response.data.detail.forEach(d => {
+            const backendErrors = {};
+            const status = err.response?.status;
+            const resData = err.response?.data;
+            const rawDetail = resData?.detail || resData?.message;
+
+            // 1. FastAPI 422 validation errors with field location
+            if (status === 422 && Array.isArray(rawDetail)) {
+                rawDetail.forEach(d => {
                     const field = d.loc?.[d.loc.length - 1];
                     if (field) {
                         backendErrors[field] = (d.msg || '').replace(/^Value error,\s*/i, '');
                     }
                 });
-                if (Object.keys(backendErrors).length > 0) {
-                    setStoreFormErrors(backendErrors);
-                    showError('Please correct the highlighted validation errors.');
-                    return;
+            } else if (status === 409) {
+                // 2. Conflict errors (duplicate name, duplicate code)
+                const detailStr = typeof rawDetail === 'string' ? rawDetail : JSON.stringify(rawDetail);
+                if (/name.*already exists/i.test(detailStr)) {
+                    backendErrors.name = 'Store name already exists. Please choose a different name';
+                } else if (/code.*already exists/i.test(detailStr)) {
+                    backendErrors.code = 'Store code already exists. Please choose a unique code';
+                } else {
+                    showError(detailStr);
                 }
+            } else if (typeof rawDetail === 'string') {
+                // 3. String error messages matching specific fields
+                if (/name/i.test(rawDetail)) {
+                    backendErrors.name = rawDetail;
+                } else if (/code/i.test(rawDetail)) {
+                    backendErrors.code = rawDetail;
+                } else if (/gstin/i.test(rawDetail)) {
+                    backendErrors.gstin = rawDetail;
+                } else if (/phone/i.test(rawDetail)) {
+                    backendErrors.phone = rawDetail;
+                } else if (/email/i.test(rawDetail)) {
+                    backendErrors.email = rawDetail;
+                } else if (/pincode/i.test(rawDetail)) {
+                    backendErrors.pincode = rawDetail;
+                } else if (/address/i.test(rawDetail)) {
+                    backendErrors.address = rawDetail;
+                } else if (/city/i.test(rawDetail)) {
+                    backendErrors.city = rawDetail;
+                } else if (/state/i.test(rawDetail)) {
+                    backendErrors.state = rawDetail;
+                } else {
+                    showError(rawDetail);
+                }
+            } else {
+                const detail = err.response?.data?.message || err.message;
+                showError(`Failed to save store: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`);
             }
-            const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
-            showError(`Failed to save store: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`);
+
+            if (Object.keys(backendErrors).length > 0) {
+                setStoreFormErrors(backendErrors);
+                showError('Please correct the highlighted validation errors.');
+            }
         } finally {
             setStoreFormSubmitting(false);
         }
@@ -936,6 +1119,233 @@ const Stores = () => {
             .reduce((sum, t) => sum + parseFloat(t.target_value || 0), 0);
     }, [targetsSummary, targets]);
 
+    // ============================================================
+    // STORES DIRECTORY: SINGLE BOTTOM HORIZONTAL SCROLLBAR SYNCHRONIZATION
+    // ============================================================
+    const storesTableContainerRef = useRef(null);
+    const storesBottomScrollbarRef = useRef(null);
+    const isSyncingStoresScroll = useRef(false);
+
+    const [storesScrollContentWidth, setStoresScrollContentWidth] = useState(0);
+    const [isStoresScrollable, setIsStoresScrollable] = useState(false);
+
+    const updateStoresScrollMetrics = useCallback(() => {
+        const tableEl = storesTableContainerRef.current;
+        const bottomEl = storesBottomScrollbarRef.current;
+
+        const tableScrollWidth = tableEl ? tableEl.scrollWidth : 0;
+        const clientWidth = bottomEl?.clientWidth || tableEl?.clientWidth || 0;
+
+        setStoresScrollContentWidth(tableScrollWidth);
+        setIsStoresScrollable(tableScrollWidth > (clientWidth + 2));
+    }, []);
+
+    useEffect(() => {
+        if (activeTab !== 'stores') return;
+
+        updateStoresScrollMetrics();
+
+        const observers = [];
+        if (typeof ResizeObserver !== 'undefined') {
+            const ro = new ResizeObserver(() => {
+                updateStoresScrollMetrics();
+            });
+            if (storesTableContainerRef.current) ro.observe(storesTableContainerRef.current);
+            if (storesBottomScrollbarRef.current) ro.observe(storesBottomScrollbarRef.current);
+            observers.push(ro);
+        }
+
+        const handleWindowResize = () => {
+            updateStoresScrollMetrics();
+        };
+
+        window.addEventListener('resize', handleWindowResize);
+        const rafId = requestAnimationFrame(updateStoresScrollMetrics);
+
+        return () => {
+            observers.forEach(obs => obs.disconnect());
+            window.removeEventListener('resize', handleWindowResize);
+            cancelAnimationFrame(rafId);
+        };
+    }, [activeTab, filteredStores.length, storesLoading, updateStoresScrollMetrics]);
+
+    // Handle horizontal wheel scrolling on the bottom scrollbar
+    useEffect(() => {
+        if (activeTab !== 'stores') return;
+        const bottomEl = storesBottomScrollbarRef.current;
+        if (!bottomEl) return;
+
+        const handleBottomWheel = (e) => {
+            if (e.deltaY !== 0 && e.deltaX === 0) {
+                e.preventDefault();
+                bottomEl.scrollLeft += e.deltaY;
+            }
+        };
+
+        bottomEl.addEventListener('wheel', handleBottomWheel, { passive: false });
+        return () => {
+            bottomEl.removeEventListener('wheel', handleBottomWheel);
+        };
+    }, [isStoresScrollable, activeTab]);
+
+    // Synchronize bottom scrollbar dragging with table
+    const onStoresBottomScroll = (e) => {
+        if (isSyncingStoresScroll.current) return;
+        isSyncingStoresScroll.current = true;
+        const scrollLeft = e.target.scrollLeft;
+
+        if (storesTableContainerRef.current) {
+            storesTableContainerRef.current.scrollLeft = scrollLeft;
+        }
+
+        requestAnimationFrame(() => {
+            isSyncingStoresScroll.current = false;
+        });
+    };
+
+    // Synchronize table scrolling with bottom scrollbar
+    const onStoresTableScroll = (e) => {
+        if (isSyncingStoresScroll.current) return;
+        isSyncingStoresScroll.current = true;
+        const scrollLeft = e.target.scrollLeft;
+
+        if (storesBottomScrollbarRef.current) {
+            storesBottomScrollbarRef.current.scrollLeft = scrollLeft;
+        }
+
+        requestAnimationFrame(() => {
+            isSyncingStoresScroll.current = false;
+        });
+    };
+
+    // ============================================================
+    // STORE TARGETS: SINGLE BOTTOM HORIZONTAL SCROLLBAR SYNCHRONIZATION
+    // ============================================================
+    const targetsTableContainerRef = useRef(null);
+    const filterRowRef = useRef(null);
+    const bottomScrollbarRef = useRef(null);
+    const isSyncingScroll = useRef(false);
+
+    const [scrollContentWidth, setScrollContentWidth] = useState(0);
+    const [isScrollable, setIsScrollable] = useState(false);
+
+    const updateScrollMetrics = useCallback(() => {
+        const tableEl = targetsTableContainerRef.current;
+        const filterEl = filterRowRef.current;
+        const bottomEl = bottomScrollbarRef.current;
+
+        const tableScrollWidth = tableEl ? tableEl.scrollWidth : 0;
+        const filterScrollWidth = filterEl ? filterEl.scrollWidth : 0;
+        const maxWidth = Math.max(tableScrollWidth, filterScrollWidth);
+
+        const clientWidth = bottomEl?.clientWidth || tableEl?.clientWidth || filterEl?.clientWidth || 0;
+
+        setScrollContentWidth(maxWidth);
+        setIsScrollable(maxWidth > (clientWidth + 2));
+    }, []);
+
+    useEffect(() => {
+        if (activeTab !== 'targets') return;
+
+        updateScrollMetrics();
+
+        const observers = [];
+        if (typeof ResizeObserver !== 'undefined') {
+            const ro = new ResizeObserver(() => {
+                updateScrollMetrics();
+            });
+            if (targetsTableContainerRef.current) ro.observe(targetsTableContainerRef.current);
+            if (filterRowRef.current) ro.observe(filterRowRef.current);
+            if (bottomScrollbarRef.current) ro.observe(bottomScrollbarRef.current);
+            observers.push(ro);
+        }
+
+        const handleWindowResize = () => {
+            updateScrollMetrics();
+        };
+
+        window.addEventListener('resize', handleWindowResize);
+        const rafId = requestAnimationFrame(updateScrollMetrics);
+
+        return () => {
+            observers.forEach(obs => obs.disconnect());
+            window.removeEventListener('resize', handleWindowResize);
+            cancelAnimationFrame(rafId);
+        };
+    }, [activeTab, targetsView, filteredTargets.length, targetPage, targetsLoading, updateScrollMetrics]);
+
+    // Handle horizontal wheel scrolling on the bottom scrollbar
+    useEffect(() => {
+        const bottomEl = bottomScrollbarRef.current;
+        if (!bottomEl) return;
+
+        const handleBottomWheel = (e) => {
+            if (e.deltaY !== 0 && e.deltaX === 0) {
+                e.preventDefault();
+                bottomEl.scrollLeft += e.deltaY;
+            }
+        };
+
+        bottomEl.addEventListener('wheel', handleBottomWheel, { passive: false });
+        return () => {
+            bottomEl.removeEventListener('wheel', handleBottomWheel);
+        };
+    }, [isScrollable, targetsView, activeTab]);
+
+    // Synchronize bottom scrollbar dragging with table and filters
+    const onBottomScroll = (e) => {
+        if (isSyncingScroll.current) return;
+        isSyncingScroll.current = true;
+        const scrollLeft = e.target.scrollLeft;
+
+        if (targetsTableContainerRef.current) {
+            targetsTableContainerRef.current.scrollLeft = scrollLeft;
+        }
+        if (filterRowRef.current && filterRowRef.current.scrollWidth > filterRowRef.current.clientWidth) {
+            filterRowRef.current.scrollLeft = scrollLeft;
+        }
+
+        requestAnimationFrame(() => {
+            isSyncingScroll.current = false;
+        });
+    };
+
+    // Synchronize table scrolling (via mouse-wheel/trackpad) with bottom scrollbar
+    const onTableScroll = (e) => {
+        if (isSyncingScroll.current) return;
+        isSyncingScroll.current = true;
+        const scrollLeft = e.target.scrollLeft;
+
+        if (bottomScrollbarRef.current) {
+            bottomScrollbarRef.current.scrollLeft = scrollLeft;
+        }
+        if (filterRowRef.current && filterRowRef.current.scrollWidth > filterRowRef.current.clientWidth) {
+            filterRowRef.current.scrollLeft = scrollLeft;
+        }
+
+        requestAnimationFrame(() => {
+            isSyncingScroll.current = false;
+        });
+    };
+
+    // Synchronize filter row scrolling (if dragged or swiped)
+    const onFilterScroll = (e) => {
+        if (isSyncingScroll.current) return;
+        isSyncingScroll.current = true;
+        const scrollLeft = e.target.scrollLeft;
+
+        if (bottomScrollbarRef.current) {
+            bottomScrollbarRef.current.scrollLeft = scrollLeft;
+        }
+        if (targetsTableContainerRef.current) {
+            targetsTableContainerRef.current.scrollLeft = scrollLeft;
+        }
+
+        requestAnimationFrame(() => {
+            isSyncingScroll.current = false;
+        });
+    };
+
     return (
         <div style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto', fontFamily: 'inherit' }}>
             <style>{`
@@ -957,17 +1367,72 @@ const Stores = () => {
                     align-items: center !important;
                     gap: 12px !important;
                     flex-wrap: nowrap !important;
+                    overflow-x: auto !important;
+                    scrollbar-width: none !important;
+                    -ms-overflow-style: none !important;
                 }
-                @media (max-width: 1100px) {
-                    .store-targets-filter-row {
-                        overflow-x: auto !important;
-                        padding-bottom: 8px !important;
-                    }
+                .store-targets-filter-row::-webkit-scrollbar {
+                    display: none !important;
+                    width: 0 !important;
+                    height: 0 !important;
                 }
-                @media (max-width: 768px) {
-                    .store-targets-filter-row {
-                        flex-wrap: wrap !important;
-                    }
+                .store-targets-table-scroll {
+                    overflow-x: auto !important;
+                    scrollbar-width: none !important;
+                    -ms-overflow-style: none !important;
+                }
+                .store-targets-table-scroll::-webkit-scrollbar {
+                    display: none !important;
+                    width: 0 !important;
+                    height: 0 !important;
+                }
+                .store-targets-bottom-scrollbar {
+                    scrollbar-width: thin !important;
+                    scrollbar-color: #94a3b8 #f1f5f9 !important;
+                }
+                .store-targets-bottom-scrollbar::-webkit-scrollbar {
+                    height: 9px !important;
+                }
+                .store-targets-bottom-scrollbar::-webkit-scrollbar-track {
+                    background: #f1f5f9 !important;
+                    border-radius: 8px !important;
+                }
+                .store-targets-bottom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    border: 2px solid #f1f5f9 !important;
+                }
+                .store-targets-bottom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #94a3b8 !important;
+                }
+                .stores-directory-table-scroll {
+                    overflow-x: auto !important;
+                    scrollbar-width: none !important;
+                    -ms-overflow-style: none !important;
+                }
+                .stores-directory-table-scroll::-webkit-scrollbar {
+                    display: none !important;
+                    width: 0 !important;
+                    height: 0 !important;
+                }
+                .stores-directory-bottom-scrollbar {
+                    scrollbar-width: thin !important;
+                    scrollbar-color: #94a3b8 #f1f5f9 !important;
+                }
+                .stores-directory-bottom-scrollbar::-webkit-scrollbar {
+                    height: 9px !important;
+                }
+                .stores-directory-bottom-scrollbar::-webkit-scrollbar-track {
+                    background: #f1f5f9 !important;
+                    border-radius: 8px !important;
+                }
+                .stores-directory-bottom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    border: 2px solid #f1f5f9 !important;
+                }
+                .stores-directory-bottom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #94a3b8 !important;
                 }
             `}</style>
             {/* ======================================================= */}
@@ -1264,15 +1729,20 @@ const Stores = () => {
                         background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0',
                         overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                     }}>
-                        <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                        <div
+                            ref={storesTableContainerRef}
+                            onScroll={onStoresTableScroll}
+                            className="stores-directory-table-scroll"
+                            style={{ overflowX: 'auto' }}
+                        >
+                            <table style={{ width: '100%', minWidth: 880, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                                 <thead>
                                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                        <th style={{ width: '32%', padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Store Details</th>
-                                        <th style={{ width: '18%', padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type / Role</th>
-                                        <th style={{ width: '24%', padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact</th>
-                                        <th style={{ width: '12%', padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                                        <th style={{ width: '14%', padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</th>
+                                        <th style={{ width: '32%', minWidth: 220, padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Store Details</th>
+                                        <th style={{ width: '18%', minWidth: 140, padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type / Role</th>
+                                        <th style={{ width: '24%', minWidth: 180, padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact</th>
+                                        <th style={{ width: '12%', minWidth: 110, padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                                        <th style={{ width: '14%', minWidth: 160, padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1417,6 +1887,34 @@ const Stores = () => {
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+
+                    {/* Single Bottom Synchronized Horizontal Scrollbar for Stores Directory */}
+                    <div
+                        ref={storesBottomScrollbarRef}
+                        onScroll={onStoresBottomScroll}
+                        className="stores-directory-bottom-scrollbar"
+                        style={{
+                            width: '100%',
+                            overflowX: 'auto',
+                            overflowY: 'hidden',
+                            marginTop: 12,
+                            display: isStoresScrollable ? 'block' : 'none',
+                            background: '#f8fafc',
+                            borderRadius: 8,
+                            border: '1px solid #e2e8f0',
+                            padding: '3px 0',
+                            boxSizing: 'border-box'
+                        }}
+                        title="Scroll horizontally to view all columns"
+                    >
+                        <div
+                            style={{
+                                width: storesScrollContentWidth,
+                                height: 6,
+                                pointerEvents: 'none'
+                            }}
+                        />
                     </div>
                 </div>
             )}
@@ -1599,17 +2097,22 @@ const Stores = () => {
                     </div>
 
                     {/* Filter Bar & View Toggle - Single Horizontal Row (Requirement) */}
-                    <div className="store-targets-filter-row" style={{
-                        background: '#fff',
-                        borderRadius: 14,
-                        padding: '14px 18px',
-                        border: '1px solid #e2e8f0',
-                        marginBottom: 20,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        boxSizing: 'border-box'
-                    }}>
+                    <div
+                        ref={filterRowRef}
+                        onScroll={onFilterScroll}
+                        className="store-targets-filter-row"
+                        style={{
+                            background: '#fff',
+                            borderRadius: 14,
+                            padding: '14px 18px',
+                            border: '1px solid #e2e8f0',
+                            marginBottom: 20,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            boxSizing: 'border-box'
+                        }}
+                    >
                         {/* 1. Search by store or type */}
                         <div style={{
                             display: 'flex',
@@ -1917,8 +2420,13 @@ const Stores = () => {
                                 </div>
                             </div>
 
-                            <div style={{ overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                            <div
+                                ref={targetsTableContainerRef}
+                                onScroll={onTableScroll}
+                                className="store-targets-table-scroll"
+                                style={{ overflowX: 'auto' }}
+                            >
+                                <table style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                                     <thead>
                                         <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                                             <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase' }}>Rank</th>
@@ -2003,8 +2511,13 @@ const Stores = () => {
                             background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0',
                             overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                         }}>
-                            <div style={{ overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                            <div
+                                ref={targetsTableContainerRef}
+                                onScroll={onTableScroll}
+                                className="store-targets-table-scroll"
+                                style={{ overflowX: 'auto' }}
+                            >
+                                <table style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                                     <thead>
                                         <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                                             <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Store</th>
@@ -2164,6 +2677,34 @@ const Stores = () => {
                             )}
                         </div>
                     )}
+
+                    {/* Single Bottom Synchronized Horizontal Scrollbar */}
+                    <div
+                        ref={bottomScrollbarRef}
+                        onScroll={onBottomScroll}
+                        className="store-targets-bottom-scrollbar"
+                        style={{
+                            width: '100%',
+                            overflowX: 'auto',
+                            overflowY: 'hidden',
+                            marginTop: 12,
+                            display: isScrollable ? 'block' : 'none',
+                            background: '#f8fafc',
+                            borderRadius: 8,
+                            border: '1px solid #e2e8f0',
+                            padding: '3px 0',
+                            boxSizing: 'border-box'
+                        }}
+                        title="Scroll horizontally to view all columns"
+                    >
+                        <div
+                            style={{
+                                width: scrollContentWidth,
+                                height: 6,
+                                pointerEvents: 'none'
+                            }}
+                        />
+                    </div>
                 </div>
             )}
 
@@ -2177,50 +2718,68 @@ const Stores = () => {
                     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16
                 }}>
                     <div style={{
-                        background: '#fff', borderRadius: 16, width: '100%', maxWidth: 580,
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                        overflow: 'hidden', animation: 'fadeIn .2s ease-out', maxHeight: '90vh', display: 'flex', flexDirection: 'column'
+                        background: '#fff', borderRadius: 16, width: '100%', maxWidth: 620,
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        overflow: 'hidden', animation: 'fadeIn .2s ease-out', maxHeight: '92vh',
+                        display: 'flex', flexDirection: 'column'
                     }}>
                         <div style={{
                             padding: '18px 24px', borderBottom: '1px solid #e2e8f0',
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            background: '#f8fafc'
+                            background: '#f8fafc', flexShrink: 0
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                 <div style={{
-                                    width: 34, height: 34, borderRadius: 8,
-                                    background: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    color: '#fff'
+                                    width: 38, height: 38, borderRadius: 10,
+                                    background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    color: '#fff', boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)', flexShrink: 0
                                 }}>
                                     <BsShop size={18} />
                                 </div>
                                 <div>
-                                    <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                                    <h3 style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', margin: 0, lineHeight: 1.2 }}>
                                         {editingStore ? 'Edit Store' : 'Add New Store'}
                                     </h3>
-                                    <span style={{ fontSize: 11, color: '#64748b' }}>
-                                        {editingStore ? 'Update details for this branch' : 'Register a new store branch'}
+                                    <span style={{ fontSize: 12, color: '#64748b', marginTop: 3, display: 'block' }}>
+                                        {editingStore ? 'Update details and location for this branch' : 'Register a new store branch or warehouse location'}
                                     </span>
                                 </div>
                             </div>
                             <button
+                                type="button"
                                 onClick={() => setShowStoreModal(false)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', padding: 4 }}
+                                style={{
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    color: '#94a3b8', display: 'flex', alignItems: 'center',
+                                    justifyContent: 'center', padding: 6, borderRadius: 8,
+                                    transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.color = '#0f172a'; e.currentTarget.style.background = '#f1f5f9'; }}
+                                onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'none'; }}
+                                title="Close modal"
                             >
                                 <BsX size={22} />
                             </button>
                         </div>
 
-                        <form onSubmit={handleSaveStore} style={{ padding: '20px 24px', overflowY: 'auto' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                                {/* Store Name */}
+                        <form onSubmit={handleSaveStore} noValidate style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                            <div style={{
+                                padding: '20px 24px',
+                                overflowY: 'auto',
+                                flex: 1,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 16
+                            }}>
+                                {/* Store Name (Full Width) */}
                                 <div>
-                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
-                                        Store Name <span style={{ color: '#ef4444' }}>*</span>
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                                        Store Name <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>
                                     </label>
                                     <input
                                         type="text"
-                                        required
+                                        maxLength={100}
                                         value={storeFormData.name}
                                         onChange={e => {
                                             setStoreFormData({ ...storeFormData, name: e.target.value });
@@ -2228,75 +2787,84 @@ const Stores = () => {
                                         }}
                                         placeholder="e.g. Phoenix Mall Branch"
                                         style={{
-                                            width: '100%', padding: '9px 12px', borderRadius: 8,
+                                            width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                             border: `1px solid ${storeFormErrors.name ? '#ef4444' : '#cbd5e1'}`,
-                                            fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                            fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                            background: '#fff', transition: 'border-color .15s ease'
                                         }}
                                     />
                                     {storeFormErrors.name && (
-                                        <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.name}</div>
+                                        <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.name}</div>
                                     )}
                                 </div>
 
-                                {/* Code & Contact Phone */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                {/* Store Code & Contact Phone (Equal 2 Columns) */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             Store Code
                                         </label>
                                         <input
                                             type="text"
+                                            maxLength={20}
                                             value={storeFormData.code}
                                             disabled={Boolean(editingStore)}
                                             onChange={e => {
-                                                setStoreFormData({ ...storeFormData, code: e.target.value });
+                                                const codeVal = e.target.value.toUpperCase().slice(0, 20);
+                                                setStoreFormData({ ...storeFormData, code: codeVal });
                                                 if (storeFormErrors.code) setStoreFormErrors(prev => ({ ...prev, code: null }));
                                             }}
                                             placeholder="e.g. STR-MUM-01"
                                             style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                                 border: `1px solid ${storeFormErrors.code ? '#ef4444' : '#cbd5e1'}`,
-                                                fontSize: 13, outline: 'none',
-                                                boxSizing: 'border-box', background: editingStore ? '#f8fafc' : '#fff'
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                background: editingStore ? '#f8fafc' : '#fff',
+                                                cursor: editingStore ? 'not-allowed' : 'text',
+                                                transition: 'border-color .15s ease'
                                             }}
                                         />
                                         {storeFormErrors.code && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.code}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.code}</div>
                                         )}
                                     </div>
 
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             Contact Phone (10 digits)
                                         </label>
                                         <input
                                             type="tel"
+                                            maxLength={10}
                                             value={storeFormData.phone}
                                             onChange={e => {
-                                                setStoreFormData({ ...storeFormData, phone: e.target.value });
+                                                const phoneVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                setStoreFormData({ ...storeFormData, phone: phoneVal });
                                                 if (storeFormErrors.phone) setStoreFormErrors(prev => ({ ...prev, phone: null }));
                                             }}
                                             placeholder="e.g. 9876543210"
                                             style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                                 border: `1px solid ${storeFormErrors.phone ? '#ef4444' : '#cbd5e1'}`,
-                                                fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                background: '#fff', transition: 'border-color .15s ease'
                                             }}
                                         />
                                         {storeFormErrors.phone && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.phone}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.phone}</div>
                                         )}
                                     </div>
                                 </div>
 
-                                {/* Email & GSTIN */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                {/* Store Email & GSTIN (Equal 2 Columns) */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             Store Email
                                         </label>
                                         <input
                                             type="email"
+                                            maxLength={254}
                                             value={storeFormData.email}
                                             onChange={e => {
                                                 setStoreFormData({ ...storeFormData, email: e.target.value });
@@ -2304,18 +2872,19 @@ const Stores = () => {
                                             }}
                                             placeholder="store@example.com"
                                             style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                                 border: `1px solid ${storeFormErrors.email ? '#ef4444' : '#cbd5e1'}`,
-                                                fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                background: '#fff', transition: 'border-color .15s ease'
                                             }}
                                         />
                                         {storeFormErrors.email && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.email}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.email}</div>
                                         )}
                                     </div>
 
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             GSTIN
                                         </label>
                                         <input
@@ -2323,29 +2892,32 @@ const Stores = () => {
                                             maxLength={15}
                                             value={storeFormData.gstin}
                                             onChange={e => {
-                                                setStoreFormData({ ...storeFormData, gstin: e.target.value.toUpperCase() });
+                                                const gstinVal = e.target.value.toUpperCase().slice(0, 15);
+                                                setStoreFormData({ ...storeFormData, gstin: gstinVal });
                                                 if (storeFormErrors.gstin) setStoreFormErrors(prev => ({ ...prev, gstin: null }));
                                             }}
                                             placeholder="27AAPFU0939F1ZV"
                                             style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                                 border: `1px solid ${storeFormErrors.gstin ? '#ef4444' : '#cbd5e1'}`,
-                                                fontSize: 13, outline: 'none', boxSizing: 'border-box', textTransform: 'uppercase'
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                textTransform: 'uppercase', background: '#fff', transition: 'border-color .15s ease'
                                             }}
                                         />
                                         {storeFormErrors.gstin && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.gstin}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.gstin}</div>
                                         )}
                                     </div>
                                 </div>
 
-                                {/* Address */}
+                                {/* Street Address (Full Width) */}
                                 <div>
-                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                         Street Address
                                     </label>
                                     <input
                                         type="text"
+                                        maxLength={250}
                                         value={storeFormData.address}
                                         onChange={e => {
                                             setStoreFormData({ ...storeFormData, address: e.target.value });
@@ -2353,30 +2925,38 @@ const Stores = () => {
                                         }}
                                         placeholder="Shop 12, Ground Floor, Central Mall"
                                         style={{
-                                            width: '100%', padding: '9px 12px', borderRadius: 8,
+                                            width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                             border: `1px solid ${storeFormErrors.address ? '#ef4444' : '#cbd5e1'}`,
-                                            fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                            fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                            background: '#fff', transition: 'border-color .15s ease'
                                         }}
                                     />
                                     {storeFormErrors.address && (
-                                        <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.address}</div>
+                                        <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.address}</div>
                                     )}
                                 </div>
 
-                                {/* State, City, Pincode */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 1fr', gap: 10 }}>
+                                {/* State & District (Equal 2 Columns) */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
-                                            State <span style={{ color: '#ef4444' }}>*</span>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                                            State <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>
                                         </label>
                                         <SearchableSelect
                                             value={storeFormData.state}
                                             onChange={(newState) => {
-                                                setStoreFormData({ ...storeFormData, state: newState, city: '' });
+                                                setStoreFormData(prev => ({
+                                                    ...prev,
+                                                    state: newState,
+                                                    district: '',
+                                                    city: ''
+                                                }));
                                                 setIsCustomCity(false);
                                                 setCustomCityName('');
                                                 if (storeFormErrors.state) setStoreFormErrors(prev => ({ ...prev, state: null }));
+                                                if (storeFormErrors.district) setStoreFormErrors(prev => ({ ...prev, district: null }));
                                                 if (storeFormErrors.city) setStoreFormErrors(prev => ({ ...prev, city: null }));
+                                                if (storeFormErrors.gstin) setStoreFormErrors(prev => ({ ...prev, gstin: null }));
                                             }}
                                             options={INDIAN_STATES}
                                             placeholder="-- Select State --"
@@ -2384,12 +2964,37 @@ const Stores = () => {
                                             hasError={Boolean(storeFormErrors.state)}
                                         />
                                         {storeFormErrors.state && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.state}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.state}</div>
                                         )}
                                     </div>
 
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                                            District
+                                        </label>
+                                        <SearchableSelect
+                                            value={storeFormData.district || ''}
+                                            onChange={(newDistrict) => {
+                                                setStoreFormData(prev => ({ ...prev, district: newDistrict }));
+                                                if (storeFormErrors.district) setStoreFormErrors(prev => ({ ...prev, district: null }));
+                                            }}
+                                            options={availableDistricts}
+                                            placeholder={storeFormData.state ? '-- Select District --' : '-- Select State First --'}
+                                            searchPlaceholder="Search district..."
+                                            disabled={!storeFormData.state}
+                                            hasError={Boolean(storeFormErrors.district)}
+                                            emptyMessage={storeFormData.state ? 'No districts found' : 'Please select state first'}
+                                        />
+                                        {storeFormErrors.district && (
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.district}</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* City & Pincode (Equal 2 Columns) */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             City
                                         </label>
                                         <SearchableSelect
@@ -2416,12 +3021,12 @@ const Stores = () => {
                                             emptyMessage={storeFormData.state ? 'No predefined city found' : 'Please select state first'}
                                         />
                                         {!isCustomCity && storeFormErrors.city && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.city}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.city}</div>
                                         )}
                                     </div>
 
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             Pincode (6 digits)
                                         </label>
                                         <input
@@ -2429,30 +3034,33 @@ const Stores = () => {
                                             maxLength={6}
                                             value={storeFormData.pincode}
                                             onChange={e => {
-                                                setStoreFormData({ ...storeFormData, pincode: e.target.value });
+                                                const pinVal = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                                setStoreFormData({ ...storeFormData, pincode: pinVal });
                                                 if (storeFormErrors.pincode) setStoreFormErrors(prev => ({ ...prev, pincode: null }));
                                             }}
                                             placeholder="400001"
                                             style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                                 border: `1px solid ${storeFormErrors.pincode ? '#ef4444' : '#cbd5e1'}`,
-                                                fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                background: '#fff', transition: 'border-color .15s ease'
                                             }}
                                         />
                                         {storeFormErrors.pincode && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.pincode}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.pincode}</div>
                                         )}
                                     </div>
                                 </div>
 
-                                {/* Custom City Input when 'Other' is selected */}
+                                {/* Custom City Input when 'Other' is selected (Full Width) */}
                                 {isCustomCity && (
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
-                                            Enter City Name <span style={{ color: '#ef4444' }}>*</span>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                                            Enter City Name <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>
                                         </label>
                                         <input
                                             type="text"
+                                            maxLength={50}
                                             value={customCityName}
                                             onChange={e => {
                                                 setCustomCityName(e.target.value);
@@ -2460,53 +3068,73 @@ const Stores = () => {
                                             }}
                                             placeholder="Enter custom city name"
                                             style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                                 border: `1px solid ${storeFormErrors.city ? '#ef4444' : '#cbd5e1'}`,
-                                                fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                background: '#fff', transition: 'border-color .15s ease'
                                             }}
                                         />
                                         {storeFormErrors.city && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.city}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.city}</div>
                                         )}
                                     </div>
                                 )}
 
                                 {/* Checkboxes for Warehouse & Main */}
-                                <div style={{ display: 'flex', gap: 24, marginTop: 4 }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
+                                <div style={{ display: 'flex', gap: 24, marginTop: 4, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                                    <label style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                                        fontSize: 13, fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none'
+                                    }}>
                                         <input
                                             type="checkbox"
                                             checked={storeFormData.is_warehouse}
                                             onChange={e => setStoreFormData({ ...storeFormData, is_warehouse: e.target.checked })}
+                                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#4f46e5' }}
                                         />
                                         <span>Warehouse Location</span>
                                     </label>
 
                                     {!editingStore && (
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={storeFormData.is_main}
-                                                onChange={e => setStoreFormData({ ...storeFormData, is_main: e.target.checked })}
-                                            />
-                                            <span>Set as Primary Main Store</span>
-                                        </label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                            <label style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 8,
+                                                fontSize: 13, fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none'
+                                            }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={storeFormData.is_main}
+                                                    onChange={e => setStoreFormData({ ...storeFormData, is_main: e.target.checked })}
+                                                    style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#4f46e5' }}
+                                                />
+                                                <span>Set as Primary Main Store</span>
+                                            </label>
+                                            {currentMainStore && storeFormData.is_main && (
+                                                <span style={{ fontSize: 11, color: '#64748b', marginLeft: 24 }}>
+                                                    Note: Setting this as primary will replace &ldquo;{currentMainStore.name}&rdquo;.
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             </div>
 
+                            {/* Pinned Modal Footer */}
                             <div style={{
-                                marginTop: 24, paddingTop: 16, borderTop: '1px solid #e2e8f0',
-                                display: 'flex', justifyContent: 'flex-end', gap: 10
+                                padding: '16px 24px', borderTop: '1px solid #e2e8f0', background: '#f8fafc',
+                                display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, flexShrink: 0
                             }}>
                                 <button
                                     type="button"
                                     onClick={() => setShowStoreModal(false)}
                                     style={{
-                                        padding: '9px 16px', borderRadius: 8,
+                                        height: 40, padding: '0 20px', borderRadius: 8,
                                         border: '1px solid #cbd5e1', background: '#fff',
-                                        fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer'
+                                        fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
                                     }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#94a3b8'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
                                 >
                                     Cancel
                                 </button>
@@ -2514,14 +3142,17 @@ const Stores = () => {
                                     type="submit"
                                     disabled={storeFormSubmitting}
                                     style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                                        padding: '9px 20px', borderRadius: 8,
+                                        height: 40, padding: '0 24px', borderRadius: 8,
                                         border: 'none', background: '#4f46e5',
                                         fontSize: 13, fontWeight: 700, color: '#fff',
                                         cursor: storeFormSubmitting ? 'not-allowed' : 'pointer',
                                         opacity: storeFormSubmitting ? 0.7 : 1,
-                                        boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)'
+                                        boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+                                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                                        transition: 'all 0.15s ease'
                                     }}
+                                    onMouseEnter={e => { if (!storeFormSubmitting) e.currentTarget.style.background = '#4338ca'; }}
+                                    onMouseLeave={e => { if (!storeFormSubmitting) e.currentTarget.style.background = '#4f46e5'; }}
                                 >
                                     {storeFormSubmitting ? (
                                         <>
@@ -2530,7 +3161,7 @@ const Stores = () => {
                                         </>
                                     ) : (
                                         <>
-                                            <BsCheckCircleFill size={13} />
+                                            <BsCheckCircleFill size={14} />
                                             <span>{editingStore ? 'Update Store' : 'Create Store'}</span>
                                         </>
                                     )}
@@ -2600,7 +3231,7 @@ const Stores = () => {
                                         </h4>
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, fontSize: 12 }}>
                                             <div><strong style={{ color: '#64748b' }}>Address:</strong> {detailStore.address || '—'}</div>
-                                            <div><strong style={{ color: '#64748b' }}>City / State:</strong> {detailStore.city || '—'}, {detailStore.state || '—'}</div>
+                                            <div><strong style={{ color: '#64748b' }}>City / State:</strong> {[detailStore.city, detailStore.district, detailStore.state].filter(Boolean).join(', ') || '—'}</div>
                                             <div><strong style={{ color: '#64748b' }}>Pincode:</strong> {detailStore.pincode || '—'}</div>
                                             <div><strong style={{ color: '#64748b' }}>Phone:</strong> {detailStore.phone || '—'}</div>
                                             <div><strong style={{ color: '#64748b' }}>Email:</strong> {detailStore.email || '—'}</div>
