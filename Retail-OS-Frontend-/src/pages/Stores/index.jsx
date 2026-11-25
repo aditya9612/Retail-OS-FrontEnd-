@@ -36,16 +36,8 @@ import {
     BsShieldCheck,
     BsShieldX
 } from 'react-icons/bs';
-
-const INDIAN_STATES = [
-    'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-    'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
-    'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
-    'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
-    'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal', 'Andaman and Nicobar Islands',
-    'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi',
-    'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
-];
+import { INDIAN_STATES, getCitiesForState, isKnownCity, findCanonicalCityName } from '../../utils/indiaLocationData';
+import SearchableSelect from '../../components/Common/SearchableSelect';
 
 // Backend TargetType enum options (Requirements 27 & 28)
 const TARGET_TYPES = [
@@ -94,15 +86,6 @@ const Stores = () => {
         }
     }, [location.pathname]);
 
-    const handleTabChange = (tab) => {
-        setActiveTab(tab);
-        if (tab === 'targets') {
-            navigate('/stores/targets');
-        } else {
-            navigate('/stores');
-        }
-    };
-
     // Shared Notifications (Requirement 14)
     const [errorMsg, setErrorMsg] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
@@ -126,27 +109,20 @@ const Stores = () => {
     const [stores, setStores] = useState([]);
     const [storesLoading, setStoresLoading] = useState(false);
     const [storeSearch, setStoreSearch] = useState('');
+    const [storeKpiFilter, setStoreKpiFilter] = useState('all'); // 'all' | 'active' | 'warehouse' | 'main'
     const [storeTypeFilter, setStoreTypeFilter] = useState('all'); // 'all' | 'retail' | 'warehouse'
     const [storeStatusFilter, setStoreStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
     const [storeCityFilter, setStoreCityFilter] = useState('all');
     const [includeInactive, setIncludeInactive] = useState(true);
     const [togglingStoreId, setTogglingStoreId] = useState(null);
 
-    // Fetch Stores: GET /api/v1/stores/
+    // Fetch Stores: GET /api/v1/stores/ (Always maintains full store dataset for KPI metrics)
     const fetchStores = useCallback(async () => {
         setStoresLoading(true);
         try {
             const params = {
                 include_inactive: includeInactive,
             };
-            if (storeSearch.trim()) {
-                params.search = storeSearch.trim();
-            }
-            if (storeTypeFilter === 'warehouse') {
-                params.is_warehouse = true;
-            } else if (storeTypeFilter === 'retail') {
-                params.is_warehouse = false;
-            }
 
             const data = await storeService.listStores(params);
             const list = Array.isArray(data) ? data : (data?.items || []);
@@ -165,7 +141,7 @@ const Stores = () => {
         } finally {
             setStoresLoading(false);
         }
-    }, [includeInactive, storeSearch, storeTypeFilter]);
+    }, [includeInactive]);
 
     // Unique cities for Store Location Filter (Requirement 10)
     const storeCities = useMemo(() => {
@@ -176,9 +152,15 @@ const Stores = () => {
         return Array.from(set).sort();
     }, [stores]);
 
-    // Filtered Stores (Requirement 10: name, code, location, type, status)
+    // Filtered Stores (Requirement 10 & Clickable KPI Cards: name, code, location, type, status, kpi)
     const filteredStores = useMemo(() => {
         return stores.filter(store => {
+            // Interactive KPI Card Filter
+            if (storeKpiFilter === 'active' && !store.is_active) return false;
+            if (storeKpiFilter === 'warehouse' && !store.is_warehouse) return false;
+            if (storeKpiFilter === 'main' && !store.is_main) return false;
+
+            // Search filter
             if (storeSearch.trim()) {
                 const q = storeSearch.trim().toLowerCase();
                 const matchName = (store.name || '').toLowerCase().includes(q);
@@ -186,16 +168,24 @@ const Stores = () => {
                 const matchCity = (store.city || '').toLowerCase().includes(q);
                 if (!matchName && !matchCode && !matchCity) return false;
             }
+
+            // Type filter
             if (storeTypeFilter === 'warehouse' && !store.is_warehouse) return false;
             if (storeTypeFilter === 'retail' && store.is_warehouse) return false;
+
+            // Status filter
             if (storeStatusFilter === 'active' && !store.is_active) return false;
             if (storeStatusFilter === 'inactive' && store.is_active) return false;
+
+            // City filter
             if (storeCityFilter !== 'all' && (store.city || '').toLowerCase() !== storeCityFilter.toLowerCase()) return false;
+
             return true;
         });
-    }, [stores, storeSearch, storeTypeFilter, storeStatusFilter, storeCityFilter]);
+    }, [stores, storeKpiFilter, storeSearch, storeTypeFilter, storeStatusFilter, storeCityFilter]);
 
     const resetStoreFilters = () => {
+        setStoreKpiFilter('all');
         setStoreSearch('');
         setStoreTypeFilter('all');
         setStoreStatusFilter('all');
@@ -213,6 +203,8 @@ const Stores = () => {
     const [editingStore, setEditingStore] = useState(null);
     const [storeFormSubmitting, setStoreFormSubmitting] = useState(false);
     const [storeFormErrors, setStoreFormErrors] = useState({});
+    const [isCustomCity, setIsCustomCity] = useState(false);
+    const [customCityName, setCustomCityName] = useState('');
     const [storeFormData, setStoreFormData] = useState({
         name: '',
         code: '',
@@ -227,8 +219,16 @@ const Stores = () => {
         is_main: false,
     });
 
+    // Dynamic verified cities list for the currently selected state
+    const availableCities = useMemo(() => {
+        if (!storeFormData.state) return [];
+        return getCitiesForState(storeFormData.state);
+    }, [storeFormData.state]);
+
     const openCreateStore = () => {
         setEditingStore(null);
+        setIsCustomCity(false);
+        setCustomCityName('');
         setStoreFormData({
             name: '',
             code: '',
@@ -252,14 +252,42 @@ const Stores = () => {
             // Fetch fresh details: GET /api/v1/stores/{store_id}
             const fresh = await storeService.getStore(store.id, true);
             setEditingStore(fresh);
+
+            const stateVal = fresh.state || 'Maharashtra';
+            const rawCity = (fresh.city || '').trim();
+
+            let isCustom = false;
+            let selectedCity = rawCity;
+            let customCity = '';
+
+            if (rawCity) {
+                const canonical = findCanonicalCityName(stateVal, rawCity);
+                if (canonical) {
+                    selectedCity = canonical;
+                    isCustom = false;
+                    customCity = '';
+                } else {
+                    selectedCity = 'Other';
+                    isCustom = true;
+                    customCity = rawCity;
+                }
+            } else {
+                selectedCity = '';
+                isCustom = false;
+                customCity = '';
+            }
+
+            setIsCustomCity(isCustom);
+            setCustomCityName(customCity);
+
             setStoreFormData({
                 name: fresh.name || '',
                 code: fresh.code || '',
                 phone: fresh.phone || '',
                 email: fresh.email || '',
                 address: fresh.address || '',
-                city: fresh.city || '',
-                state: fresh.state || 'Maharashtra',
+                city: selectedCity,
+                state: stateVal,
                 pincode: fresh.pincode || '',
                 gstin: fresh.gstin || '',
                 is_warehouse: Boolean(fresh.is_warehouse),
@@ -278,34 +306,58 @@ const Stores = () => {
 
     const validateStoreForm = () => {
         const errors = {};
-        const trimmedName = storeFormData.name.trim();
-        if (!trimmedName || trimmedName.length < 2) {
+        const trimmedName = (storeFormData.name || '').trim();
+        if (!trimmedName) {
+            errors.name = 'Store name is required';
+        } else if (trimmedName.length < 2) {
             errors.name = 'Store name must be at least 2 characters';
         } else if (trimmedName.length > 100) {
             errors.name = 'Store name must not exceed 100 characters';
+        } else if (/^\d+$/.test(trimmedName)) {
+            errors.name = 'Store name cannot contain only numbers';
+        } else if (!/[a-zA-Z]/.test(trimmedName)) {
+            errors.name = 'Store name must contain at least one letter';
+        }
+
+        const trimmedCode = (storeFormData.code || '').trim();
+        if (trimmedCode) {
+            if (trimmedCode.length < 2) {
+                errors.code = 'Store code must be at least 2 characters';
+            } else if (trimmedCode.length > 20) {
+                errors.code = 'Store code must not exceed 20 characters';
+            } else if (!/^[a-zA-Z]/.test(trimmedCode)) {
+                errors.code = 'Store code must start with a letter';
+            } else if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(trimmedCode)) {
+                errors.code = 'Store code can only contain letters, numbers, hyphens, and underscores';
+            } else {
+                const isDuplicate = stores.some(s =>
+                    s.code && s.code.trim().toLowerCase() === trimmedCode.toLowerCase() &&
+                    s.id !== editingStore?.id
+                );
+                if (isDuplicate) {
+                    errors.code = 'Store code already exists. Please choose a unique code';
+                }
+            }
         }
 
         if (storeFormData.phone && storeFormData.phone.trim()) {
             const cleanPhone = storeFormData.phone.trim();
-            if (!/^\d{10}$/.test(cleanPhone)) {
+            if (!/^\d+$/.test(cleanPhone)) {
+                errors.phone = 'Phone number must contain only numeric digits';
+            } else if (cleanPhone.length !== 10) {
                 errors.phone = 'Phone number must be exactly 10 digits';
             } else if (!/^[6-9]/.test(cleanPhone)) {
                 errors.phone = 'Phone number must start with 6, 7, 8, or 9';
-            }
-        }
-
-        if (storeFormData.pincode && storeFormData.pincode.trim()) {
-            const cleanPin = storeFormData.pincode.trim();
-            if (!/^\d{6}$/.test(cleanPin)) {
-                errors.pincode = 'Pincode must be exactly 6 numeric digits';
-            } else if (cleanPin.startsWith('0')) {
-                errors.pincode = 'Indian pincode cannot start with 0';
+            } else if (/^(\d)\1{9}$/.test(cleanPhone)) {
+                errors.phone = 'Phone number cannot contain all identical digits';
             }
         }
 
         if (storeFormData.email && storeFormData.email.trim()) {
             const cleanEmail = storeFormData.email.trim();
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+            if (cleanEmail.length > 100) {
+                errors.email = 'Email must not exceed 100 characters';
+            } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(cleanEmail)) {
                 errors.email = 'Please enter a valid email address';
             }
         }
@@ -313,7 +365,70 @@ const Stores = () => {
         if (storeFormData.gstin && storeFormData.gstin.trim()) {
             const cleanGstin = storeFormData.gstin.trim().toUpperCase();
             if (cleanGstin.length !== 15) {
-                errors.gstin = 'GSTIN must be exactly 15 alphanumeric characters';
+                errors.gstin = 'GSTIN must be exactly 15 characters';
+            } else if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(cleanGstin)) {
+                errors.gstin = 'Invalid GSTIN format (e.g. 27AAPFU0939F1ZV)';
+            }
+        }
+
+        if (storeFormData.address && storeFormData.address.trim()) {
+            const cleanAddress = storeFormData.address.trim();
+            if (cleanAddress.length < 3) {
+                errors.address = 'Street address must be at least 3 characters';
+            } else if (cleanAddress.length > 255) {
+                errors.address = 'Street address must not exceed 255 characters';
+            }
+        }
+
+        if (isCustomCity) {
+            const trimmedCustom = (customCityName || '').trim();
+            if (!trimmedCustom) {
+                errors.city = 'City name is required';
+            } else if (trimmedCustom.length < 2) {
+                errors.city = 'City name must be at least 2 characters';
+            } else if (trimmedCustom.length > 50) {
+                errors.city = 'City name must not exceed 50 characters';
+            } else if (!/^[a-zA-Z\s\-']+$/.test(trimmedCustom)) {
+                errors.city = 'City can only contain letters, spaces, hyphens and apostrophes';
+            } else if (INDIAN_STATES.some(s => s.toLowerCase() === trimmedCustom.toLowerCase())) {
+                errors.city = 'City name cannot be a state or union territory name';
+            }
+        } else if (storeFormData.city && storeFormData.city.trim()) {
+            if (storeFormData.city === 'Other') {
+                errors.city = 'City name is required';
+            } else {
+                const cleanCity = storeFormData.city.trim();
+                if (cleanCity.length < 2) {
+                    errors.city = 'City must be at least 2 characters';
+                } else if (cleanCity.length > 50) {
+                    errors.city = 'City must not exceed 50 characters';
+                } else if (!/^[a-zA-Z\s\-']+$/.test(cleanCity)) {
+                    errors.city = 'City can only contain letters, spaces, hyphens and apostrophes';
+                }
+            }
+        }
+
+        if (storeFormData.state && storeFormData.state.trim()) {
+            const cleanState = storeFormData.state.trim();
+            if (!INDIAN_STATES.includes(cleanState)) {
+                errors.state = 'Please select a valid Indian State / UT';
+            }
+        } else {
+            errors.state = 'State is required';
+        }
+
+        if (storeFormData.pincode && storeFormData.pincode.trim()) {
+            const cleanPin = storeFormData.pincode.trim();
+            if (!/^\d+$/.test(cleanPin)) {
+                errors.pincode = 'Pincode must contain only numeric digits';
+            } else if (cleanPin.length !== 6) {
+                errors.pincode = 'Pincode must be exactly 6 numeric digits';
+            } else if (cleanPin.startsWith('0')) {
+                errors.pincode = 'Indian pincode cannot start with 0';
+            } else if (/^(\d)\1{5}$/.test(cleanPin)) {
+                errors.pincode = 'Pincode cannot contain all identical digits';
+            } else if (cleanPin === '123456' || cleanPin === '654321') {
+                errors.pincode = 'Sequential pincodes are not valid';
             }
         }
 
@@ -323,40 +438,38 @@ const Stores = () => {
 
     const handleSaveStore = async (e) => {
         e.preventDefault();
+        if (storeFormSubmitting) return;
         if (!validateStoreForm()) return;
 
         setStoreFormSubmitting(true);
         setErrorMsg('');
         try {
+            const effectiveCity = isCustomCity
+                ? (customCityName?.trim() || null)
+                : (storeFormData.city && storeFormData.city !== 'Other' ? storeFormData.city.trim() : null);
+
+            const trimmedPayload = {
+                name: storeFormData.name.trim(),
+                code: storeFormData.code?.trim() || null,
+                address: storeFormData.address?.trim() || null,
+                city: effectiveCity,
+                state: storeFormData.state || null,
+                pincode: storeFormData.pincode?.trim() || null,
+                phone: storeFormData.phone?.trim() || null,
+                email: storeFormData.email?.trim() || null,
+                gstin: storeFormData.gstin?.trim()?.toUpperCase() || null,
+                is_warehouse: Boolean(storeFormData.is_warehouse),
+            };
+
             if (editingStore) {
                 // PATCH /api/v1/stores/{store_id}
-                const updatePayload = {
-                    name: storeFormData.name.trim(),
-                    address: storeFormData.address.trim() || null,
-                    city: storeFormData.city.trim() || null,
-                    state: storeFormData.state || null,
-                    pincode: storeFormData.pincode.trim() || null,
-                    phone: storeFormData.phone.trim() || null,
-                    email: storeFormData.email.trim() || null,
-                    gstin: storeFormData.gstin.trim().toUpperCase() || null,
-                    is_warehouse: storeFormData.is_warehouse,
-                };
-                const updated = await storeService.updateStore(editingStore.id, updatePayload);
+                const updated = await storeService.updateStore(editingStore.id, trimmedPayload);
                 showSuccess(`Store "${updated.name}" updated successfully!`);
             } else {
                 // POST /api/v1/stores/
                 const createPayload = {
-                    name: storeFormData.name.trim(),
-                    code: storeFormData.code.trim() || null,
-                    address: storeFormData.address.trim() || null,
-                    city: storeFormData.city.trim() || null,
-                    state: storeFormData.state || null,
-                    pincode: storeFormData.pincode.trim() || null,
-                    phone: storeFormData.phone.trim() || null,
-                    email: storeFormData.email.trim() || null,
-                    gstin: storeFormData.gstin.trim().toUpperCase() || null,
-                    is_warehouse: storeFormData.is_warehouse,
-                    is_main: storeFormData.is_main,
+                    ...trimmedPayload,
+                    is_main: Boolean(storeFormData.is_main),
                 };
                 const created = await storeService.createStore(createPayload);
                 showSuccess(`Store "${created.name}" created successfully!`);
@@ -365,6 +478,21 @@ const Stores = () => {
             fetchStores();
         } catch (err) {
             console.error('Save Store Error:', err);
+            // Map backend 422 validation detail array to inline field errors
+            if (err.response?.status === 422 && Array.isArray(err.response?.data?.detail)) {
+                const backendErrors = {};
+                err.response.data.detail.forEach(d => {
+                    const field = d.loc?.[d.loc.length - 1];
+                    if (field) {
+                        backendErrors[field] = (d.msg || '').replace(/^Value error,\s*/i, '');
+                    }
+                });
+                if (Object.keys(backendErrors).length > 0) {
+                    setStoreFormErrors(backendErrors);
+                    showError('Please correct the highlighted validation errors.');
+                    return;
+                }
+            }
             const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
             showError(`Failed to save store: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`);
         } finally {
@@ -486,9 +614,11 @@ const Stores = () => {
     // ============================================================
     const [targets, setTargets] = useState([]);
     const [targetsLoading, setTargetsLoading] = useState(false);
+    const [targetKpiFilter, setTargetKpiFilter] = useState('all'); // 'all' | 'active' | 'revenue' | 'completed'
     const [filterPeriod, setFilterPeriod] = useState('all');
     const [targetStatusFilter, setTargetStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive' | 'completed' | 'cancelled'
     const [targetTypeFilter, setTargetTypeFilter] = useState('all');
+    const [targetSearch, setTargetSearch] = useState('');
     const [targetsView, setTargetsView] = useState('list'); // 'list' | 'leaderboard'
 
     // Pagination for Store Targets (Requirement 22)
@@ -759,15 +889,35 @@ const Stores = () => {
         }
     }, [stores.length]);
 
-    // Filtered store targets (Requirements 15, 18, 22)
+    // Filtered store targets (Requirements 15, 18, 22 & Clickable KPI Cards)
     const filteredTargets = useMemo(() => {
         return targets.filter(t => {
+            // Interactive KPI Card Filter
+            if (targetKpiFilter === 'active') {
+                const st = (t.status || 'active').toLowerCase();
+                if (st !== 'active' && st !== 'in_progress') return false;
+            } else if (targetKpiFilter === 'completed') {
+                const st = (t.status || '').toLowerCase();
+                const prog = parseFloat(t.progress_percentage || t.progress || 0);
+                if (st !== 'completed' && prog < 100) return false;
+            } else if (targetKpiFilter === 'revenue') {
+                const tt = (t.target_type || '').toLowerCase();
+                if (!tt.includes('revenue') && !tt.includes('sales')) return false;
+            }
+
             if (filterPeriod !== 'all' && t.period?.toLowerCase() !== filterPeriod.toLowerCase()) return false;
             if (targetStatusFilter !== 'all' && (t.status || 'active').toLowerCase() !== targetStatusFilter.toLowerCase()) return false;
             if (targetTypeFilter !== 'all' && (t.target_type || '').toLowerCase() !== targetTypeFilter.toLowerCase()) return false;
+            if (targetSearch.trim()) {
+                const q = targetSearch.trim().toLowerCase();
+                const storeMatch = (t.store_name || '').toLowerCase().includes(q) || String(t.store_id || '').includes(q) || (t.store_code || '').toLowerCase().includes(q);
+                const typeMatch = (t.target_type || '').toLowerCase().includes(q);
+                const periodMatch = (t.period || '').toLowerCase().includes(q);
+                if (!storeMatch && !typeMatch && !periodMatch) return false;
+            }
             return true;
         });
-    }, [targets, filterPeriod, targetStatusFilter, targetTypeFilter]);
+    }, [targets, targetKpiFilter, filterPeriod, targetStatusFilter, targetTypeFilter, targetSearch]);
 
     // Paginated targets (Requirement 22: Display all returned records)
     const paginatedTargets = useMemo(() => {
@@ -790,9 +940,9 @@ const Stores = () => {
         <div style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto', fontFamily: 'inherit' }}>
             <style>{`
                 .store-targets-cards {
-                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
                 }
-                @media (max-width: 900px) {
+                @media (max-width: 1100px) {
                     .store-targets-cards {
                         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
                     }
@@ -802,104 +952,24 @@ const Stores = () => {
                         grid-template-columns: 1fr !important;
                     }
                 }
+                .store-targets-filter-row {
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 12px !important;
+                    flex-wrap: nowrap !important;
+                }
+                @media (max-width: 1100px) {
+                    .store-targets-filter-row {
+                        overflow-x: auto !important;
+                        padding-bottom: 8px !important;
+                    }
+                }
+                @media (max-width: 768px) {
+                    .store-targets-filter-row {
+                        flex-wrap: wrap !important;
+                    }
+                }
             `}</style>
-            {/* Top Navigation Tabs: Stores vs Store Targets */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                borderBottom: '1px solid #e2e8f0',
-                paddingBottom: 14,
-                marginBottom: 20
-            }}>
-                <button
-                    onClick={() => handleTabChange('stores')}
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '9px 18px',
-                        borderRadius: 10,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        background: activeTab === 'stores' ? '#4f46e5' : '#f1f5f9',
-                        color: activeTab === 'stores' ? '#fff' : '#475569',
-                        boxShadow: activeTab === 'stores' ? '0 4px 12px rgba(79, 70, 229, 0.25)' : 'none',
-                        transition: 'all 0.15s ease'
-                    }}
-                >
-                    <BsShop size={15} />
-                    <span>Stores Directory</span>
-                    <span style={{
-                        padding: '1px 7px',
-                        borderRadius: 99,
-                        fontSize: 11,
-                        background: activeTab === 'stores' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
-                        color: activeTab === 'stores' ? '#fff' : '#475569'
-                    }}>
-                        {stores.length}
-                    </span>
-                </button>
-
-                <button
-                    onClick={() => handleTabChange('targets')}
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '9px 18px',
-                        borderRadius: 10,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        background: activeTab === 'targets' ? '#4f46e5' : '#f1f5f9',
-                        color: activeTab === 'targets' ? '#fff' : '#475569',
-                        boxShadow: activeTab === 'targets' ? '0 4px 12px rgba(79, 70, 229, 0.25)' : 'none',
-                        transition: 'all 0.15s ease'
-                    }}
-                >
-                    <BsBullseye size={15} />
-                    <span>Store Targets & Milestones</span>
-                    <span style={{
-                        padding: '1px 7px',
-                        borderRadius: 99,
-                        fontSize: 11,
-                        background: activeTab === 'targets' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
-                        color: activeTab === 'targets' ? '#fff' : '#475569'
-                    }}>
-                        {targets.length}
-                    </span>
-                </button>
-            </div>
-
-            {/* Notification Alerts */}
-            {successMsg && (
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '12px 16px', borderRadius: 10,
-                    background: '#ecfdf5', border: '1px solid #a7f3d0',
-                    color: '#065f46', fontSize: 13, fontWeight: 600, marginBottom: 20
-                }}>
-                    <BsCheckCircleFill color="#10b981" size={16} />
-                    <span>{successMsg}</span>
-                </div>
-            )}
-
-            {errorMsg && (
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '12px 16px', borderRadius: 10,
-                    background: '#fef2f2', border: '1px solid #fecaca',
-                    color: '#991b1b', fontSize: 13, fontWeight: 600, marginBottom: 20
-                }}>
-                    <BsExclamationTriangle color="#ef4444" size={16} />
-                    <span>{errorMsg}</span>
-                </div>
-            )}
-
             {/* ======================================================= */}
             {/* VIEW 1: STORES DIRECTORY & BRANCH MANAGEMENT           */}
             {/* ======================================================= */}
@@ -966,39 +1036,112 @@ const Stores = () => {
                         </div>
                     </div>
 
-                    {/* Stores KPI Overview Cards */}
+                    {/* Notification Alerts for Stores Directory */}
+                    {successMsg && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '12px 16px', borderRadius: 10,
+                            background: '#ecfdf5', border: '1px solid #a7f3d0',
+                            color: '#065f46', fontSize: 13, fontWeight: 600, marginBottom: 20
+                        }}>
+                            <BsCheckCircleFill color="#10b981" size={16} />
+                            <span>{successMsg}</span>
+                        </div>
+                    )}
+
+                    {errorMsg && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '12px 16px', borderRadius: 10,
+                            background: '#fef2f2', border: '1px solid #fecaca',
+                            color: '#991b1b', fontSize: 13, fontWeight: 600, marginBottom: 20
+                        }}>
+                            <BsExclamationTriangle color="#ef4444" size={16} />
+                            <span>{errorMsg}</span>
+                        </div>
+                    )}
+
+                    {/* Stores KPI Overview Cards - Interactive Clickable Cards */}
                     <div className="category-cards">
-                        <div className="category-card" title="Total Stores">
+                        <div
+                            className="category-card"
+                            title={storeKpiFilter === 'all' ? "Showing all stores" : "Click to view all stores"}
+                            onClick={() => setStoreKpiFilter('all')}
+                            style={{
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                border: storeKpiFilter === 'all' ? '2px solid #4f46e5' : '1px solid #e2e8f0',
+                                background: storeKpiFilter === 'all' ? '#eef2ff' : '#fff',
+                                boxShadow: storeKpiFilter === 'all' ? '0 6px 18px rgba(79, 70, 229, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                transform: storeKpiFilter === 'all' ? 'translateY(-2px)' : 'none',
+                            }}
+                        >
                             <h3>Total Stores</h3>
                             <h2>{stores.length}</h2>
-                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 4 }}>
-                                Registered branches
+                            <span style={{ fontSize: 11, color: storeKpiFilter === 'all' ? '#4338ca' : '#10b981', fontWeight: 600, marginTop: 4 }}>
+                                {storeKpiFilter === 'all' ? '● All registered stores' : 'Click to show all'}
                             </span>
                         </div>
 
-                        <div className="category-card" title="Active Branches">
+                        <div
+                            className="category-card"
+                            title={storeKpiFilter === 'active' ? "Click to remove filter" : "Click to filter active branches"}
+                            onClick={() => setStoreKpiFilter(prev => prev === 'active' ? 'all' : 'active')}
+                            style={{
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                border: storeKpiFilter === 'active' ? '2px solid #10b981' : '1px solid #e2e8f0',
+                                background: storeKpiFilter === 'active' ? '#ecfdf5' : '#fff',
+                                boxShadow: storeKpiFilter === 'active' ? '0 6px 18px rgba(16, 185, 129, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                transform: storeKpiFilter === 'active' ? 'translateY(-2px)' : 'none',
+                            }}
+                        >
                             <h3>Active Branches</h3>
                             <h2>{stores.filter(s => s.is_active).length}</h2>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
-                                Operational outlets
+                            <span style={{ fontSize: 11, color: storeKpiFilter === 'active' ? '#047857' : '#64748b', fontWeight: storeKpiFilter === 'active' ? 700 : 500, marginTop: 4 }}>
+                                {storeKpiFilter === 'active' ? '● Filtering active outlets' : 'Operational outlets'}
                             </span>
                         </div>
 
-                        <div className="category-card" title="Warehouses">
+                        <div
+                            className="category-card"
+                            title={storeKpiFilter === 'warehouse' ? "Click to remove filter" : "Click to filter warehouses"}
+                            onClick={() => setStoreKpiFilter(prev => prev === 'warehouse' ? 'all' : 'warehouse')}
+                            style={{
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                border: storeKpiFilter === 'warehouse' ? '2px solid #7c3aed' : '1px solid #e2e8f0',
+                                background: storeKpiFilter === 'warehouse' ? '#f5f3ff' : '#fff',
+                                boxShadow: storeKpiFilter === 'warehouse' ? '0 6px 18px rgba(124, 58, 237, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                transform: storeKpiFilter === 'warehouse' ? 'translateY(-2px)' : 'none',
+                            }}
+                        >
                             <h3>Warehouses</h3>
                             <h2>{stores.filter(s => s.is_warehouse).length}</h2>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
-                                Fulfillment & storage depots
+                            <span style={{ fontSize: 11, color: storeKpiFilter === 'warehouse' ? '#6d28d9' : '#64748b', fontWeight: storeKpiFilter === 'warehouse' ? 700 : 500, marginTop: 4 }}>
+                                {storeKpiFilter === 'warehouse' ? '● Filtering warehouses' : 'Fulfillment & storage depots'}
                             </span>
                         </div>
 
-                        <div className="category-card" title="Primary Main Store">
+                        <div
+                            className="category-card"
+                            title={storeKpiFilter === 'main' ? "Click to remove filter" : "Click to filter primary main store"}
+                            onClick={() => setStoreKpiFilter(prev => prev === 'main' ? 'all' : 'main')}
+                            style={{
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                border: storeKpiFilter === 'main' ? '2px solid #f59e0b' : '1px solid #e2e8f0',
+                                background: storeKpiFilter === 'main' ? '#fffbeb' : '#fff',
+                                boxShadow: storeKpiFilter === 'main' ? '0 6px 18px rgba(245, 158, 11, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                transform: storeKpiFilter === 'main' ? 'translateY(-2px)' : 'none',
+                            }}
+                        >
                             <h3>Primary Main Store</h3>
                             <h2 style={{ fontSize: 20, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {stores.find(s => s.is_main)?.name || 'None Set'}
                             </h2>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
-                                {stores.find(s => s.is_main) ? `Code: ${stores.find(s => s.is_main)?.code || 'MAIN'}` : 'Designate a main store'}
+                            <span style={{ fontSize: 11, color: storeKpiFilter === 'main' ? '#b45309' : '#64748b', fontWeight: storeKpiFilter === 'main' ? 700 : 500, marginTop: 4 }}>
+                                {storeKpiFilter === 'main' ? '● Filtering main store' : (stores.find(s => s.is_main) ? `Code: ${stores.find(s => s.is_main)?.code || 'MAIN'}` : 'Designate a main store')}
                             </span>
                         </div>
                     </div>
@@ -1012,7 +1155,7 @@ const Stores = () => {
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flex: 1 }}>
                             {/* Search Store Name / Code */}
-                            <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 10px', height: 36, minWidth: 220, flex: '1 1 220px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 12px', height: 36, minWidth: 260, flex: '1 1 280px' }}>
                                 <BsSearch size={14} color="#94a3b8" style={{ marginRight: 8, flexShrink: 0 }} />
                                 <input
                                     type="text"
@@ -1033,65 +1176,71 @@ const Stores = () => {
                                 )}
                             </div>
 
-                            {/* Store Location / City Filter */}
-                            {storeCities.length > 0 && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>City:</span>
-                                    <select
-                                        value={storeCityFilter}
-                                        onChange={e => setStoreCityFilter(e.target.value)}
-                                        style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 12, outline: 'none', background: '#fff', cursor: 'pointer' }}
+                            {/* Store Type Filter Dropdown */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Type:</span>
+                                <select
+                                    value={storeTypeFilter}
+                                    onChange={e => setStoreTypeFilter(e.target.value)}
+                                    style={{
+                                        padding: '6px 10px',
+                                        borderRadius: 8,
+                                        border: '1px solid #cbd5e1',
+                                        fontSize: 12,
+                                        fontWeight: 500,
+                                        outline: 'none',
+                                        background: '#fff',
+                                        cursor: 'pointer',
+                                        color: '#1e293b'
+                                    }}
+                                >
+                                    <option value="all">All</option>
+                                    <option value="retail">Retail</option>
+                                    <option value="warehouse">Warehouse</option>
+                                </select>
+                            </div>
+
+                            {/* Store Status Filter Dropdown */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Status:</span>
+                                <select
+                                    value={storeStatusFilter}
+                                    onChange={e => setStoreStatusFilter(e.target.value)}
+                                    style={{
+                                        padding: '6px 10px',
+                                        borderRadius: 8,
+                                        border: '1px solid #cbd5e1',
+                                        fontSize: 12,
+                                        fontWeight: 500,
+                                        outline: 'none',
+                                        background: '#fff',
+                                        cursor: 'pointer',
+                                        color: '#1e293b'
+                                    }}
+                                >
+                                    <option value="all">All</option>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+
+                            {/* Active Card Filter Badge */}
+                            {storeKpiFilter !== 'all' && (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#e0e7ff', color: '#3730a3', padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
+                                    <span>Card Filter: {storeKpiFilter === 'active' ? 'Active Branches' : storeKpiFilter === 'warehouse' ? 'Warehouses' : 'Primary Main Store'}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStoreKpiFilter('all')}
+                                        style={{ background: 'none', border: 'none', color: '#3730a3', cursor: 'pointer', padding: 0, fontWeight: 800, fontSize: 12 }}
+                                        title="Clear card filter"
                                     >
-                                        <option value="all">All Cities</option>
-                                        {storeCities.map(c => (
-                                            <option key={c} value={c}>{c}</option>
-                                        ))}
-                                    </select>
+                                        ✕
+                                    </button>
                                 </div>
                             )}
 
-                            {/* Store Type Filter */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Type:</span>
-                                {['all', 'retail', 'warehouse'].map(type => (
-                                    <button
-                                        key={type}
-                                        onClick={() => setStoreTypeFilter(type)}
-                                        style={{
-                                            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                                            textTransform: 'capitalize', border: 'none', cursor: 'pointer',
-                                            background: storeTypeFilter === type ? '#4f46e5' : '#f1f5f9',
-                                            color: storeTypeFilter === type ? '#fff' : '#475569',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                    >
-                                        {type}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Store Status Filter */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Status:</span>
-                                {['all', 'active', 'inactive'].map(st => (
-                                    <button
-                                        key={st}
-                                        onClick={() => setStoreStatusFilter(st)}
-                                        style={{
-                                            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                                            textTransform: 'capitalize', border: 'none', cursor: 'pointer',
-                                            background: storeStatusFilter === st ? '#4f46e5' : '#f1f5f9',
-                                            color: storeStatusFilter === st ? '#fff' : '#475569',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                    >
-                                        {st}
-                                    </button>
-                                ))}
-                            </div>
-
                             {/* Reset Filters */}
-                            {(storeSearch || storeTypeFilter !== 'all' || storeStatusFilter !== 'all' || storeCityFilter !== 'all') && (
+                            {(storeSearch || storeTypeFilter !== 'all' || storeStatusFilter !== 'all' || storeCityFilter !== 'all' || storeKpiFilter !== 'all') && (
                                 <button
                                     onClick={resetStoreFilters}
                                     style={{
@@ -1103,15 +1252,6 @@ const Stores = () => {
                                     Reset Filters
                                 </button>
                             )}
-
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer', marginLeft: 4 }}>
-                                <input
-                                    type="checkbox"
-                                    checked={includeInactive}
-                                    onChange={e => setIncludeInactive(e.target.checked)}
-                                />
-                                <span>Show Inactive Stores</span>
-                            </label>
                         </div>
 
                         <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>
@@ -1128,18 +1268,17 @@ const Stores = () => {
                             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                                 <thead>
                                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Store Details</th>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type / Role</th>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location</th>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact</th>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</th>
+                                        <th style={{ width: '32%', padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Store Details</th>
+                                        <th style={{ width: '18%', padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type / Role</th>
+                                        <th style={{ width: '24%', padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact</th>
+                                        <th style={{ width: '12%', padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                                        <th style={{ width: '14%', padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredStores.length === 0 ? (
                                         <tr>
-                                            <td colSpan={6} style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>
+                                            <td colSpan={5} style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>
                                                 <BsShop size={36} style={{ marginBottom: 10, opacity: 0.5 }} />
                                                 <div style={{ fontSize: 14, fontWeight: 600 }}>No Stores Found</div>
                                                 <div style={{ fontSize: 12, marginTop: 4 }}>
@@ -1180,11 +1319,6 @@ const Stores = () => {
                                                         {store.is_warehouse ? <BsBoxes size={11} /> : <BsShop size={11} />}
                                                         {store.is_warehouse ? 'Warehouse' : 'Retail Outlet'}
                                                     </span>
-                                                </td>
-
-                                                <td style={{ padding: '14px 18px', fontSize: 12, color: '#475569' }}>
-                                                    <div>{store.city || '—'}{store.state ? `, ${store.state}` : ''}</div>
-                                                    <div style={{ fontSize: 10, color: '#94a3b8' }}>{store.pincode ? `PIN: ${store.pincode}` : store.address || ''}</div>
                                                 </td>
 
                                                 <td style={{ padding: '14px 18px', fontSize: 12, color: '#475569' }}>
@@ -1288,7 +1422,7 @@ const Stores = () => {
             )}
 
             {/* ======================================================= */}
-            {/* VIEW 2: STORE TARGETS & MILESTONES                      */}
+            {/* VIEW 2: STORE TARGETS                                   */}
             {/* ======================================================= */}
             {activeTab === 'targets' && (
                 <div>
@@ -1354,171 +1488,373 @@ const Stores = () => {
                         </div>
                     </div>
 
-                    {/* Stats Overview - Clickable KPI Cards (Requirement 18) */}
+                    {/* Notification Alerts for Store Targets */}
+                    {successMsg && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '12px 16px', borderRadius: 10,
+                            background: '#ecfdf5', border: '1px solid #a7f3d0',
+                            color: '#065f46', fontSize: 13, fontWeight: 600, marginBottom: 20
+                        }}>
+                            <BsCheckCircleFill color="#10b981" size={16} />
+                            <span>{successMsg}</span>
+                        </div>
+                    )}
+
+                    {errorMsg && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '12px 16px', borderRadius: 10,
+                            background: '#fef2f2', border: '1px solid #fecaca',
+                            color: '#991b1b', fontSize: 13, fontWeight: 600, marginBottom: 20
+                        }}>
+                            <BsExclamationTriangle color="#ef4444" size={16} />
+                            <span>{errorMsg}</span>
+                        </div>
+                    )}
+
+                    {/* Stats Overview - Interactive Clickable KPI Cards (Requirement 18) */}
                     <div className="category-cards store-targets-cards">
                         <div
                             className="category-card"
-                            title="Click to view all targets"
-                            onClick={() => { setTargetStatusFilter('all'); setTargetsView('list'); }}
-                            style={{ cursor: 'pointer' }}
+                            title={targetKpiFilter === 'all' ? "Showing all targets" : "Click to view all targets"}
+                            onClick={() => { setTargetKpiFilter('all'); setTargetsView('list'); setTargetPage(1); }}
+                            style={{
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                border: targetKpiFilter === 'all' ? '2px solid #4f46e5' : '1px solid #e2e8f0',
+                                background: targetKpiFilter === 'all' ? '#eef2ff' : '#fff',
+                                boxShadow: targetKpiFilter === 'all' ? '0 6px 18px rgba(79, 70, 229, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                transform: targetKpiFilter === 'all' ? 'translateY(-2px)' : 'none',
+                            }}
                         >
                             <h3>Total Targets</h3>
                             <h2>{targets.length}</h2>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 4 }}>
-                                Configured targets
+                            <span style={{ fontSize: 11, color: targetKpiFilter === 'all' ? '#4338ca' : '#64748b', fontWeight: 600, marginTop: 4 }}>
+                                {targetKpiFilter === 'all' ? '● All configured targets' : 'Click to show all'}
                             </span>
                         </div>
 
                         <div
                             className="category-card"
-                            title="Click to filter active targets"
-                            onClick={() => { setTargetStatusFilter('active'); setTargetsView('list'); }}
-                            style={{ cursor: 'pointer' }}
+                            title={targetKpiFilter === 'active' ? "Click to remove filter" : "Click to filter active targets"}
+                            onClick={() => { setTargetKpiFilter(prev => prev === 'active' ? 'all' : 'active'); setTargetsView('list'); setTargetPage(1); }}
+                            style={{
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                border: targetKpiFilter === 'active' ? '2px solid #10b981' : '1px solid #e2e8f0',
+                                background: targetKpiFilter === 'active' ? '#ecfdf5' : '#fff',
+                                boxShadow: targetKpiFilter === 'active' ? '0 6px 18px rgba(16, 185, 129, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                transform: targetKpiFilter === 'active' ? 'translateY(-2px)' : 'none',
+                            }}
                         >
                             <h3>Active Targets</h3>
                             <h2>{targets.filter(t => (t.status || 'active').toLowerCase() === 'active').length}</h2>
-                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 4 }}>
-                                Active milestones
+                            <span style={{ fontSize: 11, color: targetKpiFilter === 'active' ? '#047857' : '#10b981', fontWeight: targetKpiFilter === 'active' ? 700 : 600, marginTop: 4 }}>
+                                {targetKpiFilter === 'active' ? '● Filtering active targets' : 'Active milestones'}
                             </span>
                         </div>
 
                         <div
                             className="category-card"
-                            title="Click to view all revenue & sales targets"
-                            onClick={() => { setTargetTypeFilter('all'); setTargetsView('list'); }}
-                            style={{ cursor: 'pointer' }}
+                            title={targetKpiFilter === 'revenue' ? "Click to remove filter" : "Click to view revenue & sales targets"}
+                            onClick={() => { setTargetKpiFilter(prev => prev === 'revenue' ? 'all' : 'revenue'); setTargetsView('list'); setTargetPage(1); }}
+                            style={{
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                border: targetKpiFilter === 'revenue' ? '2px solid #0ea5e9' : '1px solid #e2e8f0',
+                                background: targetKpiFilter === 'revenue' ? '#f0f9ff' : '#fff',
+                                boxShadow: targetKpiFilter === 'revenue' ? '0 6px 18px rgba(14, 165, 233, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                transform: targetKpiFilter === 'revenue' ? 'translateY(-2px)' : 'none',
+                            }}
                         >
                             <h3>Total Target Value</h3>
                             <h2 style={{ fontSize: 22, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 ₹{displayTotalRevenueTarget.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </h2>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
-                                {targetsSummary?.overall_achievement_percentage ? `${targetsSummary.overall_achievement_percentage}% overall reached` : 'Sum of store goals'}
+                            <span style={{ fontSize: 11, color: targetKpiFilter === 'revenue' ? '#0369a1' : '#64748b', fontWeight: targetKpiFilter === 'revenue' ? 700 : 500, marginTop: 4 }}>
+                                {targetKpiFilter === 'revenue' ? '● Filtering revenue targets' : (targetsSummary?.overall_achievement_percentage ? `${targetsSummary.overall_achievement_percentage}% overall reached` : 'Sum of store goals')}
                             </span>
                         </div>
 
                         <div
                             className="category-card"
-                            title="Click to filter completed targets"
-                            onClick={() => { setTargetStatusFilter('completed'); setTargetsView('list'); }}
-                            style={{ cursor: 'pointer' }}
+                            title={targetKpiFilter === 'completed' ? "Click to remove filter" : "Click to filter completed targets"}
+                            onClick={() => { setTargetKpiFilter(prev => prev === 'completed' ? 'all' : 'completed'); setTargetsView('list'); setTargetPage(1); }}
+                            style={{
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                border: targetKpiFilter === 'completed' ? '2px solid #8b5cf6' : '1px solid #e2e8f0',
+                                background: targetKpiFilter === 'completed' ? '#f5f3ff' : '#fff',
+                                boxShadow: targetKpiFilter === 'completed' ? '0 6px 18px rgba(139, 92, 246, 0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
+                                transform: targetKpiFilter === 'completed' ? 'translateY(-2px)' : 'none',
+                            }}
                         >
                             <h3>Completed Targets</h3>
                             <h2>{targets.filter(t => (t.status || '').toLowerCase() === 'completed').length}</h2>
-                            <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 500, marginTop: 4 }}>
-                                Fully reached milestones
+                            <span style={{ fontSize: 11, color: targetKpiFilter === 'completed' ? '#6d28d9' : '#6366f1', fontWeight: targetKpiFilter === 'completed' ? 700 : 500, marginTop: 4 }}>
+                                {targetKpiFilter === 'completed' ? '● Filtering completed targets' : 'Fully reached milestones'}
                             </span>
                         </div>
                     </div>
 
-                    {/* Filter Bar & View Toggle */}
-                    <div style={{
-                        background: '#fff', borderRadius: 14, padding: '14px 18px',
-                        border: '1px solid #e2e8f0', marginBottom: 20,
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        flexWrap: 'wrap', gap: 12
+                    {/* Filter Bar & View Toggle - Single Horizontal Row (Requirement) */}
+                    <div className="store-targets-filter-row" style={{
+                        background: '#fff',
+                        borderRadius: 14,
+                        padding: '14px 18px',
+                        border: '1px solid #e2e8f0',
+                        marginBottom: 20,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        boxSizing: 'border-box'
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <BsFilter size={16} color="#64748b" />
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Period:</span>
-                                {['all', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'].map(p => (
-                                    <button
-                                        key={p}
-                                        onClick={() => { setFilterPeriod(p); setTargetPage(1); }}
-                                        style={{
-                                            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                                            textTransform: 'capitalize', border: 'none', cursor: 'pointer',
-                                            background: filterPeriod === p ? '#4f46e5' : '#f1f5f9',
-                                            color: filterPeriod === p ? '#fff' : '#475569',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                    >
-                                        {p}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Status Filter (Requirement 15) */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Status:</span>
-                                <select
-                                    value={targetStatusFilter}
-                                    onChange={e => { setTargetStatusFilter(e.target.value); setTargetPage(1); }}
-                                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 12, outline: 'none', background: '#fff' }}
-                                >
-                                    <option value="all">All Statuses</option>
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
-                                    <option value="completed">Completed</option>
-                                    <option value="cancelled">Cancelled</option>
-                                </select>
-                            </div>
-
-                            {/* Target Type Filter (Requirements 27 & 28) */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Type:</span>
-                                <select
-                                    value={targetTypeFilter}
-                                    onChange={e => { setTargetTypeFilter(e.target.value); setTargetPage(1); }}
-                                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 12, outline: 'none', background: '#fff' }}
-                                >
-                                    <option value="all">All Types</option>
-                                    {TARGET_TYPES.map(t => (
-                                        <option key={t.value} value={t.value}>{t.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {(filterPeriod !== 'all' || targetStatusFilter !== 'all' || targetTypeFilter !== 'all') && (
+                        {/* 1. Search by store or type */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            background: '#fff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: 8,
+                            padding: '0 10px',
+                            height: 38,
+                            minWidth: 180,
+                            maxWidth: 240,
+                            flex: '1 1 200px',
+                            boxSizing: 'border-box'
+                        }}>
+                            <BsSearch size={14} color="#94a3b8" style={{ marginRight: 8, flexShrink: 0 }} />
+                            <input
+                                value={targetSearch}
+                                onChange={e => { setTargetSearch(e.target.value); setTargetPage(1); }}
+                                placeholder="Search by store or type..."
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    outline: 'none',
+                                    fontSize: 13,
+                                    color: '#1e293b',
+                                    width: '100%'
+                                }}
+                            />
+                            {targetSearch && (
                                 <button
-                                    onClick={() => {
-                                        setFilterPeriod('all');
-                                        setTargetStatusFilter('all');
-                                        setTargetTypeFilter('all');
-                                        setTargetPage(1);
-                                    }}
-                                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer' }}
+                                    type="button"
+                                    onClick={() => { setTargetSearch(''); setTargetPage(1); }}
+                                    style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, fontSize: 13 }}
+                                    title="Clear search"
                                 >
-                                    Reset Filters
+                                    ✕
                                 </button>
                             )}
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: 3, borderRadius: 8 }}>
-                                <button
-                                    onClick={() => setTargetsView('list')}
-                                    style={{
-                                        padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 700,
-                                        cursor: 'pointer',
-                                        background: targetsView === 'list' ? '#fff' : 'transparent',
-                                        color: targetsView === 'list' ? '#0f172a' : '#64748b',
-                                        boxShadow: targetsView === 'list' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
-                                    }}
-                                >
-                                    Targets List
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setTargetsView('leaderboard');
-                                        fetchLeaderboard();
-                                    }}
-                                    style={{
-                                        padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 700,
-                                        cursor: 'pointer',
-                                        background: targetsView === 'leaderboard' ? '#fff' : 'transparent',
-                                        color: targetsView === 'leaderboard' ? '#0f172a' : '#64748b',
-                                        boxShadow: targetsView === 'leaderboard' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
-                                    }}
-                                >
-                                    Leaderboard
-                                </button>
-                            </div>
+                        {/* 2. Period dropdown */}
+                        <select
+                            value={filterPeriod}
+                            onChange={e => { setFilterPeriod(e.target.value); setTargetPage(1); }}
+                            style={{
+                                height: 38,
+                                padding: '0 10px',
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: '#1e293b',
+                                background: '#fff',
+                                outline: 'none',
+                                cursor: 'pointer',
+                                minWidth: 120,
+                                flexShrink: 0,
+                                boxSizing: 'border-box'
+                            }}
+                        >
+                            <option value="all">All Periods</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="15_days">15 Days</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="yearly">Yearly</option>
+                        </select>
 
-                            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>
-                                Showing {filteredTargets.length} target{filteredTargets.length === 1 ? '' : 's'}
+                        {/* 3. Status dropdown */}
+                        <select
+                            value={targetStatusFilter}
+                            onChange={e => { setTargetStatusFilter(e.target.value); setTargetPage(1); }}
+                            style={{
+                                height: 38,
+                                padding: '0 10px',
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: '#1e293b',
+                                background: '#fff',
+                                outline: 'none',
+                                cursor: 'pointer',
+                                minWidth: 125,
+                                flexShrink: 0,
+                                boxSizing: 'border-box'
+                            }}
+                        >
+                            <option value="all">All Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+
+                        {/* 4. Type dropdown */}
+                        <select
+                            value={targetTypeFilter}
+                            onChange={e => { setTargetTypeFilter(e.target.value); setTargetPage(1); }}
+                            style={{
+                                height: 38,
+                                padding: '0 10px',
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: '#1e293b',
+                                background: '#fff',
+                                outline: 'none',
+                                cursor: 'pointer',
+                                minWidth: 130,
+                                flexShrink: 0,
+                                boxSizing: 'border-box'
+                            }}
+                        >
+                            <option value="all">All Types</option>
+                            {TARGET_TYPES.map(t => (
+                                <option key={t.value} value={t.value}>{t.label}</option>
+                            ))}
+                        </select>
+
+                        {/* Active Target Card Filter Badge */}
+                        {targetKpiFilter !== 'all' && (
+                            <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                background: '#e0e7ff',
+                                color: '#3730a3',
+                                padding: '0 10px',
+                                height: 38,
+                                borderRadius: 8,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                                boxSizing: 'border-box'
+                            }}>
+                                <span>Card: {targetKpiFilter === 'active' ? 'Active' : targetKpiFilter === 'revenue' ? 'Revenue' : 'Completed'}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => { setTargetKpiFilter('all'); setTargetPage(1); }}
+                                    style={{ background: 'none', border: 'none', color: '#3730a3', cursor: 'pointer', padding: 0, fontWeight: 800, fontSize: 12 }}
+                                    title="Clear card filter"
+                                >
+                                    ✕
+                                </button>
                             </div>
+                        )}
+
+                        {/* Reset Filters */}
+                        {(filterPeriod !== 'all' || targetStatusFilter !== 'all' || targetTypeFilter !== 'all' || targetSearch || targetKpiFilter !== 'all') && (
+                            <button
+                                onClick={() => {
+                                    setTargetKpiFilter('all');
+                                    setFilterPeriod('all');
+                                    setTargetStatusFilter('all');
+                                    setTargetTypeFilter('all');
+                                    setTargetSearch('');
+                                    setTargetPage(1);
+                                }}
+                                style={{
+                                    height: 38,
+                                    padding: '0 10px',
+                                    borderRadius: 8,
+                                    border: '1px solid #cbd5e1',
+                                    background: '#fff',
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#475569',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                    boxSizing: 'border-box'
+                                }}
+                                title="Reset all filters"
+                            >
+                                Reset Filters
+                            </button>
+                        )}
+
+                        {/* 5. Targets List / Leaderboard toggle */}
+                        <div style={{
+                            display: 'inline-flex',
+                            background: '#f1f5f9',
+                            padding: 3,
+                            borderRadius: 8,
+                            height: 38,
+                            boxSizing: 'border-box',
+                            alignItems: 'center',
+                            flexShrink: 0
+                        }}>
+                            <button
+                                onClick={() => setTargetsView('list')}
+                                style={{
+                                    height: 32,
+                                    padding: '0 12px',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    background: targetsView === 'list' ? '#fff' : 'transparent',
+                                    color: targetsView === 'list' ? '#0f172a' : '#64748b',
+                                    boxShadow: targetsView === 'list' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s ease',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                Targets List
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setTargetsView('leaderboard');
+                                    fetchLeaderboard();
+                                }}
+                                style={{
+                                    height: 32,
+                                    padding: '0 12px',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    background: targetsView === 'leaderboard' ? '#fff' : 'transparent',
+                                    color: targetsView === 'leaderboard' ? '#0f172a' : '#64748b',
+                                    boxShadow: targetsView === 'leaderboard' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s ease',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                Leaderboard
+                            </button>
+                        </div>
+
+                        {/* 6. Showing 13 targets count */}
+                        <div style={{
+                            fontSize: 13,
+                            color: '#64748b',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            marginLeft: 'auto',
+                            flexShrink: 0
+                        }}>
+                            Showing {filteredTargets.length} target{filteredTargets.length === 1 ? '' : 's'}
                         </div>
                     </div>
 
@@ -1912,14 +2248,21 @@ const Stores = () => {
                                             type="text"
                                             value={storeFormData.code}
                                             disabled={Boolean(editingStore)}
-                                            onChange={e => setStoreFormData({ ...storeFormData, code: e.target.value })}
+                                            onChange={e => {
+                                                setStoreFormData({ ...storeFormData, code: e.target.value });
+                                                if (storeFormErrors.code) setStoreFormErrors(prev => ({ ...prev, code: null }));
+                                            }}
                                             placeholder="e.g. STR-MUM-01"
                                             style={{
                                                 width: '100%', padding: '9px 12px', borderRadius: 8,
-                                                border: '1px solid #cbd5e1', fontSize: 13, outline: 'none',
+                                                border: `1px solid ${storeFormErrors.code ? '#ef4444' : '#cbd5e1'}`,
+                                                fontSize: 13, outline: 'none',
                                                 boxSizing: 'border-box', background: editingStore ? '#f8fafc' : '#fff'
                                             }}
                                         />
+                                        {storeFormErrors.code && (
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.code}</div>
+                                        )}
                                     </div>
 
                                     <div>
@@ -2004,50 +2347,77 @@ const Stores = () => {
                                     <input
                                         type="text"
                                         value={storeFormData.address}
-                                        onChange={e => setStoreFormData({ ...storeFormData, address: e.target.value })}
+                                        onChange={e => {
+                                            setStoreFormData({ ...storeFormData, address: e.target.value });
+                                            if (storeFormErrors.address) setStoreFormErrors(prev => ({ ...prev, address: null }));
+                                        }}
                                         placeholder="Shop 12, Ground Floor, Central Mall"
                                         style={{
                                             width: '100%', padding: '9px 12px', borderRadius: 8,
-                                            border: '1px solid #cbd5e1', fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                            border: `1px solid ${storeFormErrors.address ? '#ef4444' : '#cbd5e1'}`,
+                                            fontSize: 13, outline: 'none', boxSizing: 'border-box'
                                         }}
                                     />
+                                    {storeFormErrors.address && (
+                                        <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.address}</div>
+                                    )}
                                 </div>
 
-                                {/* City, State, Pincode */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr', gap: 10 }}>
+                                {/* State, City, Pincode */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1.1fr 1fr', gap: 10 }}>
                                     <div>
                                         <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
-                                            City
+                                            State <span style={{ color: '#ef4444' }}>*</span>
                                         </label>
-                                        <input
-                                            type="text"
-                                            value={storeFormData.city}
-                                            onChange={e => setStoreFormData({ ...storeFormData, city: e.target.value })}
-                                            placeholder="Mumbai"
-                                            style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
-                                                border: '1px solid #cbd5e1', fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                        <SearchableSelect
+                                            value={storeFormData.state}
+                                            onChange={(newState) => {
+                                                setStoreFormData({ ...storeFormData, state: newState, city: '' });
+                                                setIsCustomCity(false);
+                                                setCustomCityName('');
+                                                if (storeFormErrors.state) setStoreFormErrors(prev => ({ ...prev, state: null }));
+                                                if (storeFormErrors.city) setStoreFormErrors(prev => ({ ...prev, city: null }));
                                             }}
+                                            options={INDIAN_STATES}
+                                            placeholder="-- Select State --"
+                                            searchPlaceholder="Search Indian state..."
+                                            hasError={Boolean(storeFormErrors.state)}
                                         />
+                                        {storeFormErrors.state && (
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.state}</div>
+                                        )}
                                     </div>
 
                                     <div>
                                         <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
-                                            State
+                                            City
                                         </label>
-                                        <select
-                                            value={storeFormData.state}
-                                            onChange={e => setStoreFormData({ ...storeFormData, state: e.target.value })}
-                                            style={{
-                                                width: '100%', padding: '9px 8px', borderRadius: 8,
-                                                border: '1px solid #cbd5e1', fontSize: 12, outline: 'none',
-                                                background: '#fff', boxSizing: 'border-box'
+                                        <SearchableSelect
+                                            value={isCustomCity ? 'Other' : (storeFormData.city || '')}
+                                            onChange={(val) => {
+                                                if (val === 'Other') {
+                                                    setIsCustomCity(true);
+                                                    setStoreFormData(prev => ({ ...prev, city: 'Other' }));
+                                                } else {
+                                                    setIsCustomCity(false);
+                                                    setCustomCityName('');
+                                                    setStoreFormData(prev => ({ ...prev, city: val }));
+                                                }
+                                                if (storeFormErrors.city) setStoreFormErrors(prev => ({ ...prev, city: null }));
                                             }}
-                                        >
-                                            {INDIAN_STATES.map(s => (
-                                                <option key={s} value={s}>{s}</option>
-                                            ))}
-                                        </select>
+                                            options={availableCities}
+                                            placeholder={storeFormData.state ? '-- Select City --' : '-- Select State First --'}
+                                            searchPlaceholder="Search city / town..."
+                                            allowOther={true}
+                                            otherValue="Other"
+                                            otherLabel="Other (Enter custom city)"
+                                            disabled={!storeFormData.state}
+                                            hasError={Boolean(storeFormErrors.city && !isCustomCity)}
+                                            emptyMessage={storeFormData.state ? 'No predefined city found' : 'Please select state first'}
+                                        />
+                                        {!isCustomCity && storeFormErrors.city && (
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.city}</div>
+                                        )}
                                     </div>
 
                                     <div>
@@ -2074,6 +2444,32 @@ const Stores = () => {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Custom City Input when 'Other' is selected */}
+                                {isCustomCity && (
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                            Enter City Name <span style={{ color: '#ef4444' }}>*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={customCityName}
+                                            onChange={e => {
+                                                setCustomCityName(e.target.value);
+                                                if (storeFormErrors.city) setStoreFormErrors(prev => ({ ...prev, city: null }));
+                                            }}
+                                            placeholder="Enter custom city name"
+                                            style={{
+                                                width: '100%', padding: '9px 12px', borderRadius: 8,
+                                                border: `1px solid ${storeFormErrors.city ? '#ef4444' : '#cbd5e1'}`,
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                            }}
+                                        />
+                                        {storeFormErrors.city && (
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.city}</div>
+                                        )}
+                                    </div>
+                                )}
 
                                 {/* Checkboxes for Warehouse & Main */}
                                 <div style={{ display: 'flex', gap: 24, marginTop: 4 }}>

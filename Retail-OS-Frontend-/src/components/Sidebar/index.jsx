@@ -119,7 +119,7 @@ export const menuGroups = [
         id: 'multi_store',
         label: 'MULTI-STORE',
         items: [
-            { name: 'Stores', icon: <BsShop />, path: '/stores' },
+            { name: 'Stores Directory', icon: <BsShop />, path: '/stores' },
             { name: 'Store Targets', icon: <BsBullseye />, path: '/stores/targets' },
         ],
     },
