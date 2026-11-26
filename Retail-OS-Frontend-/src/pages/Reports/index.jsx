@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import {
     BsDownload, BsBarChartFill, BsCalendar, BsArrowUpRight,
-    BsArrowDownRight, BsFilter, BsPrinter,
+    BsArrowDownRight, BsFilter, BsPrinter, BsExclamationCircle,
 } from 'react-icons/bs';
 
 import { getInvoices } from '../../services/billingService';
@@ -33,7 +33,9 @@ const CustomTooltip = ({ active, payload, label }) => {
         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 14px', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,.09)' }}>
             <p style={{ fontWeight: 700, marginBottom: 4, color: '#111827' }}>{label}</p>
             {payload.map((p, i) => (
-                <p key={i} style={{ color: p.color }}>{p.name}: {typeof p.value === 'number' && p.value > 1000 ? fmt(p.value) : p.value}</p>
+                <p key={i} style={{ color: p.color, margin: '2px 0' }}>
+                    {p.name}: {typeof p.value === 'number' ? fmt(p.value) : p.value}
+                </p>
             ))}
         </div>
     );
@@ -43,10 +45,72 @@ const REPORT_TYPES = ['Sales Overview', 'Product Performance', 'Customer Analyti
 
 const CATEGORY_COLORS = ['#6366f1', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#0ea5e9', '#14b8a6'];
 
+const isCancelledOrReturned = (status) => {
+    const s = String(status || '').trim().toLowerCase();
+    return s === 'cancelled' || s === 'returned' || s === 'void' || s === 'rejected';
+};
+
+const getInvoiceAmount = (inv) => {
+    if (!inv) return 0;
+    const val = inv.total_amount ?? inv.grand_total ?? inv.total ?? inv.amount ?? inv.final_amount ?? inv.net_amount ?? inv.subtotal ?? 0;
+    const num = Number(val);
+    return isNaN(num) ? 0 : num;
+};
+
+const getInvoiceDate = (inv) => {
+    if (!inv) return null;
+    const raw = inv.invoice_date || inv.created_at || inv.date || inv.createdAt || inv.order_date || inv.timestamp || inv.issue_date;
+    if (!raw) return null;
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d;
+};
+
+const filterInvoicesByPeriod = (invList, selectedPeriod) => {
+    if (!selectedPeriod) return invList;
+    const now = new Date();
+    return invList.filter(inv => {
+        const d = getInvoiceDate(inv);
+        if (!d) return true;
+
+        if (selectedPeriod === 'Today') {
+            return (
+                d.getDate() === now.getDate() &&
+                d.getMonth() === now.getMonth() &&
+                d.getFullYear() === now.getFullYear()
+            );
+        }
+        if (selectedPeriod === 'This Week') {
+            const dayOfWeek = (now.getDay() + 6) % 7; // Monday = 0
+            const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - dayOfWeek);
+            startOfWeek.setHours(0, 0, 0, 0);
+            return d >= startOfWeek;
+        }
+        if (selectedPeriod === 'This Month') {
+            return (
+                d.getMonth() === now.getMonth() &&
+                d.getFullYear() === now.getFullYear()
+            );
+        }
+        if (selectedPeriod === 'Last Month') {
+            const lastMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+            const lastYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+            return (
+                d.getMonth() === lastMonth &&
+                d.getFullYear() === lastYear
+            );
+        }
+        if (selectedPeriod === 'This Year') {
+            return d.getFullYear() === now.getFullYear();
+        }
+        return true;
+    });
+};
+
 const Reports = () => {
     const [period, setPeriod] = useState('This Month');
     const [activeReport, setActiveReport] = useState('Sales Overview');
     const [loading, setLoading] = useState(true);
+    const [fetchError, setFetchError] = useState(null);
 
     const [invoices, setInvoices] = useState([]);
     const [products, setProducts] = useState([]);
@@ -56,18 +120,70 @@ const Reports = () => {
         let isMounted = true;
         const loadReportData = async () => {
             setLoading(true);
+            setFetchError(null);
             try {
-                // 1. Fetch Invoices
+                // 1. Fetch Invoices & Products with fallback
                 const [invRes, prodRes] = await Promise.allSettled([
                     getInvoices(),
                     productService.getAll(),
                 ]);
 
                 let apiInvoices = [];
-                if (invRes.status === 'fulfilled') {
+                if (invRes.status === 'fulfilled' && invRes.value) {
                     const data = invRes.value;
-                    apiInvoices = Array.isArray(data) ? data : (data?.data || data?.items || []);
+                    apiInvoices = Array.isArray(data) ? data : (data?.data || data?.items || data?.invoices || []);
                 }
+
+                // If getInvoices returned empty (e.g. store_id constraint), try direct /invoices without store constraint
+                if (!apiInvoices.length) {
+                    try {
+                        const directRes = await apiClient.get('/invoices', { params: { page: 1, page_size: 500 } });
+                        const raw = directRes.data?.data ?? directRes.data?.items ?? directRes.data?.invoices ?? directRes.data;
+                        if (Array.isArray(raw) && raw.length > 0) {
+                            apiInvoices = raw;
+                        }
+                    } catch (_) {
+                        try {
+                            const rawRes = await apiClient.get('/invoices');
+                            const raw = rawRes.data?.data ?? rawRes.data?.items ?? rawRes.data?.invoices ?? rawRes.data;
+                            if (Array.isArray(raw) && raw.length > 0) {
+                                apiInvoices = raw;
+                            }
+                        } catch (err) {
+                            if (invRes.status === 'rejected') {
+                                console.warn('[Reports] Failed to fetch invoices:', err.message);
+                            }
+                        }
+                    }
+                }
+
+                // Also fetch online orders from /orders to ensure ecommerce channel data is captured
+                try {
+                    const ordRes = await apiClient.get('/orders', { params: { page: 1, page_size: 500 } });
+                    const ordData = ordRes.data?.data ?? ordRes.data?.items ?? ordRes.data?.orders ?? ordRes.data;
+                    if (Array.isArray(ordData) && ordData.length > 0) {
+                        ordData.forEach(o => {
+                            const exists = apiInvoices.some(inv =>
+                                String(inv.order_id || inv.id || '') === String(o.id || o.order_id || '') ||
+                                String(inv.invoice_number || '') === String(o.order_number || '')
+                            );
+                            if (!exists) {
+                                apiInvoices.push({
+                                    id: `ORD-${o.id || o.order_number || Math.random()}`,
+                                    order_id: o.id || o.order_id,
+                                    order_number: o.order_number,
+                                    channel: 'online',
+                                    amount: Number(o.total_amount ?? o.grand_total ?? o.total ?? o.order_total ?? 0),
+                                    total_amount: Number(o.total_amount ?? o.grand_total ?? o.total ?? o.order_total ?? 0),
+                                    created_at: o.created_at || o.order_date || o.date,
+                                    invoice_date: o.created_at || o.order_date || o.date,
+                                    status: o.status || 'completed',
+                                    mode: o.payment_method || o.payment_mode || 'online',
+                                });
+                            }
+                        });
+                    }
+                } catch (_) {}
 
                 // Merge with POS checkout invoices
                 let localInvoices = [];
@@ -86,7 +202,7 @@ const Reports = () => {
                 });
 
                 let prodList = [];
-                if (prodRes.status === 'fulfilled') {
+                if (prodRes.status === 'fulfilled' && prodRes.value) {
                     const data = prodRes.value;
                     prodList = Array.isArray(data) ? data : (data?.data || data?.items || []);
                 }
@@ -97,6 +213,7 @@ const Reports = () => {
                 }
             } catch (err) {
                 console.warn('[Reports] Failed to load data:', err);
+                if (isMounted) setFetchError(err.message || 'Failed to load report data');
             } finally {
                 if (isMounted) setLoading(false);
             }
@@ -105,19 +222,19 @@ const Reports = () => {
         return () => { isMounted = false; };
     }, []);
 
-    // Active invoices (excluding cancelled)
+    // Active invoices (excluding cancelled and returned)
     const activeInvoices = React.useMemo(() => {
-        return invoices.filter(inv => inv.status !== 'Cancelled' && inv.status !== 'Returned');
+        return invoices.filter(inv => !isCancelledOrReturned(inv.status));
     }, [invoices]);
 
     // Financial KPIs
     const totalRevenue = React.useMemo(() => {
-        return Math.round(activeInvoices.reduce((sum, inv) => sum + Number(inv.amount || inv.total || inv.grand_total || 0), 0) * 100) / 100;
+        return Math.round(activeInvoices.reduce((sum, inv) => sum + getInvoiceAmount(inv), 0) * 100) / 100;
     }, [activeInvoices]);
 
     const totalOrders = activeInvoices.length;
     const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
-    const returnedCount = invoices.filter(inv => inv.status === 'Returned' || inv.status === 'Cancelled').length;
+    const returnedCount = invoices.filter(inv => isCancelledOrReturned(inv.status)).length;
     const returnRate = invoices.length > 0 ? ((returnedCount / invoices.length) * 100).toFixed(1) + '%' : '0.0%';
 
     const kpis = [
@@ -130,36 +247,47 @@ const Reports = () => {
     // Daily Sales calculation
     const salesData = React.useMemo(() => {
         const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        const map = {
-            Mon: { day: 'Mon', revenue: 0, online: 0, pos: 0, orders: 0 },
-            Tue: { day: 'Tue', revenue: 0, online: 0, pos: 0, orders: 0 },
-            Wed: { day: 'Wed', revenue: 0, online: 0, pos: 0, orders: 0 },
-            Thu: { day: 'Thu', revenue: 0, online: 0, pos: 0, orders: 0 },
-            Fri: { day: 'Fri', revenue: 0, online: 0, pos: 0, orders: 0 },
-            Sat: { day: 'Sat', revenue: 0, online: 0, pos: 0, orders: 0 },
-            Sun: { day: 'Sun', revenue: 0, online: 0, pos: 0, orders: 0 },
-        };
+        const dayKeys = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const map = {};
+        dayKeys.forEach(k => {
+            map[k] = { day: k, revenue: 0, online: 0, pos: 0, orders: 0 };
+        });
 
-        activeInvoices.forEach(inv => {
-            const rawDate = inv.date || inv.created_at;
-            if (!rawDate) return;
-            const d = new Date(rawDate);
+        const periodInvoices = filterInvoicesByPeriod(activeInvoices, period);
+
+        periodInvoices.forEach(inv => {
+            const d = getInvoiceDate(inv);
+            if (!d) return;
             const dayName = days[d.getDay()];
             if (map[dayName]) {
-                const amt = Number(inv.amount || inv.total || inv.grand_total || 0);
-                map[dayName].revenue += amt;
+                const amt = getInvoiceAmount(inv);
+                map[dayName].revenue = Math.round((map[dayName].revenue + amt) * 100) / 100;
                 map[dayName].orders += 1;
-                const isOnline = inv.channel === 'online' || inv.order_id || inv.order_number;
+                const isOnline = inv.channel === 'online' || inv.order_type === 'online' || Boolean(inv.order_id && !inv.store_id) || Boolean(inv.order_number && !inv.store_id);
                 if (isOnline) {
-                    map[dayName].online += amt;
+                    map[dayName].online = Math.round((map[dayName].online + amt) * 100) / 100;
                 } else {
-                    map[dayName].pos += amt;
+                    map[dayName].pos = Math.round((map[dayName].pos + amt) * 100) / 100;
                 }
             }
         });
 
-        return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(k => map[k]);
-    }, [activeInvoices]);
+        return dayKeys.map(k => map[k]);
+    }, [activeInvoices, period]);
+
+    const hasRevenueData = React.useMemo(() => {
+        return salesData.some(d => (d.revenue > 0 || d.online > 0 || d.pos > 0));
+    }, [salesData]);
+
+    const periodStats = React.useMemo(() => {
+        let pos = 0;
+        let online = 0;
+        salesData.forEach(d => {
+            pos += d.pos || 0;
+            online += d.online || 0;
+        });
+        return { pos, online, total: pos + online };
+    }, [salesData]);
 
     // Monthly Sales vs Target (Last 6 Months)
     const monthlySales = React.useMemo(() => {
@@ -173,12 +301,12 @@ const Reports = () => {
         }
 
         activeInvoices.forEach(inv => {
-            const rawDate = inv.date || inv.created_at;
-            if (!rawDate) return;
-            const key = String(rawDate).slice(0, 7);
+            const d = getInvoiceDate(inv);
+            if (!d) return;
+            const key = d.toISOString().slice(0, 7);
             const m = months.find(item => item.key === key);
             if (m) {
-                m.revenue += Number(inv.amount || inv.total || inv.grand_total || 0);
+                m.revenue += getInvoiceAmount(inv);
             }
         });
 
@@ -194,8 +322,8 @@ const Reports = () => {
         let posRev = 0;
         let onlineRev = 0;
         activeInvoices.forEach(inv => {
-            const amt = Number(inv.amount || inv.total || inv.grand_total || 0);
-            const isOnline = inv.channel === 'online' || inv.order_id || inv.order_number;
+            const amt = getInvoiceAmount(inv);
+            const isOnline = inv.channel === 'online' || inv.order_type === 'online' || Boolean(inv.order_id && !inv.store_id) || Boolean(inv.order_number && !inv.store_id);
             if (isOnline) onlineRev += amt;
             else posRev += amt;
         });
@@ -331,30 +459,97 @@ const Reports = () => {
                     <div className="dash-charts-row">
                         <div className="chart-card">
                             <div className="chart-card-header">
-                                <h2 className="chart-title">Daily Revenue Trend</h2>
-                                <span style={{ fontSize: 11, color: '#9ca3af' }}>{period}</span>
+                                <div>
+                                    <h2 className="chart-title">Daily Revenue Trend</h2>
+                                    <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280' }}>
+                                        POS: <strong style={{ color: '#10b981' }}>{fmt(periodStats.pos)}</strong> · Online: <strong style={{ color: '#6366f1' }}>{fmt(periodStats.online)}</strong> · Total: <strong style={{ color: '#111827' }}>{fmt(periodStats.total)}</strong>
+                                    </p>
+                                </div>
+                                <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>{period}</span>
                             </div>
-                            <ResponsiveContainer width="100%" height={320}>
-                            
-                                <AreaChart data={salesData} margin={{ top: 10, right: 20, bottom: 20, left: 20 }}>
-                                    <defs>
-                                        <linearGradient id="gradOnline" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.18} />
-                                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                        </linearGradient>
-                                        <linearGradient id="gradPos" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.12} />
-                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false}   tickMargin={12}/>
-                                    <YAxis width={45}tickMargin={10}tick={{ fontSize: 11, fill: '#94a3b8' }}axisLine={false} tickLine={false}tickFormatter={v => `${(v / 1000).toFixed(0)}k`}/>
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Area type="monotone" dataKey="online" name="Online" stroke="#6366f1" strokeWidth={2} fill="url(#gradOnline)" dot={false} />
-                                    <Area type="monotone" dataKey="pos" name="POS" stroke="#10b981" strokeWidth={2} fill="url(#gradPos)" dot={false} />
-                                </AreaChart>
-                            </ResponsiveContainer>
+
+                            {loading ? (
+                                <div style={{ height: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#6b7280' }}>
+                                    <div className="spinner-border spinner-border-sm text-primary" role="status" style={{ width: 28, height: 28 }}>
+                                        <span className="visually-hidden">Loading...</span>
+                                    </div>
+                                    <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>Loading daily revenue trend...</span>
+                                </div>
+                            ) : fetchError && !activeInvoices.length ? (
+                                <div style={{ height: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, color: '#ef4444' }}>
+                                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
+                                        <BsExclamationCircle size={22} />
+                                    </div>
+                                    <p style={{ fontSize: 14, fontWeight: 600, color: '#991b1b', margin: 0 }}>Unable to Load Revenue Data</p>
+                                    <p style={{ fontSize: 12, color: '#6b7280', margin: 0, maxWidth: 300, textAlign: 'center' }}>{fetchError}</p>
+                                </div>
+                            ) : !hasRevenueData ? (
+                                <div style={{ height: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: '#9ca3af' }}>
+                                    <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+                                        <BsBarChartFill size={22} />
+                                    </div>
+                                    <div style={{ textAlign: 'center' }}>
+                                        <p style={{ fontSize: 14, fontWeight: 600, color: '#475569', margin: '0 0 4px 0' }}>No Data Available</p>
+                                        <p style={{ fontSize: 12, color: '#94a3b8', margin: 0 }}>
+                                            No revenue transactions recorded for {period.toLowerCase()}.
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div style={{ width: '100%', height: 320, minHeight: 320, position: 'relative' }}>
+                                    <ResponsiveContainer width="100%" height={320} minHeight={320}>
+                                        <AreaChart data={salesData} margin={{ top: 10, right: 20, bottom: 20, left: 10 }}>
+                                            <defs>
+                                                <linearGradient id="gradOnline" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.18} />
+                                                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                                </linearGradient>
+                                                <linearGradient id="gradPos" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.12} />
+                                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                                            <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickMargin={12} />
+                                            <YAxis
+                                                width={55}
+                                                tickMargin={10}
+                                                tick={{ fontSize: 11, fill: '#94a3b8' }}
+                                                axisLine={false}
+                                                tickLine={false}
+                                                domain={[0, (dataMax) => dataMax > 0 ? Math.ceil(dataMax * 1.15) : 1000]}
+                                                tickFormatter={v => {
+                                                    if (v === 0) return '₹0';
+                                                    if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`;
+                                                    if (v >= 1000) return `₹${(v / 1000).toFixed(0)}k`;
+                                                    return `₹${v}`;
+                                                }}
+                                            />
+                                            <Tooltip content={<CustomTooltip />} />
+                                            <Area
+                                                type="monotone"
+                                                dataKey="pos"
+                                                name="POS Revenue"
+                                                stroke="#10b981"
+                                                strokeWidth={2}
+                                                fill="url(#gradPos)"
+                                                dot={{ r: 3, fill: '#10b981' }}
+                                                activeDot={{ r: 6 }}
+                                            />
+                                            <Area
+                                                type="monotone"
+                                                dataKey="online"
+                                                name="Online Revenue"
+                                                stroke="#6366f1"
+                                                strokeWidth={2}
+                                                fill="url(#gradOnline)"
+                                                dot={{ r: 3, fill: '#6366f1' }}
+                                                activeDot={{ r: 6 }}
+                                            />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            )}
                         </div>
 
                         <div className="chart-card">

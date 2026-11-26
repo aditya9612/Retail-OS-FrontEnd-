@@ -316,6 +316,60 @@ export const downloadGRNPdf = async (grnId) => {
 };
 
 /**
+ * Preview Goods Receipt Note (GRN) as PDF (inline display)
+ * STRICT ENDPOINT: GET /api/v1/grn/{grn_id}/download-pdf?format=pdf&mode=preview
+ */
+export const previewGRNPdf = async (grnId) => {
+  if (grnId === undefined || grnId === null || String(grnId).trim() === "") {
+    throw new Error("GRN ID is required");
+  }
+
+  const id = Number(grnId);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error("Invalid GRN ID");
+  }
+
+  const response = await axiosInstance.get(`/api/v1/grn/${id}/download-pdf`, {
+    params: {
+      format: "pdf",
+      mode: "preview",
+    },
+    responseType: "blob",
+    headers: {
+      Accept: "application/pdf",
+    },
+  });
+  return response;
+};
+
+/**
+ * Download / Export Goods Receipt Note (GRN) as CSV
+ * STRICT ENDPOINT: GET /api/v1/grn/{grn_id}/download-pdf?format=csv&mode=download
+ */
+export const downloadGRNCsv = async (grnId) => {
+  if (grnId === undefined || grnId === null || String(grnId).trim() === "") {
+    throw new Error("GRN ID is required");
+  }
+
+  const id = Number(grnId);
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error("Invalid GRN ID");
+  }
+
+  const response = await axiosInstance.get(`/api/v1/grn/${id}/download-pdf`, {
+    params: {
+      format: "csv",
+      mode: "download",
+    },
+    responseType: "blob",
+    headers: {
+      Accept: "text/csv, application/json, */*",
+    },
+  });
+  return response;
+};
+
+/**
  * Fetch Goods Receipt Note (GRN) printable HTML slip
  * STRICT ENDPOINT: GET /api/v1/grn/{grn_id}/print-slip
  */
@@ -354,6 +408,8 @@ export default {
   getPurchaseOrderGRNs,
   getGRNHistory,
   downloadGRNPdf,
+  previewGRNPdf,
+  downloadGRNCsv,
   getGRNPrintSlip,
 };
 

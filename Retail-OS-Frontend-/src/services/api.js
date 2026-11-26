@@ -44,7 +44,12 @@ apiClient.interceptors.request.use(
         }
 
         if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+            if (config.headers?.set) {
+                config.headers.set("Authorization", `Bearer ${token}`);
+            } else {
+                config.headers = config.headers || {};
+                config.headers.Authorization = `Bearer ${token}`;
+            }
         }
 
         // Validate coupon_code on order creation or update (POST/PATCH /orders or //api/v1/orders)

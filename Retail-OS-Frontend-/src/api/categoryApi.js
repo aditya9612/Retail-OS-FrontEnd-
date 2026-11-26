@@ -95,6 +95,14 @@ export const deleteCategory = async (id) => {
   return await category.delete(id);
 };
 
+/**
+ * Export categories (CSV / Excel)
+ * GET /api/v1/categories/export
+ */
+export const exportCategories = async (params = {}) => {
+  return await category.export(params);
+};
+
 export default {
   getCategories,
   getCategoryTree,
@@ -108,5 +116,6 @@ export default {
   deactivateCategory,
   setCategoryActiveStatus,
   deleteCategory,
+  exportCategories,
 };
 

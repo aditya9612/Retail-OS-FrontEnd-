@@ -4,7 +4,6 @@ import {
     BsGrid1X2Fill,
     BsCartCheck,
     BsFileEarmarkText,
-    BsArrowReturnLeft,
     BsReceiptCutoff,
     BsPercent,
     BsCreditCard2Front,
@@ -59,7 +58,6 @@ export const menuGroups = [
         items: [
             { name: 'POS Billing', icon: <BsCartCheck />, path: '/billing' },
             { name: 'Invoices', icon: <BsFileEarmarkText />, path: '/invoices', aliasPaths: ['/billing-management'] },
-            { name: 'Returns & Refunds', icon: <BsArrowReturnLeft />, path: '/billing/returns' },
             { name: 'Credit Notes', icon: <BsReceiptCutoff />, path: '/billing/credit-notes' },
             { name: 'GST Rates', icon: <BsPercent />, path: '/gst-management' },
             { name: 'Payments', icon: <BsCreditCard2Front />, path: '/billing/payments' },
@@ -83,7 +81,7 @@ export const menuGroups = [
             { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases' },
             { name: 'Suppliers', icon: <BsTruck />, path: '/suppliers' },
             { name: 'GRN', icon: <BsClipboardCheck />, path: '/inventory/grn' },
-            { name: 'Purchase Returns', icon: <BsArrowCounterclockwise />, path: '/inventory/purchase-returns' },
+            { name: 'Purchase Returns', icon: <BsArrowCounterclockwise />, path: '/inventory/purchase-returns', aliasPaths: ['/returns', '/purchase-order-returns'] },
             { name: 'Store Transfers', icon: <BsArrowLeftRight />, path: '/inventory/store-transfers' },
         ],
     },
@@ -121,7 +119,7 @@ export const menuGroups = [
         id: 'multi_store',
         label: 'MULTI-STORE',
         items: [
-            { name: 'Stores', icon: <BsShop />, path: '/stores' },
+            { name: 'Stores Directory', icon: <BsShop />, path: '/stores' },
             { name: 'Store Targets', icon: <BsBullseye />, path: '/stores/targets' },
         ],
     },

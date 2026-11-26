@@ -29,8 +29,15 @@ import {
   BsCheck2All,
   BsTrash,
   BsArrowRepeat,
-  BsChevronLeft,
-  BsChevronRight,
+  BsSearch,
+  BsX,
+  BsPlus,
+  BsBoxSeam,
+  BsClockHistory,
+  BsReceipt,
+  BsShop,
+  BsFilter,
+  BsArrowReturnLeft,
 } from "react-icons/bs";
 
 import "./PurchaseOrderReturns.css";
@@ -1531,13 +1538,23 @@ const PurchaseOrderReturns = () => {
     <div className="purchase-order-returns-page">
       {/* HEADER */}
       <div className="purchase-order-returns-header">
-        <div>
-          <h2>Purchase Order Returns</h2>
+        <div className="por-header-left">
+          <div className="por-eyebrow">
+            <span className="por-eyebrow-dot"></span>
+            Inventory Management &bull; Purchase History
+          </div>
+          <h2>
+            <span className="por-header-icon-wrap" aria-hidden="true">
+              <BsArrowReturnLeft size={18} />
+            </span>
+            Purchase Order Returns
+          </h2>
           <p>Create, track, and manage purchase order returns and debit notes.</p>
         </div>
 
         <button
           type="button"
+          className="por-btn-create"
           onClick={() => {
             setShowCreateForm((current) => {
               const nextState = !current;
@@ -1554,14 +1571,29 @@ const PurchaseOrderReturns = () => {
             setActionSuccess("");
           }}
         >
-          {showCreateForm ? "Cancel" : "Create Return"}
+          {showCreateForm ? (
+            <>
+              <BsX size={18} />
+              <span>Cancel</span>
+            </>
+          ) : (
+            <>
+              <BsPlus size={18} />
+              <span>Create Return</span>
+            </>
+          )}
         </button>
       </div>
 
       {/* DASHBOARD STATS SUMMARY CARDS */}
       <div className="purchase-order-returns-stats-grid">
         <div className="returns-stat-card card-total">
-          <span className="returns-stat-card-title">Total Returns</span>
+          <div className="returns-stat-card-top">
+            <span className="returns-stat-card-title">Total Returns</span>
+            <div className="returns-stat-card-icon icon-total">
+              <BsBoxSeam size={16} />
+            </div>
+          </div>
           <p className="returns-stat-card-value">
             {statsLoading ? "..." : String(totalCount ?? 0)}
           </p>
@@ -1569,7 +1601,12 @@ const PurchaseOrderReturns = () => {
         </div>
 
         <div className="returns-stat-card card-requested">
-          <span className="returns-stat-card-title">Requested Returns</span>
+          <div className="returns-stat-card-top">
+            <span className="returns-stat-card-title">Requested Returns</span>
+            <div className="returns-stat-card-icon icon-requested">
+              <BsClockHistory size={16} />
+            </div>
+          </div>
           <p className="returns-stat-card-value">
             {statsLoading ? "..." : String(requestedCount ?? 0)}
           </p>
@@ -1577,7 +1614,12 @@ const PurchaseOrderReturns = () => {
         </div>
 
         <div className="returns-stat-card card-approved">
-          <span className="returns-stat-card-title">Approved Returns</span>
+          <div className="returns-stat-card-top">
+            <span className="returns-stat-card-title">Approved Returns</span>
+            <div className="returns-stat-card-icon icon-approved">
+              <BsCheckCircle size={16} />
+            </div>
+          </div>
           <p className="returns-stat-card-value">
             {statsLoading ? "..." : String(approvedCount ?? 0)}
           </p>
@@ -1585,7 +1627,12 @@ const PurchaseOrderReturns = () => {
         </div>
 
         <div className="returns-stat-card card-completed">
-          <span className="returns-stat-card-title">Completed Returns</span>
+          <div className="returns-stat-card-top">
+            <span className="returns-stat-card-title">Completed Returns</span>
+            <div className="returns-stat-card-icon icon-completed">
+              <BsCheck2All size={18} />
+            </div>
+          </div>
           <p className="returns-stat-card-value">
             {statsLoading ? "..." : String(completedCount ?? 0)}
           </p>
@@ -1593,7 +1640,12 @@ const PurchaseOrderReturns = () => {
         </div>
 
         <div className="returns-stat-card card-rejected">
-          <span className="returns-stat-card-title">Rejected Returns</span>
+          <div className="returns-stat-card-top">
+            <span className="returns-stat-card-title">Rejected Returns</span>
+            <div className="returns-stat-card-icon icon-rejected">
+              <BsXCircle size={16} />
+            </div>
+          </div>
           <p className="returns-stat-card-value">
             {statsLoading ? "..." : String(rejectedCount ?? 0)}
           </p>
@@ -1601,8 +1653,13 @@ const PurchaseOrderReturns = () => {
         </div>
 
         <div className="returns-stat-card card-amount">
-          <span className="returns-stat-card-title">Total Debit Amount</span>
-          <p className="returns-stat-card-value" style={{ fontSize: 18 }}>
+          <div className="returns-stat-card-top">
+            <span className="returns-stat-card-title">Total Debit Amount</span>
+            <div className="returns-stat-card-icon icon-amount">
+              <BsReceipt size={16} />
+            </div>
+          </div>
+          <p className="returns-stat-card-value" style={{ fontSize: 20 }}>
             {statsLoading ? "..." : formatCurrency(totalAmountVal)}
           </p>
           <span className="returns-stat-card-sub">Cumulative Debit (INR)</span>
@@ -1640,247 +1697,6 @@ const PurchaseOrderReturns = () => {
               </div>
             ))}
           </div>
-        </div>
-      )}
-
-      {/* QUICK LOOKUP BY RETURN NUMBER BAR (GET /by-number/{return_number}) */}
-      <form
-        className="purchase-order-returns-lookup-bar"
-        onSubmit={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          handleLookupByNumber(e);
-        }}
-      >
-        <input
-          type="text"
-          className="purchase-order-returns-lookup-input"
-          placeholder="Lookup by Return Number (e.g. POR-20261027064857-50D2) or Debit Note #..."
-          value={lookupNumber}
-          onChange={(e) => {
-            setLookupNumber(e.target.value);
-            if (actionError) setActionError("");
-            if (lookupError) setLookupError("");
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              e.stopPropagation();
-              handleLookupByNumber(e);
-            }
-          }}
-          disabled={lookupLoading}
-        />
-        {lookupNumber && (
-          <button
-            type="button"
-            className="purchase-order-returns-lookup-clear"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setLookupNumber("");
-              setActionError("");
-              setLookupError("");
-              setLookupResult(null);
-            }}
-            disabled={lookupLoading}
-            title="Clear lookup input"
-          >
-            ✕
-          </button>
-        )}
-        <button
-          type="button"
-          className="purchase-order-returns-lookup-btn"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleLookupByNumber(e);
-          }}
-          disabled={lookupLoading}
-          title="Lookup purchase order return from backend API"
-        >
-          {lookupLoading ? "Looking up..." : "Lookup Return"}
-        </button>
-      </form>
-
-      {/* LOOKUP ERROR BANNER WITH RETRY */}
-      {lookupError && (
-        <div
-          className="purchase-order-returns-error"
-          style={{
-            margin: "0 0 12px 0",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: 8,
-          }}
-        >
-          <span>{lookupError}</span>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleLookupByNumber(e);
-              }}
-              style={{
-                padding: "3px 10px",
-                fontSize: 11,
-                cursor: "pointer",
-                borderRadius: 4,
-                border: "1px solid #f87171",
-                background: "#ffffff",
-                color: "#dc2626",
-                fontWeight: 600,
-              }}
-            >
-              Retry
-            </button>
-            <button
-              type="button"
-              onClick={() => setLookupError("")}
-              style={{
-                padding: "3px 8px",
-                fontSize: 11,
-                cursor: "pointer",
-                borderRadius: 4,
-                border: "1px solid #cbd5e1",
-                background: "#ffffff",
-                color: "#64748b",
-              }}
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* LOOKUP RESULT PREVIEW CARD */}
-      {lookupResult && (
-        <div
-          className="purchase-order-return-details"
-          style={{
-            margin: "0 0 16px 0",
-            borderColor: "#6366f1",
-            boxShadow: "0 4px 12px rgba(99, 102, 241, 0.08)",
-          }}
-        >
-          <div className="purchase-order-return-details-header">
-            <div>
-              <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span>Lookup Return Result</span>
-                <span
-                  className={
-                    "purchase-order-return-status status-" +
-                    String(lookupResult.status || "").toLowerCase()
-                  }
-                  style={{ fontSize: 11, padding: "2px 8px" }}
-                >
-                  {lookupResult.status || "N/A"}
-                </span>
-              </h3>
-              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>
-                Found via <code>/by-number/</code> API endpoint
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              {lookupResult.id && (
-                <button
-                  type="button"
-                  onClick={() => handleDownloadPdf(lookupResult.id, lookupResult)}
-                  disabled={downloadingPdfId === lookupResult.id}
-                  title="Download Debit Note PDF"
-                >
-                  {downloadingPdfId === lookupResult.id ? "Downloading..." : "Download PDF"}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setLookupResult(null)}
-                title="Close lookup result preview"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-
-          <div className="purchase-order-return-details-grid">
-            <p>
-              <strong>Return ID:</strong> {lookupResult.id ?? "N/A"}
-            </p>
-            <p>
-              <strong>Return Number:</strong>{" "}
-              <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#4f46e5" }}>
-                {lookupResult.return_number || lookupResult.return_no || "N/A"}
-              </span>
-            </p>
-            <p>
-              <strong>Debit Note #:</strong> {lookupResult.debit_note_number ?? "N/A"}
-            </p>
-            <p>
-              <strong>PO Number:</strong>{" "}
-              {lookupResult.purchase_order_number ||
-                (lookupResult.purchase_order_id
-                  ? `PO #${lookupResult.purchase_order_id}`
-                  : "N/A")}
-            </p>
-            <p>
-              <strong>Supplier:</strong>{" "}
-              {lookupResult.supplier_name ||
-                lookupResult.supplier?.name ||
-                (lookupResult.supplier_id ? `Supplier #${lookupResult.supplier_id}` : "N/A")}
-            </p>
-            <p>
-              <strong>Total Debit:</strong>{" "}
-              <strong style={{ color: "#059669" }}>
-                {formatCurrency(lookupResult.total_amount ?? lookupResult.amount)}
-              </strong>
-            </p>
-            <p>
-              <strong>Store / Warehouse:</strong>{" "}
-              {lookupResult.store_name || lookupResult.warehouse_name || "N/A"}
-            </p>
-            <p>
-              <strong>Reason:</strong> {lookupResult.reason || "N/A"}
-            </p>
-          </div>
-
-          {Array.isArray(lookupResult.items) && lookupResult.items.length > 0 && (
-            <div style={{ marginTop: 12 }}>
-              <h5 style={{ margin: "0 0 6px", fontSize: 12, color: "#334155" }}>
-                Returned Items ({lookupResult.items.length})
-              </h5>
-              <div className="purchase-order-returns-table-wrapper">
-                <table className="purchase-order-returns-table">
-                  <thead>
-                    <tr>
-                      <th>Product</th>
-                      <th>SKU</th>
-                      <th>Quantity</th>
-                      <th>Unit Price</th>
-                      <th>Total Cost</th>
-                      <th>Item Reason</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lookupResult.items.map((it, idx) => (
-                      <tr key={it.id || idx}>
-                        <td>{it.product_name || `Product #${it.product_id || "-"}`}</td>
-                        <td>{it.product_sku || it.sku || "-"}</td>
-                        <td>{it.quantity ?? 0}</td>
-                        <td>{formatCurrency(it.unit_price ?? it.cost_price ?? 0)}</td>
-                        <td>{formatCurrency(it.total_cost ?? it.total_amount ?? 0)}</td>
-                        <td>{it.reason || it.item_reason || "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -2200,268 +2016,293 @@ const PurchaseOrderReturns = () => {
         </form>
       )}
 
-      {/* SEARCH AND FILTERS */}
-      <div className="purchase-order-returns-filters">
-        <div className="purchase-order-returns-search">
-          <input
-            type="text"
-            placeholder="Search by Return Number, Debit Note, PO Number, Reason, Supplier..."
-            value={searchTerm}
-            onChange={(event) => {
-              setSearchTerm(event.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
+      {/* ── UNIFIED PROFESSIONAL SEARCH & FILTER SECTION ── */}
+      <div className="purchase-order-returns-filter-card">
+        {/* SEARCH & FILTER CONTROLS */}
+        <div className="por-filter-row purchase-order-returns-filters">
+          <div className="por-filter-search-wrap purchase-order-returns-search">
+            <BsSearch className="por-search-icon" size={14} />
+            <input
+              type="text"
+              placeholder="Search by Return Number, Debit Note, PO Number, Reason, Supplier..."
+              value={searchTerm}
+              onChange={(event) => {
+                setSearchTerm(event.target.value);
+                setPage(1);
+              }}
+              aria-label="Search returns"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                className="por-search-clear"
+                onClick={() => {
+                  setSearchTerm("");
+                  setPage(1);
+                }}
+                title="Clear search input"
+                aria-label="Clear search input"
+              >
+                <BsX size={16} />
+              </button>
+            )}
+          </div>
 
-        <div className="purchase-order-returns-store-filter">
-          <select
-            value={selectedStoreId}
-            onChange={(event) => {
-              setSelectedStoreId(event.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="">All Stores (Overall Stats)</option>
-            {stores.map((st) => (
-              <option key={st.id} value={st.id}>
-                {st.name || st.store_name || `Store #${st.id}`}
-              </option>
-            ))}
-          </select>
-        </div>
+          <div className="por-filter-controls-group por-filters-right">
+            <div className="purchase-order-returns-store-filter">
+              <div className="por-filter-label-wrap">
+                <BsShop size={13} style={{ color: "#6366f1", flexShrink: 0 }} />
+                <span className="por-filter-text-label">Store:</span>
+              </div>
+              <select
+                value={selectedStoreId}
+                onChange={(event) => {
+                  setSelectedStoreId(event.target.value);
+                  setPage(1);
+                }}
+                aria-label="Filter by store"
+              >
+                <option value="">All Stores (Overall Stats)</option>
+                {stores.map((st) => (
+                  <option key={st.id} value={st.id}>
+                    {st.name || st.store_name || `Store #${st.id}`}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        <div className="purchase-order-returns-status-filter">
-          <select
-            value={statusFilter}
-            onChange={(event) => {
-              setStatusFilter(event.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">All Status</option>
-            <option value="requested">Requested</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="completed">Completed</option>
-          </select>
+            <div className="purchase-order-returns-status-filter">
+              <div className="por-filter-label-wrap">
+                <BsFilter size={15} style={{ color: "#6366f1", flexShrink: 0 }} />
+                <span className="por-filter-text-label">Status:</span>
+              </div>
+              <select
+                value={statusFilter}
+                onChange={(event) => {
+                  setStatusFilter(event.target.value);
+                  setPage(1);
+                }}
+                aria-label="Filter by status"
+              >
+                <option value="all">All Status</option>
+                <option value="requested">Requested</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+
+            {(searchTerm || selectedStoreId || statusFilter !== "all") && (
+              <button
+                type="button"
+                className="por-btn-reset-filters"
+                onClick={() => {
+                  setSearchTerm("");
+                  setSelectedStoreId("");
+                  setStatusFilter("all");
+                  setPage(1);
+                }}
+                title="Reset search and filters"
+              >
+                <BsArrowRepeat size={13} />
+                <span>Reset</span>
+              </button>
+            )}
+
+            <div className="por-directory-tag" title="Purchase Order Returns Directory">
+              <span className="por-dir-dot"></span>
+              <span>Purchase Return Directory</span>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* LOOKUP ERROR BANNER WITH RETRY */}
+      {lookupError && (
+        <div
+          className="purchase-order-returns-error"
+          style={{
+            margin: "0 0 12px 0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <span>{lookupError}</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleLookupByNumber(e);
+              }}
+              style={{
+                padding: "3px 10px",
+                fontSize: 11,
+                cursor: "pointer",
+                borderRadius: 4,
+                border: "1px solid #f87171",
+                background: "#ffffff",
+                color: "#dc2626",
+                fontWeight: 600,
+              }}
+            >
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={() => setLookupError("")}
+              style={{
+                padding: "3px 8px",
+                fontSize: 11,
+                cursor: "pointer",
+                borderRadius: 4,
+                border: "1px solid #cbd5e1",
+                background: "#ffffff",
+                color: "#64748b",
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* LOOKUP RESULT PREVIEW CARD */}
+      {lookupResult && (
+        <div
+          className="purchase-order-return-details"
+          style={{
+            margin: "0 0 16px 0",
+            borderColor: "#6366f1",
+            boxShadow: "0 4px 12px rgba(99, 102, 241, 0.08)",
+          }}
+        >
+          <div className="purchase-order-return-details-header">
+            <div>
+              <h3 style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Lookup Return Result</span>
+                <span
+                  className={
+                    "purchase-order-return-status status-" +
+                    String(lookupResult.status || "").toLowerCase()
+                  }
+                  style={{ fontSize: 11, padding: "2px 8px" }}
+                >
+                  {lookupResult.status || "N/A"}
+                </span>
+              </h3>
+              <p style={{ margin: "2px 0 0", fontSize: 12, color: "#64748b" }}>
+                Found via <code>/by-number/</code> API endpoint
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              {lookupResult.id && (
+                <button
+                  type="button"
+                  onClick={() => handleDownloadPdf(lookupResult.id, lookupResult)}
+                  disabled={downloadingPdfId === lookupResult.id}
+                  title="Download Debit Note PDF"
+                >
+                  {downloadingPdfId === lookupResult.id ? "Downloading..." : "Download PDF"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setLookupResult(null)}
+                title="Close lookup result preview"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          <div className="purchase-order-return-details-grid">
+            <p>
+              <strong>Return Number:</strong>{" "}
+              <span style={{ fontFamily: "monospace", fontWeight: 700, color: "#4f46e5" }}>
+                {lookupResult.return_number || lookupResult.return_no || "N/A"}
+              </span>
+            </p>
+            <p>
+              <strong>Debit Note #:</strong> {lookupResult.debit_note_number ?? "N/A"}
+            </p>
+            <p>
+              <strong>PO Number:</strong>{" "}
+              {lookupResult.purchase_order_number ||
+                (lookupResult.purchase_order_id
+                  ? `PO #${lookupResult.purchase_order_id}`
+                  : "N/A")}
+            </p>
+            <p>
+              <strong>Supplier:</strong>{" "}
+              {lookupResult.supplier_name ||
+                lookupResult.supplier?.name ||
+                (lookupResult.supplier_id ? `Supplier #${lookupResult.supplier_id}` : "N/A")}
+            </p>
+            <p>
+              <strong>Total Debit:</strong>{" "}
+              <strong style={{ color: "#059669" }}>
+                {formatCurrency(lookupResult.total_amount ?? lookupResult.amount)}
+              </strong>
+            </p>
+            <p>
+              <strong>Store / Warehouse:</strong>{" "}
+              {lookupResult.store_name || lookupResult.warehouse_name || "N/A"}
+            </p>
+            <p>
+              <strong>Reason:</strong> {lookupResult.reason || "N/A"}
+            </p>
+          </div>
+
+          {Array.isArray(lookupResult.items) && lookupResult.items.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <h5 style={{ margin: "0 0 6px", fontSize: 12, color: "#334155" }}>
+                Returned Items ({lookupResult.items.length})
+              </h5>
+              <div className="purchase-order-returns-table-wrapper">
+                <table className="purchase-order-returns-table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th>SKU</th>
+                      <th>Quantity</th>
+                      <th>Unit Price</th>
+                      <th>Total Cost</th>
+                      <th>Item Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lookupResult.items.map((it, idx) => (
+                      <tr key={it.id || idx}>
+                        <td>{it.product_name || `Product #${it.product_id || "-"}`}</td>
+                        <td>{it.product_sku || it.sku || "-"}</td>
+                        <td>{it.quantity ?? 0}</td>
+                        <td>{formatCurrency(it.unit_price ?? it.cost_price ?? 0)}</td>
+                        <td>{formatCurrency(it.total_cost ?? it.total_amount ?? 0)}</td>
+                        <td>{it.reason || it.item_reason || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <div className="purchase-order-returns-error">{String(error)}</div>}
       {actionError && <div className="purchase-order-returns-error">{String(actionError)}</div>}
       {actionSuccess && <div className="purchase-order-returns-success">{actionSuccess}</div>}
 
-      {/* RETURNS TABLE */}
-      <div className="purchase-order-returns-table-wrapper">
-        {loading ? (
-          <div className="purchase-order-returns-message">Loading purchase order returns...</div>
-        ) : displayedReturns.length === 0 ? (
-          <div className="purchase-order-returns-message">No purchase order returns found.</div>
-        ) : (
-          <table className="purchase-order-returns-table">
-            <thead>
-              <tr>
-                <th>Return Number</th>
-                <th>Debit Note Number</th>
-                <th>Purchase Order Number</th>
-                <th>Supplier</th>
-                <th>Store</th>
-                <th>Warehouse</th>
-                <th>Reason</th>
-                <th>Status</th>
-                <th>Total Amount</th>
-                <th>Created Date</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {displayedReturns.map((item) => {
-                const itemStatus = String(item.status || "").toLowerCase();
-                const itemIsProcessing =
-                  approvingId === item.id ||
-                  rejectingId === item.id ||
-                  completingId === item.id ||
-                  deletingId === item.id ||
-                  downloadingPdfId === item.id ||
-                  (updating && editingReturn?.id === item.id);
-                const isRowProcessing = itemIsProcessing || isProcessing;
-
-                const returnNum =
-                  item.return_number || item.return_no || (item.id ? `POR-${item.id}` : "-");
-                const debitNoteNum = item.debit_note_number || item.debit_note_no || "-";
-                const poNum =
-                  item.purchase_order_number ||
-                  item.po_number ||
-                  (item.purchase_order_id ? `PO #${item.purchase_order_id}` : "-");
-                const supplierName =
-                  item.supplier_name ||
-                  item.supplier?.name ||
-                  (item.supplier_id ? `Supplier #${item.supplier_id}` : "-");
-                const storeName =
-                  item.store_name ||
-                  item.store?.name ||
-                  (item.store_id ? `Store #${item.store_id}` : "-");
-                const warehouseName =
-                  item.warehouse_name ||
-                  item.warehouse?.name ||
-                  (item.warehouse_id ? `Warehouse #${item.warehouse_id}` : "-");
-                const totalAmountNum = item.total_amount ?? item.amount;
-
-                return (
-                  <tr key={item.id}>
-                    <td>
-                      <strong style={{ color: "#4f46e5" }}>{returnNum}</strong>
-                      <div style={{ fontSize: 10, color: "#94a3b8" }}>ID: #{item.id ?? "-"}</div>
-                    </td>
-
-                    <td style={{ fontWeight: 500 }}>{debitNoteNum}</td>
-                    <td>{poNum}</td>
-                    <td>{supplierName}</td>
-                    <td>{storeName}</td>
-                    <td>{warehouseName}</td>
-                    <td>{item.reason || "-"}</td>
-
-                    <td>
-                      <span className={"purchase-order-return-status status-" + itemStatus}>
-                        {item.status || "-"}
-                      </span>
-                    </td>
-
-                    <td style={{ fontWeight: 700, color: "#0f172a" }}>
-                      {formatCurrency(totalAmountNum)}
-                    </td>
-                    <td>{formatDate(item.created_at)}</td>
-
-                    <td>
-                      <div className="purchase-order-return-actions">
-                        {/* 1. View Details */}
-                        <button
-                          type="button"
-                          className="por-action-btn por-btn-view"
-                          onClick={() => handleViewDetails(item.id)}
-                          disabled={(detailsLoading && detailsReturnId === item.id) || isRowProcessing}
-                          title={detailsLoading && detailsReturnId === item.id ? "Loading..." : "View Details"}
-                          aria-label={detailsLoading && detailsReturnId === item.id ? "Loading..." : "View Details"}
-                        >
-                          {detailsLoading && detailsReturnId === item.id ? (
-                            <BsArrowRepeat className="animate-spin" size={14} />
-                          ) : (
-                            <BsEye size={14} />
-                          )}
-                        </button>
-
-                        {/* 2. Download PDF */}
-                        <button
-                          type="button"
-                          className="por-action-btn por-btn-pdf"
-                          onClick={() => handleDownloadPdf(item.id, item)}
-                          disabled={downloadingPdfId === item.id || isRowProcessing}
-                          title={downloadingPdfId === item.id ? "Downloading..." : "Download PDF"}
-                          aria-label={downloadingPdfId === item.id ? "Downloading..." : "Download PDF"}
-                        >
-                          {downloadingPdfId === item.id ? (
-                            <BsArrowRepeat className="animate-spin" size={14} />
-                          ) : (
-                            <BsFileEarmarkPdf size={14} />
-                          )}
-                        </button>
-
-                        {/* 3, 4, 5. Edit, Approve, Reject (when requested) */}
-                        {itemStatus === "requested" && (
-                          <>
-                            <button
-                              type="button"
-                              className="por-action-btn por-btn-edit"
-                              onClick={() => handleEditReturn(item)}
-                              disabled={isRowProcessing}
-                              title="Edit Return"
-                              aria-label="Edit Return"
-                            >
-                              <BsPencilFill size={13} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="por-action-btn por-btn-approve"
-                              onClick={() => handleApprove(item.id)}
-                              disabled={isRowProcessing}
-                              title={approvingId === item.id ? "Approving..." : "Approve Return"}
-                              aria-label={approvingId === item.id ? "Approving..." : "Approve Return"}
-                            >
-                              {approvingId === item.id ? (
-                                <BsArrowRepeat className="animate-spin" size={14} />
-                              ) : (
-                                <BsCheckCircle size={14} />
-                              )}
-                            </button>
-
-                            <button
-                              type="button"
-                              className="por-action-btn por-btn-reject"
-                              onClick={() => handleReject(item.id, item.status)}
-                              disabled={rejectingId === item.id || isRowProcessing}
-                              title={rejectingId === item.id ? "Rejecting..." : "Reject Return"}
-                              aria-label={rejectingId === item.id ? "Rejecting..." : "Reject Return"}
-                            >
-                              {rejectingId === item.id ? (
-                                <BsArrowRepeat className="animate-spin" size={14} />
-                              ) : (
-                                <BsXCircle size={14} />
-                              )}
-                            </button>
-                          </>
-                        )}
-
-                        {/* 6. Complete (when approved) */}
-                        {itemStatus === "approved" && (
-                          <button
-                            type="button"
-                            className="por-action-btn por-btn-complete"
-                            onClick={() => handleComplete(item.id, item.status)}
-                            disabled={completingId === item.id || isRowProcessing}
-                            title={completingId === item.id ? "Completing..." : "Complete Return"}
-                            aria-label={completingId === item.id ? "Completing..." : "Complete Return"}
-                          >
-                            {completingId === item.id ? (
-                              <BsArrowRepeat className="animate-spin" size={14} />
-                            ) : (
-                              <BsCheck2All size={15} />
-                            )}
-                          </button>
-                        )}
-
-                        {/* 7. Delete */}
-                        <button
-                          type="button"
-                          className="por-action-btn por-btn-delete"
-                          onClick={() => handleDelete(item.id)}
-                          disabled={isRowProcessing}
-                          title={deletingId === item.id ? "Deleting..." : "Delete"}
-                          aria-label={deletingId === item.id ? "Deleting..." : "Delete"}
-                        >
-                          {deletingId === item.id ? (
-                            <BsArrowRepeat className="animate-spin" size={14} />
-                          ) : (
-                            <BsTrash size={14} />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
       {/* UPDATE RETURN FORM */}
       {editingReturn && (
         <form className="purchase-order-return-details" onSubmit={handleUpdateReturn}>
           <div className="purchase-order-return-details-header">
-            <h3>Update Purchase Order Return #{editingReturn.id}</h3>
+            <h3>Update Purchase Order Return {editingReturn.return_number || editingReturn.return_no || `#${editingReturn.id}`}</h3>
             <button type="button" onClick={handleCancelEdit} disabled={updating}>
               Cancel
             </button>
@@ -2501,92 +2342,317 @@ const PurchaseOrderReturns = () => {
         </form>
       )}
 
-      {/* PAGINATION */}
-      <div className="purchase-order-returns-pagination">
-        <div className="por-pagination-left">
-          <div className="por-page-size-wrap">
-            <label htmlFor="por-page-size" className="por-page-size-label">
-              Rows per page:
-            </label>
-            <select
-              id="por-page-size"
-              className="por-page-size-select"
-              value={pageSize}
-              onChange={(e) => {
-                const newSize = Number(e.target.value);
-                setPageSize(newSize);
-                setPage(1);
-              }}
-              disabled={loading}
-              aria-label="Select rows per page"
-            >
-              <option value={8}>8</option>
-              <option value={15}>15</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
-        </div>
+      {/* RETURNS TABLE CARD WITH INTEGRATED PAGINATION */}
+      <div className="por-table-card">
+        <div className="purchase-order-returns-table-wrapper custom-scrollbar">
+          {loading ? (
+            <div className="purchase-order-returns-message">
+              <BsArrowRepeat className="animate-spin" size={24} style={{ marginBottom: 8, color: "#6366f1" }} />
+              <div>Loading purchase order returns...</div>
+            </div>
+          ) : displayedReturns.length === 0 ? (
+            <div className="purchase-order-returns-empty">
+              <div className="por-empty-icon">
+                <BsBoxSeam size={34} />
+              </div>
+              <h4>No purchase order returns found</h4>
+              <p>Try adjusting your search criteria, filter options, or create a new return.</p>
+              {(searchTerm || selectedStoreId || statusFilter !== "all") && (
+                <button
+                  type="button"
+                  className="por-btn-clear-empty"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setSelectedStoreId("");
+                    setStatusFilter("all");
+                    setPage(1);
+                  }}
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          ) : (
+            <table className="purchase-order-returns-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 150 }}>Return Number</th>
+                  <th style={{ width: 140 }}>Debit Note #</th>
+                  <th style={{ width: 130 }}>PO Number</th>
+                  <th style={{ minWidth: 160 }}>Supplier</th>
+                  <th style={{ minWidth: 140 }}>Store</th>
+                  <th style={{ minWidth: 140 }}>Warehouse</th>
+                  <th style={{ minWidth: 160 }}>Reason</th>
+                  <th style={{ width: 120, textAlign: "center" }}>Status</th>
+                  <th style={{ width: 130, textAlign: "right" }}>Total Amount</th>
+                  <th style={{ width: 130 }}>Created Date</th>
+                  <th style={{ width: 170, textAlign: "center" }}>Actions</th>
+                </tr>
+              </thead>
 
-        <div className="por-pagination-info">
-          Showing{" "}
-          <strong className="por-pagination-highlight">
-            {effectiveTotal === 0 ? "0" : `${rangeStart}–${rangeEnd}`}
-          </strong>{" "}
-          of{" "}
-          <strong className="por-pagination-highlight">
-            {effectiveTotal}
-          </strong>{" "}
-          {effectiveTotal === 1 ? "record" : "records"}
-          {effectiveTotalPages > 1 && (
-            <span className="por-pagination-page-indicator">
-              (Page {page} of {effectiveTotalPages})
-            </span>
+              <tbody>
+                {displayedReturns.map((item) => {
+                  const itemStatus = String(item.status || "").toLowerCase();
+                  const itemIsProcessing =
+                    approvingId === item.id ||
+                    rejectingId === item.id ||
+                    completingId === item.id ||
+                    deletingId === item.id ||
+                    downloadingPdfId === item.id ||
+                    (updating && editingReturn?.id === item.id);
+                  const isRowProcessing = itemIsProcessing || isProcessing;
+
+                  const returnNum =
+                    item.return_number || item.return_no || (item.id ? `POR-${item.id}` : "-");
+                  const debitNoteNum = item.debit_note_number || item.debit_note_no || "-";
+                  const poNum =
+                    item.purchase_order_number ||
+                    item.po_number ||
+                    (item.purchase_order_id ? `PO #${item.purchase_order_id}` : "-");
+                  const supplierName =
+                    item.supplier_name ||
+                    item.supplier?.name ||
+                    (item.supplier_id ? `Supplier #${item.supplier_id}` : "-");
+                  const storeName =
+                    item.store_name ||
+                    item.store?.name ||
+                    (item.store_id ? `Store #${item.store_id}` : "-");
+                  const warehouseName =
+                    item.warehouse_name ||
+                    item.warehouse?.name ||
+                    (item.warehouse_id ? `Warehouse #${item.warehouse_id}` : "-");
+                  const totalAmountNum = item.total_amount ?? item.amount;
+
+                  return (
+                    <tr key={item.id}>
+                      <td>
+                        <div className="por-cell-return-num">
+                          <span className="por-code-badge">{returnNum}</span>
+                        </div>
+                      </td>
+
+                      <td>
+                        <span className="por-debit-badge">{debitNoteNum}</span>
+                      </td>
+                      <td>
+                        <span className="por-po-badge">{poNum}</span>
+                      </td>
+                      <td>
+                        <span className="por-supplier-text">{supplierName}</span>
+                      </td>
+                      <td>
+                        <span className="por-location-text">{storeName}</span>
+                      </td>
+                      <td>
+                        <span className="por-location-text">{warehouseName}</span>
+                      </td>
+                      <td>
+                        <span className="por-reason-text" title={item.reason || "-"}>
+                          {item.reason || "-"}
+                        </span>
+                      </td>
+
+                      <td style={{ textAlign: "center" }}>
+                        <span className={"por-status-badge por-status-" + itemStatus}>
+                          <span className="por-status-dot"></span>
+                          {item.status || "-"}
+                        </span>
+                      </td>
+
+                      <td style={{ textAlign: "right" }}>
+                        <strong className="por-amount-text">
+                          {formatCurrency(totalAmountNum)}
+                        </strong>
+                      </td>
+                      <td>
+                        <span className="por-date-text">{formatDate(item.created_at)}</span>
+                      </td>
+
+                      <td style={{ textAlign: "center" }}>
+                        <div className="purchase-order-return-actions">
+                          {/* 1. View Details */}
+                          <button
+                            type="button"
+                            className="por-action-btn por-btn-view"
+                            onClick={() => handleViewDetails(item.id)}
+                            disabled={(detailsLoading && detailsReturnId === item.id) || isRowProcessing}
+                            title={detailsLoading && detailsReturnId === item.id ? "Loading..." : "View Details"}
+                            aria-label={detailsLoading && detailsReturnId === item.id ? "Loading..." : "View Details"}
+                          >
+                            {detailsLoading && detailsReturnId === item.id ? (
+                              <BsArrowRepeat className="animate-spin" size={14} />
+                            ) : (
+                              <BsEye size={14} />
+                            )}
+                          </button>
+
+                          {/* 2. Download PDF */}
+                          <button
+                            type="button"
+                            className="por-action-btn por-btn-pdf"
+                            onClick={() => handleDownloadPdf(item.id, item)}
+                            disabled={downloadingPdfId === item.id || isRowProcessing}
+                            title={downloadingPdfId === item.id ? "Downloading..." : "Download PDF"}
+                            aria-label={downloadingPdfId === item.id ? "Downloading..." : "Download PDF"}
+                          >
+                            {downloadingPdfId === item.id ? (
+                              <BsArrowRepeat className="animate-spin" size={14} />
+                            ) : (
+                              <BsFileEarmarkPdf size={14} />
+                            )}
+                          </button>
+
+                          {/* 3, 4, 5. Edit, Approve, Reject (when requested) */}
+                          {itemStatus === "requested" && (
+                            <>
+                              <button
+                                type="button"
+                                className="por-action-btn por-btn-edit"
+                                onClick={() => handleEditReturn(item)}
+                                disabled={isRowProcessing}
+                                title="Edit Return"
+                                aria-label="Edit Return"
+                              >
+                                <BsPencilFill size={13} />
+                              </button>
+
+                              <button
+                                type="button"
+                                className="por-action-btn por-btn-approve"
+                                onClick={() => handleApprove(item.id)}
+                                disabled={isRowProcessing}
+                                title={approvingId === item.id ? "Approving..." : "Approve Return"}
+                                aria-label={approvingId === item.id ? "Approving..." : "Approve Return"}
+                              >
+                                {approvingId === item.id ? (
+                                  <BsArrowRepeat className="animate-spin" size={14} />
+                                ) : (
+                                  <BsCheckCircle size={14} />
+                                )}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="por-action-btn por-btn-reject"
+                                onClick={() => handleReject(item.id, item.status)}
+                                disabled={rejectingId === item.id || isRowProcessing}
+                                title={rejectingId === item.id ? "Rejecting..." : "Reject Return"}
+                                aria-label={rejectingId === item.id ? "Rejecting..." : "Reject Return"}
+                              >
+                                {rejectingId === item.id ? (
+                                  <BsArrowRepeat className="animate-spin" size={14} />
+                                ) : (
+                                  <BsXCircle size={14} />
+                                )}
+                              </button>
+                            </>
+                          )}
+
+                          {/* 6. Complete (when approved) */}
+                          {itemStatus === "approved" && (
+                            <button
+                              type="button"
+                              className="por-action-btn por-btn-complete"
+                              onClick={() => handleComplete(item.id, item.status)}
+                              disabled={completingId === item.id || isRowProcessing}
+                              title={completingId === item.id ? "Completing..." : "Complete Return"}
+                              aria-label={completingId === item.id ? "Completing..." : "Complete Return"}
+                            >
+                              {completingId === item.id ? (
+                                <BsArrowRepeat className="animate-spin" size={14} />
+                              ) : (
+                                <BsCheck2All size={15} />
+                              )}
+                            </button>
+                          )}
+
+                          {/* 7. Delete */}
+                          <button
+                            type="button"
+                            className="por-action-btn por-btn-delete"
+                            onClick={() => handleDelete(item.id)}
+                            disabled={isRowProcessing}
+                            title={deletingId === item.id ? "Deleting..." : "Delete"}
+                            aria-label={deletingId === item.id ? "Deleting..." : "Delete"}
+                          >
+                            {deletingId === item.id ? (
+                              <BsArrowRepeat className="animate-spin" size={14} />
+                            ) : (
+                              <BsTrash size={14} />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           )}
         </div>
 
-        <div className="por-pagination-controls">
-          <button
-            type="button"
-            className="por-pagination-btn"
-            disabled={page <= 1 || loading}
-            onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
-            aria-label="Previous Page"
-          >
-            <BsChevronLeft size={12} />
-            Previous
-          </button>
-
-          {getPageNumbers().map((item, index) =>
-            item === "..." ? (
-              <span key={`ellipsis-${index}`} className="por-pagination-ellipsis">
-                &hellip;
-              </span>
-            ) : (
-              <button
-                key={item}
-                type="button"
-                className={`por-pagination-num ${page === item ? "active" : ""}`}
+        {/* PAGINATION INTEGRATED IN TABLE CARD FOOTER */}
+        <div className="purchase-order-returns-pagination">
+          <div className="por-pagination-left">
+            <div className="por-page-size-wrap">
+              <select
+                id="por-page-size"
+                className="por-page-size-select"
+                value={pageSize}
+                onChange={(e) => {
+                  const newSize = Number(e.target.value);
+                  setPageSize(newSize);
+                  setPage(1);
+                }}
                 disabled={loading}
-                onClick={() => setPage(item)}
-                aria-label={`Page ${item}`}
-                aria-current={page === item ? "page" : undefined}
+                aria-label="Select rows per page"
               >
-                {item}
-              </button>
-            )
-          )}
+                <option value={8}>8</option>
+                <option value={15}>15</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            className="por-pagination-btn"
-            disabled={page >= effectiveTotalPages || loading || effectiveTotal === 0}
-            onClick={() => setPage((currentPage) => Math.min(effectiveTotalPages, currentPage + 1))}
-            aria-label="Next Page"
-          >
-            Next
-            <BsChevronRight size={12} />
-          </button>
+          <div className="por-pagination-info">
+            Showing{" "}
+            <strong className="por-pagination-highlight">
+              {effectiveTotal === 0 ? "0" : `${rangeStart}–${rangeEnd}`}
+            </strong>{" "}
+            of{" "}
+            <strong className="por-pagination-highlight">
+              {effectiveTotal}
+            </strong>{" "}
+            {effectiveTotal === 1 ? "record" : "records"}
+            {effectiveTotalPages > 1 && (
+              <span className="por-pagination-page-indicator">
+                (Page {page} of {effectiveTotalPages})
+              </span>
+            )}
+          </div>
+
+          <div className="por-pagination-controls">
+            {getPageNumbers().map((item, index) =>
+              item === "..." ? (
+                <span key={`ellipsis-${index}`} className="por-pagination-ellipsis">
+                  &hellip;
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  className={`por-pagination-num ${page === item ? "active" : ""}`}
+                  disabled={loading}
+                  onClick={() => setPage(item)}
+                  aria-label={`Page ${item}`}
+                  aria-current={page === item ? "page" : undefined}
+                >
+                  {item}
+                </button>
+              )
+            )}
+          </div>
         </div>
       </div>
 
@@ -2671,10 +2737,6 @@ const PurchaseOrderReturns = () => {
                 Return Information
               </h4>
               <div className="purchase-order-return-details-grid">
-                <p>
-                  <strong>Return ID:</strong> {selectedReturn.id ?? "N/A"}
-                </p>
-
                 <p>
                   <strong>Return Number:</strong>{" "}
                   {selectedReturn.return_number ||

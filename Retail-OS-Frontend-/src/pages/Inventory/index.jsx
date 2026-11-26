@@ -7,6 +7,7 @@ import InventoryTable from "../../components/InventoryTable";
 import "./Inventory.css";
 
 import category from "../../services/categoryService";
+import productService from "../../services/product";
 import { getPurchaseOrders } from "../../api/purchaseOrdersApi";
 import { getWarehouses } from "../../api/warehouseApi";
 import { getSuppliers } from "../../api/supplierApi";
@@ -308,19 +309,25 @@ const normalizeProduct = (product) => {
             "",
 
         category:
-            product?.category ??
-            product?.category_name ??
-            product?.categoryName ??
-            nestedProduct?.category ??
-            nestedProduct?.category_name ??
-            nestedProduct?.categoryName ??
+            (typeof product?.category === "string" && !/^\d+$/.test(product.category.trim()) ? product.category.trim() : null) ||
+            product?.category_name ||
+            product?.categoryName ||
+            (typeof product?.category === "object" ? (product?.category?.name || product?.category?.category_name) : null) ||
+            (typeof nestedProduct?.category === "string" && !/^\d+$/.test(nestedProduct.category.trim()) ? nestedProduct.category.trim() : null) ||
+            nestedProduct?.category_name ||
+            nestedProduct?.categoryName ||
+            (typeof nestedProduct?.category === "object" ? (nestedProduct?.category?.name || nestedProduct?.category?.category_name) : null) ||
             "",
 
         category_id:
-            product?.category_id ??
-            product?.categoryId ??
-            nestedProduct?.category_id ??
-            nestedProduct?.categoryId ??
+            (product?.category_id != null && Number(product.category_id) > 0 ? Number(product.category_id) : null) ??
+            (product?.categoryId != null && Number(product.categoryId) > 0 ? Number(product.categoryId) : null) ??
+            (nestedProduct?.category_id != null && Number(nestedProduct.category_id) > 0 ? Number(nestedProduct.category_id) : null) ??
+            (nestedProduct?.categoryId != null && Number(nestedProduct.categoryId) > 0 ? Number(nestedProduct.categoryId) : null) ??
+            (typeof product?.category === "object" && Number(product?.category?.id) > 0 ? Number(product.category.id) : null) ??
+            (typeof nestedProduct?.category === "object" && Number(nestedProduct?.category?.id) > 0 ? Number(nestedProduct.category.id) : null) ??
+            (typeof product?.category === "number" && product.category > 0 ? product.category : null) ??
+            (typeof product?.category === "string" && /^\d+$/.test(product.category.trim()) ? Number(product.category.trim()) : null) ??
             null,
 
             track_expiry:
@@ -2758,27 +2765,39 @@ const Inventory = () => {
                             product?.categoryId ??
                             item?.category_id ??
                             item?.categoryId ??
+                            (typeof product?.category === "object" && product?.category?.id ? Number(product.category.id) : null) ??
+                            (typeof item?.category === "object" && item?.category?.id ? Number(item.category.id) : null) ??
                             (typeof product?.category === "number" ? product.category : null) ??
                             (typeof item?.category === "number" ? item.category : null) ??
+                            (typeof product?.category === "string" && /^\d+$/.test(product.category.trim()) ? Number(product.category.trim()) : null) ??
+                            (typeof item?.category === "string" && /^\d+$/.test(item.category.trim()) ? Number(item.category.trim()) : null) ??
                             null;
 
                         const categoryObj = categories.find(
                             (c) =>
                                 (categoryId !== null && Number(c?.id) === Number(categoryId)) ||
-                                (product?.category && String(c?.name).trim().toLowerCase() === String(product.category).trim().toLowerCase()) ||
-                                (item?.category && String(c?.name).trim().toLowerCase() === String(item.category).trim().toLowerCase())
+                                (product?.category && typeof product.category === "string" && String(c?.name).trim().toLowerCase() === product.category.trim().toLowerCase()) ||
+                                (item?.category && typeof item.category === "string" && String(c?.name).trim().toLowerCase() === item.category.trim().toLowerCase()) ||
+                                (product?.category_name && String(c?.name).trim().toLowerCase() === String(product.category_name).trim().toLowerCase()) ||
+                                (item?.category_name && String(c?.name).trim().toLowerCase() === String(item.category_name).trim().toLowerCase())
                         );
 
-                        const resolvedCategory =
+                        let resolvedCategory =
                             categoryObj?.name ||
                             categoryObj?.category_name ||
-                            (typeof product?.category === "string" ? product.category : null) ||
-                            product?.category?.name ||
+                            (typeof product?.category === "string" && !/^\d+$/.test(product.category.trim()) ? product.category.trim() : null) ||
+                            (typeof item?.category === "string" && !/^\d+$/.test(item.category.trim()) ? item.category.trim() : null) ||
                             product?.category_name ||
-                            (typeof item?.category === "string" ? item.category : null) ||
-                            item?.category?.name ||
+                            product?.categoryName ||
                             item?.category_name ||
+                            item?.categoryName ||
+                            (typeof product?.category === "object" ? (product?.category?.name || product?.category?.category_name) : null) ||
+                            (typeof item?.category === "object" ? (item?.category?.name || item?.category?.category_name) : null) ||
                             (categoryId ? `Category #${categoryId}` : "");
+
+                        if (!resolvedCategory || resolvedCategory.trim() === "" || resolvedCategory === "—" || resolvedCategory === "-") {
+                            resolvedCategory = "—";
+                        }
 
                         const supplierId =
                             (item?.supplier_id && Number(item.supplier_id) > 0 ? Number(item.supplier_id) : null) ??
@@ -2954,26 +2973,111 @@ const Inventory = () => {
        FETCH CATEGORIES
     ===================================================== */
 
-    const fetchCategories = async () => {
+    const fetchCategories = async (overrideProducts = null) => {
         try {
-            const response =
-                await category.getAll();
+            let catList = [];
 
-            const data =
-                getArrayFromResponse(response);
-
-            if (Array.isArray(data)) {
-                setCategories(data);
-            } else {
-                setCategories([]);
+            // 1. Fetch from category.getAll()
+            try {
+                const response = await category.getAll();
+                const body = response?.data ?? response;
+                const list = Array.isArray(body)
+                    ? body
+                    : Array.isArray(body?.data)
+                    ? body.data
+                    : Array.isArray(body?.items)
+                    ? body.items
+                    : Array.isArray(body?.categories)
+                    ? body.categories
+                    : [];
+                if (list.length > 0) {
+                    catList.push(...list);
+                }
+            } catch (err) {
+                console.warn("category.getAll error:", err);
             }
-        } catch (err) {
-            console.error(
-                "Categories API Error:",
-                err
-            );
 
+            // 2. Fetch from productService.getCategories()
+            try {
+                const pCatRes = await productService.getCategories();
+                const pBody = pCatRes?.data ?? pCatRes;
+                const pList = Array.isArray(pBody)
+                    ? pBody
+                    : Array.isArray(pBody?.data)
+                    ? pBody.data
+                    : Array.isArray(pBody?.items)
+                    ? pBody.items
+                    : Array.isArray(pBody?.categories)
+                    ? pBody.categories
+                    : [];
+                if (pList.length > 0) {
+                    catList.push(...pList);
+                }
+            } catch (pErr) {
+                console.warn("productService.getCategories error:", pErr);
+            }
+
+            // Normalize and deduplicate categories
+            const normalizedCats = [];
+            const seenCatNames = new Set();
+            const seenCatIds = new Set();
+
+            const registerCategory = (id, name) => {
+                if (!name || typeof name !== "string") return;
+                const cleanName = name.trim();
+                if (!cleanName || cleanName === "—" || cleanName === "-" || /^\d+$/.test(cleanName)) return;
+
+                const nameKey = cleanName.toLowerCase();
+                const numId = id != null && Number.isFinite(Number(id)) && Number(id) > 0 ? Number(id) : null;
+
+                if (seenCatNames.has(nameKey)) {
+                    if (numId) {
+                        const existing = normalizedCats.find(c => c.name.toLowerCase() === nameKey);
+                        if (existing && (!existing.id || existing.id === existing.name)) {
+                            existing.id = numId;
+                            seenCatIds.add(numId);
+                        }
+                    }
+                    return;
+                }
+
+                seenCatNames.add(nameKey);
+                if (numId) seenCatIds.add(numId);
+
+                normalizedCats.push({
+                    id: numId ?? cleanName,
+                    name: cleanName,
+                    category_name: cleanName,
+                });
+            };
+
+            catList.forEach((c) => {
+                const id = Number(c?.id ?? c?.category_id);
+                const name = String(c?.name ?? c?.category_name ?? c?.categoryName ?? "").trim();
+                registerCategory(id, name);
+            });
+
+            // 3. Extract all product categories from the product catalog
+            const prods = Array.isArray(overrideProducts) && overrideProducts.length > 0
+                ? overrideProducts
+                : (Array.isArray(products) && products.length > 0 ? products : []);
+
+            prods.forEach((p) => {
+                const id = Number(p?.category_id ?? p?.categoryId ?? p?.category?.id);
+                const name = typeof p?.category === "string" && !/^\d+$/.test(p.category.trim())
+                    ? p.category.trim()
+                    : (p?.category?.name || p?.category_name || p?.categoryName || "");
+                if (name) {
+                    registerCategory(id, name);
+                }
+            });
+
+            setCategories(normalizedCats);
+            return normalizedCats;
+        } catch (err) {
+            console.error("Categories API Error:", err);
             setCategories([]);
+            return [];
         }
     };
 
@@ -3292,27 +3396,39 @@ const fetchValuation = async () => {
                             product?.categoryId ??
                             item?.category_id ??
                             item?.categoryId ??
+                            (typeof product?.category === "object" && product?.category?.id ? Number(product.category.id) : null) ??
+                            (typeof item?.category === "object" && item?.category?.id ? Number(item.category.id) : null) ??
                             (typeof product?.category === "number" ? product.category : null) ??
                             (typeof item?.category === "number" ? item.category : null) ??
+                            (typeof product?.category === "string" && /^\d+$/.test(product.category.trim()) ? Number(product.category.trim()) : null) ??
+                            (typeof item?.category === "string" && /^\d+$/.test(item.category.trim()) ? Number(item.category.trim()) : null) ??
                             null;
 
                         const categoryObj = categories.find(
                             (c) =>
                                 (categoryId !== null && Number(c?.id) === Number(categoryId)) ||
-                                (product?.category && String(c?.name).trim().toLowerCase() === String(product.category).trim().toLowerCase()) ||
-                                (item?.category && String(c?.name).trim().toLowerCase() === String(item.category).trim().toLowerCase())
+                                (product?.category && typeof product.category === "string" && String(c?.name).trim().toLowerCase() === product.category.trim().toLowerCase()) ||
+                                (item?.category && typeof item.category === "string" && String(c?.name).trim().toLowerCase() === item.category.trim().toLowerCase()) ||
+                                (product?.category_name && String(c?.name).trim().toLowerCase() === String(product.category_name).trim().toLowerCase()) ||
+                                (item?.category_name && String(c?.name).trim().toLowerCase() === String(item.category_name).trim().toLowerCase())
                         );
 
-                        const resolvedCategory =
+                        let resolvedCategory =
                             categoryObj?.name ||
                             categoryObj?.category_name ||
-                            (typeof product?.category === "string" ? product.category : null) ||
-                            product?.category?.name ||
+                            (typeof product?.category === "string" && !/^\d+$/.test(product.category.trim()) ? product.category.trim() : null) ||
+                            (typeof item?.category === "string" && !/^\d+$/.test(item.category.trim()) ? item.category.trim() : null) ||
                             product?.category_name ||
-                            (typeof item?.category === "string" ? item.category : null) ||
-                            item?.category?.name ||
+                            product?.categoryName ||
                             item?.category_name ||
+                            item?.categoryName ||
+                            (typeof product?.category === "object" ? (product?.category?.name || product?.category?.category_name) : null) ||
+                            (typeof item?.category === "object" ? (item?.category?.name || item?.category?.category_name) : null) ||
                             (categoryId ? `Category #${categoryId}` : "");
+
+                        if (!resolvedCategory || resolvedCategory.trim() === "" || resolvedCategory === "—" || resolvedCategory === "-") {
+                            resolvedCategory = "—";
+                        }
 
                         const supplierId =
                             (item?.supplier_id && Number(item.supplier_id) > 0 ? Number(item.supplier_id) : null) ??
@@ -3589,6 +3705,11 @@ const fetchValuation = async () => {
             const warehouseData = warehousesRes.status === "fulfilled" && Array.isArray(warehousesRes.value) ? warehousesRes.value : [];
             const productData = productsRes.status === "fulfilled" && Array.isArray(productsRes.value) ? productsRes.value : [];
 
+            // Supplement categories dynamically with all product catalog categories
+            if (productData.length > 0) {
+                await fetchCategories(productData);
+            }
+
             await Promise.allSettled([
                 fetchInventory(storeData, warehouseData, false, productData),
                 fetchLowStock(storeData, warehouseData),
@@ -3624,6 +3745,36 @@ const fetchValuation = async () => {
             fetchMovements();
         }
     }, [filterWarehouse]);
+
+    /* =====================================================
+       REFRESH ALL INVENTORY DATA
+    ===================================================== */
+
+    const handleRefresh = async () => {
+        try {
+            setLoading(true);
+            await Promise.allSettled([
+                fetchStores(),
+                fetchWarehouses(),
+                fetchProducts(),
+                fetchCategories(),
+                fetchSuppliers(),
+                fetchPurchaseOrders(),
+                fetchDashboard(),
+                fetchValuation(),
+                getInventoryExpiry(),
+            ]);
+            await Promise.allSettled([
+                fetchInventory(null, null, false),
+                fetchLowStock(),
+                fetchMovements(),
+            ]);
+        } catch (err) {
+            console.error("Refresh error =>", err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     /* =====================================================
        SEARCH
@@ -3772,6 +3923,53 @@ const fetchValuation = async () => {
                 matchStatus
             );
         });
+
+    /* =====================================================
+       EXPORT INVENTORY DATA (CSV)
+    ===================================================== */
+    const handleExportInventory = () => {
+        const dataToExport = Array.isArray(filtered) && filtered.length > 0 ? filtered : inventory;
+        if (!dataToExport || dataToExport.length === 0) {
+            alert("No inventory data available to export");
+            return;
+        }
+
+        const headers = [
+            "Product Name",
+            "SKU",
+            "Category",
+            "Warehouse",
+            "Supplier",
+            "Stock Status",
+            "Available Quantity",
+            "Unit",
+            "Created Date",
+        ];
+
+        const rows = dataToExport.map((item) => [
+            `"${String(item?.name || item?.product_name || "").replace(/"/g, '""')}"`,
+            `"${String(item?.sku || "").replace(/"/g, '""')}"`,
+            `"${String(item?.category_name || item?.category || "").replace(/"/g, '""')}"`,
+            `"${String(item?.warehouse_name || item?.store_name || "").replace(/"/g, '""')}"`,
+            `"${String(item?.supplier_name || item?.supplierName || "").replace(/"/g, '""')}"`,
+            `"${String(item?.stock_status || item?.status || "").replace(/"/g, '""')}"`,
+            Number(item?.available_quantity ?? item?.quantity ?? 0),
+            `"${String(item?.unit || "Pcs").replace(/"/g, '""')}"`,
+            `"${String(item?.created_at || item?.created_date || item?.createdDate || "").slice(0, 10)}"`,
+        ]);
+
+        const csvContent =
+            "data:text/csv;charset=utf-8," +
+            [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `inventory_export_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     /* =====================================================
        PAGINATION
@@ -4273,7 +4471,7 @@ if (action === "transfer") {
                 <div className="inv-kpi-grid">
                     {kpis.map((item) => {
                         const cardModifier = item.isCurrency
-                            ? "inv-kpi-card-valuation"
+                            ? "inv-kpi-card-valuation inv-kpi-card-inventory-value"
                             : `inv-kpi-card-${item.label.toLowerCase().replace(/\s+/g, "-")}`;
 
                         const valueStr = String(item.value ?? "");
@@ -4282,14 +4480,16 @@ if (action === "transfer") {
                         let dynamicFontSize = undefined;
                         if (isCurrency) {
                             const len = valueStr.length;
-                            if (len >= 16) {
-                                dynamicFontSize = "clamp(11px, 0.95vw + 2px, 15px)";
-                            } else if (len >= 13) {
-                                dynamicFontSize = "clamp(12px, 1.05vw + 2px, 17px)";
-                            } else if (len >= 10) {
-                                dynamicFontSize = "clamp(13px, 1.2vw + 2px, 19px)";
+                            if (len >= 17) {
+                                dynamicFontSize = "clamp(10.5px, 0.72vw + 2px, 12.5px)";
+                            } else if (len >= 14) {
+                                dynamicFontSize = "clamp(11.5px, 0.8vw + 2px, 14px)";
+                            } else if (len >= 11) {
+                                dynamicFontSize = "clamp(12.5px, 0.92vw + 2px, 15.5px)";
+                            } else if (len >= 8) {
+                                dynamicFontSize = "clamp(13.5px, 1.05vw + 2px, 17px)";
                             } else {
-                                dynamicFontSize = "clamp(15px, 1.35vw + 2px, 22px)";
+                                dynamicFontSize = "clamp(14.5px, 1.15vw + 2px, 18.5px)";
                             }
                         }
 
@@ -4404,6 +4604,9 @@ if (action === "transfer") {
                             onSearch={
                                 handleSearch
                             }
+                            onExport={
+                                handleExportInventory
+                            }
                         />
                     </div>
                 </section>
@@ -4426,10 +4629,22 @@ if (action === "transfer") {
                         }
                         setActiveTab={(tab) => {
                             setActiveTab(tab);
-                            setFilterStatus("All");
+                            if (tab === "Low Stock") {
+                                setFilterStatus("Low Stock");
+                            } else if (tab === "Out of Stock") {
+                                setFilterStatus("Out of Stock");
+                            } else {
+                                setFilterStatus("All");
+                            }
                         }}
                         setStockModal={
                             setStockModal
+                        }
+                        onRefresh={
+                            handleRefresh
+                        }
+                        loading={
+                            loading
                         }
                         onAddProduct={() =>
                             setStockModal({
@@ -4466,164 +4681,26 @@ if (action === "transfer") {
                             }
                         />
                     </div>
-                </section>
-
-                {/* RECENT STOCK MOVEMENTS */}
-                <section className="inv-card inv-movements-section">
-                    <div className="inv-card-heading">
-                        <div>
-                            <h2 className="inv-section-title">
-                                Recent Stock Movements
-                            </h2>
-                            <p className="inv-section-description">
-                                {getSelectedStoreInfo().isAll
-                                    ? "Latest inventory movements across the active store."
-                                    : `Latest inventory movements for ${getSelectedStoreInfo().storeName}.`}
-                            </p>
-                        </div>
-
-                        <button
-                            type="button"
-                            className="inv-refresh-btn"
-                            onClick={() => fetchMovements()}
-                            disabled={movementsLoading}
-                            title="Refresh Recent Movements"
-                        >
-                            <span className={`inv-refresh-icon ${movementsLoading ? "spinning" : ""}`}>↻</span>
-                            <span>{movementsLoading ? "Refreshing..." : "Refresh"}</span>
-                        </button>
-                    </div>
-
-                    {movementsError && (
-                        <div className="inv-message error">
-                            {movementsError}
-                        </div>
-                    )}
-
-                    {movementsLoading ? (
-                        <div className="inv-message loading">
-                            <span className="inv-spinner" />
-                            Loading recent stock movements...
-                        </div>
-                    ) : movements.length === 0 ? (
-                        <div className="inv-movements-empty">
-                            <div className="inv-movements-empty-icon">📦</div>
-                            <div className="inv-movements-empty-title">No stock movements found</div>
-                            <div className="inv-movements-empty-sub">
-                                Stock movements will automatically record here when stock is added, transferred, or updated.
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="inv-movements-table-wrapper">
-                            <table className="inv-movements-table">
-                                <thead>
-                                    <tr>
-                                        {[
-                                            "Movement ID",
-                                            "Product",
-                                            "Type",
-                                            "Quantity",
-                                            "Store",
-                                            "Notes",
-                                            "Date & Time",
-                                        ].map((heading) => (
-                                            <th key={heading}>
-                                                {heading}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {movements.map((movement) => {
-                                        const type = String(
-                                            movement?.movement_type || ""
-                                        ).toLowerCase();
-
-                                        const typeLabel = type
-                                            .replace(/_/g, " ")
-                                            .replace(/\b\w/g, (char) =>
-                                                char.toUpperCase()
-                                            );
-
-                                        const typeBadgeClass =
-                                            type === "stock_in"
-                                                ? "badge-in"
-                                                : type === "stock_out"
-                                                ? "badge-out"
-                                                : type === "transfer"
-                                                ? "badge-transfer"
-                                                : "badge-adjustment";
-
-                                        return (
-                                            <tr key={movement?.id}>
-                                                <td className="inv-mov-id">
-                                                    #{movement?.id ?? "-"}
-                                                </td>
-                                                <td>
-                                                    <div className="inv-mov-prod-name">
-                                                        {movement?.product_name || "-"}
-                                                    </div>
-                                                    {movement?.sku && (
-                                                        <div className="inv-mov-sku">
-                                                            SKU: {movement.sku}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td>
-                                                    <span className={`inv-mov-type-badge ${typeBadgeClass}`}>
-                                                        <span className="inv-mov-dot" />
-                                                        {typeLabel || "-"}
-                                                    </span>
-                                                </td>
-                                                <td className="inv-mov-qty">
-                                                    {Number(movement?.quantity ?? 0).toLocaleString("en-IN")}
-                                                </td>
-                                                <td className="inv-mov-store">
-                                                    {movement?.store_name || `Store #${movement?.store_id ?? "-"}`}
-                                                </td>
-                                                <td className="inv-mov-notes" title={movement?.notes || undefined}>
-                                                    {movement?.notes || "—"}
-                                                </td>
-                                                <td className="inv-mov-date">
-                                                    {movement?.created_at
-                                                        ? new Date(movement.created_at).toLocaleString("en-IN", {
-                                                              day: "2-digit",
-                                                              month: "short",
-                                                              year: "numeric",
-                                                              hour: "2-digit",
-                                                              minute: "2-digit",
-                                                          })
-                                                        : "—"}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
+                
                     {/* PAGINATION */}
                     <div className="inv-pagination">
-                        {/* LEFT: Rows per page */}
+                        {/* LEFT: Rows per page (dropdown only, label removed) */}
                         <div className="inv-pagination-left">
-                            <div className="inv-page-size-select-wrap">
-                                <label htmlFor="inv-page-size" className="inv-page-size-label">Rows per page:</label>
-                                <select
-                                    id="inv-page-size"
-                                    className="inv-page-size-select"
-                                    value={pageSize}
-                                    onChange={(e) => {
-                                        setPageSize(Number(e.target.value));
-                                        setPage(1);
-                                    }}
-                                >
-                                    <option value={8}>8</option>
-                                    <option value={15}>15</option>
-                                    <option value={25}>25</option>
-                                    <option value={50}>50</option>
-                                </select>
-                            </div>
+                            <select
+                                id="inv-page-size"
+                                className="inv-page-size-select"
+                                value={pageSize}
+                                onChange={(e) => {
+                                    setPageSize(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                                aria-label="Select rows per page"
+                            >
+                                <option value={8}>8</option>
+                                <option value={15}>15</option>
+                                <option value={25}>25</option>
+                                <option value={50}>50</option>
+                            </select>
                         </div>
 
                         {/* CENTER: Pagination Summary Text */}
@@ -4650,19 +4727,44 @@ if (action === "transfer") {
                                         onClick={() => setPage(page - 1)}
                                         aria-label="Previous page"
                                     >
-                                        <BsChevronLeft />
+                                        <BsChevronLeft size={12} />
                                     </button>
 
-                                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                                        <button
-                                            type="button"
-                                            key={p}
-                                            className={`inv-page-btn ${p === page ? "active" : ""}`}
-                                            onClick={() => setPage(p)}
-                                        >
-                                            {p}
-                                        </button>
-                                    ))}
+                                    {(() => {
+                                        let pages = [];
+                                        if (totalPages <= 5) {
+                                            pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+                                        } else {
+                                            if (page <= 3) {
+                                                pages = [1, 2, 3, 4, '...', totalPages];
+                                            } else if (page >= totalPages - 2) {
+                                                pages = [1, '...', totalPages - 2, totalPages - 1, totalPages];
+                                            } else {
+                                                pages = [1, '...', page - 1, page, page + 1, '...', totalPages];
+                                            }
+                                        }
+                                        return pages.map((p, idx) => {
+                                            if (p === '...') {
+                                                return (
+                                                    <span key={`ellipsis-${idx}`} className="inv-page-ellipsis">
+                                                        …
+                                                    </span>
+                                                );
+                                            }
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    key={p}
+                                                    className={`inv-page-btn ${p === page ? "active" : ""}`}
+                                                    onClick={() => setPage(p)}
+                                                    aria-label={`Page ${p}`}
+                                                    aria-current={p === page ? "page" : undefined}
+                                                >
+                                                    {p}
+                                                </button>
+                                            );
+                                        });
+                                    })()}
 
                                     <button
                                         type="button"
@@ -4671,7 +4773,7 @@ if (action === "transfer") {
                                         onClick={() => setPage(page + 1)}
                                         aria-label="Next page"
                                     >
-                                        <BsChevronRight />
+                                        <BsChevronRight size={12} />
                                     </button>
                                 </div>
                             )}

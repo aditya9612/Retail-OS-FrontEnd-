@@ -215,7 +215,6 @@ const InventoryTable = ({
             <th>Product</th>
             <th>SKU</th>
             <th>Category</th>
-            <th>Supplier</th>
             <th>Store Name</th>
             <th>Store ID</th>
             <th>Available Qty</th>
@@ -265,23 +264,11 @@ const InventoryTable = ({
             ===================================================== */
 
             const category =
-              (typeof item.category === "string" && item.category.trim() ? item.category : null) ||
-              item.category?.name ||
+              (typeof item.category === "string" && item.category.trim() && item.category.trim() !== "—" && item.category.trim() !== "-" ? item.category.trim() : null) ||
+              (typeof item.category === "object" ? (item.category?.name || item.category?.category_name) : null) ||
               item.category_name ||
               item.categoryName ||
               (item.category_id ? `Category #${item.category_id}` : "—");
-
-            /* =====================================================
-               SUPPLIER
-            ===================================================== */
-
-            const supplier =
-              (typeof item.supplier_name === "string" && item.supplier_name.trim() ? item.supplier_name : null) ||
-              (typeof item.supplierName === "string" && item.supplierName.trim() ? item.supplierName : null) ||
-              (typeof item.supplier === "string" && item.supplier.trim() ? item.supplier : null) ||
-              item.supplier?.name ||
-              item.supplier?.supplier_name ||
-              "—";
 
             /* =====================================================
                LOCATION / WAREHOUSE
@@ -599,34 +586,15 @@ const isMissingRequiredExpiry =
                 <td>
                   <span
                     style={{
-                      background: "#eef2ff",
-                      color: "#6366f1",
+                      background: category && category !== "—" ? "#eef2ff" : "#f3f4f6",
+                      color: category && category !== "—" ? "#6366f1" : "#9ca3af",
                       padding: "4px 8px",
                       borderRadius: 20,
                       fontSize: 12,
                       fontWeight: 600,
                     }}
                   >
-                    {category}
-                  </span>
-                </td>
-
-                {/* =================================================
-                   SUPPLIER
-                ================================================= */}
-
-                <td>
-                  <span
-                    style={{
-                      background: "#f0fdf4",
-                      color: "#16a34a",
-                      padding: "4px 8px",
-                      borderRadius: 20,
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {supplier}
+                    {category || "—"}
                   </span>
                 </td>
 

@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import storeService from '../../services/storeService';
 import storeTargetService from '../../services/storeTargetService';
 import notificationService from '../../utils/notificationService';
+import { PageContainer, PageHeader, KpiGrid, KpiCard } from '../../components/Common/PageComponents';
 import '../../components/Categories/CategoryCards.css';
 import {
     BsBullseye,
@@ -36,16 +37,8 @@ import {
     BsShieldCheck,
     BsShieldX
 } from 'react-icons/bs';
-
-const INDIAN_STATES = [
-    'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
-    'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
-    'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
-    'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana',
-    'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal', 'Andaman and Nicobar Islands',
-    'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu', 'Delhi',
-    'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
-];
+import { INDIAN_STATES, getCitiesForState, isKnownCity, findCanonicalCityName, getDistrictsForState, getGstStateCodes } from '../../utils/indiaLocationData';
+import SearchableSelect from '../../components/Common/SearchableSelect';
 
 // Backend TargetType enum options (Requirements 27 & 28)
 const TARGET_TYPES = [
@@ -94,15 +87,6 @@ const Stores = () => {
         }
     }, [location.pathname]);
 
-    const handleTabChange = (tab) => {
-        setActiveTab(tab);
-        if (tab === 'targets') {
-            navigate('/stores/targets');
-        } else {
-            navigate('/stores');
-        }
-    };
-
     // Shared Notifications (Requirement 14)
     const [errorMsg, setErrorMsg] = useState('');
     const [successMsg, setSuccessMsg] = useState('');
@@ -126,27 +110,20 @@ const Stores = () => {
     const [stores, setStores] = useState([]);
     const [storesLoading, setStoresLoading] = useState(false);
     const [storeSearch, setStoreSearch] = useState('');
+    const [storeKpiFilter, setStoreKpiFilter] = useState('all'); // 'all' | 'active' | 'warehouse' | 'main'
     const [storeTypeFilter, setStoreTypeFilter] = useState('all'); // 'all' | 'retail' | 'warehouse'
     const [storeStatusFilter, setStoreStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive'
     const [storeCityFilter, setStoreCityFilter] = useState('all');
     const [includeInactive, setIncludeInactive] = useState(true);
     const [togglingStoreId, setTogglingStoreId] = useState(null);
 
-    // Fetch Stores: GET /api/v1/stores/
+    // Fetch Stores: GET /api/v1/stores/ (Always maintains full store dataset for KPI metrics)
     const fetchStores = useCallback(async () => {
         setStoresLoading(true);
         try {
             const params = {
                 include_inactive: includeInactive,
             };
-            if (storeSearch.trim()) {
-                params.search = storeSearch.trim();
-            }
-            if (storeTypeFilter === 'warehouse') {
-                params.is_warehouse = true;
-            } else if (storeTypeFilter === 'retail') {
-                params.is_warehouse = false;
-            }
 
             const data = await storeService.listStores(params);
             const list = Array.isArray(data) ? data : (data?.items || []);
@@ -165,7 +142,7 @@ const Stores = () => {
         } finally {
             setStoresLoading(false);
         }
-    }, [includeInactive, storeSearch, storeTypeFilter]);
+    }, [includeInactive]);
 
     // Unique cities for Store Location Filter (Requirement 10)
     const storeCities = useMemo(() => {
@@ -176,9 +153,18 @@ const Stores = () => {
         return Array.from(set).sort();
     }, [stores]);
 
-    // Filtered Stores (Requirement 10: name, code, location, type, status)
+    // Current primary main store if any
+    const currentMainStore = useMemo(() => stores.find(s => s.is_main), [stores]);
+
+    // Filtered Stores (Requirement 10 & Clickable KPI Cards: name, code, location, type, status, kpi)
     const filteredStores = useMemo(() => {
         return stores.filter(store => {
+            // Interactive KPI Card Filter
+            if (storeKpiFilter === 'active' && !store.is_active) return false;
+            if (storeKpiFilter === 'warehouse' && !store.is_warehouse) return false;
+            if (storeKpiFilter === 'main' && !store.is_main) return false;
+
+            // Search filter
             if (storeSearch.trim()) {
                 const q = storeSearch.trim().toLowerCase();
                 const matchName = (store.name || '').toLowerCase().includes(q);
@@ -186,16 +172,24 @@ const Stores = () => {
                 const matchCity = (store.city || '').toLowerCase().includes(q);
                 if (!matchName && !matchCode && !matchCity) return false;
             }
+
+            // Type filter
             if (storeTypeFilter === 'warehouse' && !store.is_warehouse) return false;
             if (storeTypeFilter === 'retail' && store.is_warehouse) return false;
+
+            // Status filter
             if (storeStatusFilter === 'active' && !store.is_active) return false;
             if (storeStatusFilter === 'inactive' && store.is_active) return false;
+
+            // City filter
             if (storeCityFilter !== 'all' && (store.city || '').toLowerCase() !== storeCityFilter.toLowerCase()) return false;
+
             return true;
         });
-    }, [stores, storeSearch, storeTypeFilter, storeStatusFilter, storeCityFilter]);
+    }, [stores, storeKpiFilter, storeSearch, storeTypeFilter, storeStatusFilter, storeCityFilter]);
 
     const resetStoreFilters = () => {
+        setStoreKpiFilter('all');
         setStoreSearch('');
         setStoreTypeFilter('all');
         setStoreStatusFilter('all');
@@ -213,12 +207,15 @@ const Stores = () => {
     const [editingStore, setEditingStore] = useState(null);
     const [storeFormSubmitting, setStoreFormSubmitting] = useState(false);
     const [storeFormErrors, setStoreFormErrors] = useState({});
+    const [isCustomCity, setIsCustomCity] = useState(false);
+    const [customCityName, setCustomCityName] = useState('');
     const [storeFormData, setStoreFormData] = useState({
         name: '',
         code: '',
         phone: '',
         email: '',
         address: '',
+        district: '',
         city: '',
         state: 'Maharashtra',
         pincode: '',
@@ -227,14 +224,34 @@ const Stores = () => {
         is_main: false,
     });
 
+    // Dynamic verified cities list for the currently selected state
+    const availableCities = useMemo(() => {
+        if (!storeFormData.state) return [];
+        return getCitiesForState(storeFormData.state);
+    }, [storeFormData.state]);
+
+    // Dynamic verified districts list for the currently selected state
+    const availableDistricts = useMemo(() => {
+        if (!storeFormData.state) return [];
+        const baseList = getDistrictsForState(storeFormData.state);
+        // Requirement 3: Do not overwrite existing district values if they are not present in the new dataset
+        if (storeFormData.district && !baseList.includes(storeFormData.district)) {
+            return [storeFormData.district, ...baseList];
+        }
+        return baseList;
+    }, [storeFormData.state, storeFormData.district]);
+
     const openCreateStore = () => {
         setEditingStore(null);
+        setIsCustomCity(false);
+        setCustomCityName('');
         setStoreFormData({
             name: '',
             code: '',
             phone: '',
             email: '',
             address: '',
+            district: '',
             city: '',
             state: 'Maharashtra',
             pincode: '',
@@ -252,14 +269,43 @@ const Stores = () => {
             // Fetch fresh details: GET /api/v1/stores/{store_id}
             const fresh = await storeService.getStore(store.id, true);
             setEditingStore(fresh);
+
+            const stateVal = fresh.state || 'Maharashtra';
+            const rawCity = (fresh.city || '').trim();
+
+            let isCustom = false;
+            let selectedCity = rawCity;
+            let customCity = '';
+
+            if (rawCity) {
+                const canonical = findCanonicalCityName(stateVal, rawCity);
+                if (canonical) {
+                    selectedCity = canonical;
+                    isCustom = false;
+                    customCity = '';
+                } else {
+                    selectedCity = 'Other';
+                    isCustom = true;
+                    customCity = rawCity;
+                }
+            } else {
+                selectedCity = '';
+                isCustom = false;
+                customCity = '';
+            }
+
+            setIsCustomCity(isCustom);
+            setCustomCityName(customCity);
+
             setStoreFormData({
                 name: fresh.name || '',
                 code: fresh.code || '',
                 phone: fresh.phone || '',
                 email: fresh.email || '',
                 address: fresh.address || '',
-                city: fresh.city || '',
-                state: fresh.state || 'Maharashtra',
+                district: fresh.district || '',
+                city: selectedCity,
+                state: stateVal,
                 pincode: fresh.pincode || '',
                 gstin: fresh.gstin || '',
                 is_warehouse: Boolean(fresh.is_warehouse),
@@ -278,42 +324,253 @@ const Stores = () => {
 
     const validateStoreForm = () => {
         const errors = {};
-        const trimmedName = storeFormData.name.trim();
-        if (!trimmedName || trimmedName.length < 2) {
+
+        // 1. Store Name Validation
+        const rawName = storeFormData.name || '';
+        const trimmedName = rawName.trim();
+        if (!trimmedName) {
+            errors.name = 'Store name is required';
+        } else if (trimmedName.length < 2) {
             errors.name = 'Store name must be at least 2 characters';
         } else if (trimmedName.length > 100) {
             errors.name = 'Store name must not exceed 100 characters';
+        } else if (/^\d+$/.test(trimmedName)) {
+            errors.name = 'Store name cannot contain only numbers';
+        } else if (!/[a-zA-Z]/.test(trimmedName)) {
+            errors.name = 'Store name must contain at least one letter';
+        } else if (!/^[a-zA-Z0-9\s&'()./,-]+$/.test(trimmedName)) {
+            errors.name = 'Store name contains invalid special characters';
+        } else {
+            // Disallowed generic/placeholder names
+            const disallowedPlaceholders = [
+                'test', 'store', 'shop', 'retail', 'sample', 'dummy', 'placeholder',
+                'null', 'undefined', 'unknown', 'n/a', 'na', 'string'
+            ];
+            if (disallowedPlaceholders.includes(trimmedName.toLowerCase())) {
+                errors.name = 'Please enter a valid, specific store name';
+            } else {
+                // Check repetitive meaningless strings (e.g. AAAAAA)
+                const letters = trimmedName.toLowerCase().replace(/[^a-z]/g, '');
+                if (letters.length >= 4 && new Set(letters).size < 2) {
+                    errors.name = 'Store name contains invalid repetitive characters';
+                } else {
+                    // Check duplicate store names against loaded stores
+                    const isDuplicate = stores.some(s =>
+                        s.name && s.name.trim().toLowerCase() === trimmedName.toLowerCase() &&
+                        s.id !== editingStore?.id
+                    );
+                    if (isDuplicate) {
+                        errors.name = 'Store name already exists. Please choose a different name';
+                    }
+                }
+            }
         }
 
+        // 2. Store Code Validation (Optional, but if provided must follow rules)
+        const trimmedCode = (storeFormData.code || '').trim().toUpperCase();
+        if (trimmedCode) {
+            if (trimmedCode.length < 2) {
+                errors.code = 'Store code must be at least 2 characters';
+            } else if (trimmedCode.length > 20) {
+                errors.code = 'Store code must not exceed 20 characters';
+            } else if (!/^[A-Z]/.test(trimmedCode)) {
+                errors.code = 'Store code must start with a letter';
+            } else if (!/^[A-Z][A-Z0-9_-]*$/.test(trimmedCode)) {
+                errors.code = 'Store code can only contain letters, numbers, hyphens, and underscores';
+            } else {
+                // Prevent duplicate store codes
+                const isDuplicate = stores.some(s =>
+                    s.code && s.code.trim().toUpperCase() === trimmedCode &&
+                    s.id !== editingStore?.id
+                );
+                if (isDuplicate) {
+                    errors.code = 'Store code already exists. Please choose a unique code';
+                }
+            }
+        }
+
+        // 3. Contact Phone Validation (Optional, exactly 10 digits, starts with 6-9)
         if (storeFormData.phone && storeFormData.phone.trim()) {
             const cleanPhone = storeFormData.phone.trim();
-            if (!/^\d{10}$/.test(cleanPhone)) {
+            if (!/^\d+$/.test(cleanPhone)) {
+                errors.phone = 'Phone number must contain only numeric digits';
+            } else if (cleanPhone.length !== 10) {
                 errors.phone = 'Phone number must be exactly 10 digits';
             } else if (!/^[6-9]/.test(cleanPhone)) {
                 errors.phone = 'Phone number must start with 6, 7, 8, or 9';
+            } else if (/^(\d)\1{9}$/.test(cleanPhone)) {
+                errors.phone = 'Phone number cannot contain all identical digits';
             }
         }
 
-        if (storeFormData.pincode && storeFormData.pincode.trim()) {
-            const cleanPin = storeFormData.pincode.trim();
-            if (!/^\d{6}$/.test(cleanPin)) {
-                errors.pincode = 'Pincode must be exactly 6 numeric digits';
-            } else if (cleanPin.startsWith('0')) {
-                errors.pincode = 'Indian pincode cannot start with 0';
+        // 4. Store Email – Strict Validation (Optional, standard RFC & domain checks)
+        if (storeFormData.email !== undefined && storeFormData.email !== null) {
+            const rawEmailStr = String(storeFormData.email);
+            if (rawEmailStr.length > 0) {
+                // Reject leading/trailing spaces and internal whitespace
+                if (/\s/.test(rawEmailStr)) {
+                    errors.email = 'Email address cannot contain spaces.';
+                } else {
+                    const cleanEmail = rawEmailStr.trim();
+                    if (!cleanEmail) {
+                        errors.email = 'Email address cannot contain spaces.';
+                    } else if (cleanEmail.length > 254) {
+                        errors.email = 'Email address is too long.';
+                    } else {
+                        // Check single @ symbol
+                        const atMatches = cleanEmail.match(/@/g);
+                        if (!atMatches || atMatches.length !== 1) {
+                            errors.email = 'Please enter a valid email address.';
+                        } else if (cleanEmail.includes('..')) {
+                            // Prevent invalid consecutive dots anywhere
+                            errors.email = 'Please enter a valid email address.';
+                        } else {
+                            const [localPart, domainPart] = cleanEmail.split('@');
+                            // Local-part checks
+                            if (!localPart || localPart.length > 64 || localPart.startsWith('.') || localPart.endsWith('.')) {
+                                errors.email = 'Please enter a valid email address.';
+                            } else if (localPart.startsWith('-') || localPart.endsWith('-')) {
+                                errors.email = 'Please enter a valid email address.';
+                            } else if (!domainPart || domainPart.length > 253 || domainPart.startsWith('.') || domainPart.endsWith('.') || domainPart.startsWith('-') || domainPart.endsWith('-')) {
+                                errors.email = 'Please enter a valid email address.';
+                            } else {
+                                // Domain structure: must have valid extension (TLD >= 2 letters)
+                                const domainParts = domainPart.split('.');
+                                if (domainParts.length < 2) {
+                                    errors.email = 'Please enter a valid email address.';
+                                } else {
+                                    const tld = domainParts[domainParts.length - 1];
+                                    if (!/^[a-zA-Z]{2,}$/.test(tld)) {
+                                        errors.email = 'Please enter a valid email address.';
+                                    } else {
+                                        // Validate each domain label
+                                        const validDomainLabels = domainParts.every(label =>
+                                            /^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(label)
+                                        );
+                                        // Validate local-part characters
+                                        const validLocal = /^[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*$/.test(localPart);
+
+                                        if (!validLocal || !validDomainLabels) {
+                                            errors.email = 'Please enter a valid email address.';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        if (storeFormData.email && storeFormData.email.trim()) {
-            const cleanEmail = storeFormData.email.trim();
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
-                errors.email = 'Please enter a valid email address';
-            }
-        }
-
+        // 5. GSTIN Validation (Optional, 15 chars, pattern + state code matching)
         if (storeFormData.gstin && storeFormData.gstin.trim()) {
             const cleanGstin = storeFormData.gstin.trim().toUpperCase();
             if (cleanGstin.length !== 15) {
-                errors.gstin = 'GSTIN must be exactly 15 alphanumeric characters';
+                errors.gstin = 'GSTIN must be exactly 15 characters';
+            } else if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/.test(cleanGstin)) {
+                errors.gstin = 'Invalid GSTIN format (e.g. 27AAPFU0939F1ZV)';
+            } else {
+                const gstinPrefix = cleanGstin.slice(0, 2);
+                const prefixNum = parseInt(gstinPrefix, 10);
+                if (isNaN(prefixNum) || !((prefixNum >= 1 && prefixNum <= 38) || prefixNum === 97 || prefixNum === 99)) {
+                    errors.gstin = `Invalid GST state code "${gstinPrefix}" in GSTIN`;
+                } else if (storeFormData.state) {
+                    const validStateCodes = getGstStateCodes(storeFormData.state);
+                    if (validStateCodes.length > 0 && !validStateCodes.includes(gstinPrefix)) {
+                        errors.gstin = `GSTIN state code (${gstinPrefix}) does not match selected state (${storeFormData.state})`;
+                    }
+                }
+            }
+        }
+
+        // 6. Street Address – Strict Validation (Optional, meaningful physical address)
+        if (storeFormData.address !== undefined && storeFormData.address !== null) {
+            const rawAddressStr = String(storeFormData.address);
+            if (rawAddressStr.length > 0) {
+                const cleanAddress = rawAddressStr.trim();
+                if (!cleanAddress) {
+                    errors.address = 'Please enter a valid street address.';
+                } else if (cleanAddress.length > 250) {
+                    errors.address = 'Address cannot exceed the maximum allowed length.';
+                } else if (cleanAddress.length < 5) {
+                    errors.address = 'Address must contain at least 5 characters.';
+                } else if (!/[a-zA-Z]/.test(cleanAddress)) {
+                    // Prevent addresses containing only numbers or special characters
+                    errors.address = 'Address cannot contain only numbers or special characters.';
+                } else if (!/^[a-zA-Z0-9\s,./#()\-&']+$/.test(cleanAddress)) {
+                    // Reject unsupported special characters
+                    errors.address = 'Please enter a valid street address.';
+                } else if (/[,#/\-]{2,}|\.{3,}/.test(cleanAddress)) {
+                    // Reject excessive repeated punctuation
+                    errors.address = 'Please enter a valid street address.';
+                } else {
+                    // Check meaningful characters count (excluding spaces & punctuation)
+                    const meaningfulChars = cleanAddress.replace(/[^a-zA-Z0-9]/g, '');
+                    if (meaningfulChars.length < 5) {
+                        errors.address = 'Address must contain at least 5 characters.';
+                    }
+                }
+            }
+        }
+
+        // 7. State Validation (Required, must be in INDIAN_STATES)
+        const cleanState = (storeFormData.state || '').trim();
+        if (!cleanState) {
+            errors.state = 'State is required';
+        } else if (!INDIAN_STATES.includes(cleanState)) {
+            errors.state = 'Please select a valid Indian State / UT from the list';
+        }
+
+        // 8. District Validation (Optional, but if selected must correspond to selected state)
+        if (storeFormData.district && storeFormData.district.trim()) {
+            const cleanDistrict = storeFormData.district.trim();
+            if (availableDistricts.length > 0 && !availableDistricts.includes(cleanDistrict)) {
+                errors.district = 'Selected district does not belong to the chosen state';
+            }
+        }
+
+        // 9. City Validation (Dynamic per state/district or custom city validation)
+        if (isCustomCity) {
+            const trimmedCustom = (customCityName || '').trim();
+            if (!trimmedCustom) {
+                errors.city = 'City name is required';
+            } else if (trimmedCustom.length < 2) {
+                errors.city = 'City name must be at least 2 characters';
+            } else if (trimmedCustom.length > 50) {
+                errors.city = 'City name must not exceed 50 characters';
+            } else if (!/^[a-zA-Z\s\-']+$/.test(trimmedCustom)) {
+                errors.city = 'City can only contain letters, spaces, hyphens and apostrophes';
+            } else if (INDIAN_STATES.some(s => s.toLowerCase() === trimmedCustom.toLowerCase())) {
+                errors.city = 'City name cannot be a state or union territory name';
+            }
+        } else if (storeFormData.city && storeFormData.city.trim()) {
+            if (storeFormData.city === 'Other') {
+                errors.city = 'City name is required';
+            } else {
+                const cleanCity = storeFormData.city.trim();
+                if (cleanCity.length < 2) {
+                    errors.city = 'City must be at least 2 characters';
+                } else if (cleanCity.length > 50) {
+                    errors.city = 'City must not exceed 50 characters';
+                } else if (!/^[a-zA-Z\s\-']+$/.test(cleanCity)) {
+                    errors.city = 'City can only contain letters, spaces, hyphens and apostrophes';
+                }
+            }
+        }
+
+        // 10. Pincode Validation (Optional, exactly 6 digits, non-zero start, non-sequential)
+        if (storeFormData.pincode && storeFormData.pincode.trim()) {
+            const cleanPin = storeFormData.pincode.trim();
+            if (!/^\d+$/.test(cleanPin)) {
+                errors.pincode = 'Pincode must contain only numeric digits';
+            } else if (cleanPin.length !== 6) {
+                errors.pincode = 'Pincode must be exactly 6 numeric digits';
+            } else if (cleanPin.startsWith('0')) {
+                errors.pincode = 'Indian pincode cannot start with 0';
+            } else if (/^(\d)\1{5}$/.test(cleanPin)) {
+                errors.pincode = 'Pincode cannot contain all identical digits';
+            } else if (cleanPin === '123456' || cleanPin === '654321') {
+                errors.pincode = 'Sequential pincodes are not valid';
             }
         }
 
@@ -323,40 +580,42 @@ const Stores = () => {
 
     const handleSaveStore = async (e) => {
         e.preventDefault();
-        if (!validateStoreForm()) return;
+        if (storeFormSubmitting) return;
+        if (!validateStoreForm()) {
+            showError('Please correct the highlighted validation errors before submitting.');
+            return;
+        }
 
         setStoreFormSubmitting(true);
         setErrorMsg('');
         try {
+            const effectiveCity = isCustomCity
+                ? (customCityName?.trim() || null)
+                : (storeFormData.city && storeFormData.city !== 'Other' ? storeFormData.city.trim() : null);
+
+            const trimmedPayload = {
+                name: storeFormData.name.trim(),
+                code: storeFormData.code?.trim()?.toUpperCase() || null,
+                address: storeFormData.address?.trim() || null,
+                district: storeFormData.district?.trim() || null,
+                city: effectiveCity,
+                state: storeFormData.state || null,
+                pincode: storeFormData.pincode?.trim() || null,
+                phone: storeFormData.phone?.trim() || null,
+                email: storeFormData.email?.trim() ? storeFormData.email.trim().toLowerCase() : null,
+                gstin: storeFormData.gstin?.trim()?.toUpperCase() || null,
+                is_warehouse: Boolean(storeFormData.is_warehouse),
+            };
+
             if (editingStore) {
                 // PATCH /api/v1/stores/{store_id}
-                const updatePayload = {
-                    name: storeFormData.name.trim(),
-                    address: storeFormData.address.trim() || null,
-                    city: storeFormData.city.trim() || null,
-                    state: storeFormData.state || null,
-                    pincode: storeFormData.pincode.trim() || null,
-                    phone: storeFormData.phone.trim() || null,
-                    email: storeFormData.email.trim() || null,
-                    gstin: storeFormData.gstin.trim().toUpperCase() || null,
-                    is_warehouse: storeFormData.is_warehouse,
-                };
-                const updated = await storeService.updateStore(editingStore.id, updatePayload);
+                const updated = await storeService.updateStore(editingStore.id, trimmedPayload);
                 showSuccess(`Store "${updated.name}" updated successfully!`);
             } else {
                 // POST /api/v1/stores/
                 const createPayload = {
-                    name: storeFormData.name.trim(),
-                    code: storeFormData.code.trim() || null,
-                    address: storeFormData.address.trim() || null,
-                    city: storeFormData.city.trim() || null,
-                    state: storeFormData.state || null,
-                    pincode: storeFormData.pincode.trim() || null,
-                    phone: storeFormData.phone.trim() || null,
-                    email: storeFormData.email.trim() || null,
-                    gstin: storeFormData.gstin.trim().toUpperCase() || null,
-                    is_warehouse: storeFormData.is_warehouse,
-                    is_main: storeFormData.is_main,
+                    ...trimmedPayload,
+                    is_main: Boolean(storeFormData.is_main),
                 };
                 const created = await storeService.createStore(createPayload);
                 showSuccess(`Store "${created.name}" created successfully!`);
@@ -365,8 +624,61 @@ const Stores = () => {
             fetchStores();
         } catch (err) {
             console.error('Save Store Error:', err);
-            const detail = err.response?.data?.detail || err.response?.data?.message || err.message;
-            showError(`Failed to save store: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`);
+            const backendErrors = {};
+            const status = err.response?.status;
+            const resData = err.response?.data;
+            const rawDetail = resData?.detail || resData?.message;
+
+            // 1. FastAPI 422 validation errors with field location
+            if (status === 422 && Array.isArray(rawDetail)) {
+                rawDetail.forEach(d => {
+                    const field = d.loc?.[d.loc.length - 1];
+                    if (field) {
+                        backendErrors[field] = (d.msg || '').replace(/^Value error,\s*/i, '');
+                    }
+                });
+            } else if (status === 409) {
+                // 2. Conflict errors (duplicate name, duplicate code)
+                const detailStr = typeof rawDetail === 'string' ? rawDetail : JSON.stringify(rawDetail);
+                if (/name.*already exists/i.test(detailStr)) {
+                    backendErrors.name = 'Store name already exists. Please choose a different name';
+                } else if (/code.*already exists/i.test(detailStr)) {
+                    backendErrors.code = 'Store code already exists. Please choose a unique code';
+                } else {
+                    showError(detailStr);
+                }
+            } else if (typeof rawDetail === 'string') {
+                // 3. String error messages matching specific fields
+                if (/name/i.test(rawDetail)) {
+                    backendErrors.name = rawDetail;
+                } else if (/code/i.test(rawDetail)) {
+                    backendErrors.code = rawDetail;
+                } else if (/gstin/i.test(rawDetail)) {
+                    backendErrors.gstin = rawDetail;
+                } else if (/phone/i.test(rawDetail)) {
+                    backendErrors.phone = rawDetail;
+                } else if (/email/i.test(rawDetail)) {
+                    backendErrors.email = rawDetail;
+                } else if (/pincode/i.test(rawDetail)) {
+                    backendErrors.pincode = rawDetail;
+                } else if (/address/i.test(rawDetail)) {
+                    backendErrors.address = rawDetail;
+                } else if (/city/i.test(rawDetail)) {
+                    backendErrors.city = rawDetail;
+                } else if (/state/i.test(rawDetail)) {
+                    backendErrors.state = rawDetail;
+                } else {
+                    showError(rawDetail);
+                }
+            } else {
+                const detail = err.response?.data?.message || err.message;
+                showError(`Failed to save store: ${typeof detail === 'object' ? JSON.stringify(detail) : detail}`);
+            }
+
+            if (Object.keys(backendErrors).length > 0) {
+                setStoreFormErrors(backendErrors);
+                showError('Please correct the highlighted validation errors.');
+            }
         } finally {
             setStoreFormSubmitting(false);
         }
@@ -486,9 +798,11 @@ const Stores = () => {
     // ============================================================
     const [targets, setTargets] = useState([]);
     const [targetsLoading, setTargetsLoading] = useState(false);
+    const [targetKpiFilter, setTargetKpiFilter] = useState('all'); // 'all' | 'active' | 'revenue' | 'completed'
     const [filterPeriod, setFilterPeriod] = useState('all');
     const [targetStatusFilter, setTargetStatusFilter] = useState('all'); // 'all' | 'active' | 'inactive' | 'completed' | 'cancelled'
     const [targetTypeFilter, setTargetTypeFilter] = useState('all');
+    const [targetSearch, setTargetSearch] = useState('');
     const [targetsView, setTargetsView] = useState('list'); // 'list' | 'leaderboard'
 
     // Pagination for Store Targets (Requirement 22)
@@ -755,19 +1069,39 @@ const Stores = () => {
                     const list = Array.isArray(data) ? data : (data?.items || []);
                     if (list.length > 0) setStores(list);
                 })
-                .catch(() => {});
+                .catch(() => { });
         }
     }, [stores.length]);
 
-    // Filtered store targets (Requirements 15, 18, 22)
+    // Filtered store targets (Requirements 15, 18, 22 & Clickable KPI Cards)
     const filteredTargets = useMemo(() => {
         return targets.filter(t => {
+            // Interactive KPI Card Filter
+            if (targetKpiFilter === 'active') {
+                const st = (t.status || 'active').toLowerCase();
+                if (st !== 'active' && st !== 'in_progress') return false;
+            } else if (targetKpiFilter === 'completed') {
+                const st = (t.status || '').toLowerCase();
+                const prog = parseFloat(t.progress_percentage || t.progress || 0);
+                if (st !== 'completed' && prog < 100) return false;
+            } else if (targetKpiFilter === 'revenue') {
+                const tt = (t.target_type || '').toLowerCase();
+                if (!tt.includes('revenue') && !tt.includes('sales')) return false;
+            }
+
             if (filterPeriod !== 'all' && t.period?.toLowerCase() !== filterPeriod.toLowerCase()) return false;
             if (targetStatusFilter !== 'all' && (t.status || 'active').toLowerCase() !== targetStatusFilter.toLowerCase()) return false;
             if (targetTypeFilter !== 'all' && (t.target_type || '').toLowerCase() !== targetTypeFilter.toLowerCase()) return false;
+            if (targetSearch.trim()) {
+                const q = targetSearch.trim().toLowerCase();
+                const storeMatch = (t.store_name || '').toLowerCase().includes(q) || String(t.store_id || '').includes(q) || (t.store_code || '').toLowerCase().includes(q);
+                const typeMatch = (t.target_type || '').toLowerCase().includes(q);
+                const periodMatch = (t.period || '').toLowerCase().includes(q);
+                if (!storeMatch && !typeMatch && !periodMatch) return false;
+            }
             return true;
         });
-    }, [targets, filterPeriod, targetStatusFilter, targetTypeFilter]);
+    }, [targets, targetKpiFilter, filterPeriod, targetStatusFilter, targetTypeFilter, targetSearch]);
 
     // Paginated targets (Requirement 22: Display all returned records)
     const paginatedTargets = useMemo(() => {
@@ -786,222 +1120,427 @@ const Stores = () => {
             .reduce((sum, t) => sum + parseFloat(t.target_value || 0), 0);
     }, [targetsSummary, targets]);
 
+    // ============================================================
+    // STORES DIRECTORY: SINGLE BOTTOM HORIZONTAL SCROLLBAR SYNCHRONIZATION
+    // ============================================================
+    const storesTableContainerRef = useRef(null);
+    const storesBottomScrollbarRef = useRef(null);
+    const isSyncingStoresScroll = useRef(false);
+
+    const [storesScrollContentWidth, setStoresScrollContentWidth] = useState(0);
+    const [isStoresScrollable, setIsStoresScrollable] = useState(false);
+
+    const updateStoresScrollMetrics = useCallback(() => {
+        const tableEl = storesTableContainerRef.current;
+        const bottomEl = storesBottomScrollbarRef.current;
+
+        const tableScrollWidth = tableEl ? tableEl.scrollWidth : 0;
+        const clientWidth = bottomEl?.clientWidth || tableEl?.clientWidth || 0;
+
+        setStoresScrollContentWidth(tableScrollWidth);
+        setIsStoresScrollable(tableScrollWidth > (clientWidth + 2));
+    }, []);
+
+    useEffect(() => {
+        if (activeTab !== 'stores') return;
+
+        updateStoresScrollMetrics();
+
+        const observers = [];
+        if (typeof ResizeObserver !== 'undefined') {
+            const ro = new ResizeObserver(() => {
+                updateStoresScrollMetrics();
+            });
+            if (storesTableContainerRef.current) ro.observe(storesTableContainerRef.current);
+            if (storesBottomScrollbarRef.current) ro.observe(storesBottomScrollbarRef.current);
+            observers.push(ro);
+        }
+
+        const handleWindowResize = () => {
+            updateStoresScrollMetrics();
+        };
+
+        window.addEventListener('resize', handleWindowResize);
+        const rafId = requestAnimationFrame(updateStoresScrollMetrics);
+
+        return () => {
+            observers.forEach(obs => obs.disconnect());
+            window.removeEventListener('resize', handleWindowResize);
+            cancelAnimationFrame(rafId);
+        };
+    }, [activeTab, filteredStores.length, storesLoading, updateStoresScrollMetrics]);
+
+    // Handle horizontal wheel scrolling on the bottom scrollbar
+    useEffect(() => {
+        if (activeTab !== 'stores') return;
+        const bottomEl = storesBottomScrollbarRef.current;
+        if (!bottomEl) return;
+
+        const handleBottomWheel = (e) => {
+            if (e.deltaY !== 0 && e.deltaX === 0) {
+                e.preventDefault();
+                bottomEl.scrollLeft += e.deltaY;
+            }
+        };
+
+        bottomEl.addEventListener('wheel', handleBottomWheel, { passive: false });
+        return () => {
+            bottomEl.removeEventListener('wheel', handleBottomWheel);
+        };
+    }, [isStoresScrollable, activeTab]);
+
+    // Synchronize bottom scrollbar dragging with table
+    const onStoresBottomScroll = (e) => {
+        if (isSyncingStoresScroll.current) return;
+        isSyncingStoresScroll.current = true;
+        const scrollLeft = e.target.scrollLeft;
+
+        if (storesTableContainerRef.current) {
+            storesTableContainerRef.current.scrollLeft = scrollLeft;
+        }
+
+        requestAnimationFrame(() => {
+            isSyncingStoresScroll.current = false;
+        });
+    };
+
+    // Synchronize table scrolling with bottom scrollbar
+    const onStoresTableScroll = (e) => {
+        if (isSyncingStoresScroll.current) return;
+        isSyncingStoresScroll.current = true;
+        const scrollLeft = e.target.scrollLeft;
+
+        if (storesBottomScrollbarRef.current) {
+            storesBottomScrollbarRef.current.scrollLeft = scrollLeft;
+        }
+
+        requestAnimationFrame(() => {
+            isSyncingStoresScroll.current = false;
+        });
+    };
+
+    // ============================================================
+    // STORE TARGETS: SINGLE BOTTOM HORIZONTAL SCROLLBAR SYNCHRONIZATION
+    // ============================================================
+    const targetsTableContainerRef = useRef(null);
+    const filterRowRef = useRef(null);
+    const bottomScrollbarRef = useRef(null);
+    const isSyncingScroll = useRef(false);
+
+    const [scrollContentWidth, setScrollContentWidth] = useState(0);
+    const [isScrollable, setIsScrollable] = useState(false);
+
+    const updateScrollMetrics = useCallback(() => {
+        const tableEl = targetsTableContainerRef.current;
+        const filterEl = filterRowRef.current;
+        const bottomEl = bottomScrollbarRef.current;
+
+        const tableScrollWidth = tableEl ? tableEl.scrollWidth : 0;
+        const filterScrollWidth = filterEl ? filterEl.scrollWidth : 0;
+        const maxWidth = Math.max(tableScrollWidth, filterScrollWidth);
+
+        const clientWidth = bottomEl?.clientWidth || tableEl?.clientWidth || filterEl?.clientWidth || 0;
+
+        setScrollContentWidth(maxWidth);
+        setIsScrollable(maxWidth > (clientWidth + 2));
+    }, []);
+
+    useEffect(() => {
+        if (activeTab !== 'targets') return;
+
+        updateScrollMetrics();
+
+        const observers = [];
+        if (typeof ResizeObserver !== 'undefined') {
+            const ro = new ResizeObserver(() => {
+                updateScrollMetrics();
+            });
+            if (targetsTableContainerRef.current) ro.observe(targetsTableContainerRef.current);
+            if (filterRowRef.current) ro.observe(filterRowRef.current);
+            if (bottomScrollbarRef.current) ro.observe(bottomScrollbarRef.current);
+            observers.push(ro);
+        }
+
+        const handleWindowResize = () => {
+            updateScrollMetrics();
+        };
+
+        window.addEventListener('resize', handleWindowResize);
+        const rafId = requestAnimationFrame(updateScrollMetrics);
+
+        return () => {
+            observers.forEach(obs => obs.disconnect());
+            window.removeEventListener('resize', handleWindowResize);
+            cancelAnimationFrame(rafId);
+        };
+    }, [activeTab, targetsView, filteredTargets.length, targetPage, targetsLoading, updateScrollMetrics]);
+
+    // Handle horizontal wheel scrolling on the bottom scrollbar
+    useEffect(() => {
+        const bottomEl = bottomScrollbarRef.current;
+        if (!bottomEl) return;
+
+        const handleBottomWheel = (e) => {
+            if (e.deltaY !== 0 && e.deltaX === 0) {
+                e.preventDefault();
+                bottomEl.scrollLeft += e.deltaY;
+            }
+        };
+
+        bottomEl.addEventListener('wheel', handleBottomWheel, { passive: false });
+        return () => {
+            bottomEl.removeEventListener('wheel', handleBottomWheel);
+        };
+    }, [isScrollable, targetsView, activeTab]);
+
+    // Synchronize bottom scrollbar dragging with table and filters
+    const onBottomScroll = (e) => {
+        if (isSyncingScroll.current) return;
+        isSyncingScroll.current = true;
+        const scrollLeft = e.target.scrollLeft;
+
+        if (targetsTableContainerRef.current) {
+            targetsTableContainerRef.current.scrollLeft = scrollLeft;
+        }
+        if (filterRowRef.current && filterRowRef.current.scrollWidth > filterRowRef.current.clientWidth) {
+            filterRowRef.current.scrollLeft = scrollLeft;
+        }
+
+        requestAnimationFrame(() => {
+            isSyncingScroll.current = false;
+        });
+    };
+
+    // Synchronize table scrolling (via mouse-wheel/trackpad) with bottom scrollbar
+    const onTableScroll = (e) => {
+        if (isSyncingScroll.current) return;
+        isSyncingScroll.current = true;
+        const scrollLeft = e.target.scrollLeft;
+
+        if (bottomScrollbarRef.current) {
+            bottomScrollbarRef.current.scrollLeft = scrollLeft;
+        }
+        if (filterRowRef.current && filterRowRef.current.scrollWidth > filterRowRef.current.clientWidth) {
+            filterRowRef.current.scrollLeft = scrollLeft;
+        }
+
+        requestAnimationFrame(() => {
+            isSyncingScroll.current = false;
+        });
+    };
+
+    // Synchronize filter row scrolling (if dragged or swiped)
+    const onFilterScroll = (e) => {
+        if (isSyncingScroll.current) return;
+        isSyncingScroll.current = true;
+        const scrollLeft = e.target.scrollLeft;
+
+        if (bottomScrollbarRef.current) {
+            bottomScrollbarRef.current.scrollLeft = scrollLeft;
+        }
+        if (targetsTableContainerRef.current) {
+            targetsTableContainerRef.current.scrollLeft = scrollLeft;
+        }
+
+        requestAnimationFrame(() => {
+            isSyncingScroll.current = false;
+        });
+    };
+
     return (
-        <div style={{ padding: '24px 32px', maxWidth: 1400, margin: '0 auto', fontFamily: 'inherit' }}>
+        <PageContainer>
             <style>{`
-                .store-targets-cards {
-                    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                .store-targets-filter-row {
+                    display: flex !important;
+                    align-items: center !important;
+                    gap: 12px !important;
+                    flex-wrap: nowrap !important;
+                    overflow-x: auto !important;
+                    scrollbar-width: none !important;
+                    -ms-overflow-style: none !important;
                 }
-                @media (max-width: 900px) {
-                    .store-targets-cards {
-                        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-                    }
+                .store-targets-filter-row::-webkit-scrollbar {
+                    display: none !important;
+                    width: 0 !important;
+                    height: 0 !important;
                 }
-                @media (max-width: 600px) {
-                    .store-targets-cards {
-                        grid-template-columns: 1fr !important;
-                    }
+                .store-targets-table-scroll {
+                    overflow-x: auto !important;
+                    scrollbar-width: none !important;
+                    -ms-overflow-style: none !important;
+                }
+                .store-targets-table-scroll::-webkit-scrollbar {
+                    display: none !important;
+                    width: 0 !important;
+                    height: 0 !important;
+                }
+                .store-targets-bottom-scrollbar {
+                    scrollbar-width: thin !important;
+                    scrollbar-color: #94a3b8 #f1f5f9 !important;
+                }
+                .store-targets-bottom-scrollbar::-webkit-scrollbar {
+                    height: 9px !important;
+                }
+                .store-targets-bottom-scrollbar::-webkit-scrollbar-track {
+                    background: #f1f5f9 !important;
+                    border-radius: 8px !important;
+                }
+                .store-targets-bottom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    border: 2px solid #f1f5f9 !important;
+                }
+                .store-targets-bottom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #94a3b8 !important;
+                }
+                .stores-directory-table-scroll {
+                    overflow-x: auto !important;
+                    scrollbar-width: none !important;
+                    -ms-overflow-style: none !important;
+                }
+                .stores-directory-table-scroll::-webkit-scrollbar {
+                    display: none !important;
+                    width: 0 !important;
+                    height: 0 !important;
+                }
+                .stores-directory-bottom-scrollbar {
+                    scrollbar-width: thin !important;
+                    scrollbar-color: #94a3b8 #f1f5f9 !important;
+                }
+                .stores-directory-bottom-scrollbar::-webkit-scrollbar {
+                    height: 9px !important;
+                }
+                .stores-directory-bottom-scrollbar::-webkit-scrollbar-track {
+                    background: #f1f5f9 !important;
+                    border-radius: 8px !important;
+                }
+                .stores-directory-bottom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #cbd5e1 !important;
+                    border-radius: 8px !important;
+                    border: 2px solid #f1f5f9 !important;
+                }
+                .stores-directory-bottom-scrollbar::-webkit-scrollbar-thumb:hover {
+                    background: #94a3b8 !important;
                 }
             `}</style>
-            {/* Top Navigation Tabs: Stores vs Store Targets */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                borderBottom: '1px solid #e2e8f0',
-                paddingBottom: 14,
-                marginBottom: 20
-            }}>
-                <button
-                    onClick={() => handleTabChange('stores')}
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '9px 18px',
-                        borderRadius: 10,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        background: activeTab === 'stores' ? '#4f46e5' : '#f1f5f9',
-                        color: activeTab === 'stores' ? '#fff' : '#475569',
-                        boxShadow: activeTab === 'stores' ? '0 4px 12px rgba(79, 70, 229, 0.25)' : 'none',
-                        transition: 'all 0.15s ease'
-                    }}
-                >
-                    <BsShop size={15} />
-                    <span>Stores Directory</span>
-                    <span style={{
-                        padding: '1px 7px',
-                        borderRadius: 99,
-                        fontSize: 11,
-                        background: activeTab === 'stores' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
-                        color: activeTab === 'stores' ? '#fff' : '#475569'
-                    }}>
-                        {stores.length}
-                    </span>
-                </button>
-
-                <button
-                    onClick={() => handleTabChange('targets')}
-                    style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '9px 18px',
-                        borderRadius: 10,
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        background: activeTab === 'targets' ? '#4f46e5' : '#f1f5f9',
-                        color: activeTab === 'targets' ? '#fff' : '#475569',
-                        boxShadow: activeTab === 'targets' ? '0 4px 12px rgba(79, 70, 229, 0.25)' : 'none',
-                        transition: 'all 0.15s ease'
-                    }}
-                >
-                    <BsBullseye size={15} />
-                    <span>Store Targets & Milestones</span>
-                    <span style={{
-                        padding: '1px 7px',
-                        borderRadius: 99,
-                        fontSize: 11,
-                        background: activeTab === 'targets' ? 'rgba(255,255,255,0.25)' : '#e2e8f0',
-                        color: activeTab === 'targets' ? '#fff' : '#475569'
-                    }}>
-                        {targets.length}
-                    </span>
-                </button>
-            </div>
-
-            {/* Notification Alerts */}
-            {successMsg && (
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '12px 16px', borderRadius: 10,
-                    background: '#ecfdf5', border: '1px solid #a7f3d0',
-                    color: '#065f46', fontSize: 13, fontWeight: 600, marginBottom: 20
-                }}>
-                    <BsCheckCircleFill color="#10b981" size={16} />
-                    <span>{successMsg}</span>
-                </div>
-            )}
-
-            {errorMsg && (
-                <div style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '12px 16px', borderRadius: 10,
-                    background: '#fef2f2', border: '1px solid #fecaca',
-                    color: '#991b1b', fontSize: 13, fontWeight: 600, marginBottom: 20
-                }}>
-                    <BsExclamationTriangle color="#ef4444" size={16} />
-                    <span>{errorMsg}</span>
-                </div>
-            )}
-
             {/* ======================================================= */}
             {/* VIEW 1: STORES DIRECTORY & BRANCH MANAGEMENT           */}
             {/* ======================================================= */}
             {activeTab === 'stores' && (
                 <div>
                     {/* Header */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 16,
-                        marginBottom: 24,
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{
-                                width: 40, height: 40, borderRadius: 12,
-                                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: '#fff', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)'
-                            }}>
-                                <BsShop size={22} />
-                            </div>
-                            <div>
-                                <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
-                                    Stores Directory
-                                </h1>
-                                <p style={{ fontSize: 13, color: '#64748b', margin: '3px 0 0' }}>
-                                    Manage branch locations, warehouses, staff and store details (<code>/api/v1/stores</code>)
-                                </p>
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                            <button
-                                onClick={fetchStores}
-                                disabled={storesLoading}
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                    padding: '10px 14px', borderRadius: 10,
-                                    background: '#fff', border: '1px solid #e2e8f0',
-                                    color: '#475569', fontSize: 13, fontWeight: 600,
-                                    cursor: 'pointer', transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <BsArrowRepeat size={14} className={storesLoading ? 'spin-anim' : ''} />
-                                <span>Refresh</span>
-                            </button>
-
-                            <button
-                                onClick={openCreateStore}
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                    padding: '10px 18px', borderRadius: 10,
-                                    background: '#4f46e5', border: 'none',
-                                    color: '#fff', fontSize: 13, fontWeight: 700,
-                                    cursor: 'pointer', boxShadow: '0 4px 14px rgba(79, 70, 229, 0.3)',
-                                    transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <BsPlus size={18} />
-                                <span>Add Store</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Stores KPI Overview Cards */}
-                    <div className="category-cards">
-                        <div className="category-card" title="Total Stores">
-                            <h3>Total Stores</h3>
-                            <h2>{stores.length}</h2>
-                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 4 }}>
-                                Registered branches
+                    <PageHeader
+                        title="Stores Directory"
+                        subtitle={
+                            <span>
+                                Manage branch locations, warehouses, staff and store details (<code>/api/v1/stores</code>)
                             </span>
-                        </div>
+                        }
+                        icon={<BsShop />}
+                        actions={
+                            <>
+                                <button
+                                    onClick={fetchStores}
+                                    disabled={storesLoading}
+                                    className="adm-btn-secondary"
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        padding: '10px 14px', borderRadius: 8,
+                                        background: '#fff', border: '1px solid #e2e8f0',
+                                        color: '#475569', fontSize: 13, fontWeight: 600,
+                                        cursor: 'pointer', transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <BsArrowRepeat size={14} className={storesLoading ? 'spin-anim' : ''} />
+                                    <span>Refresh</span>
+                                </button>
+                                <button
+                                    onClick={openCreateStore}
+                                    className="adm-btn-primary"
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        padding: '10px 18px', borderRadius: 8,
+                                        background: '#2563eb', border: 'none',
+                                        color: '#fff', fontSize: 13, fontWeight: 700,
+                                        cursor: 'pointer', boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <BsPlus size={18} />
+                                    <span>Add Store</span>
+                                </button>
+                            </>
+                        }
+                    />
 
-                        <div className="category-card" title="Active Branches">
-                            <h3>Active Branches</h3>
-                            <h2>{stores.filter(s => s.is_active).length}</h2>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
-                                Operational outlets
-                            </span>
+                    {/* Notification Alerts for Stores Directory */}
+                    {successMsg && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '12px 16px', borderRadius: 10,
+                            background: '#ecfdf5', border: '1px solid #a7f3d0',
+                            color: '#065f46', fontSize: 13, fontWeight: 600, marginBottom: 20
+                        }}>
+                            <BsCheckCircleFill color="#10b981" size={16} />
+                            <span>{successMsg}</span>
                         </div>
+                    )}
 
-                        <div className="category-card" title="Warehouses">
-                            <h3>Warehouses</h3>
-                            <h2>{stores.filter(s => s.is_warehouse).length}</h2>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
-                                Fulfillment & storage depots
-                            </span>
+                    {errorMsg && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '12px 16px', borderRadius: 10,
+                            background: '#fef2f2', border: '1px solid #fecaca',
+                            color: '#991b1b', fontSize: 13, fontWeight: 600, marginBottom: 20
+                        }}>
+                            <BsExclamationTriangle color="#ef4444" size={16} />
+                            <span>{errorMsg}</span>
                         </div>
+                    )}
 
-                        <div className="category-card" title="Primary Main Store">
-                            <h3>Primary Main Store</h3>
-                            <h2 style={{ fontSize: 20, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {stores.find(s => s.is_main)?.name || 'None Set'}
-                            </h2>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
-                                {stores.find(s => s.is_main) ? `Code: ${stores.find(s => s.is_main)?.code || 'MAIN'}` : 'Designate a main store'}
-                            </span>
-                        </div>
-                    </div>
+                    {/* Stores KPI Overview Cards - Interactive Clickable Cards */}
+                    <KpiGrid columns={4}>
+                        <KpiCard
+                            variant="revenue"
+                            icon={<BsShop />}
+                            title="Total Stores"
+                            value={stores.length}
+                            subtitle={storeKpiFilter === 'all' ? '● All registered stores' : 'Click to show all'}
+                            tooltip={storeKpiFilter === 'all' ? "Showing all stores" : "Click to view all stores"}
+                            active={storeKpiFilter === 'all'}
+                            onClick={() => setStoreKpiFilter('all')}
+                        />
+                        <KpiCard
+                            variant="profit"
+                            icon={<BsCheckCircleFill />}
+                            title="Active Branches"
+                            value={stores.filter(s => s.is_active).length}
+                            subtitle={storeKpiFilter === 'active' ? '● Filtering active outlets' : 'Operational outlets'}
+                            tooltip={storeKpiFilter === 'active' ? "Click to remove filter" : "Click to filter active branches"}
+                            active={storeKpiFilter === 'active'}
+                            onClick={() => setStoreKpiFilter(prev => prev === 'active' ? 'all' : 'active')}
+                        />
+                        <KpiCard
+                            variant="margin"
+                            icon={<BsBuilding />}
+                            title="Warehouses"
+                            value={stores.filter(s => s.is_warehouse).length}
+                            subtitle={storeKpiFilter === 'warehouse' ? '● Filtering warehouses' : 'Fulfillment & storage depots'}
+                            tooltip={storeKpiFilter === 'warehouse' ? "Click to remove filter" : "Click to filter warehouses"}
+                            active={storeKpiFilter === 'warehouse'}
+                            onClick={() => setStoreKpiFilter(prev => prev === 'warehouse' ? 'all' : 'warehouse')}
+                        />
+                        <KpiCard
+                            variant="customers"
+                            icon={<BsStarFill />}
+                            title="Primary Main Store"
+                            value={stores.find(s => s.is_main)?.name || 'None Set'}
+                            subtitle={storeKpiFilter === 'main' ? '● Filtering main store' : (stores.find(s => s.is_main) ? `Code: ${stores.find(s => s.is_main)?.code || 'MAIN'}` : 'Designate a main store')}
+                            tooltip={storeKpiFilter === 'main' ? "Click to remove filter" : "Click to filter primary main store"}
+                            active={storeKpiFilter === 'main'}
+                            onClick={() => setStoreKpiFilter(prev => prev === 'main' ? 'all' : 'main')}
+                        />
+                    </KpiGrid>
 
                     {/* Filter and Search Bar (Requirement 10) */}
                     <div style={{
@@ -1012,7 +1551,7 @@ const Stores = () => {
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flex: 1 }}>
                             {/* Search Store Name / Code */}
-                            <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 10px', height: 36, minWidth: 220, flex: '1 1 220px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 8, padding: '0 12px', height: 36, minWidth: 260, flex: '1 1 280px' }}>
                                 <BsSearch size={14} color="#94a3b8" style={{ marginRight: 8, flexShrink: 0 }} />
                                 <input
                                     type="text"
@@ -1033,65 +1572,71 @@ const Stores = () => {
                                 )}
                             </div>
 
-                            {/* Store Location / City Filter */}
-                            {storeCities.length > 0 && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>City:</span>
-                                    <select
-                                        value={storeCityFilter}
-                                        onChange={e => setStoreCityFilter(e.target.value)}
-                                        style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 12, outline: 'none', background: '#fff', cursor: 'pointer' }}
+                            {/* Store Type Filter Dropdown */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Type:</span>
+                                <select
+                                    value={storeTypeFilter}
+                                    onChange={e => setStoreTypeFilter(e.target.value)}
+                                    style={{
+                                        padding: '6px 10px',
+                                        borderRadius: 8,
+                                        border: '1px solid #cbd5e1',
+                                        fontSize: 12,
+                                        fontWeight: 500,
+                                        outline: 'none',
+                                        background: '#fff',
+                                        cursor: 'pointer',
+                                        color: '#1e293b'
+                                    }}
+                                >
+                                    <option value="all">All</option>
+                                    <option value="retail">Retail</option>
+                                    <option value="warehouse">Warehouse</option>
+                                </select>
+                            </div>
+
+                            {/* Store Status Filter Dropdown */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Status:</span>
+                                <select
+                                    value={storeStatusFilter}
+                                    onChange={e => setStoreStatusFilter(e.target.value)}
+                                    style={{
+                                        padding: '6px 10px',
+                                        borderRadius: 8,
+                                        border: '1px solid #cbd5e1',
+                                        fontSize: 12,
+                                        fontWeight: 500,
+                                        outline: 'none',
+                                        background: '#fff',
+                                        cursor: 'pointer',
+                                        color: '#1e293b'
+                                    }}
+                                >
+                                    <option value="all">All</option>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
+                                </select>
+                            </div>
+
+                            {/* Active Card Filter Badge */}
+                            {storeKpiFilter !== 'all' && (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#e0e7ff', color: '#3730a3', padding: '4px 10px', borderRadius: 8, fontSize: 12, fontWeight: 700 }}>
+                                    <span>Card Filter: {storeKpiFilter === 'active' ? 'Active Branches' : storeKpiFilter === 'warehouse' ? 'Warehouses' : 'Primary Main Store'}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStoreKpiFilter('all')}
+                                        style={{ background: 'none', border: 'none', color: '#3730a3', cursor: 'pointer', padding: 0, fontWeight: 800, fontSize: 12 }}
+                                        title="Clear card filter"
                                     >
-                                        <option value="all">All Cities</option>
-                                        {storeCities.map(c => (
-                                            <option key={c} value={c}>{c}</option>
-                                        ))}
-                                    </select>
+                                        ✕
+                                    </button>
                                 </div>
                             )}
 
-                            {/* Store Type Filter */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Type:</span>
-                                {['all', 'retail', 'warehouse'].map(type => (
-                                    <button
-                                        key={type}
-                                        onClick={() => setStoreTypeFilter(type)}
-                                        style={{
-                                            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                                            textTransform: 'capitalize', border: 'none', cursor: 'pointer',
-                                            background: storeTypeFilter === type ? '#4f46e5' : '#f1f5f9',
-                                            color: storeTypeFilter === type ? '#fff' : '#475569',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                    >
-                                        {type}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Store Status Filter */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>Status:</span>
-                                {['all', 'active', 'inactive'].map(st => (
-                                    <button
-                                        key={st}
-                                        onClick={() => setStoreStatusFilter(st)}
-                                        style={{
-                                            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                                            textTransform: 'capitalize', border: 'none', cursor: 'pointer',
-                                            background: storeStatusFilter === st ? '#4f46e5' : '#f1f5f9',
-                                            color: storeStatusFilter === st ? '#fff' : '#475569',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                    >
-                                        {st}
-                                    </button>
-                                ))}
-                            </div>
-
                             {/* Reset Filters */}
-                            {(storeSearch || storeTypeFilter !== 'all' || storeStatusFilter !== 'all' || storeCityFilter !== 'all') && (
+                            {(storeSearch || storeTypeFilter !== 'all' || storeStatusFilter !== 'all' || storeCityFilter !== 'all' || storeKpiFilter !== 'all') && (
                                 <button
                                     onClick={resetStoreFilters}
                                     style={{
@@ -1103,15 +1648,6 @@ const Stores = () => {
                                     Reset Filters
                                 </button>
                             )}
-
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer', marginLeft: 4 }}>
-                                <input
-                                    type="checkbox"
-                                    checked={includeInactive}
-                                    onChange={e => setIncludeInactive(e.target.checked)}
-                                />
-                                <span>Show Inactive Stores</span>
-                            </label>
                         </div>
 
                         <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>
@@ -1124,22 +1660,26 @@ const Stores = () => {
                         background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0',
                         overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                     }}>
-                        <div style={{ overflowX: 'auto' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                        <div
+                            ref={storesTableContainerRef}
+                            onScroll={onStoresTableScroll}
+                            className="stores-directory-table-scroll"
+                            style={{ overflowX: 'auto' }}
+                        >
+                            <table style={{ width: '100%', minWidth: 880, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                                 <thead>
                                     <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Store Details</th>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type / Role</th>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location</th>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact</th>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
-                                        <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</th>
+                                        <th style={{ width: '32%', minWidth: 220, padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Store Details</th>
+                                        <th style={{ width: '18%', minWidth: 140, padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Type / Role</th>
+                                        <th style={{ width: '24%', minWidth: 180, padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact</th>
+                                        <th style={{ width: '12%', minWidth: 110, padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</th>
+                                        <th style={{ width: '14%', minWidth: 160, padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'right' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {filteredStores.length === 0 ? (
                                         <tr>
-                                            <td colSpan={6} style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>
+                                            <td colSpan={5} style={{ padding: 48, textAlign: 'center', color: '#94a3b8' }}>
                                                 <BsShop size={36} style={{ marginBottom: 10, opacity: 0.5 }} />
                                                 <div style={{ fontSize: 14, fontWeight: 600 }}>No Stores Found</div>
                                                 <div style={{ fontSize: 12, marginTop: 4 }}>
@@ -1180,11 +1720,6 @@ const Stores = () => {
                                                         {store.is_warehouse ? <BsBoxes size={11} /> : <BsShop size={11} />}
                                                         {store.is_warehouse ? 'Warehouse' : 'Retail Outlet'}
                                                     </span>
-                                                </td>
-
-                                                <td style={{ padding: '14px 18px', fontSize: 12, color: '#475569' }}>
-                                                    <div>{store.city || '—'}{store.state ? `, ${store.state}` : ''}</div>
-                                                    <div style={{ fontSize: 10, color: '#94a3b8' }}>{store.pincode ? `PIN: ${store.pincode}` : store.address || ''}</div>
                                                 </td>
 
                                                 <td style={{ padding: '14px 18px', fontSize: 12, color: '#475569' }}>
@@ -1284,241 +1819,416 @@ const Stores = () => {
                             </table>
                         </div>
                     </div>
+
+                    {/* Single Bottom Synchronized Horizontal Scrollbar for Stores Directory */}
+                    <div
+                        ref={storesBottomScrollbarRef}
+                        onScroll={onStoresBottomScroll}
+                        className="stores-directory-bottom-scrollbar"
+                        style={{
+                            width: '100%',
+                            overflowX: 'auto',
+                            overflowY: 'hidden',
+                            marginTop: 12,
+                            display: isStoresScrollable ? 'block' : 'none',
+                            background: '#f8fafc',
+                            borderRadius: 8,
+                            border: '1px solid #e2e8f0',
+                            padding: '3px 0',
+                            boxSizing: 'border-box'
+                        }}
+                        title="Scroll horizontally to view all columns"
+                    >
+                        <div
+                            style={{
+                                width: storesScrollContentWidth,
+                                height: 6,
+                                pointerEvents: 'none'
+                            }}
+                        />
+                    </div>
                 </div>
             )}
 
             {/* ======================================================= */}
-            {/* VIEW 2: STORE TARGETS & MILESTONES                      */}
+            {/* VIEW 2: STORE TARGETS                                   */}
             {/* ======================================================= */}
             {activeTab === 'targets' && (
                 <div>
                     {/* Header */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 16,
-                        marginBottom: 24,
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{
-                                width: 40, height: 40, borderRadius: 12,
-                                background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                color: '#fff', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)'
-                            }}>
-                                <BsBullseye size={22} />
-                            </div>
-                            <div>
-                                <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
-                                    Store Targets
-                                </h1>
-                                <p style={{ fontSize: 13, color: '#64748b', margin: '3px 0 0' }}>
-                                    Manage revenue, orders and performance milestones across all stores
-                                </p>
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                            <button
-                                onClick={fetchTargets}
-                                disabled={targetsLoading}
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                    padding: '10px 14px', borderRadius: 10,
-                                    background: '#fff', border: '1px solid #e2e8f0',
-                                    color: '#475569', fontSize: 13, fontWeight: 600,
-                                    cursor: 'pointer', transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <BsArrowRepeat size={14} className={targetsLoading ? 'spin-anim' : ''} />
-                                <span>Refresh</span>
-                            </button>
-
-                            <button
-                                id="create-target-btn"
-                                onClick={openCreateTarget}
-                                style={{
-                                    display: 'inline-flex', alignItems: 'center', gap: 6,
-                                    padding: '10px 18px', borderRadius: 10,
-                                    background: '#4f46e5', border: 'none',
-                                    color: '#fff', fontSize: 13, fontWeight: 700,
-                                    cursor: 'pointer', boxShadow: '0 4px 14px rgba(79, 70, 229, 0.3)',
-                                    transition: 'all 0.15s ease'
-                                }}
-                            >
-                                <BsPlus size={18} />
-                                <span>Create Target</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Stats Overview - Clickable KPI Cards (Requirement 18) */}
-                    <div className="category-cards store-targets-cards">
-                        <div
-                            className="category-card"
-                            title="Click to view all targets"
-                            onClick={() => { setTargetStatusFilter('all'); setTargetsView('list'); }}
-                            style={{ cursor: 'pointer' }}
-                        >
-                            <h3>Total Targets</h3>
-                            <h2>{targets.length}</h2>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginTop: 4 }}>
-                                Configured targets
-                            </span>
-                        </div>
-
-                        <div
-                            className="category-card"
-                            title="Click to filter active targets"
-                            onClick={() => { setTargetStatusFilter('active'); setTargetsView('list'); }}
-                            style={{ cursor: 'pointer' }}
-                        >
-                            <h3>Active Targets</h3>
-                            <h2>{targets.filter(t => (t.status || 'active').toLowerCase() === 'active').length}</h2>
-                            <span style={{ fontSize: 11, color: '#10b981', fontWeight: 600, marginTop: 4 }}>
-                                Active milestones
-                            </span>
-                        </div>
-
-                        <div
-                            className="category-card"
-                            title="Click to view all revenue & sales targets"
-                            onClick={() => { setTargetTypeFilter('all'); setTargetsView('list'); }}
-                            style={{ cursor: 'pointer' }}
-                        >
-                            <h3>Total Target Value</h3>
-                            <h2 style={{ fontSize: 22, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                ₹{displayTotalRevenueTarget.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </h2>
-                            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, marginTop: 4 }}>
-                                {targetsSummary?.overall_achievement_percentage ? `${targetsSummary.overall_achievement_percentage}% overall reached` : 'Sum of store goals'}
-                            </span>
-                        </div>
-
-                        <div
-                            className="category-card"
-                            title="Click to filter completed targets"
-                            onClick={() => { setTargetStatusFilter('completed'); setTargetsView('list'); }}
-                            style={{ cursor: 'pointer' }}
-                        >
-                            <h3>Completed Targets</h3>
-                            <h2>{targets.filter(t => (t.status || '').toLowerCase() === 'completed').length}</h2>
-                            <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 500, marginTop: 4 }}>
-                                Fully reached milestones
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* Filter Bar & View Toggle */}
-                    <div style={{
-                        background: '#fff', borderRadius: 14, padding: '14px 18px',
-                        border: '1px solid #e2e8f0', marginBottom: 20,
-                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        flexWrap: 'wrap', gap: 12
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <BsFilter size={16} color="#64748b" />
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Period:</span>
-                                {['all', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly'].map(p => (
-                                    <button
-                                        key={p}
-                                        onClick={() => { setFilterPeriod(p); setTargetPage(1); }}
-                                        style={{
-                                            padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 600,
-                                            textTransform: 'capitalize', border: 'none', cursor: 'pointer',
-                                            background: filterPeriod === p ? '#4f46e5' : '#f1f5f9',
-                                            color: filterPeriod === p ? '#fff' : '#475569',
-                                            transition: 'all 0.15s ease'
-                                        }}
-                                    >
-                                        {p}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Status Filter (Requirement 15) */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Status:</span>
-                                <select
-                                    value={targetStatusFilter}
-                                    onChange={e => { setTargetStatusFilter(e.target.value); setTargetPage(1); }}
-                                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 12, outline: 'none', background: '#fff' }}
-                                >
-                                    <option value="all">All Statuses</option>
-                                    <option value="active">Active</option>
-                                    <option value="inactive">Inactive</option>
-                                    <option value="completed">Completed</option>
-                                    <option value="cancelled">Cancelled</option>
-                                </select>
-                            </div>
-
-                            {/* Target Type Filter (Requirements 27 & 28) */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Type:</span>
-                                <select
-                                    value={targetTypeFilter}
-                                    onChange={e => { setTargetTypeFilter(e.target.value); setTargetPage(1); }}
-                                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 12, outline: 'none', background: '#fff' }}
-                                >
-                                    <option value="all">All Types</option>
-                                    {TARGET_TYPES.map(t => (
-                                        <option key={t.value} value={t.value}>{t.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {(filterPeriod !== 'all' || targetStatusFilter !== 'all' || targetTypeFilter !== 'all') && (
+                    <PageHeader
+                        title="Store Targets"
+                        subtitle="Manage revenue, orders and performance milestones across all stores"
+                        icon={<BsBullseye />}
+                        actions={
+                            <>
                                 <button
-                                    onClick={() => {
-                                        setFilterPeriod('all');
-                                        setTargetStatusFilter('all');
-                                        setTargetTypeFilter('all');
-                                        setTargetPage(1);
+                                    onClick={fetchTargets}
+                                    disabled={targetsLoading}
+                                    className="adm-btn-secondary"
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        padding: '10px 14px', borderRadius: 8,
+                                        background: '#fff', border: '1px solid #e2e8f0',
+                                        color: '#475569', fontSize: 13, fontWeight: 600,
+                                        cursor: 'pointer', transition: 'all 0.15s ease'
                                     }}
-                                    style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', fontSize: 12, fontWeight: 600, color: '#475569', cursor: 'pointer' }}
                                 >
-                                    Reset Filters
+                                    <BsArrowRepeat size={14} className={targetsLoading ? 'spin-anim' : ''} />
+                                    <span>Refresh</span>
+                                </button>
+
+                                <button
+                                    id="create-target-btn"
+                                    onClick={openCreateTarget}
+                                    className="adm-btn-primary"
+                                    style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                                        padding: '10px 18px', borderRadius: 8,
+                                        background: '#2563eb', border: 'none',
+                                        color: '#fff', fontSize: 13, fontWeight: 700,
+                                        cursor: 'pointer', boxShadow: '0 4px 14px rgba(37, 99, 235, 0.25)',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <BsPlus size={18} />
+                                    <span>Create Target</span>
+                                </button>
+                            </>
+                        }
+                    />
+
+                    {/* Notification Alerts for Store Targets */}
+                    {successMsg && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '12px 16px', borderRadius: 10,
+                            background: '#ecfdf5', border: '1px solid #a7f3d0',
+                            color: '#065f46', fontSize: 13, fontWeight: 600, marginBottom: 20
+                        }}>
+                            <BsCheckCircleFill color="#10b981" size={16} />
+                            <span>{successMsg}</span>
+                        </div>
+                    )}
+
+                    {errorMsg && (
+                        <div style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            padding: '12px 16px', borderRadius: 10,
+                            background: '#fef2f2', border: '1px solid #fecaca',
+                            color: '#991b1b', fontSize: 13, fontWeight: 600, marginBottom: 20
+                        }}>
+                            <BsExclamationTriangle color="#ef4444" size={16} />
+                            <span>{errorMsg}</span>
+                        </div>
+                    )}
+
+                    {/* Stats Overview - Interactive Clickable KPI Cards (Requirement 18) */}
+                    <KpiGrid columns={4}>
+                        <KpiCard
+                            variant="revenue"
+                            icon={<BsBullseye />}
+                            title="Total Targets"
+                            value={targets.length}
+                            subtitle={targetKpiFilter === 'all' ? '● All configured targets' : 'Click to show all'}
+                            tooltip={targetKpiFilter === 'all' ? "Showing all targets" : "Click to view all targets"}
+                            active={targetKpiFilter === 'all'}
+                            onClick={() => { setTargetKpiFilter('all'); setTargetsView('list'); setTargetPage(1); }}
+                        />
+                        <KpiCard
+                            variant="profit"
+                            icon={<BsClockHistory />}
+                            title="Active Targets"
+                            value={targets.filter(t => (t.status || 'active').toLowerCase() === 'active').length}
+                            subtitle={targetKpiFilter === 'active' ? '● Filtering active targets' : 'Active milestones'}
+                            tooltip={targetKpiFilter === 'active' ? "Click to remove filter" : "Click to filter active targets"}
+                            active={targetKpiFilter === 'active'}
+                            onClick={() => { setTargetKpiFilter(prev => prev === 'active' ? 'all' : 'active'); setTargetsView('list'); setTargetPage(1); }}
+                        />
+                        <KpiCard
+                            variant="margin"
+                            icon={<BsCashStack />}
+                            title="Total Target Value"
+                            value={`₹${displayTotalRevenueTarget.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            subtitle={targetKpiFilter === 'revenue' ? '● Filtering revenue targets' : (targetsSummary?.overall_achievement_percentage ? `${targetsSummary.overall_achievement_percentage}% overall reached` : 'Sum of store goals')}
+                            tooltip={targetKpiFilter === 'revenue' ? "Click to remove filter" : "Click to view revenue & sales targets"}
+                            active={targetKpiFilter === 'revenue'}
+                            onClick={() => { setTargetKpiFilter(prev => prev === 'revenue' ? 'all' : 'revenue'); setTargetsView('list'); setTargetPage(1); }}
+                        />
+                        <KpiCard
+                            variant="customers"
+                            icon={<BsTrophy />}
+                            title="Completed Targets"
+                            value={targets.filter(t => (t.status || '').toLowerCase() === 'completed').length}
+                            subtitle={targetKpiFilter === 'completed' ? '● Filtering completed targets' : 'Fully reached milestones'}
+                            tooltip={targetKpiFilter === 'completed' ? "Click to remove filter" : "Click to filter completed targets"}
+                            active={targetKpiFilter === 'completed'}
+                            onClick={() => { setTargetKpiFilter(prev => prev === 'completed' ? 'all' : 'completed'); setTargetsView('list'); setTargetPage(1); }}
+                        />
+                    </KpiGrid>
+
+                    {/* Filter Bar & View Toggle - Single Horizontal Row (Requirement) */}
+                    <div
+                        ref={filterRowRef}
+                        onScroll={onFilterScroll}
+                        className="store-targets-filter-row"
+                        style={{
+                            background: '#fff',
+                            borderRadius: 14,
+                            padding: '14px 18px',
+                            border: '1px solid #e2e8f0',
+                            marginBottom: 20,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            boxSizing: 'border-box'
+                        }}
+                    >
+                        {/* 1. Search by store or type */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            background: '#fff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: 8,
+                            padding: '0 10px',
+                            height: 38,
+                            minWidth: 180,
+                            maxWidth: 240,
+                            flex: '1 1 200px',
+                            boxSizing: 'border-box'
+                        }}>
+                            <BsSearch size={14} color="#94a3b8" style={{ marginRight: 8, flexShrink: 0 }} />
+                            <input
+                                value={targetSearch}
+                                onChange={e => { setTargetSearch(e.target.value); setTargetPage(1); }}
+                                placeholder="Search by store or type..."
+                                style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    outline: 'none',
+                                    fontSize: 13,
+                                    color: '#1e293b',
+                                    width: '100%'
+                                }}
+                            />
+                            {targetSearch && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setTargetSearch(''); setTargetPage(1); }}
+                                    style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, fontSize: 13 }}
+                                    title="Clear search"
+                                >
+                                    ✕
                                 </button>
                             )}
                         </div>
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ display: 'inline-flex', background: '#f1f5f9', padding: 3, borderRadius: 8 }}>
-                                <button
-                                    onClick={() => setTargetsView('list')}
-                                    style={{
-                                        padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 700,
-                                        cursor: 'pointer',
-                                        background: targetsView === 'list' ? '#fff' : 'transparent',
-                                        color: targetsView === 'list' ? '#0f172a' : '#64748b',
-                                        boxShadow: targetsView === 'list' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
-                                    }}
-                                >
-                                    Targets List
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        setTargetsView('leaderboard');
-                                        fetchLeaderboard();
-                                    }}
-                                    style={{
-                                        padding: '5px 12px', borderRadius: 6, border: 'none', fontSize: 12, fontWeight: 700,
-                                        cursor: 'pointer',
-                                        background: targetsView === 'leaderboard' ? '#fff' : 'transparent',
-                                        color: targetsView === 'leaderboard' ? '#0f172a' : '#64748b',
-                                        boxShadow: targetsView === 'leaderboard' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
-                                    }}
-                                >
-                                    Leaderboard
-                                </button>
-                            </div>
+                        {/* 2. Period dropdown */}
+                        <select
+                            value={filterPeriod}
+                            onChange={e => { setFilterPeriod(e.target.value); setTargetPage(1); }}
+                            style={{
+                                height: 38,
+                                padding: '0 10px',
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: '#1e293b',
+                                background: '#fff',
+                                outline: 'none',
+                                cursor: 'pointer',
+                                minWidth: 120,
+                                flexShrink: 0,
+                                boxSizing: 'border-box'
+                            }}
+                        >
+                            <option value="all">All Periods</option>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="15_days">15 Days</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="yearly">Yearly</option>
+                        </select>
 
-                            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>
-                                Showing {filteredTargets.length} target{filteredTargets.length === 1 ? '' : 's'}
+                        {/* 3. Status dropdown */}
+                        <select
+                            value={targetStatusFilter}
+                            onChange={e => { setTargetStatusFilter(e.target.value); setTargetPage(1); }}
+                            style={{
+                                height: 38,
+                                padding: '0 10px',
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: '#1e293b',
+                                background: '#fff',
+                                outline: 'none',
+                                cursor: 'pointer',
+                                minWidth: 125,
+                                flexShrink: 0,
+                                boxSizing: 'border-box'
+                            }}
+                        >
+                            <option value="all">All Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+
+                        {/* 4. Type dropdown */}
+                        <select
+                            value={targetTypeFilter}
+                            onChange={e => { setTargetTypeFilter(e.target.value); setTargetPage(1); }}
+                            style={{
+                                height: 38,
+                                padding: '0 10px',
+                                borderRadius: 8,
+                                border: '1px solid #cbd5e1',
+                                fontSize: 13,
+                                fontWeight: 500,
+                                color: '#1e293b',
+                                background: '#fff',
+                                outline: 'none',
+                                cursor: 'pointer',
+                                minWidth: 130,
+                                flexShrink: 0,
+                                boxSizing: 'border-box'
+                            }}
+                        >
+                            <option value="all">All Types</option>
+                            {TARGET_TYPES.map(t => (
+                                <option key={t.value} value={t.value}>{t.label}</option>
+                            ))}
+                        </select>
+
+                        {/* Active Target Card Filter Badge */}
+                        {targetKpiFilter !== 'all' && (
+                            <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                background: '#e0e7ff',
+                                color: '#3730a3',
+                                padding: '0 10px',
+                                height: 38,
+                                borderRadius: 8,
+                                fontSize: 12,
+                                fontWeight: 700,
+                                flexShrink: 0,
+                                boxSizing: 'border-box'
+                            }}>
+                                <span>Card: {targetKpiFilter === 'active' ? 'Active' : targetKpiFilter === 'revenue' ? 'Revenue' : 'Completed'}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => { setTargetKpiFilter('all'); setTargetPage(1); }}
+                                    style={{ background: 'none', border: 'none', color: '#3730a3', cursor: 'pointer', padding: 0, fontWeight: 800, fontSize: 12 }}
+                                    title="Clear card filter"
+                                >
+                                    ✕
+                                </button>
                             </div>
+                        )}
+
+                        {/* Reset Filters */}
+                        {(filterPeriod !== 'all' || targetStatusFilter !== 'all' || targetTypeFilter !== 'all' || targetSearch || targetKpiFilter !== 'all') && (
+                            <button
+                                onClick={() => {
+                                    setTargetKpiFilter('all');
+                                    setFilterPeriod('all');
+                                    setTargetStatusFilter('all');
+                                    setTargetTypeFilter('all');
+                                    setTargetSearch('');
+                                    setTargetPage(1);
+                                }}
+                                style={{
+                                    height: 38,
+                                    padding: '0 10px',
+                                    borderRadius: 8,
+                                    border: '1px solid #cbd5e1',
+                                    background: '#fff',
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#475569',
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    flexShrink: 0,
+                                    boxSizing: 'border-box'
+                                }}
+                                title="Reset all filters"
+                            >
+                                Reset Filters
+                            </button>
+                        )}
+
+                        {/* 5. Targets List / Leaderboard toggle */}
+                        <div style={{
+                            display: 'inline-flex',
+                            background: '#f1f5f9',
+                            padding: 3,
+                            borderRadius: 8,
+                            height: 38,
+                            boxSizing: 'border-box',
+                            alignItems: 'center',
+                            flexShrink: 0
+                        }}>
+                            <button
+                                onClick={() => setTargetsView('list')}
+                                style={{
+                                    height: 32,
+                                    padding: '0 12px',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    background: targetsView === 'list' ? '#fff' : 'transparent',
+                                    color: targetsView === 'list' ? '#0f172a' : '#64748b',
+                                    boxShadow: targetsView === 'list' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s ease',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                Targets List
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setTargetsView('leaderboard');
+                                    fetchLeaderboard();
+                                }}
+                                style={{
+                                    height: 32,
+                                    padding: '0 12px',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                    background: targetsView === 'leaderboard' ? '#fff' : 'transparent',
+                                    color: targetsView === 'leaderboard' ? '#0f172a' : '#64748b',
+                                    boxShadow: targetsView === 'leaderboard' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                    transition: 'all 0.15s ease',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                Leaderboard
+                            </button>
+                        </div>
+
+                        {/* 6. Showing 13 targets count */}
+                        <div style={{
+                            fontSize: 13,
+                            color: '#64748b',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            marginLeft: 'auto',
+                            flexShrink: 0
+                        }}>
+                            Showing {filteredTargets.length} target{filteredTargets.length === 1 ? '' : 's'}
                         </div>
                     </div>
 
@@ -1581,8 +2291,13 @@ const Stores = () => {
                                 </div>
                             </div>
 
-                            <div style={{ overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                            <div
+                                ref={targetsTableContainerRef}
+                                onScroll={onTableScroll}
+                                className="store-targets-table-scroll"
+                                style={{ overflowX: 'auto' }}
+                            >
+                                <table style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                                     <thead>
                                         <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                                             <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase' }}>Rank</th>
@@ -1667,8 +2382,13 @@ const Stores = () => {
                             background: '#fff', borderRadius: 14, border: '1px solid #e2e8f0',
                             overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                         }}>
-                            <div style={{ overflowX: 'auto' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+                            <div
+                                ref={targetsTableContainerRef}
+                                onScroll={onTableScroll}
+                                className="store-targets-table-scroll"
+                                style={{ overflowX: 'auto' }}
+                            >
+                                <table style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
                                     <thead>
                                         <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                                             <th style={{ padding: '12px 18px', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Store</th>
@@ -1731,14 +2451,14 @@ const Stores = () => {
                                                             padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 700,
                                                             background:
                                                                 (item.status || 'active').toLowerCase() === 'active' ? '#ecfdf5' :
-                                                                (item.status || '').toLowerCase() === 'completed' ? '#e0e7ff' :
-                                                                (item.status || '').toLowerCase() === 'cancelled' ? '#fef2f2' :
-                                                                '#f1f5f9',
+                                                                    (item.status || '').toLowerCase() === 'completed' ? '#e0e7ff' :
+                                                                        (item.status || '').toLowerCase() === 'cancelled' ? '#fef2f2' :
+                                                                            '#f1f5f9',
                                                             color:
                                                                 (item.status || 'active').toLowerCase() === 'active' ? '#059669' :
-                                                                (item.status || '').toLowerCase() === 'completed' ? '#4338ca' :
-                                                                (item.status || '').toLowerCase() === 'cancelled' ? '#dc2626' :
-                                                                '#64748b',
+                                                                    (item.status || '').toLowerCase() === 'completed' ? '#4338ca' :
+                                                                        (item.status || '').toLowerCase() === 'cancelled' ? '#dc2626' :
+                                                                            '#64748b',
                                                             textTransform: 'capitalize'
                                                         }}>
                                                             {item.status || 'active'}
@@ -1828,6 +2548,34 @@ const Stores = () => {
                             )}
                         </div>
                     )}
+
+                    {/* Single Bottom Synchronized Horizontal Scrollbar */}
+                    <div
+                        ref={bottomScrollbarRef}
+                        onScroll={onBottomScroll}
+                        className="store-targets-bottom-scrollbar"
+                        style={{
+                            width: '100%',
+                            overflowX: 'auto',
+                            overflowY: 'hidden',
+                            marginTop: 12,
+                            display: isScrollable ? 'block' : 'none',
+                            background: '#f8fafc',
+                            borderRadius: 8,
+                            border: '1px solid #e2e8f0',
+                            padding: '3px 0',
+                            boxSizing: 'border-box'
+                        }}
+                        title="Scroll horizontally to view all columns"
+                    >
+                        <div
+                            style={{
+                                width: scrollContentWidth,
+                                height: 6,
+                                pointerEvents: 'none'
+                            }}
+                        />
+                    </div>
                 </div>
             )}
 
@@ -1841,50 +2589,68 @@ const Stores = () => {
                     display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16
                 }}>
                     <div style={{
-                        background: '#fff', borderRadius: 16, width: '100%', maxWidth: 580,
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                        overflow: 'hidden', animation: 'fadeIn .2s ease-out', maxHeight: '90vh', display: 'flex', flexDirection: 'column'
+                        background: '#fff', borderRadius: 16, width: '100%', maxWidth: 620,
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        overflow: 'hidden', animation: 'fadeIn .2s ease-out', maxHeight: '92vh',
+                        display: 'flex', flexDirection: 'column'
                     }}>
                         <div style={{
                             padding: '18px 24px', borderBottom: '1px solid #e2e8f0',
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            background: '#f8fafc'
+                            background: '#f8fafc', flexShrink: 0
                         }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                 <div style={{
-                                    width: 34, height: 34, borderRadius: 8,
-                                    background: '#4f46e5', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    color: '#fff'
+                                    width: 38, height: 38, borderRadius: 10,
+                                    background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    color: '#fff', boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)', flexShrink: 0
                                 }}>
                                     <BsShop size={18} />
                                 </div>
                                 <div>
-                                    <h3 style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', margin: 0 }}>
+                                    <h3 style={{ fontSize: 17, fontWeight: 800, color: '#0f172a', margin: 0, lineHeight: 1.2 }}>
                                         {editingStore ? 'Edit Store' : 'Add New Store'}
                                     </h3>
-                                    <span style={{ fontSize: 11, color: '#64748b' }}>
-                                        {editingStore ? 'Update details for this branch' : 'Register a new store branch'}
+                                    <span style={{ fontSize: 12, color: '#64748b', marginTop: 3, display: 'block' }}>
+                                        {editingStore ? 'Update details and location for this branch' : 'Register a new store branch or warehouse location'}
                                     </span>
                                 </div>
                             </div>
                             <button
+                                type="button"
                                 onClick={() => setShowStoreModal(false)}
-                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex', padding: 4 }}
+                                style={{
+                                    background: 'none', border: 'none', cursor: 'pointer',
+                                    color: '#94a3b8', display: 'flex', alignItems: 'center',
+                                    justifyContent: 'center', padding: 6, borderRadius: 8,
+                                    transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.color = '#0f172a'; e.currentTarget.style.background = '#f1f5f9'; }}
+                                onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'none'; }}
+                                title="Close modal"
                             >
                                 <BsX size={22} />
                             </button>
                         </div>
 
-                        <form onSubmit={handleSaveStore} style={{ padding: '20px 24px', overflowY: 'auto' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                                {/* Store Name */}
+                        <form onSubmit={handleSaveStore} noValidate style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                            <div style={{
+                                padding: '20px 24px',
+                                overflowY: 'auto',
+                                flex: 1,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 16
+                            }}>
+                                {/* Store Name (Full Width) */}
                                 <div>
-                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
-                                        Store Name <span style={{ color: '#ef4444' }}>*</span>
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                                        Store Name <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>
                                     </label>
                                     <input
                                         type="text"
-                                        required
+                                        maxLength={100}
                                         value={storeFormData.name}
                                         onChange={e => {
                                             setStoreFormData({ ...storeFormData, name: e.target.value });
@@ -1892,68 +2658,84 @@ const Stores = () => {
                                         }}
                                         placeholder="e.g. Phoenix Mall Branch"
                                         style={{
-                                            width: '100%', padding: '9px 12px', borderRadius: 8,
+                                            width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                             border: `1px solid ${storeFormErrors.name ? '#ef4444' : '#cbd5e1'}`,
-                                            fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                            fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                            background: '#fff', transition: 'border-color .15s ease'
                                         }}
                                     />
                                     {storeFormErrors.name && (
-                                        <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.name}</div>
+                                        <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.name}</div>
                                     )}
                                 </div>
 
-                                {/* Code & Contact Phone */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                {/* Store Code & Contact Phone (Equal 2 Columns) */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             Store Code
                                         </label>
                                         <input
                                             type="text"
+                                            maxLength={20}
                                             value={storeFormData.code}
                                             disabled={Boolean(editingStore)}
-                                            onChange={e => setStoreFormData({ ...storeFormData, code: e.target.value })}
+                                            onChange={e => {
+                                                const codeVal = e.target.value.toUpperCase().slice(0, 20);
+                                                setStoreFormData({ ...storeFormData, code: codeVal });
+                                                if (storeFormErrors.code) setStoreFormErrors(prev => ({ ...prev, code: null }));
+                                            }}
                                             placeholder="e.g. STR-MUM-01"
                                             style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
-                                                border: '1px solid #cbd5e1', fontSize: 13, outline: 'none',
-                                                boxSizing: 'border-box', background: editingStore ? '#f8fafc' : '#fff'
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
+                                                border: `1px solid ${storeFormErrors.code ? '#ef4444' : '#cbd5e1'}`,
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                background: editingStore ? '#f8fafc' : '#fff',
+                                                cursor: editingStore ? 'not-allowed' : 'text',
+                                                transition: 'border-color .15s ease'
                                             }}
                                         />
+                                        {storeFormErrors.code && (
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.code}</div>
+                                        )}
                                     </div>
 
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             Contact Phone (10 digits)
                                         </label>
                                         <input
                                             type="tel"
+                                            maxLength={10}
                                             value={storeFormData.phone}
                                             onChange={e => {
-                                                setStoreFormData({ ...storeFormData, phone: e.target.value });
+                                                const phoneVal = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                setStoreFormData({ ...storeFormData, phone: phoneVal });
                                                 if (storeFormErrors.phone) setStoreFormErrors(prev => ({ ...prev, phone: null }));
                                             }}
                                             placeholder="e.g. 9876543210"
                                             style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                                 border: `1px solid ${storeFormErrors.phone ? '#ef4444' : '#cbd5e1'}`,
-                                                fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                background: '#fff', transition: 'border-color .15s ease'
                                             }}
                                         />
                                         {storeFormErrors.phone && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.phone}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.phone}</div>
                                         )}
                                     </div>
                                 </div>
 
-                                {/* Email & GSTIN */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                                {/* Store Email & GSTIN (Equal 2 Columns) */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             Store Email
                                         </label>
                                         <input
                                             type="email"
+                                            maxLength={254}
                                             value={storeFormData.email}
                                             onChange={e => {
                                                 setStoreFormData({ ...storeFormData, email: e.target.value });
@@ -1961,18 +2743,19 @@ const Stores = () => {
                                             }}
                                             placeholder="store@example.com"
                                             style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                                 border: `1px solid ${storeFormErrors.email ? '#ef4444' : '#cbd5e1'}`,
-                                                fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                background: '#fff', transition: 'border-color .15s ease'
                                             }}
                                         />
                                         {storeFormErrors.email && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.email}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.email}</div>
                                         )}
                                     </div>
 
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             GSTIN
                                         </label>
                                         <input
@@ -1980,78 +2763,141 @@ const Stores = () => {
                                             maxLength={15}
                                             value={storeFormData.gstin}
                                             onChange={e => {
-                                                setStoreFormData({ ...storeFormData, gstin: e.target.value.toUpperCase() });
+                                                const gstinVal = e.target.value.toUpperCase().slice(0, 15);
+                                                setStoreFormData({ ...storeFormData, gstin: gstinVal });
                                                 if (storeFormErrors.gstin) setStoreFormErrors(prev => ({ ...prev, gstin: null }));
                                             }}
                                             placeholder="27AAPFU0939F1ZV"
                                             style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                                 border: `1px solid ${storeFormErrors.gstin ? '#ef4444' : '#cbd5e1'}`,
-                                                fontSize: 13, outline: 'none', boxSizing: 'border-box', textTransform: 'uppercase'
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                textTransform: 'uppercase', background: '#fff', transition: 'border-color .15s ease'
                                             }}
                                         />
                                         {storeFormErrors.gstin && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.gstin}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.gstin}</div>
                                         )}
                                     </div>
                                 </div>
 
-                                {/* Address */}
+                                {/* Street Address (Full Width) */}
                                 <div>
-                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                    <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                         Street Address
                                     </label>
                                     <input
                                         type="text"
+                                        maxLength={250}
                                         value={storeFormData.address}
-                                        onChange={e => setStoreFormData({ ...storeFormData, address: e.target.value })}
+                                        onChange={e => {
+                                            setStoreFormData({ ...storeFormData, address: e.target.value });
+                                            if (storeFormErrors.address) setStoreFormErrors(prev => ({ ...prev, address: null }));
+                                        }}
                                         placeholder="Shop 12, Ground Floor, Central Mall"
                                         style={{
-                                            width: '100%', padding: '9px 12px', borderRadius: 8,
-                                            border: '1px solid #cbd5e1', fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                            width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
+                                            border: `1px solid ${storeFormErrors.address ? '#ef4444' : '#cbd5e1'}`,
+                                            fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                            background: '#fff', transition: 'border-color .15s ease'
                                         }}
                                     />
+                                    {storeFormErrors.address && (
+                                        <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.address}</div>
+                                    )}
                                 </div>
 
-                                {/* City, State, Pincode */}
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr 1fr', gap: 10 }}>
+                                {/* State & District (Equal 2 Columns) */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                                            State <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>
+                                        </label>
+                                        <SearchableSelect
+                                            value={storeFormData.state}
+                                            onChange={(newState) => {
+                                                setStoreFormData(prev => ({
+                                                    ...prev,
+                                                    state: newState,
+                                                    district: '',
+                                                    city: ''
+                                                }));
+                                                setIsCustomCity(false);
+                                                setCustomCityName('');
+                                                if (storeFormErrors.state) setStoreFormErrors(prev => ({ ...prev, state: null }));
+                                                if (storeFormErrors.district) setStoreFormErrors(prev => ({ ...prev, district: null }));
+                                                if (storeFormErrors.city) setStoreFormErrors(prev => ({ ...prev, city: null }));
+                                                if (storeFormErrors.gstin) setStoreFormErrors(prev => ({ ...prev, gstin: null }));
+                                            }}
+                                            options={INDIAN_STATES}
+                                            placeholder="-- Select State --"
+                                            searchPlaceholder="Search Indian state..."
+                                            hasError={Boolean(storeFormErrors.state)}
+                                        />
+                                        {storeFormErrors.state && (
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.state}</div>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                                            District
+                                        </label>
+                                        <SearchableSelect
+                                            value={storeFormData.district || ''}
+                                            onChange={(newDistrict) => {
+                                                setStoreFormData(prev => ({ ...prev, district: newDistrict }));
+                                                if (storeFormErrors.district) setStoreFormErrors(prev => ({ ...prev, district: null }));
+                                            }}
+                                            options={availableDistricts}
+                                            placeholder={storeFormData.state ? '-- Select District --' : '-- Select State First --'}
+                                            searchPlaceholder="Search district..."
+                                            disabled={!storeFormData.state}
+                                            hasError={Boolean(storeFormErrors.district)}
+                                            emptyMessage={storeFormData.state ? 'No districts found' : 'Please select state first'}
+                                        />
+                                        {storeFormErrors.district && (
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.district}</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* City & Pincode (Equal 2 Columns) */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             City
                                         </label>
-                                        <input
-                                            type="text"
-                                            value={storeFormData.city}
-                                            onChange={e => setStoreFormData({ ...storeFormData, city: e.target.value })}
-                                            placeholder="Mumbai"
-                                            style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
-                                                border: '1px solid #cbd5e1', fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                        <SearchableSelect
+                                            value={isCustomCity ? 'Other' : (storeFormData.city || '')}
+                                            onChange={(val) => {
+                                                if (val === 'Other') {
+                                                    setIsCustomCity(true);
+                                                    setStoreFormData(prev => ({ ...prev, city: 'Other' }));
+                                                } else {
+                                                    setIsCustomCity(false);
+                                                    setCustomCityName('');
+                                                    setStoreFormData(prev => ({ ...prev, city: val }));
+                                                }
+                                                if (storeFormErrors.city) setStoreFormErrors(prev => ({ ...prev, city: null }));
                                             }}
+                                            options={availableCities}
+                                            placeholder={storeFormData.state ? '-- Select City --' : '-- Select State First --'}
+                                            searchPlaceholder="Search city / town..."
+                                            allowOther={true}
+                                            otherValue="Other"
+                                            otherLabel="Other (Enter custom city)"
+                                            disabled={!storeFormData.state}
+                                            hasError={Boolean(storeFormErrors.city && !isCustomCity)}
+                                            emptyMessage={storeFormData.state ? 'No predefined city found' : 'Please select state first'}
                                         />
+                                        {!isCustomCity && storeFormErrors.city && (
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.city}</div>
+                                        )}
                                     </div>
 
                                     <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
-                                            State
-                                        </label>
-                                        <select
-                                            value={storeFormData.state}
-                                            onChange={e => setStoreFormData({ ...storeFormData, state: e.target.value })}
-                                            style={{
-                                                width: '100%', padding: '9px 8px', borderRadius: 8,
-                                                border: '1px solid #cbd5e1', fontSize: 12, outline: 'none',
-                                                background: '#fff', boxSizing: 'border-box'
-                                            }}
-                                        >
-                                            {INDIAN_STATES.map(s => (
-                                                <option key={s} value={s}>{s}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 5 }}>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
                                             Pincode (6 digits)
                                         </label>
                                         <input
@@ -2059,58 +2905,107 @@ const Stores = () => {
                                             maxLength={6}
                                             value={storeFormData.pincode}
                                             onChange={e => {
-                                                setStoreFormData({ ...storeFormData, pincode: e.target.value });
+                                                const pinVal = e.target.value.replace(/\D/g, '').slice(0, 6);
+                                                setStoreFormData({ ...storeFormData, pincode: pinVal });
                                                 if (storeFormErrors.pincode) setStoreFormErrors(prev => ({ ...prev, pincode: null }));
                                             }}
                                             placeholder="400001"
                                             style={{
-                                                width: '100%', padding: '9px 12px', borderRadius: 8,
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
                                                 border: `1px solid ${storeFormErrors.pincode ? '#ef4444' : '#cbd5e1'}`,
-                                                fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                background: '#fff', transition: 'border-color .15s ease'
                                             }}
                                         />
                                         {storeFormErrors.pincode && (
-                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 3 }}>{storeFormErrors.pincode}</div>
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.pincode}</div>
                                         )}
                                     </div>
                                 </div>
 
+                                {/* Custom City Input when 'Other' is selected (Full Width) */}
+                                {isCustomCity && (
+                                    <div>
+                                        <label style={{ display: 'block', fontSize: 12, fontWeight: 700, color: '#334155', marginBottom: 6 }}>
+                                            Enter City Name <span style={{ color: '#ef4444', marginLeft: 2 }}>*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            maxLength={50}
+                                            value={customCityName}
+                                            onChange={e => {
+                                                setCustomCityName(e.target.value);
+                                                if (storeFormErrors.city) setStoreFormErrors(prev => ({ ...prev, city: null }));
+                                            }}
+                                            placeholder="Enter custom city name"
+                                            style={{
+                                                width: '100%', height: 40, padding: '0 12px', borderRadius: 8,
+                                                border: `1px solid ${storeFormErrors.city ? '#ef4444' : '#cbd5e1'}`,
+                                                fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                                                background: '#fff', transition: 'border-color .15s ease'
+                                            }}
+                                        />
+                                        {storeFormErrors.city && (
+                                            <div style={{ fontSize: 11, color: '#ef4444', marginTop: 4, fontWeight: 500 }}>{storeFormErrors.city}</div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* Checkboxes for Warehouse & Main */}
-                                <div style={{ display: 'flex', gap: 24, marginTop: 4 }}>
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
+                                <div style={{ display: 'flex', gap: 24, marginTop: 4, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                                    <label style={{
+                                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                                        fontSize: 13, fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none'
+                                    }}>
                                         <input
                                             type="checkbox"
                                             checked={storeFormData.is_warehouse}
                                             onChange={e => setStoreFormData({ ...storeFormData, is_warehouse: e.target.checked })}
+                                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#4f46e5' }}
                                         />
                                         <span>Warehouse Location</span>
                                     </label>
 
                                     {!editingStore && (
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
-                                            <input
-                                                type="checkbox"
-                                                checked={storeFormData.is_main}
-                                                onChange={e => setStoreFormData({ ...storeFormData, is_main: e.target.checked })}
-                                            />
-                                            <span>Set as Primary Main Store</span>
-                                        </label>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                            <label style={{
+                                                display: 'inline-flex', alignItems: 'center', gap: 8,
+                                                fontSize: 13, fontWeight: 600, color: '#334155', cursor: 'pointer', userSelect: 'none'
+                                            }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={storeFormData.is_main}
+                                                    onChange={e => setStoreFormData({ ...storeFormData, is_main: e.target.checked })}
+                                                    style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#4f46e5' }}
+                                                />
+                                                <span>Set as Primary Main Store</span>
+                                            </label>
+                                            {currentMainStore && storeFormData.is_main && (
+                                                <span style={{ fontSize: 11, color: '#64748b', marginLeft: 24 }}>
+                                                    Note: Setting this as primary will replace &ldquo;{currentMainStore.name}&rdquo;.
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             </div>
 
+                            {/* Pinned Modal Footer */}
                             <div style={{
-                                marginTop: 24, paddingTop: 16, borderTop: '1px solid #e2e8f0',
-                                display: 'flex', justifyContent: 'flex-end', gap: 10
+                                padding: '16px 24px', borderTop: '1px solid #e2e8f0', background: '#f8fafc',
+                                display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, flexShrink: 0
                             }}>
                                 <button
                                     type="button"
                                     onClick={() => setShowStoreModal(false)}
                                     style={{
-                                        padding: '9px 16px', borderRadius: 8,
+                                        height: 40, padding: '0 20px', borderRadius: 8,
                                         border: '1px solid #cbd5e1', background: '#fff',
-                                        fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer'
+                                        fontSize: 13, fontWeight: 600, color: '#475569', cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
                                     }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#94a3b8'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#cbd5e1'; }}
                                 >
                                     Cancel
                                 </button>
@@ -2118,14 +3013,17 @@ const Stores = () => {
                                     type="submit"
                                     disabled={storeFormSubmitting}
                                     style={{
-                                        display: 'inline-flex', alignItems: 'center', gap: 6,
-                                        padding: '9px 20px', borderRadius: 8,
+                                        height: 40, padding: '0 24px', borderRadius: 8,
                                         border: 'none', background: '#4f46e5',
                                         fontSize: 13, fontWeight: 700, color: '#fff',
                                         cursor: storeFormSubmitting ? 'not-allowed' : 'pointer',
                                         opacity: storeFormSubmitting ? 0.7 : 1,
-                                        boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)'
+                                        boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)',
+                                        display: 'inline-flex', alignItems: 'center', gap: 8,
+                                        transition: 'all 0.15s ease'
                                     }}
+                                    onMouseEnter={e => { if (!storeFormSubmitting) e.currentTarget.style.background = '#4338ca'; }}
+                                    onMouseLeave={e => { if (!storeFormSubmitting) e.currentTarget.style.background = '#4f46e5'; }}
                                 >
                                     {storeFormSubmitting ? (
                                         <>
@@ -2134,7 +3032,7 @@ const Stores = () => {
                                         </>
                                     ) : (
                                         <>
-                                            <BsCheckCircleFill size={13} />
+                                            <BsCheckCircleFill size={14} />
                                             <span>{editingStore ? 'Update Store' : 'Create Store'}</span>
                                         </>
                                     )}
@@ -2204,7 +3102,7 @@ const Stores = () => {
                                         </h4>
                                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, fontSize: 12 }}>
                                             <div><strong style={{ color: '#64748b' }}>Address:</strong> {detailStore.address || '—'}</div>
-                                            <div><strong style={{ color: '#64748b' }}>City / State:</strong> {detailStore.city || '—'}, {detailStore.state || '—'}</div>
+                                            <div><strong style={{ color: '#64748b' }}>City / State:</strong> {[detailStore.city, detailStore.district, detailStore.state].filter(Boolean).join(', ') || '—'}</div>
                                             <div><strong style={{ color: '#64748b' }}>Pincode:</strong> {detailStore.pincode || '—'}</div>
                                             <div><strong style={{ color: '#64748b' }}>Phone:</strong> {detailStore.phone || '—'}</div>
                                             <div><strong style={{ color: '#64748b' }}>Email:</strong> {detailStore.email || '—'}</div>
@@ -2284,7 +3182,7 @@ const Stores = () => {
                                             Assigned Staff ({storeStaff.length})
                                         </h4>
                                         {storeStaff.length === 0 ? (
-                                             <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: '8px 0' }}>
+                                            <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: '8px 0' }}>
                                                 No employees directly assigned to this branch yet.
                                             </div>
                                         ) : (
@@ -2787,7 +3685,7 @@ const Stores = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </PageContainer>
     );
 };
 

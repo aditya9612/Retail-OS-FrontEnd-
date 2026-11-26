@@ -1,16 +1,7 @@
 import React from "react";
 import "./InventoryHeader.css";
 
-const InventoryHeader = ({
-    totalItems,
-    lowStockCount,
-    outOfStockCount,
-    activeTab,
-    setActiveTab,
-    setStockModal,
-    onAddProduct,
-    onAddInventory,
-}) => {
+const InventoryHeader = () => {
     return (
         <div className="inventory-header">
 
@@ -18,42 +9,14 @@ const InventoryHeader = ({
                 HEADER TOP
             ========================= */}
             <div className="inventory-header-top">
-
-                {/* LEFT */}
                 <div className="inventory-header-left">
+                    <span className="inventory-header-label">
+                        INVENTORY MANAGEMENT
+                    </span>
                     <h1 className="inventory-main-title">
                         Inventory Management
                     </h1>
                 </div>
-
-            </div>
-
-            {/* =========================
-                INVENTORY TABS
-            ========================= */}
-            <div className="inventory-tabs">
-
-                {/* ALL ITEMS */}
-                <button
-                    type="button"
-                    className={
-                        activeTab === "All Items"
-                            ? "active-tab"
-                            : ""
-                    }
-                    onClick={() =>
-                        setActiveTab("All Items")
-                    }
-                >
-                    <span>
-                        All Items
-                    </span>
-
-                    <span className="tab-count">
-                        {totalItems}
-                    </span>
-                </button>
-
             </div>
         </div>
     );

@@ -4,23 +4,47 @@ import categoryApi from "../../services/categoryService";
 import { BsBoxes, BsFolder, BsArrowClockwise } from "react-icons/bs";
 import "./CategoryModel.css";
 
-const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
+const CategoryModel = ({
+  category,
+  onClose,
+  onSave,
+  isView = false,
+  initialTab = "details",
+  allCategories = [],
+}) => {
   const [name, setName] = useState("");
   const [status, setStatus] = useState("Active");
   const [description, setDescription] = useState("");
   const [parentId, setParentId] = useState("");
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Parent categories for Add/Edit dropdown
   const [availableParents, setAvailableParents] = useState([]);
 
   // View mode tabs and fetched data
-  const [activeTab, setActiveTab] = useState("details"); // 'details' | 'products' | 'subcategories'
+  const [activeTab, setActiveTab] = useState(initialTab || "details"); // 'details' | 'products' | 'subcategories'
   const [categoryProducts, setCategoryProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [productsError, setProductsError] = useState("");
   const [categorySubcategories, setCategorySubcategories] = useState([]);
   const [loadingSubs, setLoadingSubs] = useState(false);
+
+  // Helper to find all descendants of a category to avoid circular parent-child relationships
+  const getDescendantIds = (catId, cats) => {
+    const descendants = new Set();
+    const findChildren = (id) => {
+      cats.forEach((c) => {
+        if (Number(c.parent_id) === Number(id) && !descendants.has(c.id)) {
+          descendants.add(c.id);
+          findChildren(c.id);
+        }
+      });
+    };
+    findChildren(catId);
+    return descendants;
+  };
 
   useEffect(() => {
     if (category) {
@@ -43,10 +67,12 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
       setParentId("");
     }
     setError("");
-    setActiveTab("details");
-  }, [category]);
+    setFieldErrors({});
+    setIsSubmitting(false);
+    setActiveTab(initialTab || "details");
+  }, [category, initialTab]);
 
-  // Load parent categories for Add/Edit
+  // Load parent categories for Add/Edit dynamically
   useEffect(() => {
     if (!isView) {
       categoryApi.getAll()
@@ -58,14 +84,35 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
             : Array.isArray(res?.data?.items)
             ? res.data.items
             : [];
-          // Exclude self from potential parents
-          setAvailableParents(list.filter((c) => !category || c.id !== category.id));
+
+          // Exclude self and any descendants to prevent circular hierarchy
+          if (category?.id) {
+            const forbiddenIds = new Set([
+              category.id,
+              ...getDescendantIds(category.id, list),
+            ]);
+            setAvailableParents(list.filter((c) => !forbiddenIds.has(c.id)));
+          } else {
+            setAvailableParents(list);
+          }
         })
         .catch((err) => {
           console.warn("Could not load parent categories for selection:", err);
+          if (allCategories && allCategories.length > 0) {
+            const list = allCategories;
+            if (category?.id) {
+              const forbiddenIds = new Set([
+                category.id,
+                ...getDescendantIds(category.id, list),
+              ]);
+              setAvailableParents(list.filter((c) => !forbiddenIds.has(c.id)));
+            } else {
+              setAvailableParents(list);
+            }
+          }
         });
     }
-  }, [isView, category]);
+  }, [isView, category, allCategories]);
 
   // Fetch category products & subcategories dynamically when viewing
   useEffect(() => {
@@ -113,38 +160,122 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
     }
   }, [isView, category?.id]);
 
-  const validateCategoryName = (categoryName) => {
-    const trimmed = (categoryName || "").trim();
-    if (!trimmed) {
-      return "Please enter category name";
+  /* =========================================================
+     VALIDATION LOGIC
+  ========================================================= */
+
+  const validateForm = () => {
+    const errors = {};
+    const trimmedName = (name || "").trim();
+
+    // 1. Category Name Validation
+    if (!trimmedName) {
+      errors.name = "Category name is required.";
+    } else if (trimmedName.length < 2) {
+      errors.name = "Category name must contain at least 2 characters.";
+    } else if (trimmedName.length > 100) {
+      errors.name = "Category name cannot exceed 100 characters.";
+    } else if (/^\d+$/.test(trimmedName)) {
+      errors.name = "Category name cannot consist only of numbers.";
+    } else if (/^[-&]+$/.test(trimmedName) || /^[^a-zA-Z0-9]+$/.test(trimmedName)) {
+      errors.name = "Category name cannot consist only of special characters.";
+    } else if (/<\s*script|javascript\s*:|onload\s*=/i.test(trimmedName)) {
+      errors.name = "Category name contains invalid script content.";
+    } else {
+      // Check duplicate category names within tenant
+      const listToCheck = availableParents.length > 0 ? availableParents : allCategories;
+      const isDuplicate = listToCheck.some(
+        (c) =>
+          c.name?.trim().toLowerCase() === trimmedName.toLowerCase() &&
+          (!category || c.id !== category.id)
+      );
+      if (isDuplicate) {
+        errors.name = "Category name already exists.";
+      }
     }
-    if (trimmed.length < 2) {
-      return "Category name must be at least 2 characters";
+
+    // 2. Description Validation (Optional)
+    if (description && !description.trim()) {
+      errors.description = "Description cannot be whitespace-only.";
+    } else if (description && description.trim().length > 0) {
+      const cleanDesc = description.trim();
+      if (cleanDesc.length < 3) {
+        errors.description = "Description must be between 3 and 500 characters.";
+      } else if (cleanDesc.length > 500) {
+        errors.description = "Description cannot exceed 500 characters.";
+      }
     }
-    if (trimmed.length > 255) {
-      return "Category name cannot exceed 255 characters";
-    }
-    return "";
+
+    return errors;
   };
 
-  const handleSave = () => {
-    const formattedName = formatCategoryName(name);
-    const nameError = validateCategoryName(formattedName);
-    if (nameError) {
-      setError(nameError);
-      alert(nameError);
+  const handleSave = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (isSubmitting) return;
+
+    const validationErrors = validateForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setFieldErrors(validationErrors);
+      setError("");
       return;
     }
 
+    setFieldErrors({});
     setError("");
+    setIsSubmitting(true);
+
+    const formattedName = formatCategoryName(name);
     const categoryData = {
-      name: formattedName,
-      status: status,
-      description: description ? description.trim() : "",
+      name: formattedName.trim(),
+      status: status || "Active",
+      description: description && description.trim() ? description.trim() : null,
       parent_id: parentId ? Number(parentId) : null,
     };
 
-    onSave(categoryData);
+    try {
+      await onSave(categoryData);
+    } catch (err) {
+      console.error("Save category error caught in modal:", err);
+      const responseData = err?.response?.data;
+      const newFieldErrors = {};
+
+      // Parse FastAPI 422 validation errors
+      if (Array.isArray(responseData?.detail)) {
+        responseData.detail.forEach((issue) => {
+          const field = issue.loc?.[issue.loc.length - 1];
+          const rawMsg = issue.msg || "Invalid value";
+          const msg = rawMsg.replace(/^Value error,\s*/i, "");
+          if (field === "name") {
+            newFieldErrors.name = msg;
+          } else if (field === "description") {
+            newFieldErrors.description = msg;
+          } else if (field === "parent_id") {
+            newFieldErrors.parentId = msg;
+          }
+        });
+      } else if (typeof responseData?.detail === "string") {
+        const detail = responseData.detail;
+        if (/already exists/i.test(detail) || err?.response?.status === 409) {
+          newFieldErrors.name = "Category name already exists.";
+        } else {
+          setError(detail);
+        }
+      } else if (responseData?.message) {
+        if (/already exists/i.test(responseData.message)) {
+          newFieldErrors.name = "Category name already exists.";
+        } else {
+          setError(responseData.message);
+        }
+      } else if (err?.message) {
+        setError(err.message);
+      }
+
+      if (Object.keys(newFieldErrors).length > 0) {
+        setFieldErrors(newFieldErrors);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -168,6 +299,8 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
             type="button"
             className="close-btn"
             onClick={onClose}
+            disabled={isSubmitting}
+            aria-label="Close modal"
           >
             ×
           </button>
@@ -262,17 +395,24 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
           {/* TAB 1: DETAILS */}
           {(!isView || activeTab === "details") && (
             <>
-              {/* Category Name */}
+              {/* Category Name (Required with red asterisk) */}
               <div className="form-group">
-                <label>Category Name</label>
+                <label htmlFor="category-name-input">
+                  Category Name <span className="required-star" style={{ color: "red", fontWeight: "bold" }}>*</span>
+                </label>
                 <input
+                  id="category-name-input"
                   type="text"
                   placeholder="Enter Category Name"
                   value={name}
-                  disabled={isView}
+                  disabled={isView || isSubmitting}
+                  className={fieldErrors.name ? "has-error" : ""}
+                  style={fieldErrors.name ? { borderColor: "#dc2626", backgroundColor: "#fffaf0" } : undefined}
                   onChange={(e) => {
                     setName(e.target.value);
-                    setError("");
+                    if (fieldErrors.name) {
+                      setFieldErrors((prev) => ({ ...prev, name: "" }));
+                    }
                   }}
                   onBlur={() => {
                     if (name && name.trim()) {
@@ -280,15 +420,33 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
                     }
                   }}
                 />
+                {fieldErrors.name && (
+                  <span
+                    className="form-field-error"
+                    role="alert"
+                    style={{ color: "#dc2626", fontSize: 12, marginTop: 4, display: "block", fontWeight: 500 }}
+                  >
+                    {fieldErrors.name}
+                  </span>
+                )}
               </div>
 
-              {/* Parent Category (Optional) */}
-              {!isView && (
+              {/* Parent Category (Optional - NO asterisk) */}
+              {!isView ? (
                 <div className="form-group">
-                  <label>Parent Category (Optional)</label>
+                  <label htmlFor="category-parent-select">Parent Category (Optional)</label>
                   <select
+                    id="category-parent-select"
                     value={parentId}
-                    onChange={(e) => setParentId(e.target.value)}
+                    disabled={isSubmitting}
+                    className={fieldErrors.parentId ? "has-error" : ""}
+                    style={fieldErrors.parentId ? { borderColor: "#dc2626", backgroundColor: "#fffaf0" } : undefined}
+                    onChange={(e) => {
+                      setParentId(e.target.value);
+                      if (fieldErrors.parentId) {
+                        setFieldErrors((prev) => ({ ...prev, parentId: "" }));
+                      }
+                    }}
                   >
                     <option value="">None (Top-level Category)</option>
                     {availableParents.map((p) => (
@@ -297,15 +455,34 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
                       </option>
                     ))}
                   </select>
+                  {fieldErrors.parentId && (
+                    <span
+                      className="form-field-error"
+                      role="alert"
+                      style={{ color: "#dc2626", fontSize: 12, marginTop: 4, display: "block", fontWeight: 500 }}
+                    >
+                      {fieldErrors.parentId}
+                    </span>
+                  )}
                 </div>
-              )}
+              ) : category?.parent_name ? (
+                <div className="form-group">
+                  <label>Parent Category</label>
+                  <input
+                    type="text"
+                    value={formatCategoryName(category.parent_name)}
+                    disabled
+                  />
+                </div>
+              ) : null}
 
-              {/* Status */}
+              {/* Status (Optional / Default Active - NO asterisk) */}
               <div className="form-group">
-                <label>Status</label>
+                <label htmlFor="category-status-select">Status</label>
                 <select
+                  id="category-status-select"
                   value={status}
-                  disabled={isView}
+                  disabled={isView || isSubmitting}
                   onChange={(e) => setStatus(e.target.value)}
                 >
                   <option value="Active">Active</option>
@@ -313,19 +490,33 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
                 </select>
               </div>
 
-              {/* Description */}
+              {/* Description (Optional - NO asterisk) */}
               <div className="form-group">
-                <label>Description</label>
+                <label htmlFor="category-desc-textarea">Description (Optional)</label>
                 <textarea
+                  id="category-desc-textarea"
                   placeholder="Enter Category Description"
                   value={description}
-                  disabled={isView}
+                  disabled={isView || isSubmitting}
+                  className={fieldErrors.description ? "has-error" : ""}
+                  style={fieldErrors.description ? { borderColor: "#dc2626", backgroundColor: "#fffaf0" } : undefined}
                   onChange={(e) => {
                     setDescription(e.target.value);
-                    setError("");
+                    if (fieldErrors.description) {
+                      setFieldErrors((prev) => ({ ...prev, description: "" }));
+                    }
                   }}
                   rows="3"
                 />
+                {fieldErrors.description && (
+                  <span
+                    className="form-field-error"
+                    role="alert"
+                    style={{ color: "#dc2626", fontSize: 12, marginTop: 4, display: "block", fontWeight: 500 }}
+                  >
+                    {fieldErrors.description}
+                  </span>
+                )}
               </div>
 
               {/* Additional details for View mode */}
@@ -353,7 +544,7 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
             </>
           )}
 
-          {/* TAB 2: PRODUCTS (Issue 11: GET /api/v1/categories/{category_id}/products) */}
+          {/* TAB 2: PRODUCTS (GET /api/v1/categories/{category_id}/products) */}
           {isView && activeTab === "products" && (
             <div style={{ minHeight: 200 }}>
               {loadingProducts ? (
@@ -409,7 +600,7 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
             </div>
           )}
 
-          {/* TAB 3: SUBCATEGORIES (Issue 10: GET /api/v1/categories/{category_id}/subcategories) */}
+          {/* TAB 3: SUBCATEGORIES (GET /api/v1/categories/{category_id}/subcategories) */}
           {isView && activeTab === "subcategories" && (
             <div style={{ minHeight: 200 }}>
               {loadingSubs ? (
@@ -473,6 +664,7 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
                 type="button"
                 className="cancel-btn"
                 onClick={onClose}
+                disabled={isSubmitting}
               >
                 Cancel
               </button>
@@ -481,8 +673,16 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
                 type="button"
                 className="save-btn"
                 onClick={handleSave}
+                disabled={isSubmitting}
               >
-                {category ? "Update Category" : "Add Category"}
+                {isSubmitting ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <BsArrowClockwise className="spin" size={13} />
+                    {category ? "Updating..." : "Creating..."}
+                  </span>
+                ) : (
+                  category ? "Update Category" : "Add Category"
+                )}
               </button>
             </>
           )}
@@ -493,3 +693,4 @@ const CategoryModel = ({ category, onClose, onSave, isView = false }) => {
 };
 
 export default CategoryModel;
+

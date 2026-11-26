@@ -525,7 +525,7 @@
 
 .sup-table {
   width: 100%;
-  min-width: 880px;
+  min-width: 960px;
   border-collapse: collapse;
   text-align: left;
 }
@@ -599,10 +599,10 @@
 .sup-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border-radius: 12px;
-  font-size: 10px;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  font-size: 11.5px;
   font-weight: 600;
   text-transform: capitalize;
   line-height: 1.2;
@@ -615,9 +615,37 @@
 }
 
 .sup-badge-inactive {
-  background: #f1f5f9;
-  color: #64748b;
-  border: 1px solid #e2e8f0;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.sup-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.sup-dot-active {
+  background-color: #10b981;
+}
+
+.sup-dot-inactive {
+  background-color: #ef4444;
+}
+
+.sup-badge-clickable {
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.sup-badge-clickable:hover {
+  filter: brightness(0.92);
+  transform: translateY(-0.5px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .sup-text-secondary {
@@ -649,23 +677,53 @@
   align-items: center;
   gap: 8px;
   justify-content: flex-end;
+  flex-wrap: nowrap;
 }
 
 .sup-btn-action {
   position: relative;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 7px;
-  font-size: 13px;
+  border-radius: 8px;
+  font-size: 14px;
   cursor: pointer;
   transition: all 0.15s ease;
   border: 1px solid transparent;
   flex-shrink: 0;
   box-sizing: border-box;
+  outline: none;
+}
+
+.sup-btn-view {
+  background: #f5f3ff;
+  color: #6366f1;
+  border-color: #ddd6fe;
+}
+
+.sup-btn-view:hover {
+  background: #ede9fe;
+  color: #4f46e5;
+  border-color: #c4b5fd;
+  transform: translateY(-1px);
+}
+
+.sup-btn-products {
+  background: #f0fdfa;
+  color: #0d9488;
+  border-color: #99f6e4;
+}
+
+.sup-btn-products:hover {
+  background: #ccfbf1;
+  color: #0f766e;
+  border-color: #5eead4;
+  transform: translateY(-1px);
 }
 
 .sup-btn-history {
@@ -903,58 +961,153 @@
    PAGINATION TOOLBAR
    ========================================================= */
 .sup-pagination {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 12px 20px;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+  border-radius: 0 0 12px 12px;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sup-pagination-left {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 18px;
-  border-top: 1px solid #e2e8f0;
-  background: #f8fafc;
-  flex-wrap: wrap;
-  gap: 12px;
+  justify-self: start;
 }
 
-.sup-pagination-info {
+.sup-page-size-select {
+  height: 32px;
+  min-width: 58px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.sup-page-size-select:hover {
+  border-color: #94a3b8;
+}
+
+.sup-page-size-select:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.sup-pagination-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
   font-size: 13px;
   color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+  text-align: center;
 }
 
-.sup-pagination-info strong {
+.sup-pagination-center strong {
   color: #0f172a;
-  font-weight: 600;
+  font-weight: 700;
+  margin: 0 2px;
+}
+
+.sup-pagination-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  justify-self: end;
+  gap: 6px;
+}
+
+.sup-page-numbers-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .sup-pagination-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 6px;
 }
 
 .sup-page-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: #ffffff;
-  border: 1px solid #d1d5db;
+  justify-content: center;
+  height: 32px;
   border-radius: 6px;
+  border: 1.5px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
   font-size: 12.5px;
   font-weight: 600;
-  color: #374151;
   cursor: pointer;
   transition: all 0.15s ease;
+  box-sizing: border-box;
+  outline: none;
 }
 
-.sup-page-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+.sup-page-nav-btn {
+  padding: 0 10px;
+  gap: 5px;
+}
+
+.sup-page-nav-btn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
   color: #0f172a;
 }
 
-.sup-page-btn:disabled {
-  background: #f3f4f6;
-  border-color: #e5e7eb;
-  color: #9ca3af;
+.sup-page-nav-btn:disabled {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #94a3b8;
+  opacity: 0.5;
   cursor: not-allowed;
+}
+
+.sup-page-num-btn {
+  min-width: 32px;
+  padding: 0 7px;
+  font-weight: 600;
+}
+
+.sup-page-num-btn:hover:not(.sup-page-btn--active) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+.sup-page-num-btn.sup-page-btn--active {
+  border-color: #4f46e5 !important;
+  background: #4f46e5 !important;
+  color: #ffffff !important;
+  font-weight: 700;
+  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.25) !important;
+}
+
+.sup-page-ellipsis {
+  min-width: 24px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+  user-select: none;
 }
 
 .sup-page-current {
@@ -988,16 +1141,25 @@
   .sup-kpi-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  .sup-pagination {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .sup-pagination-left,
+  .sup-pagination-center,
+  .sup-pagination-right {
+    width: 100%;
+    justify-content: center;
+    justify-self: center;
+    text-align: center;
+  }
 }
 
 @media (max-width: 480px) {
   .sup-kpi-grid {
     grid-template-columns: 1fr;
-  }
-  .sup-pagination {
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
   }
 }
 

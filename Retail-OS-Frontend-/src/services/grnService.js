@@ -13,6 +13,8 @@ import {
   getPurchaseOrderGRNs,
   getGRNHistory,
   downloadGRNPdf,
+  previewGRNPdf,
+  downloadGRNCsv,
   getGRNPrintSlip,
 } from "../api/grnApi";
 
@@ -51,6 +53,10 @@ export const grnService = {
   downloadPdf: downloadGRNPdf,
   printPdf: downloadGRNPdf,
   print: downloadGRNPdf,
+  previewGRNPdf,
+  previewPdf: previewGRNPdf,
+  downloadGRNCsv,
+  downloadCsv: downloadGRNCsv,
   getGRNPrintSlip,
   getPrintSlip: getGRNPrintSlip,
   printSlip: getGRNPrintSlip,
@@ -71,6 +77,8 @@ export {
   getPurchaseOrderGRNs,
   getGRNHistory,
   downloadGRNPdf,
+  previewGRNPdf,
+  downloadGRNCsv,
   getGRNPrintSlip,
 };
 

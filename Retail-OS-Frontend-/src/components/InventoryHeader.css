@@ -9,7 +9,7 @@
   max-width: 100%;
   min-width: 0;
   margin: 0 0 16px;
-  padding: 18px 18px 0;
+  padding: 16px 18px;
   background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
@@ -23,16 +23,14 @@
   width: 100%;
   min-width: 0;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  padding-bottom: 16px;
+  align-items: center;
+  justify-content: flex-start;
+  padding-bottom: 0;
   box-sizing: border-box;
 }
 
 .inventory-header-left {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
 }
 
 .inventory-header-label {
@@ -40,7 +38,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin: 0 0 5px;
+  margin: 0 0 4px;
   padding-left: 12px;
   color: #6366f1;
   font-size: 10px;
@@ -63,11 +61,12 @@
   box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
-.inventory-header-left h1 {
+.inventory-header-left h1,
+.inventory-main-title {
   margin: 0;
   color: #111827;
-  font-size: 21px;
-  line-height: 28px;
+  font-size: 20px;
+  line-height: 26px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
@@ -86,6 +85,7 @@
 ========================================================= */
 
 .inventory-tabs {
+  display: none !important;
   width: 100%;
   min-width: 0;
   display: flex;
@@ -168,10 +168,28 @@
   box-sizing: border-box;
 }
 
+.tab-count.low {
+  color: #b45309;
+  background: #fffbeb;
+}
+
+.tab-count.out {
+  color: #dc2626;
+  background: #fef2f2;
+}
+
 .inventory-tabs button.active-tab .tab-count {
   color: #4f46e5;
   background: #ffffff;
   box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12);
+}
+
+.inventory-tabs button.active-tab .tab-count.low {
+  color: #b45309;
+}
+
+.inventory-tabs button.active-tab .tab-count.out {
+  color: #dc2626;
 }
 
 /* =========================================================
@@ -180,33 +198,22 @@
 
 @media (max-width: 768px) {
   .inventory-header {
-    padding: 16px 16px 0;
+    padding: 14px 14px 0;
     border-radius: 10px;
   }
 
   .inventory-header-top {
-    gap: 14px;
-    padding-bottom: 14px;
+    padding-bottom: 12px;
   }
 
-  .inventory-header-left h1 {
+  .inventory-header-left h1,
+  .inventory-main-title {
     font-size: 19px;
-    line-height: 26px;
+    line-height: 25px;
   }
 
   .inventory-header-subtitle {
     font-size: 11px;
-  }
-
-  .header-btn {
-    width: 32px;
-    height: 32px;
-    flex-basis: 32px;
-  }
-
-  .header-btn svg {
-    width: 14px;
-    height: 14px;
   }
 
   .inventory-tabs {
@@ -221,37 +228,26 @@
 @media (max-width: 576px) {
   .inventory-header {
     margin-bottom: 14px;
-    padding: 14px 14px 0;
+    padding: 12px 12px 0;
   }
 
   .inventory-header-top {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .inventory-header-left {
-    width: 100%;
+    padding-bottom: 10px;
   }
 
   .inventory-header-label {
     font-size: 9px;
   }
 
-  .inventory-header-left h1 {
+  .inventory-header-left h1,
+  .inventory-main-title {
     font-size: 18px;
-    line-height: 25px;
+    line-height: 24px;
   }
 
   .inventory-header-subtitle {
-    max-width: 100%;
     font-size: 10px;
-    line-height: 16px;
-  }
-
-  .inventory-header-right {
-    width: 100%;
-    justify-content: flex-start;
+    line-height: 15px;
   }
 
   .inventory-tabs {
@@ -284,12 +280,8 @@
 
 @media (max-width: 400px) {
   .inventory-header {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  .inventory-header-right {
-    gap: 6px;
+    padding-left: 10px;
+    padding-right: 10px;
   }
 
   .inventory-tabs button {
@@ -303,12 +295,7 @@
 ========================================================= */
 
 @media (prefers-reduced-motion: reduce) {
-  .header-btn,
   .inventory-tabs button {
     transition: none;
-  }
-
-  .header-btn:hover {
-    transform: none;
   }
 }
