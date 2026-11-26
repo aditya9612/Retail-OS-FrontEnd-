@@ -2111,15 +2111,20 @@ body {
 /* Two-panel shell */
 .pos-shell {
   display: flex;
-  height: calc(100vh - var(--header-h));
+  height: 100%;
+  max-height: calc(100vh - var(--header-h));
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
   background: var(--color-bg);
+  box-sizing: border-box;
 }
 
 /* ── LEFT panel ── */
 .pos-left {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
+  width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2177,6 +2182,39 @@ body {
     opacity: 0.5;
     transform: scale(0.85);
   }
+}
+
+.pos-open-order-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #4f46e5;
+  color: #ffffff;
+  border: none;
+  border-radius: 9px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.pos-open-order-btn:hover {
+  background: #4338ca;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+}
+
+.pos-open-order-badge {
+  background: #ffffff;
+  color: #4f46e5;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 12px;
+  padding: 1px 7px;
+  line-height: 1.4;
 }
 
 .pos-search-row {
@@ -2293,14 +2331,15 @@ body {
   background: #fff;
   border: 1.5px solid var(--color-border);
   border-radius: 16px;
-  padding: 16px 14px 14px;
+  padding: 12px;
   cursor: pointer;
   position: relative;
   overflow: hidden;
   transition: box-shadow 0.2s, transform 0.2s, border-color 0.15s;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  min-height: 275px;
 }
 
 .pos-product-card:hover {
@@ -2316,8 +2355,8 @@ body {
 
 .pos-product-qty-badge {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
   background: var(--color-primary);
   color: #fff;
   font-size: 10px;
@@ -2328,37 +2367,42 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 10;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
 }
 
 .pos-product-image {
-  font-size: 36px;
   width: 100%;
-  height: 88px;
-  background: #f8fafc;
-  border-radius: 12px;
+  height: 110px;
+  background: #f1f5f9;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 8px;
-  transition: transform 0.2s;
+  margin-bottom: 6px;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
   overflow: hidden;
   position: relative;
-  border: 1px solid #f1f5f9;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
 }
 
 .pos-product-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   transition: transform 0.25s ease;
+  display: block;
 }
 
 .pos-product-card:hover .pos-product-image img {
-  transform: scale(1.08);
+  transform: scale(1.06);
 }
 
 .pos-product-card:hover .pos-product-image {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #c7d2fe;
 }
 
 .pos-product-cat {
@@ -2373,18 +2417,21 @@ body {
   font-size: 12.5px;
   font-weight: 700;
   color: #111827;
-  line-height: 1.45;
+  line-height: 1.4;
   white-space: normal;
   word-break: break-word;
-  overflow: visible;
-  display: block;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .pos-product-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 8px;
+  margin-top: auto;
+  padding-top: 6px;
 }
 
 .pos-product-price {
@@ -2420,26 +2467,33 @@ body {
 
 /* ── RIGHT panel ── */
 .pos-right {
-  width: 420px;
+  width: 440px;
+  max-width: 470px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  height: 100%;
+  max-height: 100%;
+  background: #ffffff;
   border-left: 1px solid var(--color-border);
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.03);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  box-sizing: border-box;
+  position: relative;
 }
 
 .pos-right-header {
-  padding: 20px 20px 14px;
+  padding: 12px 14px 10px;
   border-bottom: 1px solid #f3f4f6;
   flex-shrink: 0;
+  background: #fff;
 }
 
 .pos-right-header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .pos-right-title-row {
@@ -2449,7 +2503,7 @@ body {
 }
 
 .pos-right-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
   color: #111827;
   letter-spacing: -0.3px;
@@ -2460,48 +2514,68 @@ body {
   color: var(--color-primary);
   font-size: 11px;
   font-weight: 700;
-  padding: 4px 12px;
+  padding: 3px 10px;
   border-radius: 20px;
 }
 
-/* Customer fields */
+.pos-order-panel-close-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+}
+
+.pos-order-panel-close-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #ef4444;
+}
+
+/* Customer fields in 2-column grid to prevent clipping */
 .pos-customer-row {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.pos-cust-field-wrap--full {
+  grid-column: 1 / -1;
 }
 
 .pos-cust-field-wrap {
-  flex: 1;
   position: relative;
+  min-width: 0;
 }
 
 .pos-cust-icon {
   position: absolute;
-  left: 10px;
+  left: 9px;
   top: 50%;
   transform: translateY(-50%);
   color: #9ca3af;
+  pointer-events: none;
 }
 
 .pos-cust-input {
   width: 100%;
-  padding: 8px 10px 8px 28px;
+  padding: 7px 8px 7px 26px;
   border: 1px solid #e5e7eb;
-  border-radius: 9px;
-  font-size: 12px;
+  border-radius: 8px;
+  font-size: 11.5px;
   font-weight: 500;
   color: var(--color-text);
   background: #f9fafb;
   outline: none;
+  box-sizing: border-box;
   transition: border-color 0.15s, background 0.15s;
-}
-
-.pos-cust-input:only-child {
-  padding-left: 10px;
-}
-
-.pos-cust-field-wrap:not(:has(.pos-cust-icon)) .pos-cust-input {
-  padding-left: 10px;
 }
 
 .pos-cust-input:focus {
@@ -2510,17 +2584,25 @@ body {
 }
 
 .pos-cust-input::placeholder {
-  color: #d1d5db;
+  color: #9ca3af;
 }
 
-/* Cart list */
-.pos-cart-list {
-  flex: 1;
+/* ── Middle Scrollable Body ── */
+.pos-right-content {
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
-  padding: 12px 20px;
+  padding: 10px 14px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 10px;
+}
+
+/* Cart list inside scrollable body */
+.pos-cart-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .pos-cart-empty {
@@ -2552,6 +2634,24 @@ body {
   padding: 10px 8px;
   border-radius: 12px;
   transition: background 0.15s;
+}
+
+/* Modern Spacious POS Cart Item Card */
+.pos-cart-item-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.15s ease;
+}
+
+.pos-cart-item-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
 }
 
 .pos-cart-item:hover {
@@ -2661,14 +2761,14 @@ body {
   background: #fef2f2;
 }
 
-/* ── Right footer (totals + payment) ── */
+/* ── Right options (totals + payment inside scrollable body) ── */
+.pos-right-options,
 .pos-right-footer {
   border-top: 1px solid #f3f4f6;
-  padding: 14px 20px 18px;
-  flex-shrink: 0;
+  padding: 10px 0 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 /* Discount row */
@@ -2873,15 +2973,61 @@ body {
   box-shadow: none;
 }
 
+/* ── Pinned Checkout Action Bar at Bottom of Panel ── */
+.pos-right-checkout-bar {
+  flex-shrink: 0;
+  padding: 10px 14px 14px;
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+}
+
+.pos-checkout-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0 2px;
+}
+
+.pos-checkout-total-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pos-checkout-items-count {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.pos-checkout-grand-total {
+  font-size: 20px;
+  font-weight: 900;
+  color: #111827;
+  letter-spacing: -0.5px;
+}
+
 /* ── Receipt Modal ── */
 .pos-receipt-modal {
   background: #fff;
   border-radius: 20px;
   width: 100%;
-  max-width: 440px;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+  max-width: 480px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.25);
   position: relative;
   overflow: hidden;
+  margin: auto;
   animation: slideUp 0.22s ease;
 }
 
@@ -2889,9 +3035,9 @@ body {
   position: absolute;
   top: 14px;
   right: 14px;
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
   border: 1px solid #e5e7eb;
   background: #f9fafb;
   color: #6b7280;
@@ -2899,17 +3045,21 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 10;
+  z-index: 20;
   transition: background 0.15s, color 0.15s;
 }
 
 .pos-receipt-close:hover {
   background: #fef2f2;
+  border-color: #fca5a5;
   color: #ef4444;
 }
 
 .pos-receipt-body {
-  padding: 28px 28px 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px 28px 16px;
 }
 
 .pos-receipt-store {
@@ -3068,9 +3218,13 @@ body {
 }
 
 .pos-receipt-actions {
+  flex-shrink: 0;
   display: flex;
-  gap: 10px;
-  padding: 0 28px 24px;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 28px;
+  background: #ffffff;
+  border-top: 1px solid #f1f5f9;
 }
 
 .pos-receipt-btn-print {
@@ -3120,6 +3274,12 @@ body {
 /* ─────────────────────────────────────────
    Responsive
 ───────────────────────────────────────── */
+@media (max-width: 1280px) {
+  .pos-right {
+    width: 400px;
+  }
+}
+
 @media (max-width: 1024px) {
 
   .dash-charts-row,
@@ -3129,6 +3289,17 @@ body {
 
   .dash-stats {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .pos-right {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 390px;
+    max-width: 100%;
+    z-index: 50;
+    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.15);
   }
 }
 
@@ -3149,37 +3320,172 @@ body {
 /* ─────────────────────────────────────────
    Print utilities
 ───────────────────────────────────────── */
+/* ─────────────────────────────────────────
+   POS Receipt Print Styles
+───────────────────────────────────────── */
 @media print {
-  .no-print {
+  /* 1. Global resets */
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    font-size: 12pt !important;
+  }
+
+  /* 2. Hide all non-printable chrome and screen components */
+  nav,
+  header,
+  aside,
+  .sidebar,
+  .no-print,
+  .pos-left,
+  .pos-right,
+  .pos-receipt-close,
+  .pos-receipt-actions,
+  .pos-open-order-btn,
+  .pos-search-row,
+  .pos-categories,
+  .pos-numpad-modal,
+  .pos-barcode-modal,
+  button {
     display: none !important;
   }
 
-  body * {
-    visibility: hidden;
+  /* 3. Strip layout constraints on ancestor tree to prevent clipping */
+  #root,
+  #root > div,
+  #root > div > div,
+  main,
+  .custom-scrollbar,
+  .pos-shell {
+    display: block !important;
+    position: static !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
   }
 
+  /* 4. Modal overlay & wrapper: unconstrain from fixed/hidden */
+  .ec-modal-overlay {
+    position: static !important;
+    display: block !important;
+    inset: auto !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    width: 100% !important;
+    z-index: auto !important;
+    box-shadow: none !important;
+  }
+
+  .pos-receipt-modal {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    animation: none !important;
+  }
+
+  /* 5. Render receipt in normal document flow */
   #invoice,
+  .pos-receipt-body {
+    display: block !important;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 480px !important;
+    margin: 0 auto !important;
+    padding: 16px 20px !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    background: #ffffff !important;
+    box-sizing: border-box !important;
+  }
+
   #invoice * {
-    visibility: visible;
+    visibility: visible !important;
+    color: #111827 !important;
   }
 
-  #invoice {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
+  .pos-receipt-store {
+    margin-bottom: 14px !important;
   }
 
-  #invoice-capture,
-  #invoice-capture * {
-    visibility: visible;
+  .pos-receipt-logo {
+    background: #4f46e5 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    display: flex !important;
+    margin: 0 auto 8px !important;
   }
 
-  #invoice-capture {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 80mm;
+  .pos-receipt-divider-dots {
+    border: none !important;
+    border-top: 1px dashed #94a3b8 !important;
+    margin: 10px 0 !important;
+  }
+
+  .pos-receipt-item-row {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .pos-receipt-total-box {
+    background: #f1f5f9 !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    padding: 10px 14px !important;
+    margin-top: 12px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .pos-receipt-total-box * {
+    color: #0f172a !important;
+  }
+
+  @page {
+    size: auto;
+    margin: 8mm;
   }
 }
 
@@ -4113,5 +4419,273 @@ body {
   background: #94a3b8;
 }
 
+/* ─────────────────────────────────────────────────────────────
+   Admin Dashboard — Notification Bell Dropdown Panel
+───────────────────────────────────────────────────────────── */
+.header-icon-btn--bell.active,
+.header-icon-btn--bell:focus-visible {
+    border-color: #6366f1 !important;
+    background: #eef2ff !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+    outline: none;
+}
 
+.dashboard-notification-panel {
+    position: absolute;
+    width: 350px;
+    max-width: calc(100vw - 32px);
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    box-shadow: 0 12px 30px -4px rgba(15, 23, 42, 0.12), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+    z-index: 9999;
+    animation: dashboardNotificationFadeIn 0.15s ease-out;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@keyframes dashboardNotificationFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.dashboard-notification-header {
+    background: #eef2ff;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #c7d2fe;
+}
+
+.dashboard-notification-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dashboard-notification-header-icon {
+    color: #6366f1;
+    font-size: 15px;
+}
+
+.dashboard-notification-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e1b4b;
+    margin: 0;
+}
+
+.dashboard-notification-badge {
+    background: #6366f1;
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.dashboard-notification-close-btn {
+    border: none;
+    background: transparent;
+    color: #6b7280;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dashboard-notification-close-btn:hover {
+    background: #e0e7ff;
+    color: #1e1b4b;
+}
+
+.dashboard-notification-close-btn:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 1px;
+}
+
+.dashboard-notification-list {
+    max-height: 380px;
+    overflow-y: auto;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dashboard-notification-card {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    background: #ffffff;
+    border: 1px solid #f1f5f9;
+    transition: all 0.15s ease;
+}
+
+.dashboard-notification-card:hover {
+    background: #f8fafc;
+    border-color: #e2e8f0;
+}
+
+.dashboard-notification-card.warning {
+    border-left: 3px solid #f59e0b;
+}
+
+.dashboard-notification-card.error {
+    border-left: 3px solid #ef4444;
+}
+
+.dashboard-notification-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.dashboard-notification-card.warning .dashboard-notification-card-icon {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.dashboard-notification-card.error .dashboard-notification-card-icon {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+.dashboard-notification-card-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dashboard-notification-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.dashboard-notification-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+.dashboard-notification-card-time {
+    font-size: 10px;
+    font-weight: 600;
+    color: #d97706;
+    background: #fffbeb;
+    padding: 1px 6px;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.dashboard-notification-card.error .dashboard-notification-card-time {
+    color: #ef4444;
+    background: #fef2f2;
+}
+
+.dashboard-notification-card-msg {
+    font-size: 12px;
+    color: #475569;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.dashboard-notification-card-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #2563eb;
+    text-decoration: none;
+    margin-top: 4px;
+    transition: color 0.15s ease;
+    align-self: flex-start;
+}
+
+.dashboard-notification-card-link:hover {
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
+.dashboard-notification-card-link:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 1px;
+    border-radius: 2px;
+}
+
+.dashboard-notification-empty {
+    padding: 32px 16px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.dashboard-notification-empty-icon-wrap {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #ecfdf5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
+.dashboard-notification-empty-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+.dashboard-notification-empty-desc {
+    font-size: 12px;
+    color: #64748b;
+    margin: 0;
+    max-width: 240px;
+    line-height: 1.4;
+}
+
+.dashboard-notification-footer {
+    padding: 10px 16px;
+    background: #f8fafc;
+    border-top: 1px solid #f1f5f9;
+    text-align: center;
+}
+
+.dashboard-notification-footer-link {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6366f1;
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+
+.dashboard-notification-footer-link:hover {
+    color: #4f46e5;
+    text-decoration: underline;
+}
 

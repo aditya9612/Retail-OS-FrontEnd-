@@ -2,12 +2,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
     BsSearch, BsPlus, BsDownload, BsPencilFill, BsTrashFill,
     BsChevronLeft, BsChevronRight, BsToggleOn, BsToggleOff, BsImage,
-    BsStarFill, BsGrid3X3Gap
+    BsStarFill, BsGrid3X3Gap, BsArrowCounterclockwise, BsEye,
+    BsBoxSeam, BsTagFill, BsClockHistory
 } from 'react-icons/bs';
 import productService from "../../services/product";
 import categoryService from "../../services/categoryService";
 import apiClient from "../../api/axios";
 import ProductVariantModal from "./ProductVariantModal";
+import "../../components/Categories/CategoryCards.css";
+import "../../components/Common/PageComponents.css";
+import { PageContainer, PageHeader, KpiGrid, KpiCard } from "../../components/Common/PageComponents";
+import { resolveProductImage } from "../../utils/productImages";
+import notificationService from "../../utils/notificationService";
 
 export const fetchDatabaseCategories = async () => {
     try {
@@ -244,11 +250,20 @@ export const isProductExpired = (pOrDate) => {
     return expZero < todayZero;
 };
 
-export const generateSuggestedSKU = (existingProducts = []) => {
+export const generateSuggestedSKU = (existingProducts = [], currentSku = '') => {
+    const existingSkus = new Set(
+        (Array.isArray(existingProducts) ? existingProducts : [])
+            .map(p => String(p?.sku || '').trim().toUpperCase())
+            .filter(Boolean)
+    );
+    if (currentSku && String(currentSku).trim()) {
+        existingSkus.add(String(currentSku).trim().toUpperCase());
+    }
+
     let maxNum = 0;
     if (Array.isArray(existingProducts)) {
         for (const p of existingProducts) {
-            const sku = String(p.sku || '').trim().toUpperCase();
+            const sku = String(p?.sku || '').trim().toUpperCase();
             const match = sku.match(/^SKU-(\d+)$/);
             if (match) {
                 const num = parseInt(match[1], 10);
@@ -256,8 +271,22 @@ export const generateSuggestedSKU = (existingProducts = []) => {
             }
         }
     }
-    const nextNum = maxNum + 1;
-    return `SKU-${String(nextNum).padStart(3, '0')}`;
+
+    if (currentSku) {
+        const match = String(currentSku).trim().toUpperCase().match(/^SKU-(\d+)$/);
+        if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNum) maxNum = num;
+        }
+    }
+
+    let nextNum = maxNum + 1;
+    let candidate = `SKU-${String(nextNum).padStart(3, '0')}`;
+    while (existingSkus.has(candidate)) {
+        nextNum++;
+        candidate = `SKU-${String(nextNum).padStart(3, '0')}`;
+    }
+    return candidate;
 };
 
 export const generateEAN13 = () => {
@@ -743,22 +772,39 @@ export const mapProductRecord = (p, activeCatMap = {}, inventoryExpiryMap = {}) 
         null
     );
 
+    const hsnVal = (
+        p.hsn_code ||
+        p.hsnCode ||
+        p.hsn ||
+        variants.hsn_code ||
+        variants.hsnCode ||
+        variants.hsn ||
+        localMeta.hsnCode ||
+        null
+    );
+
     const isExpired = isProductExpired(expiryDate);
     const rawActive = Boolean(p.is_active ?? p.status ?? true);
     const effectiveStatus = isExpired ? false : rawActive;
     const statusLabel = isExpired ? 'Expired' : (effectiveStatus ? 'Active' : 'Inactive');
 
     if (isExpired && p.id && (p.is_active === true || p.is_active === 1)) {
-        productService.update(p.id, { is_active: false }).catch(() => {});
+        productService.update(p.id, { is_active: false }).catch(() => { });
     }
+
+    const isSoftDeleted = Boolean(localMeta?.soft_deleted || p.variants?.soft_deleted);
 
     return {
         ...p,
+        sku: p.sku || variants.sku || localMeta.sku || '',
         category: catName,
         barcode: barcodeVal,
+        hsn_code: hsnVal,
+        hsnCode: hsnVal,
         is_active: effectiveStatus,
         status: effectiveStatus,
         is_expired: isExpired,
+        is_soft_deleted: isSoftDeleted,
         status_label: statusLabel,
         sellingPrice: priceVal,
         selling_price: priceVal,
@@ -773,6 +819,34 @@ export const mapProductRecord = (p, activeCatMap = {}, inventoryExpiryMap = {}) 
         image_url: imageUrl,
         variants: variants,
     };
+};
+
+export const validateSKUFormat = (sku) => {
+    if (!sku || !String(sku).trim()) {
+        return 'SKU is required';
+    }
+    const value = String(sku).trim().toUpperCase();
+
+    if (value.length < 2) {
+        return 'SKU must be at least 2 characters long';
+    }
+    if (value.length > 50) {
+        return 'SKU cannot exceed 50 characters';
+    }
+    if (value.startsWith('-') || value.startsWith(' ')) {
+        return 'SKU cannot start with a hyphen (-) or space';
+    }
+    if (value.endsWith('-') || value.endsWith(' ')) {
+        return 'SKU cannot end with a hyphen (-) or space';
+    }
+    if (/[ -]{2,}/.test(value)) {
+        return 'SKU cannot contain consecutive spaces or hyphens';
+    }
+    if (!/^[A-Z0-9 -]+$/.test(value)) {
+        return 'SKU can only contain uppercase letters (A-Z), numbers (0-9), spaces, and hyphens (-)';
+    }
+
+    return '';
 };
 
 export const ProductFormModal = ({ product, onClose, onSave, existingProducts = [], categories = [] }) => {
@@ -818,7 +892,7 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
 
     const initialCatObj = product
         ? (availableCategories.find(c => String(c.id) === String(prodCatId)) ||
-           availableCategories.find(c => (c.name || '').trim().toLowerCase() === prodCatName.toLowerCase()))
+            availableCategories.find(c => (c.name || '').trim().toLowerCase() === prodCatName.toLowerCase()))
         : (availableCategories[0] || null);
 
     const initialCategoryId = product
@@ -907,6 +981,7 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
     }, [product]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+    const [generatingBarcode, setGeneratingBarcode] = useState(false);
 
     // Multiple Images Management State
     const [existingImages, setExistingImages] = useState([]);
@@ -1083,25 +1158,7 @@ export const ProductFormModal = ({ product, onClose, onSave, existingProducts = 
             return next;
         });
     };
-    const SKU_REGEX = /^SKU-\d{3,6}$/;
 
-const validateSKUFormat = (sku) => {
-    const value = sku.trim().toUpperCase();
-
-    if (!value) {
-        return 'SKU is required';
-    }
-
-    if (!SKU_REGEX.test(value)) {
-        return 'SKU must be in format SKU-001 with 3 to 6 digits';
-    }
-
-    if (/^SKU-0+$/.test(value)) {
-        return 'SKU cannot be all zeros';
-    }
-
-    return '';
-};
     const validateForm = () => {
         const newErrors = {};
 
@@ -1110,24 +1167,24 @@ const validateSKUFormat = (sku) => {
         }
         const normalizedSKU = form.sku.trim().toUpperCase();
 
-const skuError = validateSKUFormat(normalizedSKU);
+        const skuError = validateSKUFormat(normalizedSKU);
 
-if (skuError) {
-    newErrors.sku = skuError;
-} else {
-   const duplicateSKU = existingProducts.some(p => {
-        const existingSKU = (p.sku || '').trim().toUpperCase();
+        if (skuError) {
+            newErrors.sku = skuError;
+        } else {
+            const duplicateSKU = existingProducts.some(p => {
+                const existingSKU = (p.sku || '').trim().toUpperCase();
 
-        return (
-            existingSKU === normalizedSKU &&
-            String(p.id) !== String(product?.id)
-        );
-    });
+                return (
+                    existingSKU === normalizedSKU &&
+                    String(p.id) !== String(product?.id)
+                );
+            });
 
-    if (duplicateSKU) {
-        newErrors.sku = 'SKU already exists. Please use a unique SKU.';
-    }
-}
+            if (duplicateSKU) {
+                newErrors.sku = 'SKU already exists. Please use a unique SKU.';
+            }
+        }
 
         if (!form.category && form.category_id == null && categories.length > 0) {
             newErrors.category = 'Category is required';
@@ -1154,27 +1211,40 @@ if (skuError) {
             }
         }
 
-        const mrp = Number(form.mrp);
-        const sellingPrice = Number(form.sellingPrice);
+        const mrpRaw = form.mrp !== null && form.mrp !== undefined ? String(form.mrp).trim() : '';
+        const spRaw = form.sellingPrice !== null && form.sellingPrice !== undefined ? String(form.sellingPrice).trim() : '';
 
-        if (form.mrp === '' || isNaN(mrp) || mrp <= 0) {
-            newErrors.mrp = 'MRP must be a valid positive number greater than 0';
+        if (!mrpRaw) {
+            newErrors.mrp = 'MRP is required';
+        } else {
+            const mrp = Number(mrpRaw);
+            if (isNaN(mrp) || mrp <= 0) {
+                newErrors.mrp = 'MRP must be a valid positive number greater than 0';
+            }
         }
 
-        if (form.sellingPrice === '' || isNaN(sellingPrice) || sellingPrice <= 0) {
-            newErrors.sellingPrice = 'Selling price must be a valid positive number greater than 0';
-        } else if (sellingPrice > 999999.99) {
-            newErrors.sellingPrice = 'Selling price cannot exceed ₹9,99,999.99';
+        if (!spRaw) {
+            newErrors.sellingPrice = 'Selling price is required';
+        } else {
+            const sellingPrice = Number(spRaw);
+            if (isNaN(sellingPrice) || sellingPrice <= 0) {
+                newErrors.sellingPrice = 'Selling price must be a valid positive number greater than 0';
+            } else if (sellingPrice > 999999.99) {
+                newErrors.sellingPrice = 'Selling price cannot exceed ₹9,99,999.99';
+            }
         }
 
         if (
-            form.mrp !== '' &&
-            form.sellingPrice !== '' &&
-            !isNaN(mrp) &&
-            !isNaN(sellingPrice) &&
-            mrp < sellingPrice
+            mrpRaw &&
+            spRaw &&
+            !newErrors.mrp &&
+            !newErrors.sellingPrice
         ) {
-            newErrors.mrp = 'MRP must be greater than or equal to selling price';
+            const mrp = Number(mrpRaw);
+            const sellingPrice = Number(spRaw);
+            if (mrp < sellingPrice) {
+                newErrors.mrp = 'MRP must be greater than or equal to selling price';
+            }
         }
 
         if (!form.gst) {
@@ -1200,7 +1270,7 @@ if (skuError) {
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
-    }; 
+    };
 
     const [featuredConfirm, setFeaturedConfirm] = useState(false);
 
@@ -1250,7 +1320,7 @@ if (skuError) {
             } else {
                 errMsg = err?.message || 'Failed to save product. Please check your inputs.';
             }
-            alert('Could not save product:\n' + errMsg);
+            notificationService.error('Could not save product: ' + errMsg);
         } finally {
             setSaving(false);
         }
@@ -1258,570 +1328,733 @@ if (skuError) {
 
     return (
         <>
-        {featuredConfirm && (
-            <div className="ec-modal-overlay" style={{ zIndex: 2000 }}>
-                <div className="ec-modal" style={{ maxWidth: 420, width: '90%', padding: 28 }} onClick={e => e.stopPropagation()}>
-                    <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>⭐</div>
-                    <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827', textAlign: 'center', margin: '0 0 8px' }}>
-                        Mark as Featured Product?
-                    </h3>
-                    <p style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' }}>
-                        Do you want to mark this product as a featured product? It will be displayed in the Featured Products section and included in the Featured Products KPI count.
-                    </p>
-                    <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-                        <button
-                            className="adm-btn-secondary"
-                            style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#374151' }}
-                            onClick={() => { set('featured', false); setFeaturedConfirm(false); }}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            className="adm-btn-primary"
-                            style={{ padding: '9px 20px', borderRadius: 8, background: '#eab308', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}
-                            onClick={() => { setFeaturedConfirm(false); doSave(); }}
-                        >
-                            ⭐ Mark as Featured
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
-        <div className="ec-modal-overlay" onClick={onClose}>
-            <div
-                className="ec-modal"
-                style={{ maxWidth: 720, width: '90%' }}
-                onClick={e => e.stopPropagation()}
-            >
-                <div className="ec-modal-header">
-                    <div>
-                        <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>
-                            {isNew ? 'Add New Product' : `Edit: ${product.name}`}
+            {featuredConfirm && (
+                <div className="ec-modal-overlay" style={{ zIndex: 2000 }}>
+                    <div className="ec-modal" style={{ maxWidth: 420, width: '90%', padding: 28 }} onClick={e => e.stopPropagation()}>
+                        <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>⭐</div>
+                        <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827', textAlign: 'center', margin: '0 0 8px' }}>
+                            Mark as Featured Product?
                         </h3>
-                        <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-                            Fill in all required product details
+                        <p style={{ fontSize: 13, color: '#6b7280', textAlign: 'center', lineHeight: 1.6, margin: '0 0 24px' }}>
+                            Do you want to mark this product as a featured product? It will be displayed in the Featured Products section and included in the Featured Products KPI count.
                         </p>
+                        <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                            <button
+                                className="adm-btn-secondary"
+                                style={{ padding: '9px 20px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#374151' }}
+                                onClick={() => { set('featured', false); setFeaturedConfirm(false); }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                className="adm-btn-primary"
+                                style={{ padding: '9px 20px', borderRadius: 8, background: '#eab308', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}
+                                onClick={() => { setFeaturedConfirm(false); doSave(); }}
+                            >
+                                ⭐ Mark as Featured
+                            </button>
+                        </div>
                     </div>
-                    <button className="ec-modal-close" onClick={onClose}>✕</button>
                 </div>
-
-                <form onSubmit={handleSubmit} style={{ padding: 20, display: 'grid', gap: 14 }}>
-                    {/* Product + SKU */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            )}
+            <div className="ec-modal-overlay" onClick={onClose}>
+                <div
+                    className="ec-modal"
+                    style={{ maxWidth: 720, width: '90%' }}
+                    onClick={e => e.stopPropagation()}
+                >
+                    <div className="ec-modal-header">
                         <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Product Name <span style={{ color: 'red' }}>*</span>
-                            </label>
-                            <input
-                                className="adm-search"
-                                value={form.name}
-                                onChange={e => set('name', e.target.value)}
-                                placeholder="e.g. Wireless Earbuds Pro"
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.name && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.name}
+                            <h3 style={{ fontWeight: 700, fontSize: 16, color: '#111827' }}>
+                                {isNew ? 'Add New Product' : `Edit: ${product.name}`}
+                            </h3>
+                            <p style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                                Fill in all required product details
+                            </p>
+                        </div>
+                        <button className="ec-modal-close" onClick={onClose}>✕</button>
+                    </div>
+
+                    <form onSubmit={handleSubmit} style={{ padding: 20, display: 'grid', gap: 14 }}>
+                        {/* Product + SKU */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Product Name <span style={{ color: 'red' }}>*</span>
+                                </label>
+                                <input
+                                    className="adm-search"
+                                    value={form.name}
+                                    onChange={e => set('name', e.target.value)}
+                                    placeholder="e.g. Wireless Earbuds Pro"
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                {errors.name && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.name}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                        SKU <span style={{ color: 'red' }}>*</span>
+                                    </label>
+                                    {isNew && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const newSku = generateSuggestedSKU(existingProducts, form.sku);
+                                                set('sku', newSku);
+                                                setErrors(prev => ({ ...prev, sku: undefined }));
+                                            }}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                color: '#6366f1',
+                                                fontSize: 11,
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                padding: 0
+                                            }}
+                                        >
+                                            Auto Generate
+                                        </button>
+                                    )}
                                 </div>
-                            )}
+                                <input
+                                    className="adm-search"
+                                    value={form.sku}
+                                    onChange={e => {
+                                        const upper = e.target.value.toUpperCase();
+                                        set('sku', upper);
+                                        if (errors.sku) {
+                                            setErrors(prev => ({ ...prev, sku: undefined }));
+                                        }
+                                    }}
+                                    placeholder="e.g. SURF EXCEL 001, NIKE123, ABC 250"
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                {errors.sku && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.sku}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
-                        <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                    SKU <span style={{ color: 'red' }}>*</span>
+                        {/* Category + Brand */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                        Category Name <span style={{ color: 'red' }}>*</span>
+                                    </label>
+                                    {form.category && (
+                                        <span style={{
+                                            fontSize: 11,
+                                            fontWeight: 600,
+                                            color: '#4f46e5',
+                                            background: '#eef2ff',
+                                            padding: '1px 8px',
+                                            borderRadius: 12,
+                                            border: '1px solid #c7d2fe'
+                                        }}>
+                                            Selected: {form.category}
+                                        </span>
+                                    )}
+                                </div>
+                                <select
+                                    id="product-category-select"
+                                    value={form.category_id != null ? String(form.category_id) : (availableCategories.find(c => (c.name || '').trim().toLowerCase() === (form.category || '').trim().toLowerCase())?.id != null ? String(availableCategories.find(c => (c.name || '').trim().toLowerCase() === (form.category || '').trim().toLowerCase()).id) : '')}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        const selId = val ? Number(val) : null;
+                                        const selCat = availableCategories.find(c => String(c.id) === String(val));
+                                        const catName = selCat ? selCat.name : val;
+                                        setForm(f => ({ ...f, category: catName, category_id: selId }));
+                                        set('category', catName);
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '9px 12px',
+                                        borderRadius: 6,
+                                        border: errors.category ? '1px solid #dc2626' : (form.category ? '1.5px solid #6366f1' : '1px solid #e5e7eb'),
+                                        background: form.category ? '#f8faff' : '#ffffff',
+                                        fontWeight: form.category ? 600 : 400,
+                                        color: '#111827',
+                                        boxSizing: 'border-box',
+                                        fontSize: 13
+                                    }}
+                                >
+                                    {availableCategories.length === 0 ? (
+                                        <option value="" disabled>No categories available</option>
+                                    ) : (
+                                        availableCategories.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name}</option>
+                                        ))
+                                    )}
+                                </select>
+                                {errors.category && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.category}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label htmlFor="product-brand-input" style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Brand <span style={{ color: 'red' }}>*</span>
                                 </label>
-                                {isNew && (
+                                <input
+                                    id="product-brand-input"
+                                    name="brand"
+                                    className="adm-search"
+                                    value={form.brand}
+                                    onChange={e => set('brand', e.target.value)}
+                                    onBlur={() => {
+                                        setErrors(prev => ({
+                                            ...prev,
+                                            brand: validateBrandField(form.brand)
+                                        }));
+                                    }}
+                                    placeholder="e.g. Nike, Nike123, ABC 123"
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
+                                        borderRadius: 6,
+                                        border: errors.brand ? '1px solid #dc2626' : '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                {errors.brand && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.brand}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Barcode + Unit */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <label style={{ fontSize: 12, fontWeight: 600, color: '#01050c' }}>
+                                        Barcode Number <span style={{ color: 'red' }}>*</span>
+                                    </label>
                                     <button
                                         type="button"
-                                        onClick={() => set('sku', generateSuggestedSKU(existingProducts))}
+                                        disabled={generatingBarcode}
+                                        onClick={async () => {
+                                            if (generatingBarcode) return;
+                                            if (product?.id) {
+                                                setGeneratingBarcode(true);
+                                                try {
+                                                    const res = await productService.generateBarcode(product.id, true);
+                                                    const candidateBarcode = (
+                                                        res?.data?.barcode ||
+                                                        res?.data?.data?.barcode ||
+                                                        res?.data?.product?.barcode ||
+                                                        res?.barcode ||
+                                                        (typeof res?.data === 'string' ? res.data : null)
+                                                    );
+                                                    if (candidateBarcode) {
+                                                        set('barcode', candidateBarcode);
+                                                        if (errors.barcode) setErrors(prev => ({ ...prev, barcode: null }));
+                                                    }
+                                                } catch (err) {
+                                                    console.error('Failed to generate barcode via API:', err);
+                                                    const msg = err?.response?.data?.message ||
+                                                        (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
+                                                        err?.message || 'Failed to generate barcode';
+                                                    notificationService.error(`Failed to generate barcode: ${msg}`);
+                                                } finally {
+                                                    setGeneratingBarcode(false);
+                                                }
+                                            } else {
+                                                set('barcode', generateEAN13());
+                                                if (errors.barcode) setErrors(prev => ({ ...prev, barcode: null }));
+                                            }
+                                        }}
                                         style={{
                                             background: 'none',
                                             border: 'none',
                                             color: '#6366f1',
                                             fontSize: 11,
                                             fontWeight: 600,
-                                            cursor: 'pointer',
-                                            padding: 0
+                                            cursor: generatingBarcode ? 'wait' : 'pointer',
+                                            padding: 0,
+                                            opacity: generatingBarcode ? 0.7 : 1
                                         }}
                                     >
-                                        Auto-generate
+                                        {generatingBarcode ? 'Generating...' : 'Auto-generate'}
                                     </button>
+                                </div>
+                                <input
+                                    className="adm-search"
+                                    value={form.barcode}
+                                    onChange={e => set('barcode', e.target.value)}
+                                    placeholder="EAN/UPC Barcode"
+                                    inputMode="numeric"
+                                    maxLength={13}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                {errors.barcode && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.barcode}
+                                    </div>
                                 )}
                             </div>
-                            <input
-                                className="adm-search"
-                                value={form.sku}
-                               onChange={e => {
-    let value = e.target.value.toUpperCase();
 
-    if (!value.startsWith('SKU-')) {
-        value = 'SKU-' + value.replace(/^SKU-?/i, '');
-    }
-
-    const digits = value
-        .slice(4)
-        .replace(/\D/g, '')
-        .slice(0, 6);
-
-    set('sku', 'SKU-' + digits);
-}}
-                                placeholder="e.g. SKU-001"
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.sku && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.sku}
-                                </div>
-                            )}
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Unit
+                                </label>
+                                <select
+                                    value={form.unit}
+                                    onChange={e => set('unit', e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '8px 10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                >
+                                    {UNITS.map(u => (
+                                        <option key={u} value={u}>{u}</option>
+                                    ))}
+                                </select>
+                                {errors.unit && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.unit}
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Category + Brand */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                        {/* HSN + MRP */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    HSN Code
+                                </label>
+                                <input
+                                    className="adm-search"
+                                    value={form.hsnCode}
+                                    onChange={e => set('hsnCode', e.target.value)}
+                                    placeholder="HSN/SAC Code"
+                                    inputMode="numeric"
+                                    maxLength={8}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                {errors.hsnCode && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.hsnCode}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    MRP (₹) <span style={{ color: 'red' }}>*</span>{' '}
+                                    <span style={{ fontSize: 11, fontWeight: 500, color: '#6b7280' }}>(GST Inclusive)</span>
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    step="any"
+                                    value={form.mrp}
+                                    onChange={e => {
+                                        set('mrp', e.target.value);
+                                        if (errors.mrp) setErrors(prev => ({ ...prev, mrp: undefined }));
+                                    }}
+                                    placeholder="0.00"
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '8px 10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                <span style={{ fontSize: 11, color: '#6b7280', marginTop: 3, display: 'block' }}>
+                                    Maximum Retail Price (inclusive of all taxes / GST)
+                                </span>
+                                {errors.mrp && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.mrp}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Selling Price + GST Rate */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Selling Price (₹) <span style={{ color: 'red' }}>*</span>{' '}
+                                    <span style={{ fontSize: 11, fontWeight: 500, color: '#6b7280' }}>(GST Exclusive)</span>
+                                </label>
+                                <input
+                                    className="ec-input"
+                                    type="number"
+                                    step="any"
+                                    value={form.sellingPrice}
+                                    onChange={e => {
+                                        set('sellingPrice', e.target.value);
+                                        if (errors.sellingPrice) setErrors(prev => ({ ...prev, sellingPrice: undefined }));
+                                    }}
+                                    placeholder="0.00"
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                                <span style={{ fontSize: 11, color: '#6b7280', marginTop: 3, display: 'block' }}>
+                                    Base selling price (exclusive of GST; tax is added at billing)
+                                </span>
+                                {errors.sellingPrice && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.sellingPrice}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    GST Rate
+                                </label>
+                                <select
+                                    value={form.gst}
+                                    onChange={e => set('gst', e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '8px 10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box'
+                                    }}
+                                >
+                                    {GST_RATES.map(g => (
+                                        <option key={g} value={g}>{g}</option>
+                                    ))}
+                                </select>
+                                {errors.gst && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.gst}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+
+                        {/* Manufacturing Date + Expiry Date */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Manufacturing Date
+                                </label>
+                                <input
+                                    type="date"
+                                    value={form.manufacturingDate}
+                                    onChange={e => set('manufacturingDate', e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '8px 10px',
+                                        borderRadius: 6,
+                                        border: errors.manufacturingDate ? '1px solid #dc2626' : '1px solid #e5e7eb',
+                                        boxSizing: 'border-box',
+                                        fontSize: 13,
+                                        color: '#111827'
+                                    }}
+                                />
+                                {errors.manufacturingDate && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.manufacturingDate}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                    Expiry Date
+                                    {form.category === 'Groceries' && (
+                                        <span style={{ color: 'red' }}> *</span>
+                                    )}
+                                </label>
+                                <input
+                                    type="date"
+                                    value={form.expiryDate}
+                                    onChange={e => set('expiryDate', e.target.value)}
+                                    style={{
+                                        width: '100%',
+                                        marginTop: 4,
+                                        padding: '8px 10px',
+                                        borderRadius: 6,
+                                        border: errors.expiryDate ? '1px solid #dc2626' : '1px solid #e5e7eb',
+                                        boxSizing: 'border-box',
+                                        fontSize: 13,
+                                        color: '#111827'
+                                    }}
+                                />
+                                {form.category === 'Groceries' && (
+                                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
+                                        Expiry date is mandatory for food/grocery products.
+                                    </div>
+                                )}
+                                {errors.expiryDate && (
+                                    <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
+                                        {errors.expiryDate}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Product Image URL or Multiple File Upload */}
                         <div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                    Category Name <span style={{ color: 'red' }}>*</span>
+                                    Product Images <span style={{ color: '#9ca3af', fontWeight: 400 }}>(Supports multiple photos, JPG/PNG/WEBP up to 10MB)</span>
                                 </label>
-                                {form.category && (
-                                    <span style={{
-                                        fontSize: 11,
-                                        fontWeight: 600,
-                                        color: '#4f46e5',
-                                        background: '#eef2ff',
-                                        padding: '1px 8px',
-                                        borderRadius: 12,
-                                        border: '1px solid #c7d2fe'
-                                    }}>
-                                        Selected: {form.category}
+                                {(existingImages.length > 0 || selectedNewFiles.length > 0) && (
+                                    <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
+                                        {existingImages.length + selectedNewFiles.length} image{existingImages.length + selectedNewFiles.length === 1 ? '' : 's'}
                                     </span>
                                 )}
                             </div>
-                            <select
-                                id="product-category-select"
-                                value={form.category_id != null ? String(form.category_id) : (availableCategories.find(c => (c.name || '').trim().toLowerCase() === (form.category || '').trim().toLowerCase())?.id != null ? String(availableCategories.find(c => (c.name || '').trim().toLowerCase() === (form.category || '').trim().toLowerCase()).id) : '')}
-                                onChange={e => {
-                                    const val = e.target.value;
-                                    const selId = val ? Number(val) : null;
-                                    const selCat = availableCategories.find(c => String(c.id) === String(val));
-                                    const catName = selCat ? selCat.name : val;
-                                    setForm(f => ({ ...f, category: catName, category_id: selId }));
-                                    set('category', catName);
-                                }}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '9px 12px',
-                                    borderRadius: 6,
-                                    border: errors.category ? '1px solid #dc2626' : (form.category ? '1.5px solid #6366f1' : '1px solid #e5e7eb'),
-                                    background: form.category ? '#f8faff' : '#ffffff',
-                                    fontWeight: form.category ? 600 : 400,
-                                    color: '#111827',
-                                    boxSizing: 'border-box',
-                                    fontSize: 13
-                                }}
-                            >
-                                {availableCategories.length === 0 ? (
-                                    <option value="" disabled>No categories available</option>
-                                ) : (
-                                    availableCategories.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))
-                                )}
-                            </select>
-                            {errors.category && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.category}
-                                </div>
-                            )}
-                        </div>
 
-                        <div>
-                            <label htmlFor="product-brand-input" style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Brand <span style={{ color: 'red' }}>*</span>
-                            </label>
-                            <input
-                                id="product-brand-input"
-                                name="brand"
-                                className="adm-search"
-                                value={form.brand}
-                                onChange={e => set('brand', e.target.value)}
-                                onBlur={() => {
-                                    setErrors(prev => ({
-                                        ...prev,
-                                        brand: validateBrandField(form.brand)
-                                    }));
-                                }}
-                                placeholder="e.g. Nike, Nike123, ABC 123"
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: errors.brand ? '1px solid #dc2626' : '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.brand && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.brand}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Barcode + Unit */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                        <div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <label style={{ fontSize: 12, fontWeight: 600, color: '#01050c' }}>
-                                    Barcode Number <span style={{ color: 'red' }}>*</span>
-                                </label>
-                                <button
-                                    type="button"
-                                    onClick={() => set('barcode', generateEAN13())}
-                                    style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: '#6366f1',
-                                        fontSize: 11,
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        padding: 0
-                                    }}
-                                >
-                                    Auto-generate
-                                </button>
-                            </div>
-                            <input
-                                className="adm-search"
-                                value={form.barcode}
-                                onChange={e => set('barcode', e.target.value)}
-                                placeholder="EAN/UPC Barcode"
-                                inputMode="numeric"
-                                maxLength={13}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.barcode && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.barcode}
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Unit
-                            </label>
-                            <select
-                                value={form.unit}
-                                onChange={e => set('unit', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            >
-                                {UNITS.map(u => (
-                                    <option key={u} value={u}>{u}</option>
-                                ))}
-                            </select>
-                            {errors.unit && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.unit}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* HSN + MRP */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                HSN Code
-                            </label>
-                            <input
-                                className="adm-search"
-                                value={form.hsnCode}
-                                onChange={e => set('hsnCode', e.target.value)}
-                                placeholder="HSN/SAC Code"
-                                inputMode="numeric"
-                                maxLength={8}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.hsnCode && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.hsnCode}
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                MRP (₹)
-                            </label>
-                            <input
-                                type="number"
-                                min="0"
-                                value={form.mrp}
-                                onChange={e => set('mrp', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.mrp && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.mrp}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Selling Price + GST Rate */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Selling Price (₹)
-                            </label>
-                            <input
-                                className="ec-input"
-                                type="number"
-                                value={form.sellingPrice}
-                                onChange={e => set('sellingPrice', e.target.value)}
-                                placeholder="0"
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            />
-                            {errors.sellingPrice && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.sellingPrice}
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                GST Rate
-                            </label>
-                            <select
-                                value={form.gst}
-                                onChange={e => set('gst', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box'
-                                }}
-                            >
-                                {GST_RATES.map(g => (
-                                    <option key={g} value={g}>{g}</option>
-                                ))}
-                            </select>
-                            {errors.gst && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.gst}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-
-                    {/* Manufacturing Date + Expiry Date */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Manufacturing Date
-                            </label>
-                            <input
-                                type="date"
-                                value={form.manufacturingDate}
-                                onChange={e => set('manufacturingDate', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: errors.manufacturingDate ? '1px solid #dc2626' : '1px solid #e5e7eb',
-                                    boxSizing: 'border-box',
-                                    fontSize: 13,
-                                    color: '#111827'
-                                }}
-                            />
-                            {errors.manufacturingDate && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.manufacturingDate}
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Expiry Date
-                                {form.category === 'Groceries' && (
-                                    <span style={{ color: 'red' }}> *</span>
-                                )}
-                            </label>
-                            <input
-                                type="date"
-                                value={form.expiryDate}
-                                onChange={e => set('expiryDate', e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    marginTop: 4,
-                                    padding: '8px 10px',
-                                    borderRadius: 6,
-                                    border: errors.expiryDate ? '1px solid #dc2626' : '1px solid #e5e7eb',
-                                    boxSizing: 'border-box',
-                                    fontSize: 13,
-                                    color: '#111827'
-                                }}
-                            />
-                            {form.category === 'Groceries' && (
-                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
-                                    Expiry date is mandatory for food/grocery products.
-                                </div>
-                            )}
-                            {errors.expiryDate && (
-                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 3 }}>
-                                    {errors.expiryDate}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Product Image URL or Multiple File Upload */}
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                                Product Images <span style={{ color: '#9ca3af', fontWeight: 400 }}>(Supports multiple photos, JPG/PNG/WEBP up to 10MB)</span>
-                            </label>
-                            {(existingImages.length > 0 || selectedNewFiles.length > 0) && (
-                                <span style={{ fontSize: 11, color: '#6366f1', fontWeight: 600 }}>
-                                    {existingImages.length + selectedNewFiles.length} image{existingImages.length + selectedNewFiles.length === 1 ? '' : 's'}
-                                </span>
-                            )}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                            <input
-                                className="adm-search"
-                                value={form.imageUrl || ''}
-                                onChange={e => {
-                                    const val = e.target.value;
-                                    setForm(f => ({
-                                        ...f,
-                                        imageUrl: val,
-                                        imagePreview: val,
-                                        imageRemoved: false
-                                    }));
-                                }}
-                                placeholder="Paste image URL (https://...)"
-                                style={{
-                                    flex: 1,
-                                    padding: '9px 10px',
-                                    borderRadius: 6,
-                                    border: '1px solid #e5e7eb',
-                                    boxSizing: 'border-box',
-                                    fontSize: 13
-                                }}
-                            />
-                            <label
-                                style={{
-                                    padding: '9px 14px',
-                                    background: '#f9fafb',
-                                    border: '1px solid #d1d5db',
-                                    borderRadius: 6,
-                                    cursor: 'pointer',
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    whiteSpace: 'nowrap',
-                                    userSelect: 'none'
-                                }}
-                                title="Upload multiple images from computer"
-                            >
-                                📁 Choose Images
+                            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                                 <input
-                                    type="file"
-                                    multiple
-                                    accept="image/*"
-                                    style={{ display: 'none' }}
-                                    onChange={handleFileSelect}
+                                    className="adm-search"
+                                    value={form.imageUrl || ''}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        setForm(f => ({
+                                            ...f,
+                                            imageUrl: val,
+                                            imagePreview: val,
+                                            imageRemoved: false
+                                        }));
+                                    }}
+                                    placeholder="Paste image URL (https://...)"
+                                    style={{
+                                        flex: 1,
+                                        padding: '9px 10px',
+                                        borderRadius: 6,
+                                        border: '1px solid #e5e7eb',
+                                        boxSizing: 'border-box',
+                                        fontSize: 13
+                                    }}
                                 />
-                            </label>
-                        </div>
-
-                        {imageValidationMsg && (
-                            <div style={{ color: '#dc2626', fontSize: 11, marginTop: 4, fontWeight: 500 }}>
-                                ⚠️ {imageValidationMsg}
+                                <label
+                                    style={{
+                                        padding: '9px 14px',
+                                        background: '#f9fafb',
+                                        border: '1px solid #d1d5db',
+                                        borderRadius: 6,
+                                        cursor: 'pointer',
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        color: '#374151',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        whiteSpace: 'nowrap',
+                                        userSelect: 'none'
+                                    }}
+                                    title="Upload multiple images from computer"
+                                >
+                                    📁 Choose Images
+                                    <input
+                                        type="file"
+                                        multiple
+                                        accept="image/*"
+                                        style={{ display: 'none' }}
+                                        onChange={handleFileSelect}
+                                    />
+                                </label>
                             </div>
-                        )}
 
-                        {/* Image Gallery Thumbnails Grid (Existing + Newly Selected) */}
-                        {(existingImages.length > 0 || selectedNewFiles.length > 0 || Boolean(form.imageUrl && getValidRemoteImageUrl(form.imageUrl))) && (
-                            <div style={{
-                                marginTop: 10,
-                                padding: 10,
-                                background: '#f9fafb',
-                                borderRadius: 8,
-                                border: '1px solid #e5e7eb',
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: 10
-                            }}>
-                                {/* Existing Server Images */}
-                                {existingImages.map((img, idx) => (
-                                    <div
-                                        key={img.id || `exist_${idx}`}
-                                        style={{
+                            {imageValidationMsg && (
+                                <div style={{ color: '#dc2626', fontSize: 11, marginTop: 4, fontWeight: 500 }}>
+                                    ⚠️ {imageValidationMsg}
+                                </div>
+                            )}
+
+                            {/* Image Gallery Thumbnails Grid (Existing + Newly Selected) */}
+                            {(existingImages.length > 0 || selectedNewFiles.length > 0 || Boolean(form.imageUrl && getValidRemoteImageUrl(form.imageUrl))) && (
+                                <div style={{
+                                    marginTop: 10,
+                                    padding: 10,
+                                    background: '#f9fafb',
+                                    borderRadius: 8,
+                                    border: '1px solid #e5e7eb',
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: 10
+                                }}>
+                                    {/* Existing Server Images */}
+                                    {existingImages.map((img, idx) => (
+                                        <div
+                                            key={img.id || `exist_${idx}`}
+                                            style={{
+                                                position: 'relative',
+                                                width: 64,
+                                                height: 64,
+                                                borderRadius: 6,
+                                                overflow: 'hidden',
+                                                border: '1px solid #d1d5db',
+                                                background: '#ffffff'
+                                            }}
+                                        >
+                                            <img
+                                                src={normalizeImageUrl(img.image_url || img.imageUrl || img.url) || (img.image_url || img.imageUrl || img.url)}
+                                                alt={`Product image ${idx + 1}`}
+                                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            />
+                                            <span style={{
+                                                position: 'absolute',
+                                                bottom: 2,
+                                                left: 2,
+                                                fontSize: 9,
+                                                padding: '1px 3px',
+                                                borderRadius: 3,
+                                                background: idx === 0 ? '#4f46e5' : 'rgba(0,0,0,0.6)',
+                                                color: '#ffffff',
+                                                fontWeight: 700
+                                            }}>
+                                                {idx === 0 ? 'Primary' : 'Saved'}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveExistingImage(img, idx)}
+                                                title="Remove image"
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 2,
+                                                    right: 2,
+                                                    width: 18,
+                                                    height: 18,
+                                                    borderRadius: '50%',
+                                                    background: '#ef4444',
+                                                    color: '#ffffff',
+                                                    border: 'none',
+                                                    display: 'grid',
+                                                    placeItems: 'center',
+                                                    cursor: 'pointer',
+                                                    fontSize: 10,
+                                                    fontWeight: 700,
+                                                    lineHeight: 1
+                                                }}
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ))}
+
+                                    {/* Newly Selected Files */}
+                                    {selectedNewFiles.map((item, idx) => (
+                                        <div
+                                            key={item.id}
+                                            style={{
+                                                position: 'relative',
+                                                width: 64,
+                                                height: 64,
+                                                borderRadius: 6,
+                                                overflow: 'hidden',
+                                                border: '1px solid #a7f3d0',
+                                                background: '#ffffff'
+                                            }}
+                                        >
+                                            <img
+                                                src={item.preview}
+                                                alt={item.name}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            />
+                                            <span style={{
+                                                position: 'absolute',
+                                                bottom: 2,
+                                                left: 2,
+                                                fontSize: 9,
+                                                padding: '1px 3px',
+                                                borderRadius: 3,
+                                                background: '#059669',
+                                                color: '#ffffff',
+                                                fontWeight: 700
+                                            }}>
+                                                New
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveNewFile(idx)}
+                                                title="Remove image"
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 2,
+                                                    right: 2,
+                                                    width: 18,
+                                                    height: 18,
+                                                    borderRadius: '50%',
+                                                    background: '#ef4444',
+                                                    color: '#ffffff',
+                                                    border: 'none',
+                                                    display: 'grid',
+                                                    placeItems: 'center',
+                                                    cursor: 'pointer',
+                                                    fontSize: 10,
+                                                    fontWeight: 700,
+                                                    lineHeight: 1
+                                                }}
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    ))}
+
+                                    {/* Single URL preview if pasted and no files */}
+                                    {existingImages.length === 0 && selectedNewFiles.length === 0 && Boolean(form.imageUrl && getValidRemoteImageUrl(form.imageUrl)) && (
+                                        <div style={{
                                             position: 'relative',
                                             width: 64,
                                             height: 64,
@@ -1829,260 +2062,383 @@ if (skuError) {
                                             overflow: 'hidden',
                                             border: '1px solid #d1d5db',
                                             background: '#ffffff'
-                                        }}
-                                    >
-                                        <img
-                                            src={normalizeImageUrl(img.image_url || img.imageUrl || img.url) || (img.image_url || img.imageUrl || img.url)}
-                                            alt={`Product image ${idx + 1}`}
-                                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        />
-                                        <span style={{
-                                            position: 'absolute',
-                                            bottom: 2,
-                                            left: 2,
-                                            fontSize: 9,
-                                            padding: '1px 3px',
-                                            borderRadius: 3,
-                                            background: idx === 0 ? '#4f46e5' : 'rgba(0,0,0,0.6)',
-                                            color: '#ffffff',
-                                            fontWeight: 700
                                         }}>
-                                            {idx === 0 ? 'Primary' : 'Saved'}
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemoveExistingImage(img, idx)}
-                                            title="Remove image"
-                                            style={{
-                                                position: 'absolute',
-                                                top: 2,
-                                                right: 2,
-                                                width: 18,
-                                                height: 18,
-                                                borderRadius: '50%',
-                                                background: '#ef4444',
-                                                color: '#ffffff',
-                                                border: 'none',
-                                                display: 'grid',
-                                                placeItems: 'center',
-                                                cursor: 'pointer',
-                                                fontSize: 10,
-                                                fontWeight: 700,
-                                                lineHeight: 1
-                                            }}
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                ))}
-
-                                {/* Newly Selected Files */}
-                                {selectedNewFiles.map((item, idx) => (
-                                    <div
-                                        key={item.id}
-                                        style={{
-                                            position: 'relative',
-                                            width: 64,
-                                            height: 64,
-                                            borderRadius: 6,
-                                            overflow: 'hidden',
-                                            border: '1px solid #a7f3d0',
-                                            background: '#ffffff'
-                                        }}
-                                    >
-                                        <img
-                                            src={item.preview}
-                                            alt={item.name}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        />
-                                        <span style={{
-                                            position: 'absolute',
-                                            bottom: 2,
-                                            left: 2,
-                                            fontSize: 9,
-                                            padding: '1px 3px',
-                                            borderRadius: 3,
-                                            background: '#059669',
-                                            color: '#ffffff',
-                                            fontWeight: 700
-                                        }}>
-                                            New
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleRemoveNewFile(idx)}
-                                            title="Remove image"
-                                            style={{
-                                                position: 'absolute',
-                                                top: 2,
-                                                right: 2,
-                                                width: 18,
-                                                height: 18,
-                                                borderRadius: '50%',
-                                                background: '#ef4444',
-                                                color: '#ffffff',
-                                                border: 'none',
-                                                display: 'grid',
-                                                placeItems: 'center',
-                                                cursor: 'pointer',
-                                                fontSize: 10,
-                                                fontWeight: 700,
-                                                lineHeight: 1
-                                            }}
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                ))}
-
-                                {/* Single URL preview if pasted and no files */}
-                                {existingImages.length === 0 && selectedNewFiles.length === 0 && Boolean(form.imageUrl && getValidRemoteImageUrl(form.imageUrl)) && (
-                                    <div style={{
-                                        position: 'relative',
-                                        width: 64,
-                                        height: 64,
-                                        borderRadius: 6,
-                                        overflow: 'hidden',
-                                        border: '1px solid #d1d5db',
-                                        background: '#ffffff'
-                                    }}>
-                                        <img
-                                            src={normalizeImageUrl(form.imageUrl) || form.imageUrl}
-                                            alt="URL Preview"
-                                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setForm(f => ({ ...f, imageUrl: '', imagePreview: '', imageRemoved: true }))}
-                                            title="Remove image"
-                                            style={{
-                                                position: 'absolute',
-                                                top: 2,
-                                                right: 2,
-                                                width: 18,
-                                                height: 18,
-                                                borderRadius: '50%',
-                                                background: '#ef4444',
-                                                color: '#ffffff',
-                                                border: 'none',
-                                                display: 'grid',
-                                                placeItems: 'center',
-                                                cursor: 'pointer',
-                                                fontSize: 10,
-                                                fontWeight: 700,
-                                                lineHeight: 1
-                                            }}
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-
-                    {/* Description */}
-                    <div>
-                        <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
-                            Description
-                        </label>
-                        <textarea
-                            value={form.description}
-                            onChange={e => set('description', e.target.value)}
-                            rows={3}
-                            style={{
-                                width: '100%',
-                                marginTop: 4,
-                                padding: '8px 10px',
-                                borderRadius: 6,
-                                border: '1px solid #e5e7eb',
-                                boxSizing: 'border-box',
-                                resize: 'vertical'
-                            }}
-                        />
-                    </div>
-
-                    {/* Active + Featured */}
-                    <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-                        {(() => {
-                            const isExpired = isProductExpired(form.expiryDate);
-                            return (
-                                <label style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                    fontSize: 13,
-                                    color: isExpired ? '#9ca3af' : '#374151',
-                                    cursor: isExpired ? 'not-allowed' : 'pointer'
-                                }}
-                                title={isExpired ? "Expired products cannot be set to Active" : ""}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={isExpired ? false : Boolean(form.status)}
-                                        disabled={isExpired}
-                                        onChange={e => set('status', e.target.checked)}
-                                    />
-                                    <span>Active</span>
-                                    {isExpired && (
-                                        <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 600 }}>
-                                            (Expired — Inactive)
-                                        </span>
+                                            <img
+                                                src={normalizeImageUrl(form.imageUrl) || form.imageUrl}
+                                                alt="URL Preview"
+                                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setForm(f => ({ ...f, imageUrl: '', imagePreview: '', imageRemoved: true }))}
+                                                title="Remove image"
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 2,
+                                                    right: 2,
+                                                    width: 18,
+                                                    height: 18,
+                                                    borderRadius: '50%',
+                                                    background: '#ef4444',
+                                                    color: '#ffffff',
+                                                    border: 'none',
+                                                    display: 'grid',
+                                                    placeItems: 'center',
+                                                    cursor: 'pointer',
+                                                    fontSize: 10,
+                                                    fontWeight: 700,
+                                                    lineHeight: 1
+                                                }}
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
                                     )}
-                                </label>
-                            );
-                        })()}
+                                </div>
+                            )}
+                        </div>
 
-                        <label style={{
+
+                        {/* Description */}
+                        <div>
+                            <label style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>
+                                Description
+                            </label>
+                            <textarea
+                                value={form.description}
+                                onChange={e => set('description', e.target.value)}
+                                rows={3}
+                                style={{
+                                    width: '100%',
+                                    marginTop: 4,
+                                    padding: '8px 10px',
+                                    borderRadius: 6,
+                                    border: '1px solid #e5e7eb',
+                                    boxSizing: 'border-box',
+                                    resize: 'vertical'
+                                }}
+                            />
+                        </div>
+
+                        {/* Active + Featured */}
+                        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                            {(() => {
+                                const isExpired = isProductExpired(form.expiryDate);
+                                return (
+                                    <label style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8,
+                                        fontSize: 13,
+                                        color: isExpired ? '#9ca3af' : '#374151',
+                                        cursor: isExpired ? 'not-allowed' : 'pointer'
+                                    }}
+                                        title={isExpired ? "Expired products cannot be set to Active" : ""}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={isExpired ? false : Boolean(form.status)}
+                                            disabled={isExpired}
+                                            onChange={e => set('status', e.target.checked)}
+                                        />
+                                        <span>Active</span>
+                                        {isExpired && (
+                                            <span style={{ color: '#ef4444', fontSize: 11, fontWeight: 600 }}>
+                                                (Expired — Inactive)
+                                            </span>
+                                        )}
+                                    </label>
+                                );
+                            })()}
+
+                            <label style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                fontSize: 13,
+                                color: '#374151',
+                                cursor: 'pointer'
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={form.featured}
+                                    onChange={e => set('featured', e.target.checked)}
+                                />
+                                Featured
+                            </label>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: 10,
+                            marginTop: 10
+                        }}>
+                            <button
+                                type="button"
+                                className="adm-btn-secondary"
+                                onClick={onClose}
+                                style={{ padding: '8px 16px' }}
+                            >
+                                Cancel
+                            </button>
+
+                            <button
+                                type="submit"
+                                className="adm-btn-primary"
+                                disabled={saving}
+                                onClick={handleSubmit}
+                                style={{ padding: '8px 16px' }}
+                            >
+                                {saving ? 'Saving…' : (isNew ? 'Create Product' : 'Update Product')}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </>
+    );
+};
+
+export const ProductDetailsModal = ({ product, onClose, onEdit, categories = [] }) => {
+    if (!product) return null;
+
+    const variants = (typeof product?.variants === 'object' && product?.variants !== null && !Array.isArray(product?.variants)) ? product.variants : {};
+    const localMeta = getLocalProductMeta(product.id, product.sku);
+
+    const categoryName = product.category_name ||
+        (typeof product.category === 'object' ? product.category?.name : product.category) ||
+        categories.find(c => String(c.id) === String(product.category_id))?.name ||
+        '—';
+
+    const brandName = product.brand || product.brand_name || variants.brand || localMeta.brand || '—';
+    const mrpVal = product.mrp ?? product.cost_price ?? product.mrp_price ?? '—';
+    const sellingPriceVal = product.sellingPrice ?? product.price ?? product.selling_price ?? '—';
+    const gstRateVal = product.gst_rate != null ? `${product.gst_rate}%` : (product.gst || '—');
+    const hsnVal = product.hsn_code ?? product.hsnCode ?? '—';
+    const unitVal = product.unit || 'Pcs';
+    const mfgDateVal = product.manufacturing_date ?? product.manufacturingDate ?? variants.manufacturing_date ?? localMeta.manufacturingDate ?? '—';
+    const expDateVal = product.expiry_date ?? product.expiryDate ?? product.expiration_date ?? product.expirationDate ?? variants.expiry_date ?? localMeta.expiryDate ?? '—';
+    const descVal = product.description || 'No description provided.';
+    const isExpired = isProductExpired(product);
+    const isActive = isExpired ? false : Boolean(product.is_active ?? product.status ?? true);
+    const isFeatured = Boolean(
+        product.featured === true || product.featured === 1 || product.featured === 'true' ||
+        variants.featured === true || variants.featured === 1 || variants.featured === 'true' ||
+        localMeta.featured === true
+    );
+
+    const imgUrl = getValidRemoteImageUrl(
+        product?.imageUrl || product?.image_url ||
+        (Array.isArray(product?.images) && product.images[0]?.image_url) ||
+        variants.image_url || localMeta.imageUrl
+    );
+
+    return (
+        <div className="ec-modal-overlay" onClick={onClose} style={{ zIndex: 1200 }}>
+            <div
+                className="ec-modal"
+                style={{ maxWidth: 680, width: '92%', maxHeight: '90vh', overflowY: 'auto', padding: 0 }}
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div style={{
+                    padding: '18px 24px',
+                    borderBottom: '1px solid #e5e7eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: '#f9fafb'
+                }}>
+                    <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <h3 style={{ fontSize: 17, fontWeight: 700, color: '#111827', margin: 0 }}>
+                                {product.name || 'Product Details'}
+                            </h3>
+                            {isExpired ? (
+                                <span style={{
+                                    fontSize: 10, background: '#fef2f2', color: '#dc2626',
+                                    border: '1px solid #fecaca', padding: '2px 8px', borderRadius: 12, fontWeight: 700
+                                }}>
+                                    EXPIRED
+                                </span>
+                            ) : isActive ? (
+                                <span style={{
+                                    fontSize: 10, background: '#ecfdf5', color: '#059669',
+                                    border: '1px solid #a7f3d0', padding: '2px 8px', borderRadius: 12, fontWeight: 700
+                                }}>
+                                    ACTIVE
+                                </span>
+                            ) : (
+                                <span style={{
+                                    fontSize: 10, background: '#f3f4f6', color: '#6b7280',
+                                    border: '1px solid #e5e7eb', padding: '2px 8px', borderRadius: 12, fontWeight: 700
+                                }}>
+                                    INACTIVE
+                                </span>
+                            )}
+                            {isFeatured && (
+                                <span style={{
+                                    fontSize: 10, background: '#fef3c7', color: '#b45309',
+                                    border: '1px solid #fde68a', padding: '2px 8px', borderRadius: 12, fontWeight: 700
+                                }}>
+                                    ⭐ FEATURED
+                                </span>
+                            )}
+                        </div>
+                        <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0 0' }}>
+                            Product ID #{product.id} • SKU: {product.sku || '—'}
+                        </p>
+                    </div>
+                    <button className="ec-modal-close" onClick={onClose}>✕</button>
+                </div>
+
+                {/* Body Content */}
+                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                    {/* Top Row: Image & Key Identifiers */}
+                    <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        <div style={{
+                            width: 110,
+                            height: 110,
+                            borderRadius: 10,
+                            overflow: 'hidden',
+                            border: '1px solid #e5e7eb',
+                            background: '#f9fafb',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 8,
-                            fontSize: 13,
-                            color: '#374151',
-                            cursor: 'pointer'
+                            justifyContent: 'center',
+                            flexShrink: 0
                         }}>
-                            <input
-                                type="checkbox"
-                                checked={form.featured}
-                                onChange={e => set('featured', e.target.checked)}
-                            />
-                            Featured
-                        </label>
+                            {imgUrl ? (
+                                <img
+                                    src={imgUrl}
+                                    alt={product.name || 'Product'}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                            ) : (
+                                <BsImage size={36} color="#9ca3af" />
+                            )}
+                        </div>
+
+                        <div style={{ flex: 1, minWidth: 220, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12 }}>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>SKU Code</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 2 }}>{product.sku || '—'}</div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Barcode (EAN-13)</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 2 }}>{product.barcode || '—'}</div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Category</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#4f46e5', marginTop: 2 }}>{categoryName}</div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Brand</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 2 }}>{brandName}</div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Unit of Measure</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 2 }}>{unitVal}</div>
+                            </div>
+                            <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>HSN / SAC Code</span>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 2 }}>{hsnVal}</div>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Footer */}
-                    <div style={{
-                        display: 'flex',
-                        justifyContent: 'flex-end',
-                        gap: 10,
-                        marginTop: 10
-                    }}>
+                    {/* Section: Pricing & Tax Breakdown */}
+                    <div style={{ background: '#f8fafc', padding: 16, borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                        <h4 style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 12px 0' }}>
+                            Pricing & Taxation Details
+                        </h4>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+                            <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>MRP (₹)</span>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                                    {mrpVal !== '—' && !isNaN(Number(mrpVal)) ? `₹${Number(mrpVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : (mrpVal || '—')}
+                                </div>
+                                <span style={{ fontSize: 10, color: '#059669', fontWeight: 600 }}>Inclusive of all taxes (GST)</span>
+                            </div>
+
+                            <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Selling Price (₹)</span>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: '#4f46e5', marginTop: 2 }}>
+                                    {sellingPriceVal !== '—' && !isNaN(Number(sellingPriceVal)) ? `₹${Number(sellingPriceVal).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : (sellingPriceVal || '—')}
+                                </div>
+                                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>Exclusive of GST (tax added at billing)</span>
+                            </div>
+
+                            <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>GST Rate</span>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: '#0f172a', marginTop: 2 }}>
+                                    {gstRateVal}
+                                </div>
+                                <span style={{ fontSize: 10, color: '#64748b', fontWeight: 500 }}>Standard statutory rate</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section: Dates & Expiry */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                        <div style={{ background: '#fff', padding: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                            <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>Manufacturing Date</span>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 4 }}>
+                                {mfgDateVal}
+                            </div>
+                        </div>
+                        <div style={{ background: isExpired ? '#fef2f2' : '#fff', padding: 12, borderRadius: 8, border: isExpired ? '1px solid #fecaca' : '1px solid #e5e7eb' }}>
+                            <span style={{ fontSize: 11, color: isExpired ? '#dc2626' : '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>
+                                Expiry Date {isExpired && '(Expired)'}
+                            </span>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: isExpired ? '#dc2626' : '#111827', marginTop: 4 }}>
+                                {expDateVal}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Section: Description */}
+                    <div style={{ background: '#fff', padding: 14, borderRadius: 8, border: '1px solid #e5e7eb' }}>
+                        <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Description</span>
+                        <p style={{ fontSize: 13, color: '#374151', margin: '6px 0 0 0', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                            {descVal}
+                        </p>
+                    </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div style={{
+                    padding: '14px 24px',
+                    borderTop: '1px solid #e5e7eb',
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    gap: 10,
+                    background: '#f9fafb'
+                }}>
+                    <button
+                        type="button"
+                        className="adm-btn-secondary"
+                        onClick={onClose}
+                        style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#374151' }}
+                    >
+                        Close
+                    </button>
+                    {onEdit && (
                         <button
                             type="button"
-                            className="adm-btn-secondary"
-                            onClick={onClose}
-                            style={{ padding: '8px 16px' }}
-                        >
-                            Cancel
-                        </button>
-
-                        <button
-                            type="submit"
                             className="adm-btn-primary"
-                            disabled={saving}
-                            onClick={handleSubmit}
-                            style={{ padding: '8px 16px' }}
+                            onClick={() => { onClose(); onEdit(product); }}
+                            style={{ padding: '8px 18px', borderRadius: 8, background: '#4f46e5', border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center', gap: 6 }}
                         >
-                            {saving ? 'Saving…' : (isNew ? 'Create Product' : 'Update Product')}
+                            <BsPencilFill size={12} /> Edit Product
                         </button>
-                    </div>
-                </form>
+                    )}
+                </div>
             </div>
         </div>
-    </>
     );
 };
 
@@ -2162,12 +2518,16 @@ const Products = () => {
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [kpiFilter, setKpiFilter] = useState('all'); // 'all' | 'featured' | 'categories' | 'expirySoon'
+    const [showSoftDeleted, setShowSoftDeleted] = useState(false);
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
     const [modal, setModal] = useState(null);
+    const [viewProduct, setViewProduct] = useState(null);
     const [showVariantModal, setShowVariantModal] = useState(false);
     const [editLoadingId, setEditLoadingId] = useState(null);
     const [togglingId, setTogglingId] = useState(null);
     const [deletingId, setDeletingId] = useState(null);
+    const [generatingBarcodeId, setGeneratingBarcodeId] = useState(null);
     const [previewImage, setPreviewImage] = useState(null);
     const [previewError, setPreviewError] = useState(false);
     const [brokenImages, setBrokenImages] = useState(new Set());
@@ -2300,22 +2660,20 @@ const Products = () => {
     }, [debouncedSearch]);
 
     useEffect(() => {
-        if (kpiFilter === 'expirySoon') {
-            const fetchBackendExpiring = async () => {
-                try {
-                    const u = JSON.parse(localStorage.getItem('user') || '{}');
-                    const storeId = u.store_id || u.storeId || 1;
-                    const res = await productService.getExpiringSoon(storeId, 30);
-                    const list = res?.data ?? res;
-                    if (Array.isArray(list) && list.length > 0) {
-                        setBackendExpiringIds(new Set(list.map(x => x.id)));
-                    }
-                } catch {
-                    // Fall back to client-side date inspection
+        const fetchBackendExpiring = async () => {
+            try {
+                const u = JSON.parse(localStorage.getItem('user') || '{}');
+                const storeId = u.store_id || u.storeId || 1;
+                const res = await productService.getExpiringSoon(storeId, 30);
+                const list = res?.data ?? res;
+                if (Array.isArray(list) && list.length > 0) {
+                    setBackendExpiringIds(new Set(list.map(x => x.id)));
                 }
-            };
-            fetchBackendExpiring();
-        }
+            } catch {
+                // Fall back to client-side date inspection
+            }
+        };
+        fetchBackendExpiring();
     }, [kpiFilter]);
 
     useEffect(() => {
@@ -2324,18 +2682,23 @@ const Products = () => {
 
     // KPI Metrics calculation
     const kpiStats = useMemo(() => {
-        const total = products.length;
-        const featured = products.filter(p => Boolean(p.featured)).length;
+        const activeList = products.filter(p => !p.is_soft_deleted);
+        const total = activeList.length;
+        const featured = activeList.filter(p => Boolean(p.featured)).length;
         const categorySet = new Set(
-            products.map(p => p.category).filter(c => c && c !== '—')
+            activeList.map(p => p.category).filter(c => c && c !== '—')
         );
         const categoriesCount = categories.length > 0 ? categories.length : categorySet.size;
 
         // Expiry Soon: products expiring within the next 30 days, excluding already expired
-        const expirySoon = products.filter(p => !p.is_expired && (backendExpiringIds.has(p.id) || isNearlyExpiry(p))).length;
+        const expirySoon = activeList.filter(p => !p.is_expired && (backendExpiringIds.has(p.id) || isNearlyExpiry(p))).length;
 
         return { total, featured, categories: categoriesCount, expirySoon };
     }, [products, categories, backendExpiringIds]);
+
+    const softDeletedCount = useMemo(() => {
+        return products.filter(p => Boolean(p.is_soft_deleted)).length;
+    }, [products]);
 
     const categoryFilterList = useMemo(() => {
         const set = new Set();
@@ -2354,9 +2717,16 @@ const Products = () => {
         return Array.from(set);
     }, [categories, products]);
 
-    // Filter by KPI filter, Category, and Search query
+    // Filter by Soft-Delete view, KPI filter, Category, and Search query
     const filtered = useMemo(() => {
         let list = products;
+
+        // 0. Soft-delete segregation
+        if (showSoftDeleted) {
+            list = list.filter(p => Boolean(p.is_soft_deleted));
+        } else {
+            list = list.filter(p => !p.is_soft_deleted);
+        }
 
         // 1. KPI Card Filter
         if (kpiFilter === 'featured') {
@@ -2392,6 +2762,7 @@ const Products = () => {
                     (p.name || '').toLowerCase().includes(q) ||
                     (p.sku || '').toLowerCase().includes(q) ||
                     (p.barcode || '').toLowerCase().includes(q) ||
+                    (p.hsn_code || p.hsnCode || '').toLowerCase().includes(q) ||
                     (p.brand || '').toLowerCase().includes(q) ||
                     (p.category || '').toLowerCase().includes(q) ||
                     isMatchStatus
@@ -2400,12 +2771,12 @@ const Products = () => {
         }
 
         return list;
-    }, [products, search, selectedCategory, kpiFilter]);
+    }, [products, search, selectedCategory, kpiFilter, showSoftDeleted]);
 
-    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-    const start = (page - 1) * PAGE_SIZE + 1;
-    const end = Math.min(page * PAGE_SIZE, filtered.length);
-    const paginated = filtered.slice(start - 1, end);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    const start = filtered.length === 0 ? 0 : (page - 1) * pageSize + 1;
+    const end = Math.min(page * pageSize, filtered.length);
+    const paginated = filtered.slice(Math.max(0, start - 1), end);
 
     const handleSave = async (payload, id, originalForm, originalProduct) => {
         let savedProduct = null;
@@ -2495,7 +2866,27 @@ const Products = () => {
             }
         }
 
+        if (id) {
+            notificationService.success(`Product "${payload.name || originalForm?.name || 'Item'}" updated successfully.`);
+        } else {
+            notificationService.success(`Product "${payload.name || originalForm?.name || 'Item'}" created successfully.`);
+        }
+
         await fetchProducts(categoryMap, debouncedSearch);
+    };
+
+    const handleOpenViewModal = async (p) => {
+        if (!p) return;
+        setViewProduct(p);
+        try {
+            const res = await productService.getById(p.id);
+            const detailed = res?.data ?? res;
+            if (detailed) {
+                setViewProduct(prev => (prev && String(prev.id) === String(p.id) ? { ...p, ...detailed } : prev));
+            }
+        } catch (err) {
+            console.warn('Could not fetch detailed product in background, continuing with row data:', err);
+        }
     };
 
     const handleOpenEditModal = async (p) => {
@@ -2515,8 +2906,69 @@ const Products = () => {
         }
     };
 
+    const handleSoftDelete = async (product) => {
+        if (!product) return;
+        const confirmMsg = `Soft-delete expired product "${product.name}"?\nIt will be safely archived without deleting database records and excluded from the active listing.`;
+        if (!window.confirm(confirmMsg)) return;
+
+        setDeletingId(product.id);
+        try {
+            if (product.id && product.is_active !== false) {
+                try {
+                    await productService.update(product.id, { is_active: false });
+                } catch (e) {
+                    console.warn('Backend update failed, persisting soft delete locally:', e);
+                }
+            }
+            saveLocalProductMeta(product.id, product.sku, {
+                soft_deleted: true,
+                soft_deleted_at: new Date().toISOString()
+            });
+
+            setProducts(prev => prev.map(p =>
+                p.id === product.id ? { ...p, is_soft_deleted: true, status: false, is_active: false } : p
+            ));
+            notificationService.success(`Expired product "${product.name}" soft-deleted.`);
+        } catch (err) {
+            console.error('Error soft-deleting product:', err);
+            notificationService.error('Could not soft-delete product: ' + (err?.message || err));
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
+    const handleRestoreProduct = async (product) => {
+        if (!product) return;
+        const confirmMsg = `Restore expired product "${product.name}" back to the active products list?`;
+        if (!window.confirm(confirmMsg)) return;
+
+        setDeletingId(product.id);
+        try {
+            saveLocalProductMeta(product.id, product.sku, {
+                soft_deleted: false,
+                restored_at: new Date().toISOString()
+            });
+
+            setProducts(prev => prev.map(p =>
+                p.id === product.id ? { ...p, is_soft_deleted: false } : p
+            ));
+            notificationService.success(`Product "${product.name}" restored successfully.`);
+        } catch (err) {
+            console.error('Error restoring product:', err);
+            notificationService.error('Could not restore product: ' + (err?.message || err));
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
     const handleDelete = async (id) => {
         if (deletingId === id) return;
+        const prod = products.find(p => p.id === id);
+        if (prod && (prod.is_expired || isProductExpired(prod))) {
+            await handleSoftDelete(prod);
+            return;
+        }
+
         if (!window.confirm('Are you sure you want to delete this product?')) {
             return;
         }
@@ -2524,12 +2976,12 @@ const Products = () => {
         setDeletingId(id);
         try {
             await productService.delete(id);
-            const prod = products.find(p => p.id === id);
             removeLocalProductMeta(id, prod?.sku);
+            notificationService.success(`Product "${prod?.name || 'Item'}" deleted successfully.`);
             await fetchProducts(categoryMap, debouncedSearch);
         } catch (err) {
             const detail = err?.response?.data?.detail;
-            alert(
+            notificationService.error(
                 'Could not delete product: ' +
                 (typeof detail === 'string'
                     ? detail
@@ -2543,17 +2995,18 @@ const Products = () => {
     const toggleStatus = async (p) => {
         if (togglingId === p.id) return;
         if (p.is_expired || isProductExpired(p)) {
-            alert('Cannot activate an expired product. Please update the expiry date first.');
+            notificationService.warning('Cannot activate an expired product. Please update the expiry date first.');
             return;
         }
         setTogglingId(p.id);
 
         try {
             await productService.toggleStatus(p.id);
+            notificationService.success(`Product "${p.name}" status updated to ${!p.status ? 'Active' : 'Inactive'}.`);
             await fetchProducts(categoryMap, debouncedSearch);
         } catch (err) {
             const detail = err?.response?.data?.detail;
-            alert(
+            notificationService.error(
                 'Status update failed: ' +
                 (typeof detail === 'string'
                     ? detail
@@ -2567,9 +3020,10 @@ const Products = () => {
     const exportCSV = () => {
         const headers = [
             'Product Name',
-            'Category Name',
-            'Barcode Number',
             'SKU',
+            'Category Name',
+            'HSN Code',
+            'Barcode Number',
             'MRP',
             'Selling Price',
             'GST',
@@ -2579,9 +3033,10 @@ const Products = () => {
 
         const rows = filtered.map(p => [
             p.name,
-            p.category,
-            p.barcode,
             p.sku,
+            p.category,
+            p.hsn_code || p.hsnCode || '',
+            p.barcode,
             p.mrp ?? p.cost_price ?? '',
             p.sellingPrice ?? p.price ?? p.selling_price ?? '',
             p.gst_rate || p.gst,
@@ -2606,15 +3061,11 @@ const Products = () => {
         a.click();
 
         URL.revokeObjectURL(url);
+        notificationService.success('Products exported to CSV successfully!');
     };
 
     return (
-        <div style={{
-            padding: '24px 32px',
-            background: '#f8f9fb',
-            minHeight: '100vh',
-            fontFamily: 'inherit'
-        }}>
+        <PageContainer>
             <style>
                 {`
                 input[type="number"]::-webkit-inner-spin-button,
@@ -2713,42 +3164,6 @@ const Products = () => {
                     box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
                 }
 
-                .kpi-card-clickable {
-                    cursor: pointer;
-                    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
-                    user-select: none;
-                }
-
-                .kpi-card-clickable:hover {
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-                    border-color: #cbd5e1 !important;
-                }
-
-                .kpi-card-clickable.active-total {
-                    border-color: #2563eb !important;
-                    background: #f0f7ff !important;
-                    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
-                }
-
-                .kpi-card-clickable.active-featured {
-                    border-color: #6366f1 !important;
-                    background: #f5f3ff !important;
-                    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
-                }
-
-                .kpi-card-clickable.active-categories {
-                    border-color: #0891b2 !important;
-                    background: #ecfeff !important;
-                    box-shadow: 0 0 0 2px rgba(8, 145, 178, 0.18);
-                }
-
-                .kpi-card-clickable.active-expiry {
-                    border-color: #f59e0b !important;
-                    background: #fffbeb !important;
-                    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
-                }
-
                 .prod-thumb-clickable {
                     cursor: pointer !important;
                     pointer-events: auto !important;
@@ -2766,251 +3181,251 @@ const Products = () => {
                 `}
             </style>
 
-            {/* 1. TOP HEADER */}
+            {/* 1. TOP HEADER - Dashboard Standard PageHeader */}
+            <PageHeader
+                title="Product Master"
+                subtitle="Manage your POS product catalog, pricing and tax settings"
+                actions={
+                    <>
+                        <button
+                            type="button"
+                            className="adm-btn-secondary"
+                            onClick={exportCSV}
+                            title="Export products to CSV"
+                        >
+                            <BsDownload size={14} />
+                            Export
+                        </button>
+
+                        <button
+                            type="button"
+                            className="adm-btn-primary"
+                            onClick={() => setShowVariantModal(true)}
+                            title="Manage product variants"
+                        >
+                            <BsGrid3X3Gap size={14} />
+                            Product Variant
+                        </button>
+
+                        <button
+                            type="button"
+                            className="adm-btn-primary"
+                            onClick={() => setModal('new')}
+                            title="Create a new product"
+                        >
+                            <BsPlus size={18} />
+                            Add Product
+                        </button>
+                    </>
+                }
+            />
+
+            {/* 2. KPI METRIC CARDS - Standard Dashboard KpiGrid & KpiCard */}
+            <KpiGrid columns={4}>
+                <KpiCard
+                    variant="revenue"
+                    icon={<BsBoxSeam />}
+                    title="Total Products"
+                    value={kpiStats.total}
+                    subtitle="In product catalog"
+                    active={kpiFilter === 'all'}
+                    onClick={() => setKpiFilter('all')}
+                />
+                <KpiCard
+                    variant="profit"
+                    icon={<BsStarFill />}
+                    title="Featured"
+                    value={kpiStats.featured}
+                    subtitle="Promoted catalog items"
+                    active={kpiFilter === 'featured'}
+                    onClick={() => setKpiFilter(prev => prev === 'featured' ? 'all' : 'featured')}
+                />
+                <KpiCard
+                    variant="margin"
+                    icon={<BsTagFill />}
+                    title="Categories"
+                    value={kpiStats.categories}
+                    subtitle="Product groupings"
+                    active={kpiFilter === 'categories'}
+                    onClick={() => setKpiFilter(prev => prev === 'categories' ? 'all' : 'categories')}
+                />
+                <KpiCard
+                    variant="cost"
+                    icon={<BsClockHistory />}
+                    title="Expiry Soon"
+                    value={kpiStats.expirySoon}
+                    subtitle="Near expiration threshold"
+                    active={kpiFilter === 'expirySoon'}
+                    onClick={() => setKpiFilter(prev => prev === 'expirySoon' ? 'all' : 'expirySoon')}
+                />
+            </KpiGrid>
+
+            {/* 3. SEARCH BAR, CATEGORY FILTER & SOFT DELETED PRODUCTS IN SINGLE HORIZONTAL ROW */}
             <div style={{
                 display: 'flex',
-                alignItems: 'flex-start',
-                justifyContent: 'space-between',
-                marginBottom: 24,
-                flexWrap: 'wrap',
-                gap: 12
+                gap: 12,
+                alignItems: 'center',
+                marginBottom: 16,
+                flexWrap: 'wrap'
             }}>
-                <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 22 }}>🛒</span>
-                        <h2 style={{
-                            fontSize: 22,
-                            fontWeight: 700,
+                {/* Search Bar */}
+                <div style={{
+                    flex: '1 1 320px',
+                    minWidth: 240,
+                    display: 'flex',
+                    alignItems: 'center',
+                    background: '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 10,
+                    padding: '0 16px',
+                    height: 42,
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                    boxSizing: 'border-box'
+                }}>
+                    <BsSearch style={{ color: '#9ca3af', marginRight: 12, flexShrink: 0 }} size={16} />
+                    <input
+                        value={search}
+                        onChange={e => {
+                            setSearch(e.target.value);
+                            setPage(1);
+                        }}
+                        placeholder="Search products, barcode or brand..."
+                        style={{
+                            border: 'none',
+                            outline: 'none',
+                            width: '100%',
+                            fontSize: 13,
                             color: '#111827',
-                            margin: 0
-                        }}>
-                            Product Master
-                        </h2>
-                    </div>
-                    <p style={{
-                        fontSize: 13,
-                        color: '#6b7280',
-                        marginTop: 4,
-                        marginBottom: 0
-                    }}>
-                        Manage your POS product catalog, pricing and tax settings
-                    </p>
+                            background: 'transparent'
+                        }}
+                    />
+                    {search && (
+                        <button
+                            type="button"
+                            onClick={() => setSearch('')}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#9ca3af',
+                                cursor: 'pointer',
+                                fontSize: 14,
+                                padding: '0 4px',
+                                display: 'flex',
+                                alignItems: 'center'
+                            }}
+                            title="Clear search"
+                        >
+                            ✕
+                        </button>
+                    )}
                 </div>
 
+                {/* Category Filter Dropdown */}
+                <div style={{
+                    flex: '0 1 240px',
+                    minWidth: 180,
+                    display: 'flex',
+                    alignItems: 'center',
+                    background: '#ffffff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 10,
+                    padding: '0 14px',
+                    height: 42,
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                    boxSizing: 'border-box'
+                }}>
+                    <select
+                        value={selectedCategory}
+                        onChange={e => {
+                            setSelectedCategory(e.target.value);
+                            setPage(1);
+                        }}
+                        style={{
+                            border: 'none',
+                            outline: 'none',
+                            width: '100%',
+                            fontSize: 13,
+                            color: selectedCategory === 'All' ? '#6b7280' : '#111827',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            fontWeight: 500
+                        }}
+                    >
+                        <option value="All">All Categories</option>
+                        {categoryFilterList.map(cat => (
+                            <option key={cat} value={cat}>
+                                {cat}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {/* Soft Deleted Products Option */}
+                <button
+                    type="button"
+                    onClick={() => { setShowSoftDeleted(prev => !prev); setPage(1); }}
+                    style={{
+                        padding: '0 16px',
+                        height: 42,
+                        borderRadius: 10,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        border: showSoftDeleted ? '1px solid #ef4444' : '1px solid #e5e7eb',
+                        background: showSoftDeleted ? '#fef2f2' : '#ffffff',
+                        color: showSoftDeleted ? '#dc2626' : '#6b7280',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        whiteSpace: 'nowrap',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                        boxSizing: 'border-box',
+                        flexShrink: 0
+                    }}
+                    title="Toggle view of soft-deleted products"
+                >
+                    Soft Deleted Products ({softDeletedCount})
+                </button>
+            </div>
+
+            {/* Soft-Deleted Expired Products Banner */}
+            {showSoftDeleted && (
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 10,
-                    flexWrap: 'wrap'
+                    justifyContent: 'space-between',
+                    padding: '10px 16px',
+                    marginBottom: 16,
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: 10,
+                    fontSize: 13,
+                    color: '#991b1b'
                 }}>
+                    <span>
+                        <strong>Soft-Deleted Expired Archive:</strong> These expired products are hidden from the active listing, stock operations, and POS billing. Click "Restore" on any product to return it to the active product list.
+                    </span>
                     <button
-                        className="adm-btn-secondary"
-                        onClick={exportCSV}
+                        type="button"
+                        onClick={() => { setShowSoftDeleted(false); setPage(1); }}
                         style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '8px 16px',
-                            background: '#fff',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 500,
+                            background: '#ffffff',
+                            border: '1px solid #fca5a5',
+                            borderRadius: 6,
+                            padding: '4px 10px',
+                            fontSize: 12,
+                            color: '#b91c1c',
                             cursor: 'pointer',
-                            color: '#374151'
+                            fontWeight: 600
                         }}
                     >
-                        <BsDownload size={14} />
-                        Export
-                    </button>
-
-                    <button
-                        className="adm-btn-secondary"
-                        onClick={() => setShowVariantModal(true)}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '8px 16px',
-                            background: '#fff',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 500,
-                            cursor: 'pointer',
-                            color: '#374151'
-                        }}
-                    >
-                        <BsGrid3X3Gap size={14} />
-                        Product Variant
-                    </button>
-
-                    <button
-                        className="adm-btn-primary"
-                        onClick={() => setModal('new')}
-                        style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '8px 18px',
-                            background: '#6366f1',
-                            border: 'none',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            color: '#fff'
-                        }}
-                    >
-                        <BsPlus size={18} />
-                        Add Product
+                        Back to Active Products
                     </button>
                 </div>
-            </div>
+            )}
 
-            {/* 2. KPI METRIC CARDS (ALL IN 1 SINGLE ROW) */}
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: 16,
-                marginBottom: 24,
-                width: '100%'
-            }}>
-                {/* Total Products */}
-                <div
-                    className={`kpi-card-clickable ${kpiFilter === 'all' ? 'active-total' : ''}`}
-                    onClick={() => setKpiFilter('all')}
-                    title="Click to view all products"
-                    style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        padding: '16px 20px',
-                        border: '1px solid #edf0f2',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6
-                    }}
-                >
-                    <div style={{ fontSize: 20 }}>📦</div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
-                        TOTAL PRODUCTS
-                    </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#2563eb' }}>
-                        {kpiStats.total}
-                    </span>
-                </div>
-
-                {/* Featured */}
-                <div
-                    className={`kpi-card-clickable ${kpiFilter === 'featured' ? 'active-featured' : ''}`}
-                    onClick={() => setKpiFilter(prev => prev === 'featured' ? 'all' : 'featured')}
-                    title="Click to filter featured products"
-                    style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        padding: '16px 20px',
-                        border: '1px solid #edf0f2',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6
-                    }}
-                >
-                    <div style={{ fontSize: 20, color: '#eab308' }}>
-                        <BsStarFill size={20} />
-                    </div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
-                        FEATURED
-                    </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#6366f1' }}>
-                        {kpiStats.featured}
-                    </span>
-                </div>
-
-                {/* Categories */}
-                <div
-                    className={`kpi-card-clickable ${kpiFilter === 'categories' ? 'active-categories' : ''}`}
-                    onClick={() => setKpiFilter(prev => prev === 'categories' ? 'all' : 'categories')}
-                    title="Click to filter products with category"
-                    style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        padding: '16px 20px',
-                        border: '1px solid #edf0f2',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6
-                    }}
-                >
-                    <div style={{ fontSize: 20 }}>🏷️</div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
-                        CATEGORIES
-                    </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#0891b2' }}>
-                        {kpiStats.categories}
-                    </span>
-                </div>
-
-                {/* Expiry Soon */}
-                <div
-                    className={`kpi-card-clickable ${kpiFilter === 'expirySoon' ? 'active-expiry' : ''}`}
-                    onClick={() => setKpiFilter(prev => prev === 'expirySoon' ? 'all' : 'expirySoon')}
-                    title="Click to view products expiring within 30 days"
-                    style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        padding: '16px 20px',
-                        border: '1px solid #edf0f2',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6
-                    }}
-                >
-                    <div style={{ fontSize: 20 }}>⏳</div>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#9ca3af', letterSpacing: '0.04em' }}>
-                        EXPIRY SOON
-                    </span>
-                    <span style={{ fontSize: 24, fontWeight: 700, color: '#f59e0b' }}>
-                        {kpiStats.expirySoon}
-                    </span>
-                </div>
-            </div>
-
-            {/* 3. CATEGORY PILL LIST */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                overflowX: 'auto',
-                paddingBottom: 6,
-                marginBottom: 16,
-                scrollbarWidth: 'none'
-            }}>
-                {['All', ...categoryFilterList].map(cat => {
-                    const isSelected = String(selectedCategory || '').trim().toLowerCase() === String(cat || '').trim().toLowerCase();
-                    return (
-                        <button
-                            key={cat}
-                            type="button"
-                            className={`cat-pill ${isSelected ? 'active' : ''}`}
-                            onClick={() => {
-                                setSelectedCategory(cat);
-                                setPage(1);
-                            }}
-                            aria-pressed={isSelected}
-                            title={`Filter by ${cat}`}
-                        >
-                            {isSelected && <span className="cat-pill-dot" />}
-                            <span>{cat}</span>
-                        </button>
-                    );
-                })}
-            </div>
-
-{/* Active KPI Filter Banner */}
+            {/* Active KPI Filter Banner */}
             {kpiFilter !== 'all' && (
                 <div style={{
                     display: 'flex',
@@ -3032,16 +3447,16 @@ const Products = () => {
                             borderRadius: 6,
                             background:
                                 kpiFilter === 'featured' ? '#eef2ff' :
-                                kpiFilter === 'categories' ? '#ecfeff' :
-                                '#fffbeb',
+                                    kpiFilter === 'categories' ? '#ecfeff' :
+                                        '#fffbeb',
                             color:
                                 kpiFilter === 'featured' ? '#4f46e5' :
-                                kpiFilter === 'categories' ? '#0e7490' :
-                                '#b45309',
+                                    kpiFilter === 'categories' ? '#0e7490' :
+                                        '#b45309',
                             border:
                                 kpiFilter === 'featured' ? '1px solid #c7d2fe' :
-                                kpiFilter === 'categories' ? '1px solid #a5f3fc' :
-                                '1px solid #fde68a'
+                                    kpiFilter === 'categories' ? '1px solid #a5f3fc' :
+                                        '1px solid #fde68a'
                         }}>
                             {kpiFilter === 'featured' && `⭐ Featured Products (${filtered.length})`}
                             {kpiFilter === 'categories' && `🏷️ Categorized Products (${filtered.length})`}
@@ -3075,9 +3490,10 @@ const Products = () => {
                 borderRadius: 12,
                 boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
                 overflow: 'hidden',
-                border: '1px solid #edf0f2'
+                border: '1px solid #edf0f2',
+                width: '100%'
             }}>
-                <div className="table-scroll custom-scrollbar">
+                <div className="table-scroll custom-scrollbar" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                     <table style={{
                         width: '100%',
                         minWidth: 1100,
@@ -3090,7 +3506,9 @@ const Products = () => {
                                 borderBottom: '1px solid #e5e7eb'
                             }}>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Product Name</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>SKU</th>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Category Name</th>
+                                <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>HSN Code</th>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Barcode Number</th>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>MRP</th>
                                 <th style={{ padding: '14px 16px', textAlign: 'left', color: '#6b7280', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>SELLING PRICE</th>
@@ -3104,7 +3522,7 @@ const Products = () => {
                             {loading && (
                                 <tr>
                                     <td
-                                        colSpan={8}
+                                        colSpan={10}
                                         style={{
                                             padding: 48,
                                             textAlign: 'center',
@@ -3119,7 +3537,7 @@ const Products = () => {
                             {error && !loading && (
                                 <tr>
                                     <td
-                                        colSpan={8}
+                                        colSpan={10}
                                         style={{
                                             padding: 48,
                                             textAlign: 'center',
@@ -3157,8 +3575,11 @@ const Products = () => {
                                     <td style={{ padding: '12px 16px' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                             {(() => {
-                                                const imgUrl = getProductImageUrl(p);
-                                                const isBroken = Boolean(!imgUrl || brokenImages.has(imgUrl) || brokenImages.has(String(p.id)));
+                                                const rawImg = getProductImageUrl(p);
+                                                const isBroken = Boolean(brokenImages.has(rawImg) || brokenImages.has(String(p.id)));
+                                                const imgUrl = (!rawImg || isBroken)
+                                                    ? resolveProductImage({ name: p.name, category: p.category_name || p.category, ...p })
+                                                    : rawImg;
 
                                                 return (
                                                     <div
@@ -3167,7 +3588,7 @@ const Products = () => {
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             openImagePreview({
-                                                                url: isBroken ? null : imgUrl,
+                                                                url: imgUrl,
                                                                 name: p.name || 'Product Image',
                                                                 sku: p.sku || ''
                                                             }, p.id);
@@ -3176,70 +3597,73 @@ const Products = () => {
                                                             if (e.key === 'Enter' || e.key === ' ') {
                                                                 e.stopPropagation();
                                                                 openImagePreview({
-                                                                    url: isBroken ? null : imgUrl,
+                                                                    url: imgUrl,
                                                                     name: p.name || 'Product Image',
                                                                     sku: p.sku || ''
                                                                 }, p.id);
                                                             }
                                                         }}
                                                         className="prod-thumb-clickable"
-                                                        title={imgUrl && !isBroken ? "Click to view full image" : "Click to view product image"}
+                                                        title="Click to view full image"
                                                         style={{
-                                                            width: 40,
-                                                            height: 40,
-                                                            borderRadius: 8,
+                                                            width: 50,
+                                                            height: 50,
+                                                            borderRadius: 10,
                                                             overflow: 'hidden',
                                                             cursor: 'pointer',
                                                             flexShrink: 0,
-                                                            border: '1px solid #e5e7eb',
-                                                            background: '#f9fafb',
+                                                            border: '1.5px solid #edf2f7',
+                                                            background: '#ffffff',
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
                                                             pointerEvents: 'auto',
                                                             position: 'relative',
                                                             userSelect: 'none',
+                                                            padding: 2,
+                                                            boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
                                                         }}
                                                     >
-                                                        {imgUrl && !isBroken ? (
-                                                            <img
-                                                                src={imgUrl}
-                                                                alt={p.name || 'Product'}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    openImagePreview({
-                                                                        url: imgUrl,
-                                                                        name: p.name || 'Product Image',
-                                                                        sku: p.sku || ''
-                                                                    }, p.id);
-                                                                }}
-                                                                onError={() => {
+                                                        <img
+                                                            src={imgUrl}
+                                                            alt={p.name || 'Product'}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                openImagePreview({
+                                                                    url: imgUrl,
+                                                                    name: p.name || 'Product Image',
+                                                                    sku: p.sku || ''
+                                                                }, p.id);
+                                                            }}
+                                                            onError={(e) => {
+                                                                if (!e.target.dataset.triedFallback) {
+                                                                    e.target.dataset.triedFallback = 'true';
+                                                                    e.target.src = resolveProductImage({ name: p.name, category: p.category_name || p.category });
+                                                                } else {
                                                                     setBrokenImages(prev => {
                                                                         const next = new Set(prev);
                                                                         if (imgUrl) next.add(imgUrl);
                                                                         if (p.id) next.add(String(p.id));
                                                                         return next;
                                                                     });
-                                                                }}
-                                                                style={{
-                                                                    width: '100%',
-                                                                    height: '100%',
-                                                                    objectFit: 'cover',
-                                                                    display: 'block',
-                                                                    cursor: 'pointer',
-                                                                    pointerEvents: 'auto'
-                                                                }}
-                                                            />
-                                                        ) : (
-                                                            <BsImage color="#9ca3af" size={18} style={{ pointerEvents: 'none' }} />
-                                                        )}
+                                                                }
+                                                            }}
+                                                            style={{
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                objectFit: 'contain',
+                                                                display: 'block',
+                                                                cursor: 'pointer',
+                                                                pointerEvents: 'auto'
+                                                            }}
+                                                        />
                                                     </div>
                                                 );
                                             })()}
                                             <div>
                                                 <div style={{ fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                                                     <span>{p.name}</span>
-                                                    {p.is_expired ? (
+                                                    {p.is_expired && (
                                                         <span style={{
                                                             fontSize: 10,
                                                             background: '#fef2f2',
@@ -3255,23 +3679,7 @@ const Products = () => {
                                                         }}>
                                                             ⚠️ EXPIRED
                                                         </span>
-                                                    ) : !p.status ? (
-                                                        <span style={{
-                                                            fontSize: 10,
-                                                            background: '#f3f4f6',
-                                                            color: '#6b7280',
-                                                            border: '1px solid #e5e7eb',
-                                                            padding: '1px 6px',
-                                                            borderRadius: 12,
-                                                            fontWeight: 700,
-                                                            letterSpacing: '0.03em',
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 2
-                                                        }}>
-                                                            INACTIVE
-                                                        </span>
-                                                    ) : null}
+                                                    )}
                                                     {p.featured && (
                                                         <span style={{
                                                             fontSize: 10,
@@ -3289,11 +3697,22 @@ const Products = () => {
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-                                                    {p.sku}
-                                                </div>
+                                                {p.brand ? (
+                                                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                                                        {p.brand}
+                                                    </div>
+                                                ) : null}
                                             </div>
                                         </div>
+                                    </td>
+
+                                    <td style={{
+                                        padding: '12px 16px',
+                                        color: '#111827',
+                                        fontWeight: 600,
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {p.sku && String(p.sku).trim() ? String(p.sku).trim() : '—'}
                                     </td>
 
                                     <td style={{ padding: '12px 16px' }}>
@@ -3338,6 +3757,17 @@ const Products = () => {
 
                                     <td style={{
                                         padding: '12px 16px',
+                                        color: '#4b5563',
+                                        fontWeight: 500,
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {(p.hsn_code || p.hsnCode || p.hsn) && String(p.hsn_code || p.hsnCode || p.hsn).trim()
+                                            ? String(p.hsn_code || p.hsnCode || p.hsn).trim()
+                                            : '—'}
+                                    </td>
+
+                                    <td style={{
+                                        padding: '12px 16px',
                                         color: '#111827',
                                         fontWeight: 500,
                                         whiteSpace: 'nowrap'
@@ -3357,16 +3787,60 @@ const Products = () => {
                                                         URL.revokeObjectURL(url);
                                                     } catch (err) {
                                                         console.warn('Barcode download failed', err);
-                                                        alert(`Barcode: ${p.barcode}`);
+                                                        notificationService.info(`Barcode: ${p.barcode}`);
                                                     }
                                                 }}
                                                 title="Click to download barcode image"
-                                                style={{ cursor: 'pointer', color: '#4f46e5', textDecoration: 'underline dotted' }}
+                                                style={{ cursor: 'pointer', color: '#4f46e5', textDecoration: 'underline dotted', display: 'inline-flex', alignItems: 'center', gap: 5 }}
                                             >
-                                                {p.barcode}
+                                                <span>{p.barcode}</span>
+                                                <BsDownload size={12} color="#6366f1" title="Download Barcode" />
                                             </span>
                                         ) : (
-                                            '—'
+                                            <button
+                                                type="button"
+                                                disabled={generatingBarcodeId === p.id}
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    if (generatingBarcodeId === p.id) return;
+                                                    setGeneratingBarcodeId(p.id);
+                                                    try {
+                                                        const res = await productService.generateBarcode(p.id, false);
+                                                        const candidateBarcode = (
+                                                            res?.data?.barcode ||
+                                                            res?.data?.data?.barcode ||
+                                                            res?.data?.product?.barcode ||
+                                                            res?.barcode ||
+                                                            (typeof res?.data === 'string' ? res.data : null)
+                                                        );
+                                                        if (candidateBarcode) {
+                                                            setProducts(prev => prev.map(prod => prod.id === p.id ? { ...prod, barcode: candidateBarcode } : prod));
+                                                            notificationService.success(`Barcode generated successfully: ${candidateBarcode}`);
+                                                        }
+                                                    } catch (err) {
+                                                        console.error('Failed to generate barcode:', err);
+                                                        const msg = err?.response?.data?.message ||
+                                                            (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
+                                                            err?.message || 'Failed to generate barcode';
+                                                        notificationService.error(`Failed to generate barcode: ${msg}`);
+                                                    } finally {
+                                                        setGeneratingBarcodeId(null);
+                                                    }
+                                                }}
+                                                title="Generate barcode for this product"
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#6366f1',
+                                                    fontSize: 11,
+                                                    fontWeight: 600,
+                                                    cursor: generatingBarcodeId === p.id ? 'wait' : 'pointer',
+                                                    textDecoration: 'underline',
+                                                    padding: 0
+                                                }}
+                                            >
+                                                {generatingBarcodeId === p.id ? 'Generating...' : '+ Generate'}
+                                            </button>
                                         )}
                                     </td>
 
@@ -3437,56 +3911,152 @@ const Products = () => {
                                         textAlign: 'center'
                                     }}>
                                         <div style={{
-                                            display: 'flex',
-                                            gap: 8,
+                                            display: 'inline-flex',
+                                            gap: 6,
                                             justifyContent: 'center',
                                             alignItems: 'center'
                                         }}>
-                                            <button
-                                                className="adm-btn-secondary"
-                                                style={{
-                                                    padding: '6px 8px',
-                                                    borderRadius: 6,
-                                                    border: '1px solid #e5e7eb',
-                                                    background: '#fff',
-                                                    cursor: p.is_expired ? 'not-allowed' : (togglingId === p.id ? 'wait' : 'pointer'),
-                                                    opacity: p.is_expired ? 0.7 : 1
-                                                }}
-                                                onClick={() => toggleStatus(p)}
-                                                disabled={togglingId === p.id || p.is_expired}
-                                                title={
-                                                    p.is_expired
-                                                        ? "Expired (Product has expired — Inactive)"
-                                                        : (p.status ? "Active (Click to deactivate)" : "Inactive (Click to activate)")
-                                                }
-                                            >
-                                                {p.is_expired ? (
-                                                    <BsToggleOff size={16} color="#ef4444" />
-                                                ) : p.status ? (
-                                                    <BsToggleOn size={16} color="#10b981" />
-                                                ) : (
-                                                    <BsToggleOff size={16} color="#9ca3af" />
-                                                )}
-                                            </button>
+                                            {showSoftDeleted ? (
+                                                <>
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            padding: 0,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#fff',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                        onClick={() => handleOpenViewModal(p)}
+                                                        title="View Product Details"
+                                                    >
+                                                        <BsEye size={14} color="#4f46e5" />
+                                                    </button>
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            padding: '0 10px',
+                                                            height: 28,
+                                                            borderRadius: 6,
+                                                            border: '1px solid #10b981',
+                                                            background: '#ecfdf5',
+                                                            color: '#059669',
+                                                            fontSize: 12,
+                                                            fontWeight: 600,
+                                                            cursor: deletingId === p.id ? 'wait' : 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 4
+                                                        }}
+                                                        onClick={() => handleRestoreProduct(p)}
+                                                        disabled={deletingId === p.id}
+                                                        title="Restore expired product to active list"
+                                                    >
+                                                        <BsArrowCounterclockwise size={13} />
+                                                        Restore
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            padding: 0,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#fff',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                        onClick={() => handleOpenViewModal(p)}
+                                                        title="View Product Details"
+                                                    >
+                                                        <BsEye size={14} color="#4f46e5" />
+                                                    </button>
 
-                                            <button
-                                                className="adm-btn-secondary"
-                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: 'pointer' }}
-                                                onClick={() => handleOpenEditModal(p)}
-                                                title="Edit"
-                                            >
-                                                <BsPencilFill size={13} color="#6366f1" />
-                                            </button>
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            padding: 0,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#fff',
+                                                            cursor: p.is_expired ? 'not-allowed' : (togglingId === p.id ? 'wait' : 'pointer'),
+                                                            opacity: p.is_expired ? 0.7 : 1
+                                                        }}
+                                                        onClick={() => toggleStatus(p)}
+                                                        disabled={togglingId === p.id || p.is_expired}
+                                                        title={
+                                                            p.is_expired
+                                                                ? "Expired (Product has expired — Inactive)"
+                                                                : (p.status ? "Active (Click to deactivate)" : "Inactive (Click to activate)")
+                                                        }
+                                                    >
+                                                        {p.is_expired ? (
+                                                            <BsToggleOff size={16} color="#ef4444" />
+                                                        ) : p.status ? (
+                                                            <BsToggleOn size={16} color="#10b981" />
+                                                        ) : (
+                                                            <BsToggleOff size={16} color="#9ca3af" />
+                                                        )}
+                                                    </button>
 
-                                            <button
-                                                className="adm-btn-secondary"
-                                                style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: deletingId === p.id ? 'wait' : 'pointer' }}
-                                                onClick={() => handleDelete(p.id)}
-                                                disabled={deletingId === p.id}
-                                                title="Delete"
-                                            >
-                                                <BsTrashFill size={13} color="#ef4444" />
-                                            </button>
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            padding: 0,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#fff',
+                                                            cursor: 'pointer'
+                                                        }}
+                                                        onClick={() => handleOpenEditModal(p)}
+                                                        title="Edit"
+                                                    >
+                                                        <BsPencilFill size={13} color="#6366f1" />
+                                                    </button>
+
+                                                    <button
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            padding: 0,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            borderRadius: 6,
+                                                            border: p.is_expired ? '1px solid #fca5a5' : '1px solid #e5e7eb',
+                                                            background: p.is_expired ? '#fef2f2' : '#fff',
+                                                            cursor: deletingId === p.id ? 'wait' : 'pointer'
+                                                        }}
+                                                        onClick={() => p.is_expired ? handleSoftDelete(p) : handleDelete(p.id)}
+                                                        disabled={deletingId === p.id}
+                                                        title={p.is_expired ? "Soft Delete Expired Product (Archive safely)" : "Delete"}
+                                                    >
+                                                        <BsTrashFill size={13} color="#ef4444" />
+                                                    </button>
+                                                </>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -3495,7 +4065,7 @@ const Products = () => {
                             {!loading && !error && paginated.length === 0 && (
                                 <tr>
                                     <td
-                                        colSpan={8}
+                                        colSpan={10}
                                         style={{
                                             padding: 48,
                                             textAlign: 'center',
@@ -3503,7 +4073,7 @@ const Products = () => {
                                             fontSize: 14
                                         }}
                                     >
-                                        No products found
+                                        {showSoftDeleted ? 'No soft-deleted expired products found' : 'No products found'}
                                     </td>
                                 </tr>
                             )}
@@ -3522,13 +4092,43 @@ const Products = () => {
                         flexWrap: 'wrap',
                         gap: 10
                     }}>
-                        <span style={{
-                            fontSize: 12,
-                            color: '#6b7280'
-                        }}>
-                            Showing {start}–{end} of {filtered.length}
-                            &nbsp;|&nbsp; Page {page} of {totalPages}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                            <span style={{
+                                fontSize: 12,
+                                color: '#6b7280'
+                            }}>
+                                Showing {start}–{end} of {filtered.length}
+                                &nbsp;|&nbsp; Page {page} of {totalPages}
+                            </span>
+
+                            {/* Entries Per Page Dropdown */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{ fontSize: 12, color: '#6b7280' }}>Entries per page:</span>
+                                <select
+                                    value={pageSize}
+                                    onChange={(e) => {
+                                        setPageSize(Number(e.target.value));
+                                        setPage(1);
+                                    }}
+                                    style={{
+                                        padding: '3px 8px',
+                                        borderRadius: 6,
+                                        border: '1px solid #d1d5db',
+                                        background: '#fff',
+                                        fontSize: 12,
+                                        color: '#374151',
+                                        cursor: 'pointer',
+                                        outline: 'none',
+                                        fontWeight: 500
+                                    }}
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={20}>20</option>
+                                    <option value={50}>50</option>
+                                    <option value={100}>100</option>
+                                </select>
+                            </div>
+                        </div>
 
                         <div style={{
                             display: 'flex',
@@ -3545,34 +4145,46 @@ const Products = () => {
                                 <BsChevronLeft size={12} />
                             </button>
 
-                            {Array.from(
-                                { length: totalPages },
-                                (_, i) => i + 1
-                            ).map(n => (
-                                <button
-                                    key={n}
-                                    onClick={() => setPage(n)}
-                                    style={{
-                                        width: 30,
-                                        height: 30,
-                                        borderRadius: 6,
-                                        border: `1.5px solid ${
-                                            n === page ? '#6366f1' : '#e5e7eb'
-                                        }`,
-                                        background: n === page
-                                            ? '#eef2ff'
-                                            : '#fff',
-                                        color: n === page
-                                            ? '#6366f1'
-                                            : '#6b7280',
-                                        fontSize: 12,
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    {n}
-                                </button>
-                            ))}
+                            {(() => {
+                                const pages = [];
+                                if (totalPages <= 7) {
+                                    for (let i = 1; i <= totalPages; i++) pages.push(i);
+                                } else {
+                                    pages.push(1);
+                                    let left = Math.max(2, page - 1);
+                                    let right = Math.min(totalPages - 1, page + 1);
+                                    if (left > 2) pages.push('...');
+                                    for (let i = left; i <= right; i++) pages.push(i);
+                                    if (right < totalPages - 1) pages.push('...');
+                                    pages.push(totalPages);
+                                }
+                                return pages.map((n, idx) => n === '...' ? (
+                                    <span key={`ellipsis-${idx}`} style={{ padding: '0 4px', color: '#9ca3af', fontSize: 12 }}>…</span>
+                                ) : (
+                                    <button
+                                        key={n}
+                                        onClick={() => setPage(n)}
+                                        style={{
+                                            width: 30,
+                                            height: 30,
+                                            borderRadius: 6,
+                                            border: `1.5px solid ${n === page ? '#6366f1' : '#e5e7eb'
+                                                }`,
+                                            background: n === page
+                                                ? '#eef2ff'
+                                                : '#fff',
+                                            color: n === page
+                                                ? '#6366f1'
+                                                : '#6b7280',
+                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        {n}
+                                    </button>
+                                ));
+                            })()}
 
                             <button
                                 className="adm-btn-secondary"
@@ -3586,144 +4198,153 @@ const Products = () => {
                     </div>
                 )}
             </div>
-{modal && (
-    <ProductFormModal
-        key={modal === 'new' ? 'new' : `edit-${modal?.id || ''}`}
-        product={modal === 'new' ? null : modal}
-        existingProducts={products}
-        categories={categories}
-        onClose={() => setModal(null)}
-        onSave={handleSave}
-    />
-)}
+            {modal && (
+                <ProductFormModal
+                    key={modal === 'new' ? 'new' : `edit-${modal?.id || ''}`}
+                    product={modal === 'new' ? null : modal}
+                    existingProducts={products}
+                    categories={categories}
+                    onClose={() => setModal(null)}
+                    onSave={handleSave}
+                />
+            )}
 
-{showVariantModal && (
-    <ProductVariantModal
-        isOpen={showVariantModal}
-        onClose={() => setShowVariantModal(false)}
-        products={products}
-        onRefresh={() => fetchProducts(categoryMap, debouncedSearch)}
-    />
-)}
-
-{previewImage && (
-    <div
-        className="ec-modal-overlay"
-        style={{
-            zIndex: 3000,
-            background: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20
-        }}
-        onClick={closeImagePreview}
-    >
-        <div
-            style={{
-                position: 'relative',
-                maxWidth: '90vw',
-                maxHeight: '90vh',
-                background: '#ffffff',
-                borderRadius: 12,
-                padding: 20,
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 12,
-                minWidth: 320
-            }}
-            onClick={e => e.stopPropagation()}
-        >
-            <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                borderBottom: '1px solid #f3f4f6',
-                paddingBottom: 10
-            }}>
-                <div>
-                    <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
-                        {previewImage.name}
-                    </h4>
-                    {previewImage.sku && (
-                        <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 500 }}>
-                            SKU: {previewImage.sku}
-                        </span>
-                    )}
-                </div>
-                <button
-                    onClick={closeImagePreview}
-                    style={{
-                        background: '#f3f4f6',
-                        border: 'none',
-                        borderRadius: '50%',
-                        width: 32,
-                        height: 32,
-                        display: 'grid',
-                        placeItems: 'center',
-                        cursor: 'pointer',
-                        color: '#6b7280',
-                        fontSize: 14,
-                        fontWeight: 700
+            {viewProduct && (
+                <ProductDetailsModal
+                    product={viewProduct}
+                    categories={categories}
+                    onClose={() => setViewProduct(null)}
+                    onEdit={(prod) => {
+                        setViewProduct(null);
+                        handleOpenEditModal(prod);
                     }}
-                    title="Close"
+                />
+            )}
+
+            {showVariantModal && (
+                <ProductVariantModal
+                    isOpen={showVariantModal}
+                    onClose={() => setShowVariantModal(false)}
+                    products={products}
+                    onRefresh={() => fetchProducts(categoryMap, debouncedSearch)}
+                />
+            )}
+
+            {previewImage && (
+                <div
+                    className="ec-modal-overlay"
+                    style={{
+                        zIndex: 3000,
+                        background: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 20
+                    }}
+                    onClick={closeImagePreview}
                 >
-                    ✕
-                </button>
-            </div>
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: 200,
-                maxHeight: '75vh',
-                overflow: 'hidden',
-                borderRadius: 8,
-                background: '#f9fafb'
-            }}>
-                {previewError || !previewImage.url ? (
-                    <div style={{ padding: '36px 20px', textAlign: 'center', color: '#6b7280' }}>
-                        <BsImage size={40} color="#9ca3af" style={{ marginBottom: 10 }} />
-                        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#374151' }}>
-                            {previewError ? 'Image unavailable' : 'No image uploaded'}
-                        </p>
-                        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9ca3af' }}>
-                            {previewError
-                                ? 'The image could not be loaded or the link is broken.'
-                                : 'No image link or file was provided for this product.'}
-                        </p>
-                    </div>
-                ) : (
-                    <img
-                        src={previewImage.url}
-                        alt={previewImage.name}
-                        onError={() => {
-                            setPreviewError(true);
-                            setBrokenImages(prev => {
-                                const next = new Set(prev);
-                                if (previewImage.url) next.add(previewImage.url);
-                                return next;
-                            });
-                        }}
+                    <div
                         style={{
-                            maxWidth: '100%',
-                            maxHeight: '75vh',
-                            objectFit: 'contain',
-                            borderRadius: 8,
-                            display: 'block'
+                            position: 'relative',
+                            maxWidth: '90vw',
+                            maxHeight: '90vh',
+                            background: '#ffffff',
+                            borderRadius: 12,
+                            padding: 20,
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 12,
+                            minWidth: 320
                         }}
-                    />
-                )}
-            </div>
-        </div>
-    </div>
-)}
-        </div>
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            borderBottom: '1px solid #f3f4f6',
+                            paddingBottom: 10
+                        }}>
+                            <div>
+                                <h4 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                    {previewImage.name}
+                                </h4>
+                                {previewImage.sku && (
+                                    <span style={{ fontSize: 12, color: '#6b7280', fontWeight: 500 }}>
+                                        SKU: {previewImage.sku}
+                                    </span>
+                                )}
+                            </div>
+                            <button
+                                onClick={closeImagePreview}
+                                style={{
+                                    background: '#f3f4f6',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    width: 32,
+                                    height: 32,
+                                    display: 'grid',
+                                    placeItems: 'center',
+                                    cursor: 'pointer',
+                                    color: '#6b7280',
+                                    fontSize: 14,
+                                    fontWeight: 700
+                                }}
+                                title="Close"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            minHeight: 200,
+                            maxHeight: '75vh',
+                            overflow: 'hidden',
+                            borderRadius: 8,
+                            background: '#f9fafb'
+                        }}>
+                            {previewError || !previewImage.url ? (
+                                <div style={{ padding: '36px 20px', textAlign: 'center', color: '#6b7280' }}>
+                                    <BsImage size={40} color="#9ca3af" style={{ marginBottom: 10 }} />
+                                    <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#374151' }}>
+                                        {previewError ? 'Image unavailable' : 'No image uploaded'}
+                                    </p>
+                                    <p style={{ margin: '4px 0 0', fontSize: 12, color: '#9ca3af' }}>
+                                        {previewError
+                                            ? 'The image could not be loaded or the link is broken.'
+                                            : 'No image link or file was provided for this product.'}
+                                    </p>
+                                </div>
+                            ) : (
+                                <img
+                                    src={previewImage.url}
+                                    alt={previewImage.name}
+                                    onError={() => {
+                                        setPreviewError(true);
+                                        setBrokenImages(prev => {
+                                            const next = new Set(prev);
+                                            if (previewImage.url) next.add(previewImage.url);
+                                            return next;
+                                        });
+                                    }}
+                                    style={{
+                                        maxWidth: '100%',
+                                        maxHeight: '75vh',
+                                        objectFit: 'contain',
+                                        borderRadius: 8,
+                                        display: 'block'
+                                    }}
+                                />
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </PageContainer>
     );
 };
-
-
-
 export default Products;

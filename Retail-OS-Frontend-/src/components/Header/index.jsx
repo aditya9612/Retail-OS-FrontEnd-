@@ -1,21 +1,27 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
     BsSearch,
     BsBell,
     BsBoxArrowRight,
     BsPerson,
     BsChevronDown,
+    BsList,
     BsBoxSeam,
     BsTagFill,
     BsPeopleFill,
     BsReceiptCutoff,
     BsGrid1X2Fill,
     BsX,
+    BsCheckCircleFill,
+    BsExclamationCircleFill,
+    BsArrowRight,
 } from 'react-icons/bs';
+import { getDashboardSummary } from '../../services/dashboard';
 import { logoutUser } from '../../services/auth';
 import LogoutConfirmModal from '../LogoutConfirmModal';
-import { getInitials } from '../../utils/userHelpers';
+import { getInitials, resolveUserInfo } from '../../utils/userHelpers';
+import { getCurrentUser } from '../../services/user';
 import productService from '../../services/product';
 import category from '../../services/categoryService';
 import { getCustomers } from '../../services/customer';
@@ -31,16 +37,155 @@ const formatPrice = (val) => {
 const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const isDashboard = location.pathname === '/dashboard' || location.pathname === '/';
-    const isStoreTransfers = location.pathname === '/inventory/store-transfers' || location.pathname.startsWith('/inventory/store-transfers/');
-    const isWarehouses = location.pathname === '/inventory/warehouses' || location.pathname.startsWith('/inventory/warehouses/') || location.pathname === '/warehouses' || location.pathname.startsWith('/warehouses/');
-    const isPurchases = location.pathname === '/purchases' || location.pathname.startsWith('/purchases/') || location.pathname === '/inventory/purchases' || location.pathname.startsWith('/inventory/purchases/');
-    const isSuppliers = location.pathname === '/suppliers' || location.pathname.startsWith('/suppliers/') || location.pathname === '/inventory/suppliers' || location.pathname.startsWith('/inventory/suppliers/');
-    const isGRN = location.pathname === '/inventory/grn' || location.pathname.startsWith('/inventory/grn/') || location.pathname === '/grn' || location.pathname.startsWith('/grn/');
-    const isPurchaseReturns = location.pathname === '/inventory/purchase-returns' || location.pathname.startsWith('/inventory/purchase-returns/') || location.pathname === '/purchase-order-returns' || location.pathname.startsWith('/purchase-order-returns/') || location.pathname === '/returns' || location.pathname.startsWith('/returns/');
-    const isInventoryStock = location.pathname === '/inventory' || location.pathname === '/inventory/' || location.pathname === '/inventory/dashboard' || location.pathname === '/inventory/stock' || location.pathname === '/stock';
-    const hideSearch = isDashboard || isStoreTransfers || isWarehouses || isPurchases || isSuppliers || isGRN || isPurchaseReturns || isInventoryStock;
+    const currentPath = location.pathname;
+
+    // Global search bar is hidden on:
+    // 1. Customer module (/customers) - [from t1]
+    // 2. Billing & GST module (/billing, /invoices, /billing-management, /gst-management) - [from t1]
+    // 3. Dashboard (/dashboard, /) - [from t1 & Punam]
+    // 4. Store Transfers (/inventory/store-transfers) - [from t1 & Shital]
+    // 5. Product Master (/products) & Barcode (/products/barcode) - [from Punam]
+    // 6. Category Management (/categories) - [from Punam]
+    // 7. Store Management & Targets (/stores, /stores/targets, /ecommerce/store) - [from Punam]
+    // 8. Warehouses, Purchases, Suppliers, GRN, Purchase Returns, Stock - [from Shital]
+    // 9. Order Returns (/ecommerce/returns, /returns) - [from Priya]
+    const isCustomerModule = currentPath.startsWith('/customers');
+    const isBillingGstModule = (
+        currentPath.startsWith('/billing') ||
+        currentPath.startsWith('/invoices') ||
+        currentPath.startsWith('/billing-management') ||
+        currentPath.startsWith('/gst-management')
+    );
+    const isProfileModule = currentPath.startsWith('/profile');
+    const isDashboard = currentPath === '/dashboard' || currentPath === '/';
+    const isStoreTransfers = currentPath === '/inventory/store-transfers' || currentPath.startsWith('/inventory/store-transfers/');
+    const isWarehouses = currentPath === '/inventory/warehouses' || currentPath.startsWith('/inventory/warehouses/') || currentPath === '/warehouses' || currentPath.startsWith('/warehouses/');
+    const isPurchases = currentPath === '/purchases' || currentPath.startsWith('/purchases/') || currentPath === '/inventory/purchases' || currentPath.startsWith('/inventory/purchases/');
+    const isSuppliers = currentPath === '/suppliers' || currentPath.startsWith('/suppliers/') || currentPath === '/inventory/suppliers' || currentPath.startsWith('/inventory/suppliers/');
+    const isGRN = currentPath === '/inventory/grn' || currentPath.startsWith('/inventory/grn/') || currentPath === '/grn' || currentPath.startsWith('/grn/');
+    const isPurchaseReturns = currentPath === '/inventory/purchase-returns' || currentPath.startsWith('/inventory/purchase-returns/') || currentPath === '/purchase-order-returns' || currentPath.startsWith('/purchase-order-returns/') || currentPath === '/returns' || currentPath.startsWith('/returns/');
+    const isInventoryStock = currentPath === '/inventory' || currentPath === '/inventory/' || currentPath === '/inventory/dashboard' || currentPath === '/inventory/stock' || currentPath === '/stock';
+    const isProductModule = currentPath.startsWith('/products');
+    const isCategoryModule = currentPath.startsWith('/categories');
+    const isStoreModule = currentPath.startsWith('/stores') || currentPath === '/ecommerce/store';
+    const isOrderReturns = currentPath.toLowerCase().includes('/ecommerce/returns') || currentPath.toLowerCase().endsWith('/returns');
+
+    const shouldHideSearchBar = (
+        isCustomerModule ||
+        isBillingGstModule ||
+        isProfileModule ||
+        isDashboard ||
+        isStoreTransfers ||
+        isWarehouses ||
+        isPurchases ||
+        isSuppliers ||
+        isGRN ||
+        isPurchaseReturns ||
+        isInventoryStock ||
+        isProductModule ||
+        isCategoryModule ||
+        isStoreModule ||
+        isOrderReturns
+    );
+    const isSearchHidden = shouldHideSearchBar;
+    const hideSearch = shouldHideSearchBar;
+    const hideHeaderSearch = shouldHideSearchBar;
     const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+    // ── Notifications Popup State ──
+    const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+    const [notificationSummary, setNotificationSummary] = useState(null);
+    const [systemNotifications, setSystemNotifications] = useState([]);
+    const bellButtonRef = useRef(null);
+    const notificationDropdownRef = useRef(null);
+
+    // Listen for global real-time notifications across modules
+    useEffect(() => {
+        const handleSystemNotif = (e) => {
+            if (e.detail) {
+                setSystemNotifications((prev) => [e.detail, ...prev.slice(0, 19)]);
+            }
+        };
+        window.addEventListener('retail-os:notification', handleSystemNotif);
+        return () => window.removeEventListener('retail-os:notification', handleSystemNotif);
+    }, []);
+
+    // Fetch dashboard summary for real inventory alerts
+    useEffect(() => {
+        let isMounted = true;
+        getDashboardSummary()
+            .then((data) => {
+                if (isMounted && data) {
+                    setNotificationSummary(data);
+                }
+            })
+            .catch(() => {});
+        return () => {
+            isMounted = false;
+        };
+    }, [location.pathname]);
+
+    // Notification items derived from summary & real-time system notifications
+    const notificationItems = useMemo(() => {
+        const items = [...systemNotifications];
+        if (notificationSummary && notificationSummary.low_stock_products > 0) {
+            items.push({
+                id: 'low-stock-alert',
+                type: 'warning',
+                title: 'Low Stock Alert',
+                message: `${notificationSummary.low_stock_products} ${notificationSummary.low_stock_products === 1 ? 'product is' : 'products are'} running low on inventory and need attention.`,
+                time: 'Requires Action',
+                link: '/inventory',
+                linkText: 'View Inventory',
+            });
+        }
+        return items;
+    }, [notificationSummary, systemNotifications]);
+
+    // Automatically close notification popup on navigation between pages
+    useEffect(() => {
+        setIsNotificationOpen(false);
+    }, [location.pathname]);
+
+    // Close notification panel on outside click or Escape key
+    useEffect(() => {
+        if (!isNotificationOpen) return;
+
+        const handleClickOutside = (e) => {
+            if (
+                notificationDropdownRef.current &&
+                !notificationDropdownRef.current.contains(e.target) &&
+                bellButtonRef.current &&
+                !bellButtonRef.current.contains(e.target)
+            ) {
+                setIsNotificationOpen(false);
+            }
+        };
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setIsNotificationOpen(false);
+                if (bellButtonRef.current) bellButtonRef.current.focus();
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isNotificationOpen]);
+
+    // Handle clicking a notification item: close popup and navigate
+    const handleNotificationItemClick = (item) => {
+        setIsNotificationOpen(false);
+        if (item.link) {
+            navigate(item.link);
+        }
+    };
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [logoutLoading, setLogoutLoading] = useState(false);
 
@@ -59,12 +204,87 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
     const searchInputRef = useRef(null);
     const searchTimerRef = useRef(null);
 
-    const user = JSON.parse(localStorage.getItem('user')) || {};
-    const userName = user?.full_name || user?.name || 'Akshay Chavan';
-    const userEmail = user?.email || 'akshay.chavan@shekruweb.com';
-    const userRole = user?.role?.name || user?.role || 'Employee';
+    const [user, setUser] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user')) || {};
+        } catch {
+            return {};
+        }
+    });
 
-    const userInitials = useMemo(() => getInitials(userName), [userName]);
+    useEffect(() => {
+        const handleUserUpdate = (e) => {
+            try {
+                const updated = e?.detail || JSON.parse(localStorage.getItem('user')) || {};
+                setUser(updated);
+            } catch {
+                setUser({});
+            }
+        };
+
+        window.addEventListener('storage', handleUserUpdate);
+        window.addEventListener('userProfileUpdated', handleUserUpdate);
+        return () => {
+            window.removeEventListener('storage', handleUserUpdate);
+            window.removeEventListener('userProfileUpdated', handleUserUpdate);
+        };
+    }, []);
+
+    // Auto-correct any mismatched stored user and synchronize in background
+    useEffect(() => {
+        let isMounted = true;
+        const syncUser = async () => {
+            try {
+                const currentStored = JSON.parse(localStorage.getItem('user') || '{}');
+                const resolved = resolveUserInfo(currentStored);
+
+                if (
+                    currentStored?.email &&
+                    (currentStored.full_name !== resolved.name || currentStored.name !== resolved.name)
+                ) {
+                    const corrected = {
+                        ...currentStored,
+                        full_name: resolved.name,
+                        name: resolved.name,
+                        email: resolved.email,
+                        role: typeof resolved.role === 'object' ? resolved.role : { name: resolved.role },
+                    };
+                    localStorage.setItem('user', JSON.stringify(corrected));
+                    if (isMounted) setUser(corrected);
+                }
+
+                if (!currentStored?.full_name || currentStored.full_name === 'Akshay Chavan') {
+                    const currentUser = await getCurrentUser();
+                    const u = currentUser?.user || currentUser?.data || currentUser;
+                    if (isMounted && u && typeof u === 'object') {
+                        const merged = {
+                            ...currentStored,
+                            ...u,
+                        };
+                        const freshResolved = resolveUserInfo(merged);
+                        merged.full_name = freshResolved.name;
+                        merged.name = freshResolved.name;
+                        merged.email = freshResolved.email;
+                        merged.role = typeof freshResolved.role === 'object' ? freshResolved.role : { name: freshResolved.role };
+                        localStorage.setItem('user', JSON.stringify(merged));
+                        setUser(merged);
+                    }
+                }
+            } catch {
+                // Silently ignore if offline; resolveUserInfo will provide clean fallback
+            }
+        };
+
+        syncUser();
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
+    const { name: userName, email: userEmail, role: userRole, initials: userInitials } = useMemo(
+        () => resolveUserInfo(user),
+        [user]
+    );
 
     const handleLogoutConfirm = async () => {
         setLogoutLoading(true);
@@ -337,10 +557,42 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
 
     return (
         <header className="pos-header">
-            {/* Search Bar - hidden on Admin Dashboard and Store Transfers page (which has its own main search) */}
-            {!hideSearch ? (
+            {/* Sidebar toggle button — always visible in header */}
+            <button
+                type="button"
+                id="header-sidebar-toggle"
+                onClick={onToggleSidebar}
+                title={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
+                style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 36,
+                    height: 36,
+                    border: 'none',
+                    borderRadius: 8,
+                    background: sidebarCollapsed ? '#eef2ff' : 'transparent',
+                    color: sidebarCollapsed ? '#6366f1' : '#6b7280',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                    transition: 'background 0.2s ease, color 0.2s ease',
+                }}
+                onMouseEnter={e => {
+                    e.currentTarget.style.background = '#eef2ff';
+                    e.currentTarget.style.color = '#6366f1';
+                }}
+                onMouseLeave={e => {
+                    e.currentTarget.style.background = sidebarCollapsed ? '#eef2ff' : 'transparent';
+                    e.currentTarget.style.color = sidebarCollapsed ? '#6366f1' : '#6b7280';
+                }}
+            >
+                <BsList size={20} />
+            </button>
+
+            {/* Global Search Bar - Hidden on Customer, Billing/GST, Dashboard, Store Transfers, Products, Categories, Stores, Order Returns */}
+            {!shouldHideSearchBar ? (
                 <div className="header-search-wrap" ref={searchWrapRef} style={{ flex: 1, position: 'relative' }}>
-                <BsSearch className="header-search-icon" size={14} />
+                    <BsSearch className="header-search-icon" size={14} />
                 <input
                     ref={searchInputRef}
                     className="header-search"
@@ -590,46 +842,165 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
             {/* Right side controls */}
             <div className="header-right" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 {/* [Notifications] Bell Icon Button with Count Badge */}
-                <button
-                    type="button"
-                    className="header-icon-btn header-icon-btn--bell"
-                    title="Notifications"
-                    style={{
-                        position: 'relative',
-                        width: 38,
-                        height: 38,
-                        borderRadius: 10,
-                        border: '1px solid #e5e7eb',
-                        background: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                    }}
-                >
-                    <BsBell size={17} color="#6366f1" />
-                    <span
+                <div style={{ position: 'relative' }}>
+                    <button
+                        ref={bellButtonRef}
+                        type="button"
+                        className={`header-icon-btn header-icon-btn--bell ${isNotificationOpen ? 'active' : ''}`}
+                        title="Notifications"
+                        aria-haspopup="dialog"
+                        aria-expanded={isNotificationOpen ? 'true' : 'false'}
+                        aria-controls="dashboard-notification-panel"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setIsNotificationOpen((prev) => !prev);
+                        }}
                         style={{
-                            position: 'absolute',
-                            top: -3,
-                            right: -3,
-                            background: '#ef4444',
-                            color: '#ffffff',
-                            fontSize: 10,
-                            fontWeight: 800,
-                            width: 16,
-                            height: 16,
-                            borderRadius: '50%',
+                            position: 'relative',
+                            width: 38,
+                            height: 38,
+                            borderRadius: 10,
+                            border: isNotificationOpen ? '1px solid #6366f1' : '1px solid #e5e7eb',
+                            background: isNotificationOpen ? '#eef2ff' : '#ffffff',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            border: '2px solid #ffffff',
+                            cursor: 'pointer',
+                            boxShadow: isNotificationOpen ? '0 0 0 3px rgba(99, 102, 241, 0.15)' : '0 1px 2px rgba(0,0,0,0.04)',
+                            outline: 'none',
                         }}
                     >
-                        1
-                    </span>
-                </button>
+                        <BsBell size={17} color="#6366f1" />
+                        {notificationItems.length > 0 && (
+                            <span
+                                style={{
+                                    position: 'absolute',
+                                    top: -3,
+                                    right: -3,
+                                    background: '#ef4444',
+                                    color: '#ffffff',
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    width: 16,
+                                    height: 16,
+                                    borderRadius: '50%',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    border: '2px solid #ffffff',
+                                }}
+                            >
+                                {notificationItems.length}
+                            </span>
+                        )}
+                    </button>
+
+                    {/* Notification Dropdown Panel */}
+                    {isNotificationOpen && (
+                        <div
+                            id="dashboard-notification-panel"
+                            ref={notificationDropdownRef}
+                            className="dashboard-notification-panel"
+                            style={{
+                                position: 'absolute',
+                                right: 0,
+                                top: 'calc(100% + 8px)',
+                                zIndex: 1000,
+                            }}
+                            role="dialog"
+                            aria-label="Notifications"
+                            aria-modal="false"
+                        >
+                            {/* Header Banner */}
+                            <div className="dashboard-notification-header">
+                                <div className="dashboard-notification-title-wrap">
+                                    <BsBell className="dashboard-notification-header-icon" />
+                                    <h3 className="dashboard-notification-title">Notifications</h3>
+                                    <span className="dashboard-notification-badge">
+                                        {notificationItems.length > 0 ? `${notificationItems.length} New` : '0 New'}
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="dashboard-notification-close-btn"
+                                    onClick={() => {
+                                        setIsNotificationOpen(false);
+                                        if (bellButtonRef.current) bellButtonRef.current.focus();
+                                    }}
+                                    title="Close notifications"
+                                    aria-label="Close notifications"
+                                >
+                                    <BsX size={18} />
+                                </button>
+                            </div>
+
+                            {/* Notifications List */}
+                            <div className="dashboard-notification-list">
+                                {notificationItems.length === 0 ? (
+                                    <div className="dashboard-notification-empty">
+                                        <div className="dashboard-notification-empty-icon-wrap">
+                                            <BsCheckCircleFill size={22} color="#10b981" />
+                                        </div>
+                                        <p className="dashboard-notification-empty-title">All caught up!</p>
+                                        <p className="dashboard-notification-empty-desc">
+                                            No active inventory alerts or urgent notifications.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    notificationItems.map((item) => (
+                                        <div
+                                            key={item.id}
+                                            className={`dashboard-notification-card ${item.type}`}
+                                            onClick={() => handleNotificationItemClick(item)}
+                                            style={{ cursor: item.link ? 'pointer' : 'default' }}
+                                        >
+                                            <div className="dashboard-notification-card-icon">
+                                                {item.type === 'error' ? (
+                                                    <BsExclamationCircleFill size={16} />
+                                                ) : (
+                                                    <BsBoxSeam size={16} />
+                                                )}
+                                            </div>
+                                            <div className="dashboard-notification-card-body">
+                                                <div className="dashboard-notification-card-header">
+                                                    <span className="dashboard-notification-card-title">{item.title}</span>
+                                                    <span className="dashboard-notification-card-time">{item.time}</span>
+                                                </div>
+                                                <p className="dashboard-notification-card-msg">{item.message}</p>
+                                                {item.link && (
+                                                    <Link
+                                                        to={item.link}
+                                                        className="dashboard-notification-card-link"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setIsNotificationOpen(false);
+                                                        }}
+                                                    >
+                                                        <span>{item.linkText}</span>
+                                                        <BsArrowRight size={12} />
+                                                    </Link>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            {notificationItems.length > 0 && (
+                                <div className="dashboard-notification-footer">
+                                    <Link
+                                        to="/inventory"
+                                        className="dashboard-notification-footer-link"
+                                        onClick={() => setIsNotificationOpen(false)}
+                                    >
+                                        View inventory items &amp; alerts
+                                    </Link>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
 
                 {/* Profile Trigger Button */}
                 <div style={{ position: 'relative' }}>
@@ -853,4 +1224,3 @@ const Header = ({ sidebarCollapsed, onToggleSidebar }) => {
 };
 
 export default Header;
-

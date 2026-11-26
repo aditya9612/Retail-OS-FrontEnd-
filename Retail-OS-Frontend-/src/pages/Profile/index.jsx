@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     BsPerson,
     BsEnvelope,
@@ -11,20 +12,83 @@ import {
     BsLock,
     BsEye,
     BsEyeSlash,
+    BsX,
 } from 'react-icons/bs';
-import { getInitials } from '../../utils/userHelpers';
+import { getInitials, resolveUserInfo } from '../../utils/userHelpers';
 import { auth } from '../../services/auth';
+import { updateUser } from '../../services/user';
 
 const Profile = () => {
-    const storedUser = JSON.parse(localStorage.getItem('user')) || {};
+    const navigate = useNavigate();
+
+    const handleClose = () => {
+        if (window.history.length > 1) {
+            navigate(-1);
+        } else {
+            navigate('/dashboard');
+        }
+    };
+
+    const [storedUser, setStoredUser] = useState(() => {
+        try {
+            const current = JSON.parse(localStorage.getItem('user')) || {};
+            const userKey = (current?.email || current?.identifier || '').toLowerCase().trim();
+            const persistentRaw = (userKey && localStorage.getItem(`retail_profile_${userKey}`)) || localStorage.getItem('retail_last_saved_profile');
+            const persistent = persistentRaw ? JSON.parse(persistentRaw) : null;
+            return {
+                ...current,
+                ...(persistent || {}),
+            };
+        } catch {
+            return {};
+        }
+    });
+
+    const resolved = useMemo(() => resolveUserInfo(storedUser), [storedUser]);
 
     const [userForm, setUserForm] = useState({
-        name: storedUser?.full_name || storedUser?.name || 'Akshay Chavan',
-        email: storedUser?.email || 'akshay.chavan@shekruweb.com',
-        phone: storedUser?.phone || '+91 98345 78460',
-        address: storedUser?.address || 'Pune Main Branch, Maharashtra',
-        role: storedUser?.role?.name || storedUser?.role || 'System Administrator',
+        name: storedUser?.full_name || storedUser?.name || resolved.name,
+        email: storedUser?.email || resolved.email,
+        phone: storedUser?.phone || '',
+        address: storedUser?.address || '',
+        role: resolved.role,
     });
+
+    // Keep form in sync when user data updates
+    useEffect(() => {
+        setUserForm(prev => ({
+            ...prev,
+            name: storedUser?.full_name || storedUser?.name || resolved.name,
+            email: storedUser?.email || resolved.email,
+            phone: storedUser?.phone !== undefined ? storedUser.phone : prev.phone,
+            address: storedUser?.address !== undefined ? storedUser.address : prev.address,
+            role: resolved.role,
+        }));
+    }, [storedUser, resolved.name, resolved.email, resolved.role]);
+
+    useEffect(() => {
+        const handleUserUpdate = (e) => {
+            try {
+                const updated = e?.detail || JSON.parse(localStorage.getItem('user')) || {};
+                const userKey = (updated?.email || updated?.identifier || '').toLowerCase().trim();
+                const persistentRaw = (userKey && localStorage.getItem(`retail_profile_${userKey}`)) || localStorage.getItem('retail_last_saved_profile');
+                const persistent = persistentRaw ? JSON.parse(persistentRaw) : null;
+                setStoredUser({
+                    ...updated,
+                    ...(persistent || {}),
+                });
+            } catch {
+                setStoredUser({});
+            }
+        };
+
+        window.addEventListener('storage', handleUserUpdate);
+        window.addEventListener('userProfileUpdated', handleUserUpdate);
+        return () => {
+            window.removeEventListener('storage', handleUserUpdate);
+            window.removeEventListener('userProfileUpdated', handleUserUpdate);
+        };
+    }, []);
 
     const [showPinModal, setShowPinModal] = useState(false);
     const [currentPin, setCurrentPin] = useState('');
@@ -54,8 +118,40 @@ const Profile = () => {
 
     const handleSaveProfile = (e) => {
         e.preventDefault();
-        const updated = { ...storedUser, full_name: userForm.name, email: userForm.email, phone: userForm.phone, address: userForm.address };
+        const updated = {
+            ...storedUser,
+            full_name: userForm.name,
+            name: userForm.name,
+            email: userForm.email,
+            phone: userForm.phone,
+            address: userForm.address,
+            is_custom_name: true,
+        };
+
+        // 1. Update active session user storage
         localStorage.setItem('user', JSON.stringify(updated));
+
+        // 2. Persist to account-specific storage that persists across logouts
+        const userKey = (userForm.email || storedUser?.email || storedUser?.identifier || '').toLowerCase().trim();
+        if (userKey) {
+            localStorage.setItem(`retail_profile_${userKey}`, JSON.stringify(updated));
+        }
+        localStorage.setItem('retail_last_saved_profile', JSON.stringify(updated));
+
+        // 3. Broadcast updates across header and active views
+        window.dispatchEvent(new Event('storage'));
+        window.dispatchEvent(new CustomEvent('userProfileUpdated', { detail: updated }));
+
+        // 4. Asynchronously sync to backend API
+        if (storedUser?.id) {
+            updateUser(storedUser.id, {
+                full_name: userForm.name,
+                phone: userForm.phone || null,
+            }).catch(err => {
+                console.warn('[Profile] Backend user patch note:', err);
+            });
+        }
+
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 3000);
     };
@@ -164,7 +260,7 @@ const Profile = () => {
     return (
         <div className="dash-page" style={{ paddingBottom: 40, maxWidth: 900, margin: '0 auto' }}>
             {/* Page Header */}
-            <div className="adm-page-header" style={{ marginBottom: 20 }}>
+            <div className="adm-page-header" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
                 <div>
                     <h1 className="adm-page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ background: '#eef2ff', color: '#6366f1', padding: '8px 12px', borderRadius: 10, fontSize: 20 }}>
@@ -174,46 +270,113 @@ const Profile = () => {
                     </h1>
                     <p className="adm-page-sub">Manage your administrator account details and security credentials.</p>
                 </div>
+
+                <div className="adm-header-actions" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <button
+                        type="button"
+                        onClick={handleClose}
+                        className="adm-btn-secondary"
+                        style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '8px 16px',
+                            borderRadius: 8,
+                            border: '1px solid #d1d5db',
+                            background: '#ffffff',
+                            color: '#374151',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                        }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.background = '#f9fafb';
+                            e.currentTarget.style.borderColor = '#9ca3af';
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.background = '#ffffff';
+                            e.currentTarget.style.borderColor = '#d1d5db';
+                        }}
+                        title="Close Admin Profile and return back"
+                    >
+                        <BsX size={18} />
+                        <span>Close</span>
+                    </button>
+                </div>
             </div>
 
             {/* Main Profile & Details Card */}
             <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 16, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', marginBottom: 20 }}>
                 {/* Header Banner Section */}
-                <div style={{ background: 'linear-gradient(135deg, #eef2ff, #f5f3ff)', borderBottom: '1px solid #e5e7eb', padding: '24px 28px', display: 'flex', alignItems: 'center', gap: 20 }}>
-                    {/* Avatar Initials Badge */}
-                    <div
+                <div style={{ background: 'linear-gradient(135deg, #eef2ff, #f5f3ff)', borderBottom: '1px solid #e5e7eb', padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                        {/* Avatar Initials Badge */}
+                        <div
+                            style={{
+                                width: 72,
+                                height: 72,
+                                borderRadius: '50%',
+                                background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                                color: '#ffffff',
+                                fontWeight: 800,
+                                fontSize: 26,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
+                                flexShrink: 0,
+                            }}
+                        >
+                            {userInitials}
+                        </div>
+
+                        {/* Admin Header Title */}
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <h2 style={{ fontSize: 20, fontWeight: 800, color: '#111827', margin: 0 }}>
+                                    {userForm.name}
+                                </h2>
+                                <span style={{ background: '#eef2ff', color: '#6366f1', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: '1px solid #c7d2fe' }}>
+                                    {userForm.role}
+                                </span>
+                            </div>
+                            <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <BsEnvelope style={{ color: '#6366f1' }} /> {userForm.email}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Quick Close Cross Button */}
+                    <button
+                        type="button"
+                        onClick={handleClose}
                         style={{
-                            width: 72,
-                            height: 72,
-                            borderRadius: '50%',
-                            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                            color: '#ffffff',
-                            fontWeight: 800,
-                            fontSize: 26,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.25)',
+                            width: 32,
+                            height: 32,
+                            borderRadius: '50%',
+                            border: '1px solid #c7d2fe',
+                            background: '#ffffff',
+                            color: '#4f46e5',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
                             flexShrink: 0,
                         }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.background = '#eef2ff';
+                            e.currentTarget.style.transform = 'scale(1.05)';
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.background = '#ffffff';
+                            e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                        title="Close Profile"
                     >
-                        {userInitials}
-                    </div>
-
-                    {/* Admin Header Title */}
-                    <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <h2 style={{ fontSize: 20, fontWeight: 800, color: '#111827', margin: 0 }}>
-                                {userForm.name}
-                            </h2>
-                            <span style={{ background: '#eef2ff', color: '#6366f1', fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, border: '1px solid #c7d2fe' }}>
-                                {userForm.role}
-                            </span>
-                        </div>
-                        <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <BsEnvelope style={{ color: '#6366f1' }} /> {userForm.email}
-                        </p>
-                    </div>
+                        <BsX size={20} />
+                    </button>
                 </div>
 
                 {/* Profile Information Form */}
@@ -296,7 +459,24 @@ const Profile = () => {
                         </div>
 
                         {/* Form Action */}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 10, borderTop: '1px solid #f3f4f6' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, paddingTop: 10, borderTop: '1px solid #f3f4f6' }}>
+                            <button
+                                type="button"
+                                onClick={handleClose}
+                                className="adm-btn-secondary"
+                                style={{
+                                    padding: '8px 18px',
+                                    fontSize: 13,
+                                    borderRadius: 8,
+                                    border: '1px solid #d1d5db',
+                                    background: '#ffffff',
+                                    color: '#4b5563',
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                }}
+                            >
+                                Close
+                            </button>
                             <button type="submit" className="adm-btn-primary">
                                 Save Changes
                             </button>

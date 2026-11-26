@@ -68,8 +68,8 @@ export const menuGroups = [
         label: 'PRODUCTS',
         items: [
             { name: 'Product Master', icon: <BsBoxSeam />, path: '/products' },
-            { name: 'Barcode', icon: <BsUpcScan />, path: '/products/barcode' },
-            { name: 'Categories', icon: <BsTagFill />, path: '/categories' },
+            { name: 'Barcode Management', icon: <BsUpcScan />, path: '/products/barcode' },
+            { name: 'Category Management', icon: <BsTagFill />, path: '/categories' },
         ],
     },
     {
@@ -81,7 +81,7 @@ export const menuGroups = [
             { name: 'Purchases', icon: <BsBagCheck />, path: '/purchases' },
             { name: 'Suppliers', icon: <BsTruck />, path: '/suppliers' },
             { name: 'GRN', icon: <BsClipboardCheck />, path: '/inventory/grn' },
-            { name: 'Returns', icon: <BsArrowCounterclockwise />, path: '/inventory/purchase-returns', aliasPaths: ['/returns', '/purchase-order-returns'] },
+            { name: 'Purchase Returns', icon: <BsArrowCounterclockwise />, path: '/inventory/purchase-returns', aliasPaths: ['/returns', '/purchase-order-returns'] },
             { name: 'Store Transfers', icon: <BsArrowLeftRight />, path: '/inventory/store-transfers' },
         ],
     },
@@ -97,14 +97,14 @@ export const menuGroups = [
         id: 'ecommerce',
         label: 'E-COMMERCE',
         items: [
-            { name: 'EC Dashboard', icon: <BsCart3 />, path: '/ecommerce' },
-            { name: 'Storefront Settings', icon: <BsShopWindow />, path: '/ecommerce/store' },
-            { name: 'Online Catalog', icon: <BsCollection />, path: '/ecommerce/products' },
-            { name: 'Online Orders', icon: <BsBagCheckFill />, path: '/ecommerce/orders', badge: 'Live', badgeType: 'live' },
-            { name: 'Coupons', icon: <BsTicketPerforated />, path: '/ecommerce/coupons' },
-            { name: 'Delivery', icon: <BsTruckFlatbed />, path: '/ecommerce/delivery' },
-            { name: 'Reviews', icon: <BsStarHalf />, path: '/ecommerce/reviews' },
-            { name: 'Order Returns', icon: <BsArrowReturnRight />, path: '/ecommerce/returns' },
+            { name: 'EC Dashboard', icon: <BsCart3 />, path: '/ecommerce', end: true },
+            { name: 'Storefront Settings', icon: <BsShopWindow />, path: '/ecommerce/store', end: true, aliasPaths: ['/ecommerce/store', '/ecommerce/storefront'] },
+            { name: 'Online Catalog', icon: <BsCollection />, path: '/ecommerce/products', end: true, aliasPaths: ['/ecommerce/products', '/ecommerce/catalog', '/ecommerce/product-catalog'] },
+            { name: 'Online Orders', icon: <BsBagCheckFill />, path: '/ecommerce/orders', end: true, badge: 'Live', badgeType: 'live', aliasPaths: ['/ecommerce/orders'] },
+            { name: 'Coupons', icon: <BsTicketPerforated />, path: '/ecommerce/coupons', end: true, aliasPaths: ['/ecommerce/coupons'] },
+            { name: 'Delivery', icon: <BsTruckFlatbed />, path: '/ecommerce/delivery', end: true, aliasPaths: ['/ecommerce/delivery'] },
+            { name: 'Reviews', icon: <BsStarHalf />, path: '/ecommerce/reviews', end: true, aliasPaths: ['/ecommerce/reviews'] },
+            { name: 'Order Returns', icon: <BsArrowReturnRight />, path: '/ecommerce/returns', end: true, aliasPaths: ['/ecommerce/returns'] },
         ],
     },
     {
@@ -119,7 +119,7 @@ export const menuGroups = [
         id: 'multi_store',
         label: 'MULTI-STORE',
         items: [
-            { name: 'Stores', icon: <BsShop />, path: '/stores' },
+            { name: 'Stores Directory', icon: <BsShop />, path: '/stores' },
             { name: 'Store Targets', icon: <BsBullseye />, path: '/stores/targets' },
         ],
     },
@@ -150,52 +150,85 @@ export const menuGroups = [
     },
 ];
 
+const NO_COLLAPSE_ROUTES = [
+    '/dashboard',
+    '/products',
+    '/products/barcode',
+    '/categories',
+    '/stores',
+    '/inventory/store-transfers'
+];
+
 const Sidebar = ({ collapsed, onToggle }) => {
     const location = useLocation();
     const currentPath = location.pathname;
+
+    const isNoCollapseModule = NO_COLLAPSE_ROUTES.some(r =>
+        currentPath === r || currentPath.startsWith(r + '/')
+    );
+    const isEffectiveCollapsed = isNoCollapseModule ? false : collapsed;
 
     const [searchQuery, setSearchQuery] = useState('');
     const [collapsedGroups, setCollapsedGroups] = useState({});
     const [hoveredItem, setHoveredItem] = useState(null);
 
-    // Flat list of all navigation items for route matching
-    const allNavItems = useMemo(() => menuGroups.flatMap(group => group.items), []);
+    // Compute the single active item based on current route
+    const activeItemPath = useMemo(() => {
+        const allItems = menuGroups.flatMap(g => g.items);
+        const normalizedCurrent = currentPath.length > 1 && currentPath.endsWith('/')
+            ? currentPath.slice(0, -1)
+            : currentPath;
 
-    const isItemActive = (item) => {
-        if (currentPath === item.path) return true;
-        if (item.aliasPaths && item.aliasPaths.includes(currentPath)) return true;
+        // 1. Check for exact match (by path or aliasPaths)
+        const exactMatch = allItems.find(item => {
+            const itemNorm = item.path.length > 1 && item.path.endsWith('/') ? item.path.slice(0, -1) : item.path;
+            if (itemNorm === normalizedCurrent) return true;
+            if (item.aliasPaths && item.aliasPaths.some(alias => {
+                const aliasNorm = alias.length > 1 && alias.endsWith('/') ? alias.slice(0, -1) : alias;
+                return aliasNorm === normalizedCurrent;
+            })) {
+                return true;
+            }
+            return false;
+        });
 
-        // If another item matches the current path exactly (or by alias),
-        // then this item is not the active one
-        const hasExactMatchElsewhere = allNavItems.some(
-            other => other.path === currentPath || (other.aliasPaths && other.aliasPaths.includes(currentPath))
-        );
-        if (hasExactMatchElsewhere) return false;
-
-        // For nested paths (e.g. deeper subroutes not explicitly in menu),
-        // activate the item with the most specific (longest) matching path prefix
-        if (item.path !== '/' && item.path !== '/dashboard' && currentPath.startsWith(item.path + '/')) {
-            const hasMoreSpecificMatch = allNavItems.some(
-                other => other.path !== item.path &&
-                    other.path !== '/' &&
-                    other.path !== '/dashboard' &&
-                    currentPath.startsWith(other.path + '/') &&
-                    other.path.length > item.path.length
-            );
-            return !hasMoreSpecificMatch;
+        if (exactMatch) {
+            return exactMatch.path;
         }
-        return false;
-    };
+
+        // 2. If no exact match (e.g. detail sub-routes like /products/123 or /invoices/view/1),
+        // pick the item with the longest matching prefix
+        const prefixMatches = allItems.filter(item => {
+            if (item.path === '/' || item.path === '/dashboard') return false;
+            const itemNorm = item.path.length > 1 && item.path.endsWith('/') ? item.path.slice(0, -1) : item.path;
+            if (normalizedCurrent.startsWith(itemNorm + '/')) return true;
+            if (item.aliasPaths && item.aliasPaths.some(alias => {
+                const aliasNorm = alias.length > 1 && alias.endsWith('/') ? alias.slice(0, -1) : alias;
+                return normalizedCurrent.startsWith(aliasNorm + '/');
+            })) {
+                return true;
+            }
+            return false;
+        });
+
+        if (prefixMatches.length > 0) {
+            prefixMatches.sort((a, b) => b.path.length - a.path.length);
+            return prefixMatches[0].path;
+        }
+
+        return null;
+    }, [currentPath]);
 
     // Auto-open group when active path matches
     useEffect(() => {
+        if (!activeItemPath) return;
         menuGroups.forEach(group => {
-            const hasActiveItem = group.items.some(item => isItemActive(item));
+            const hasActiveItem = group.items.some(item => item.path === activeItemPath);
             if (hasActiveItem && collapsedGroups[group.id]) {
                 setCollapsedGroups(prev => ({ ...prev, [group.id]: false }));
             }
         });
-    }, [currentPath]);
+    }, [activeItemPath]);
 
     const toggleGroup = (groupId) => {
         setCollapsedGroups(prev => ({
@@ -223,28 +256,66 @@ const Sidebar = ({ collapsed, onToggle }) => {
             .filter(group => group.items.length > 0);
     }, [searchQuery]);
 
+    // Flatten all items across menu groups for exact path checking
+    const allMenuItems = useMemo(() => {
+        return menuGroups.flatMap(group => group.items);
+    }, []);
+
+    const isItemActive = (item) => {
+        // 1. Single active item resolution [from t1]
+        if (activeItemPath) {
+            return activeItemPath === item.path;
+        }
+
+        // 2. Direct path or alias match fallback [from Punam]
+        if (currentPath === item.path) return true;
+        if (item.aliasPaths && item.aliasPaths.includes(currentPath)) return true;
+
+        // If another item in the sidebar matches currentPath exactly or via alias,
+        // do not mark this broader parent item as active
+        const hasExactMatchElsewhere = allMenuItems.some(
+            other => other.path !== item.path &&
+                (other.path === currentPath || (other.aliasPaths && other.aliasPaths.includes(currentPath)))
+        );
+        if (hasExactMatchElsewhere) {
+            return false;
+        }
+
+        // Avoid marking root or broad paths as active for everything
+        if (item.path !== '/' && item.path !== '/dashboard' && currentPath.startsWith(item.path + '/')) {
+            // Ensure no other menu item has a longer/more specific matching prefix
+            const hasMoreSpecificItem = allMenuItems.some(
+                other => other.path !== item.path &&
+                    other.path.length > item.path.length &&
+                    currentPath.startsWith(other.path)
+            );
+            return !hasMoreSpecificItem;
+        }
+        return false;
+    };
+
     return (
         <aside
-            className={`sidebar ${collapsed ? 'sidebar--collapsed' : ''}`}
-            style={{ width: collapsed ? '68px' : '242px' }}
+            className={`sidebar ${isEffectiveCollapsed ? 'sidebar--collapsed' : ''}`}
+            style={{ width: isEffectiveCollapsed ? '68px' : '242px' }}
         >
             {/* Sidebar Brand Header */}
             <div
                 className="sidebar-logo"
-                style={{ cursor: collapsed ? 'pointer' : 'default' }}
-                onClick={collapsed ? onToggle : undefined}
-                title={collapsed ? 'Expand sidebar rail' : undefined}
+                style={{ cursor: isEffectiveCollapsed ? 'pointer' : 'default' }}
+                onClick={isEffectiveCollapsed ? onToggle : undefined}
+                title={isEffectiveCollapsed ? 'Expand sidebar rail' : undefined}
             >
                 <div className="sidebar-logo-icon">
                     <BsShop size={18} />
                 </div>
-                {!collapsed && (
+                {!isEffectiveCollapsed && (
                     <div className="sidebar-brand-wrap">
                         <span className="sidebar-brand">RetailOS</span>
                         <span className="sidebar-pro-pill">PRO</span>
                     </div>
                 )}
-                {!collapsed && (
+                {!isEffectiveCollapsed && !isNoCollapseModule && (
                     <button
                         type="button"
                         className="sidebar-toggle"
@@ -257,7 +328,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
             </div>
 
             {/* Quick Filter Search Bar (when expanded) */}
-            {!collapsed && (
+            {!isEffectiveCollapsed && (
                 <div className="sidebar-search-box">
                     <div className="sidebar-search-inner">
                         <BsSearch className="sidebar-search-icon" />
@@ -309,7 +380,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
                         return (
                             <div key={group.id} className="sidebar-group">
                                 {/* Group Header Accordion Trigger */}
-                                {!collapsed ? (
+                                {!isEffectiveCollapsed ? (
                                     <button
                                         type="button"
                                         className="sidebar-group-btn"
@@ -329,7 +400,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
                                 )}
 
                                 {/* Group Items */}
-                                {(!isCollapsed || collapsed) && (
+                                {(!isCollapsed || isEffectiveCollapsed) && (
                                     <div className="sidebar-group-items">
                                         {group.items.map((item) => {
                                             const active = isItemActive(item);
@@ -342,11 +413,12 @@ const Sidebar = ({ collapsed, onToggle }) => {
                                                 >
                                                     <NavLink
                                                         to={item.path}
-                                                        className={`sidebar-item ${active ? 'sidebar-item--active' : ''}`}
+                                                        end={Boolean(item.end || item.path === '/ecommerce' || item.path === '/dashboard' || item.path === '/')}
+                                                        className={() => `sidebar-item ${active ? 'sidebar-item--active' : ''}`}
                                                     >
                                                         <span className="sidebar-item-icon">{item.icon}</span>
 
-                                                        {!collapsed && (
+                                                        {!isEffectiveCollapsed && (
                                                             <>
                                                                 <span className="sidebar-item-label">{item.name}</span>
                                                                 {item.badge && (
@@ -361,7 +433,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
                                                     </NavLink>
 
                                                     {/* Tooltip for collapsed mode */}
-                                                    {collapsed && hoveredItem === item.name && (
+                                                    {isEffectiveCollapsed && hoveredItem === item.name && (
                                                         <div
                                                             style={{
                                                                 position: 'absolute',
@@ -401,7 +473,7 @@ const Sidebar = ({ collapsed, onToggle }) => {
             </nav>
 
             {/* Sidebar Footer Info */}
-            {!collapsed ? (
+            {!isEffectiveCollapsed ? (
                 <div className="sidebar-footer">
                     <div className="sidebar-footer-store">
                         <span className="sidebar-footer-store-name">Store: Main Outlet</span>
@@ -410,6 +482,23 @@ const Sidebar = ({ collapsed, onToggle }) => {
                             Register Online
                         </span>
                     </div>
+                    <button
+                        type="button"
+                        onClick={onToggle}
+                        style={{
+                            background: '#f1f5f9',
+                            border: 'none',
+                            color: '#64748b',
+                            borderRadius: 6,
+                            padding: '4px 6px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                        }}
+                        title="Collapse sidebar rail"
+                    >
+                        <BsLayoutSidebarInset size={14} />
+                    </button>
                 </div>
             ) : (
                 <div style={{ padding: '12px 0', display: 'flex', justifyContent: 'center', borderTop: '1px solid var(--color-border)', background: '#fafafa' }}>

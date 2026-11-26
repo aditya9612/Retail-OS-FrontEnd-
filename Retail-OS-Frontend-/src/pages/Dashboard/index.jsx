@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
+import '../../components/Categories/CategoryCards.css';
+import { PageContainer, PageHeader, KpiGrid, KpiCard } from '../../components/Common/PageComponents';
 import {
     ResponsiveContainer,
     BarChart,
@@ -16,6 +18,10 @@ import {
     BsShop,
     BsCalendar3,
     BsChevronDown,
+    BsChevronLeft,
+    BsChevronRight,
+    BsCheck2,
+    BsEye,
     BsBarChartFill,
     BsCart3,
     BsPeopleFill,
@@ -44,17 +50,22 @@ import {
     getTopProducts,
     getRecentTransactions,
     getStores,
+    getStoreSummary,
     getAnalyticsProducts,
     getInventoryValuationBreakdown,
+    buildDateFilterParams,
 } from '../../services/dashboard';
 import { getOrders } from '../../services/orderService';
 import { getInvoices } from '../../services/billingService';
 import './dashboard.css';
 
 const PERIOD_LABELS = {
+    today: 'Today',
+    this_week: 'This Week',
     this_year: 'This Year',
     this_month: 'This Month',
     last_month: 'Last Month',
+    last_year: 'Last Year',
 };
 
 const parseMetric = (val) => {
@@ -80,17 +91,43 @@ const formatCompactCurrency = (val) => {
     const sign = num < 0 ? '-' : '';
     if (abs >= 10000000) {
         const cr = abs / 10000000;
-        return `${sign}₹${cr % 1 === 0 ? cr : cr.toFixed(1)}Cr`;
+        const crStr = Number(cr.toFixed(2)).toString();
+        return `${sign}₹${crStr}Cr`;
     }
     if (abs >= 100000) {
         const l = abs / 100000;
-        return `${sign}₹${l % 1 === 0 ? l : l.toFixed(1)}L`;
+        const lStr = Number(l.toFixed(2)).toString();
+        return `${sign}₹${lStr}L`;
     }
     if (abs >= 1000) {
         const k = abs / 1000;
-        return `${sign}₹${k % 1 === 0 ? k : k.toFixed(1)}k`;
+        const kStr = Number(k.toFixed(1)).toString();
+        return `${sign}₹${kStr}k`;
     }
-    return `${sign}₹${num}`;
+    return `${sign}₹${num.toLocaleString('en-IN')}`;
+};
+
+const getNiceAxisMax = (val, defaultMax = 1000) => {
+    const num = Number(val);
+    if (!num || isNaN(num) || num <= 0) return defaultMax;
+    const target = num * 1.2;
+    const power = Math.floor(Math.log10(target));
+    const magnitude = Math.pow(10, power);
+    const fraction = target / magnitude;
+
+    let niceFactor = 10;
+    if (fraction <= 1) niceFactor = 1;
+    else if (fraction <= 1.2) niceFactor = 1.2;
+    else if (fraction <= 1.5) niceFactor = 1.5;
+    else if (fraction <= 2) niceFactor = 2;
+    else if (fraction <= 2.5) niceFactor = 2.5;
+    else if (fraction <= 3) niceFactor = 3;
+    else if (fraction <= 4) niceFactor = 4;
+    else if (fraction <= 5) niceFactor = 5;
+    else if (fraction <= 6) niceFactor = 6;
+    else if (fraction <= 8) niceFactor = 8;
+
+    return Math.round(niceFactor * magnitude);
 };
 
 const formatInteger = (val) => {
@@ -113,6 +150,77 @@ const formatSyncTime = (date) => {
         hour12: true,
     });
 };
+
+const formatStatusLabel = (str) => {
+    if (!str) return '—';
+    return String(str)
+        .trim()
+        .replace(/[_-]+/g, ' ')
+        .split(' ')
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+};
+
+const parseTransactionStatuses = (ord) => {
+    if (!ord) return { order: 'Completed', payment: 'Paid' };
+
+    const rawOrder = ord.order_status || '';
+    const rawPayment = ord.payment_status || '';
+    const rawCombined = String(ord.status || '').toLowerCase().trim();
+    const rawOrderLower = String(rawOrder).toLowerCase().trim();
+
+    // Explicit mapping from requirements specification
+    const combinedMap = {
+        draftpending: { order: 'Draft', payment: 'Pending' },
+        confirmedpending: { order: 'Confirmed', payment: 'Pending' },
+        partially_returnedpending: { order: 'Partially Returned', payment: 'Pending' },
+        partiallyreturnedpending: { order: 'Partially Returned', payment: 'Pending' },
+        confirmedpaid: { order: 'Confirmed', payment: 'Paid' },
+        completedpaid: { order: 'Completed', payment: 'Paid' },
+        draftpaid: { order: 'Draft', payment: 'Paid' },
+        cancelledpaid: { order: 'Cancelled', payment: 'Paid' },
+        cancelledpending: { order: 'Cancelled', payment: 'Pending' },
+        pendingpending: { order: 'Pending', payment: 'Pending' },
+        returnedpaid: { order: 'Returned', payment: 'Paid' },
+        returnedpending: { order: 'Returned', payment: 'Pending' },
+    };
+
+    if (rawCombined && combinedMap[rawCombined]) {
+        return combinedMap[rawCombined];
+    }
+    if (rawOrderLower && combinedMap[rawOrderLower]) {
+        return combinedMap[rawOrderLower];
+    }
+
+    // If combined string ends with known payment keywords (e.g. "partially_returnedpending")
+    const combinedCandidate = rawOrderLower || rawCombined;
+    const paymentKeywords = ['pending', 'paid', 'failed', 'refunded', 'unpaid'];
+    for (const pKey of paymentKeywords) {
+        if (combinedCandidate.endsWith(pKey) && combinedCandidate.length > pKey.length) {
+            const prefix = combinedCandidate.slice(0, -pKey.length);
+            return {
+                order: formatStatusLabel(prefix),
+                payment: rawPayment ? formatStatusLabel(rawPayment) : formatStatusLabel(pKey),
+            };
+        }
+    }
+
+    // Independent fields or fallback
+    const order = rawOrder || ord.status || 'Completed';
+    const payment = rawPayment || 'Paid';
+
+    return {
+        order: formatStatusLabel(order),
+        payment: formatStatusLabel(payment),
+    };
+};
+
+const getStatusClass = (status) => {
+    if (!status) return '';
+    return String(status).toLowerCase().trim().replace(/[\s_]+/g, '-');
+};
+
 
 const CALENDAR_MONTHS = [
     { short: 'Jan', full: 'January', monthNum: 1 },
@@ -156,7 +264,15 @@ const getCalendarMonthIndex = (val) => {
         if (m >= 1 && m <= 12) return m - 1;
     }
 
-    // 5. Fallback prefix match (e.g. 'sept')
+    // 5. Date format containing month name (e.g. '01 Nov', '15-Oct', 'Nov 2026')
+    const containsIdx = CALENDAR_MONTHS.findIndex((m) => {
+        const s = m.short.toLowerCase();
+        const f = m.full.toLowerCase();
+        return str.includes(s) || str.includes(f);
+    });
+    if (containsIdx !== -1) return containsIdx;
+
+    // 6. Fallback prefix match (e.g. 'sept')
     const prefixIdx = CALENDAR_MONTHS.findIndex((m) => str.startsWith(m.short.toLowerCase()));
     if (prefixIdx !== -1) return prefixIdx;
 
@@ -181,15 +297,91 @@ const formatDate = (isoStr) => {
     }
 };
 
+/**
+ * Parse calendar day number (1-31) from various date/string formats
+ */
+const parseCalendarDay = (val) => {
+    if (val === null || val === undefined) return null;
+    const str = String(val).trim();
+    if (!str) return null;
+
+    // ISO format: '2026-11-05' or '2026-11-05T...'
+    const isoMatch = str.match(/^\d{4}-\d{2}-(\d{1,2})/);
+    if (isoMatch) return parseInt(isoMatch[1], 10);
+
+    // Day with month separator or space: '05 Nov' or '5-Nov' or '5/11'
+    const dayMonthMatch = str.match(/^(\d{1,2})[\s\-_/]/);
+    if (dayMonthMatch) return parseInt(dayMonthMatch[1], 10);
+
+    // Direct day number: '05' or 5
+    const num = parseInt(str, 10);
+    if (!isNaN(num) && num >= 1 && num <= 31) return num;
+
+    return null;
+};
+
+/**
+ * Metadata for a given period: year, monthIndex, short name, full name, daysInMonth, label
+ */
+const getMonthMeta = (periodType, yearVal = CURRENT_CALENDAR_YEAR) => {
+    const now = new Date();
+    if (periodType === 'last_month') {
+        const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const y = lastMonthDate.getFullYear();
+        const mIdx = lastMonthDate.getMonth();
+        const days = new Date(y, mIdx + 1, 0).getDate();
+        return {
+            year: y,
+            monthIndex: mIdx,
+            short: CALENDAR_MONTHS[mIdx].short,
+            full: CALENDAR_MONTHS[mIdx].full,
+            daysInMonth: days,
+            label: `${CALENDAR_MONTHS[mIdx].full} ${y}`,
+        };
+    }
+
+    // Default 'this_month'
+    const y = yearVal || now.getFullYear();
+    const mIdx = now.getMonth();
+    const days = new Date(y, mIdx + 1, 0).getDate();
+    return {
+        year: y,
+        monthIndex: mIdx,
+        short: CALENDAR_MONTHS[mIdx].short,
+        full: CALENDAR_MONTHS[mIdx].full,
+        daysInMonth: days,
+        label: `${CALENDAR_MONTHS[mIdx].full} ${y}`,
+    };
+};
+
+/**
+ * Clean milestone dates for X-axis ticks (1st, 5th, 10th, 15th, 20th, 25th, and last day of month)
+ */
+const getMilestoneTicks = (daysInMonth) => {
+    const milestones = [1, 5, 10, 15, 20, 25];
+    const ticks = milestones.filter((m) => m < daysInMonth).map((m) => String(m).padStart(2, '0'));
+    ticks.push(String(daysInMonth).padStart(2, '0'));
+    return ticks;
+};
+
+
+const CURRENT_CALENDAR_YEAR = new Date().getFullYear();
+
 const Dashboard = () => {
     // ── Filters & Selectors ──
     const [stores, setStores] = useState([]);
+    const [storesSummary, setStoresSummary] = useState([]);
     const [selectedStore, setSelectedStore] = useState(''); // '' means All Stores (omitted store_id)
-    const [period, setPeriod] = useState('this_month'); // 'this_year' | 'this_month' | 'last_month'
+    const [selectedStoreSummary, setSelectedStoreSummary] = useState(null);
+    const [period, setPeriod] = useState('this_year'); // 'this_year' | 'this_month' | 'last_month'
 
     // Individual chart period overrides (default synchronized with main period)
-    const [overviewChartPeriod, setOverviewChartPeriod] = useState('this_month');
+    const [overviewChartPeriod, setOverviewChartPeriod] = useState('this_year');
     const [revCostChartPeriod, setRevCostChartPeriod] = useState('this_year');
+
+    // ── Synchronized Year Selection State (Default current calendar year) ──
+    const [selectedYear, setSelectedYear] = useState(CURRENT_CALENDAR_YEAR);
+    const [isPeriodSubmenuOpen, setIsPeriodSubmenuOpen] = useState(false);
 
     // Dropdown open states
     const [isStoreOpen, setIsStoreOpen] = useState(false);
@@ -198,18 +390,21 @@ const Dashboard = () => {
     // ── Metric Drilldown Modal State ──
     const [activeMetricModal, setActiveMetricModal] = useState(null); // 'cost' | 'profit' | 'margin' | null
 
-    // ── Notification Bell & Dropdown State ──
-    const [isNotificationOpen, setIsNotificationOpen] = useState(false);
-    const [bellPosition, setBellPosition] = useState(null);
-    const notificationDropdownRef = useRef(null);
-    const bellButtonRef = useRef(null);
-
     // ── API State ──
     const [summary, setSummary] = useState(null);
     const [overviewData, setOverviewData] = useState([]);
+    const [yearlyOverviewData, setYearlyOverviewData] = useState([]);
+    const [rcOverviewData, setRcOverviewData] = useState(null);
     const [revenueVsCost, setRevenueVsCost] = useState(null);
     const [topProducts, setTopProducts] = useState([]);
     const [transactions, setTransactions] = useState([]);
+    const [historicalRecords, setHistoricalRecords] = useState([]);
+
+    // ── Table Pagination State ──
+    const [storePage, setStorePage] = useState(1);
+    const STORES_PER_PAGE = 5;
+    const [txPage, setTxPage] = useState(1);
+    const TX_PER_PAGE = 5;
 
     // ── Inventory Valuation Breakdown State ──
     const [valuationData, setValuationData] = useState(null);
@@ -227,144 +422,135 @@ const Dashboard = () => {
     const storeDropdownRef = useRef(null);
     const periodDropdownRef = useRef(null);
 
-    // Notification items derived from actual Dashboard data
-    const notificationItems = useMemo(() => {
-        const items = [];
+    // ── Dynamically Retrieve Available Years Based on Application's Existing Data & Date Range ──
+    const availableYears = useMemo(() => {
+        const currentYear = new Date().getFullYear();
+        const yearsSet = new Set();
+        yearsSet.add(currentYear);
 
-        // Low stock products alert from Dashboard summary
-        if (summary && summary.low_stock_products > 0) {
-            items.push({
-                id: 'low-stock-alert',
-                type: 'warning',
-                title: 'Low Stock Alert',
-                message: `${summary.low_stock_products} ${summary.low_stock_products === 1 ? 'product is' : 'products are'} running low on inventory and need attention.`,
-                time: 'Requires Action',
-                link: '/inventory',
-                linkText: 'View Inventory',
-            });
-        }
-
-        // Active connection or dashboard error
-        if (error) {
-            items.push({
-                id: 'dashboard-error-alert',
-                type: 'error',
-                title: 'System Notice',
-                message: error,
-                time: 'Warning',
-                link: null,
-            });
-        }
-
-        return items;
-    }, [summary, error]);
-
-    // ── Bind Header Notification Bell Icon Button ──
-    useEffect(() => {
-        const getBellElement = () => (
-            document.querySelector('.header-icon-btn--bell') ||
-            document.querySelector('button[title="Notifications"]')
-        );
-
-        let bellBtn = getBellElement();
-        if (!bellBtn) return;
-        bellButtonRef.current = bellBtn;
-
-        bellBtn.setAttribute('aria-haspopup', 'dialog');
-        bellBtn.setAttribute('aria-controls', 'dashboard-notification-panel');
-
-        const updatePosition = () => {
-            const rect = bellBtn.getBoundingClientRect();
-            setBellPosition({
-                top: Math.round(rect.bottom + 8),
-                right: Math.max(16, Math.round(window.innerWidth - rect.right)),
-            });
-        };
-
-        const handleBellClick = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            updatePosition();
-            setIsNotificationOpen((prev) => !prev);
-        };
-
-        const handleBellKeyDown = (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                e.stopPropagation();
-                updatePosition();
-                setIsNotificationOpen((prev) => !prev);
+        if (selectedYear) {
+            const sy = Number(selectedYear);
+            if (!isNaN(sy) && sy >= 1970 && sy <= 3000) {
+                yearsSet.add(sy);
             }
-        };
-
-        bellBtn.addEventListener('click', handleBellClick);
-        bellBtn.addEventListener('keydown', handleBellKeyDown);
-
-        return () => {
-            bellBtn.removeEventListener('click', handleBellClick);
-            bellBtn.removeEventListener('keydown', handleBellKeyDown);
-            bellBtn.removeAttribute('aria-haspopup');
-            bellBtn.removeAttribute('aria-expanded');
-            bellBtn.removeAttribute('aria-controls');
-            bellBtn.classList.remove('active');
-        };
-    }, []);
-
-    // Synchronize bell button accessibility and active state
-    useEffect(() => {
-        if (bellButtonRef.current) {
-            bellButtonRef.current.setAttribute('aria-expanded', isNotificationOpen ? 'true' : 'false');
-            bellButtonRef.current.classList.toggle('active', isNotificationOpen);
         }
-    }, [isNotificationOpen]);
 
-    // Close notification panel on outside click, Escape key, or reposition on resize/scroll
-    useEffect(() => {
-        if (!isNotificationOpen) return;
-
-        const handleClickOutside = (e) => {
-            if (
-                notificationDropdownRef.current &&
-                !notificationDropdownRef.current.contains(e.target) &&
-                bellButtonRef.current &&
-                !bellButtonRef.current.contains(e.target)
-            ) {
-                setIsNotificationOpen(false);
+        // Helper to extract year from various date/timestamp formats without arbitrary limits
+        const extractYear = (val) => {
+            if (!val) return null;
+            if (typeof val === 'number') {
+                if (val >= 1970 && val <= 3000) return val;
+                const d = new Date(val > 1e11 ? val : val * 1000);
+                if (!isNaN(d.getTime())) {
+                    const y = d.getFullYear();
+                    if (y >= 1970 && y <= 3000) return y;
+                }
+                return null;
             }
+            if (typeof val === 'string') {
+                const str = val.trim();
+                if (!str) return null;
+                if (/^\d{4}$/.test(str)) {
+                    const y = parseInt(str, 10);
+                    if (y >= 1970 && y <= 3000) return y;
+                }
+                const isoMatch = str.match(/^(\d{4})[-\\/]/);
+                if (isoMatch) {
+                    const y = parseInt(isoMatch[1], 10);
+                    if (y >= 1970 && y <= 3000) return y;
+                }
+                const d = new Date(str);
+                if (!isNaN(d.getTime())) {
+                    const y = d.getFullYear();
+                    if (y >= 1970 && y <= 3000) return y;
+                }
+            }
+            return null;
         };
 
-        const handleKeyDown = (e) => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                setIsNotificationOpen(false);
-                if (bellButtonRef.current) {
-                    bellButtonRef.current.focus();
+        const scanItem = (item) => {
+            if (!item) return;
+            if (typeof item === 'number' || typeof item === 'string') {
+                const yr = extractYear(item);
+                if (yr) yearsSet.add(yr);
+                return;
+            }
+            if (typeof item === 'object') {
+                const directYr = extractYear(item.year || item.sales_year || item.fiscal_year);
+                if (directYr) yearsSet.add(directYr);
+
+                const dateKeys = [
+                    'created_at', 'createdAt',
+                    'order_date', 'orderDate',
+                    'invoice_date', 'invoiceDate',
+                    'date', 'updated_at', 'updatedAt',
+                    'timestamp', 'start_date', 'end_date',
+                    'date_from', 'date_to',
+                    'registration_date', 'founded_date'
+                ];
+                for (const k of dateKeys) {
+                    if (item[k]) {
+                        const yr = extractYear(item[k]);
+                        if (yr) yearsSet.add(yr);
+                    }
                 }
             }
         };
 
-        const handleReposition = () => {
-            if (bellButtonRef.current) {
-                const rect = bellButtonRef.current.getBoundingClientRect();
-                setBellPosition({
-                    top: Math.round(rect.bottom + 8),
-                    right: Math.max(16, Math.round(window.innerWidth - rect.right)),
-                });
+        const scanArray = (arr) => {
+            if (Array.isArray(arr)) {
+                arr.forEach(scanItem);
             }
         };
 
-        document.addEventListener('mousedown', handleClickOutside);
-        document.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('resize', handleReposition);
-        window.addEventListener('scroll', handleReposition, true);
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('resize', handleReposition);
-            window.removeEventListener('scroll', handleReposition, true);
+        const getLocalRecords = () => {
+            const list = [];
+            try {
+                const gst = localStorage.getItem('gst_invoices');
+                if (gst) {
+                    const parsed = JSON.parse(gst);
+                    if (Array.isArray(parsed)) list.push(...parsed);
+                }
+            } catch (_) {}
+            try {
+                const po = localStorage.getItem('local_purchase_orders') || localStorage.getItem('purchases');
+                if (po) {
+                    const parsed = JSON.parse(po);
+                    if (Array.isArray(parsed)) list.push(...parsed);
+                }
+            } catch (_) {}
+            return list;
         };
-    }, [isNotificationOpen]);
+
+        // Scan all application data sources dynamically
+        scanArray(transactions);
+        scanArray(summary?.recent_transactions);
+        scanArray(summary?.available_years || summary?.years);
+        scanItem(summary);
+        scanArray(stores);
+        scanArray(historicalRecords);
+        scanArray(overviewData);
+        scanArray(yearlyOverviewData);
+        scanArray(getLocalRecords());
+
+        // Compute dynamic date range from earliest historical data point to current year
+        const minYear = Math.min(...Array.from(yearsSet));
+        const maxYear = Math.max(currentYear, ...Array.from(yearsSet));
+
+        const result = [];
+        for (let y = maxYear; y >= minYear; y--) {
+            result.push(y);
+        }
+        return result;
+    }, [transactions, summary, stores, historicalRecords, overviewData, yearlyOverviewData, selectedYear]);
+
+    // Synchronized year selection handler across both chart sections & main header
+    const handleYearSelect = useCallback((yr) => {
+        setSelectedYear(yr);
+        setPeriod('this_year');
+        setOverviewChartPeriod('this_year');
+        setRevCostChartPeriod('this_year');
+    }, []);
 
     // Close dropdowns on outside click
     useEffect(() => {
@@ -422,8 +608,46 @@ const Dashboard = () => {
         return () => { mounted = false; };
     }, []);
 
+    // ── Load Historical Data Records to Disclose Actual Available Date Range ──
+    useEffect(() => {
+        let mounted = true;
+        const fetchHistoricalData = async () => {
+            try {
+                const [ordersRes, invoicesRes] = await Promise.allSettled([
+                    getOrders({ page: 1, page_size: 100 }),
+                    getInvoices({ page: 1, limit: 100 }),
+                ]);
+                if (!mounted) return;
+                const records = [];
+                if (ordersRes.status === 'fulfilled' && ordersRes.value) {
+                    const list = Array.isArray(ordersRes.value)
+                        ? ordersRes.value
+                        : (ordersRes.value?.items || ordersRes.value?.data || []);
+                    records.push(...list);
+                }
+                if (invoicesRes.status === 'fulfilled' && invoicesRes.value) {
+                    const list = Array.isArray(invoicesRes.value)
+                        ? invoicesRes.value
+                        : (invoicesRes.value?.items || invoicesRes.value?.data || []);
+                    records.push(...list);
+                }
+                if (records.length > 0) {
+                    setHistoricalRecords((prev) => {
+                        const existingIds = new Set(prev.map(p => p.id || p.order_id || p.order_number || p.invoice_number));
+                        const additions = records.filter(r => !existingIds.has(r.id || r.order_id || r.order_number || r.invoice_number));
+                        return additions.length > 0 ? [...prev, ...additions] : prev;
+                    });
+                }
+            } catch (err) {
+                console.warn('Could not fetch historical data records:', err?.message || err);
+            }
+        };
+        fetchHistoricalData();
+        return () => { mounted = false; };
+    }, []);
+
     // ── Fetch All Dashboard Data ──
-    const fetchAllDashboardData = useCallback(async (storeIdVal, mainPeriodVal, ovPeriodVal, rcPeriodVal, isSilent = false) => {
+    const fetchAllDashboardData = useCallback(async (storeIdVal, mainPeriodVal, ovPeriodVal, rcPeriodVal, isSilent = false, yearVal = CURRENT_CALENDAR_YEAR) => {
         // Prevent duplicate requests when fetch is already in-flight
         if (isRefreshingRef.current) return;
         isRefreshingRef.current = true;
@@ -436,6 +660,7 @@ const Dashboard = () => {
         const storeFilter = storeIdVal ? Number(storeIdVal) : null;
 
         try {
+            const needsSeparateRcOverview = rcPeriodVal !== (ovPeriodVal || mainPeriodVal);
             const [
                 summaryResult,
                 overviewResult,
@@ -444,21 +669,31 @@ const Dashboard = () => {
                 recentTxResult,
                 ordersResult,
                 analyticsProductsResult,
+                separateRcOverviewResult,
+                tenantSummaryResult,
+                storeSummaryDetailResult,
                 valuationResult,
             ] = await Promise.allSettled([
-                getDashboardSummary(mainPeriodVal, storeFilter),
-                getDashboardOverview(ovPeriodVal || mainPeriodVal, storeFilter),
-                getRevenueVsCost(rcPeriodVal || mainPeriodVal, storeFilter),
-                getTopProducts(10, storeFilter, mainPeriodVal),
-                getRecentTransactions(10, storeFilter),
+                getDashboardSummary(mainPeriodVal, storeFilter, yearVal),
+                getDashboardOverview(ovPeriodVal || mainPeriodVal, storeFilter, yearVal),
+                getRevenueVsCost(rcPeriodVal || mainPeriodVal, storeFilter, yearVal),
+                getTopProducts(10, storeFilter, mainPeriodVal, yearVal),
+                getRecentTransactions(20, storeFilter, mainPeriodVal, yearVal),
                 getOrders({
                     store_id: storeFilter || undefined,
                     page: 1,
-                    page_size: 10,
+                    page_size: 50,
+                    ...buildDateFilterParams(mainPeriodVal, yearVal),
                 }),
                 getAnalyticsProducts({
                     store_id: storeFilter || undefined,
+                    ...buildDateFilterParams(mainPeriodVal, yearVal),
                 }),
+                needsSeparateRcOverview ? getDashboardOverview(rcPeriodVal, storeFilter, yearVal) : Promise.resolve(null),
+                // When filtering by a single store, fetch tenant summary in parallel to guarantee store-wise sales summary is never null
+                storeFilter ? getDashboardSummary(mainPeriodVal, null, yearVal) : Promise.resolve(null),
+                // Fetch store-specific summary from /api/v1/stores/{store_id}/summary for deep metrics verification
+                storeFilter ? getStoreSummary(storeFilter) : Promise.resolve(null),
                 getInventoryValuationBreakdown(storeFilter),
             ]);
 
@@ -468,50 +703,80 @@ const Dashboard = () => {
             let hadError = false;
             let errorMsg = '';
 
+            // Extract fresh stores_summary: prefer direct summary, then tenant summary, then existing state
+            let freshStoresSummary = null;
+            if (summaryResult.status === 'fulfilled' && Array.isArray(summaryResult.value?.stores_summary) && summaryResult.value.stores_summary.length > 0) {
+                freshStoresSummary = summaryResult.value.stores_summary;
+            } else if (tenantSummaryResult && tenantSummaryResult.status === 'fulfilled' && Array.isArray(tenantSummaryResult.value?.stores_summary) && tenantSummaryResult.value.stores_summary.length > 0) {
+                freshStoresSummary = tenantSummaryResult.value.stores_summary;
+            }
+
+            if (freshStoresSummary) {
+                setStoresSummary(freshStoresSummary);
+                // Populate/enrich stores list dynamically from real stores_summary
+                setStores((prevStores) => {
+                    const mergedMap = new Map();
+                    (prevStores || []).forEach((s) => {
+                        if (s?.id) mergedMap.set(String(s.id), s);
+                    });
+                    freshStoresSummary.forEach((s) => {
+                        const existing = mergedMap.get(String(s.store_id));
+                        mergedMap.set(String(s.store_id), {
+                            id: s.store_id,
+                            name: s.store_name || existing?.name || `Store #${s.store_id}`,
+                            is_active: s.is_active !== false,
+                            ...(existing || {}),
+                        });
+                    });
+                    return Array.from(mergedMap.values());
+                });
+            }
+
             // 1. Dashboard Summary
             if (summaryResult.status === 'fulfilled' && summaryResult.value) {
                 const val = summaryResult.value;
-                setSummary({
-                    mode: val.mode || 'all_stores',
-                    store_id: val.store_id ?? null,
-                    store_name: val.store_name ?? null,
-                    today_sales: parseMetric(val.today_sales),
-                    monthly_sales: parseMetric(val.monthly_sales),
-                    total_customers: parseMetric(val.total_customers),
-                    total_revenue: parseMetric(val.total_revenue),
-                    low_stock_products: parseMetric(val.low_stock_products),
-                    stores_summary: Array.isArray(val.stores_summary) ? val.stores_summary : [],
-                    total_sales: parseMetric(val.total_sales),
-                    sales_target: parseMetric(val.sales_target),
-                    sales_achievement_percentage: parseMetric(val.sales_achievement_percentage),
-                    total_cost: parseMetric(val.total_cost),
-                    cost_target: parseMetric(val.cost_target),
-                    cost_achievement_percentage: parseMetric(val.cost_achievement_percentage),
-                    products_sold: parseMetric(val.products_sold),
-                    products_target: parseMetric(val.products_target),
-                    products_achievement_percentage: parseMetric(val.products_achievement_percentage),
-                    gross_profit: parseMetric(val.gross_profit),
-                    gross_margin_percentage: parseMetric(val.gross_margin_percentage),
-                    recent_transactions: Array.isArray(val.recent_transactions) ? val.recent_transactions : [],
-                });
+                setSummary((prevSummary) => {
+                    const resolvedStoresSummary =
+                        freshStoresSummary ||
+                        (Array.isArray(prevSummary?.stores_summary) && prevSummary.stores_summary.length > 0
+                            ? prevSummary.stores_summary
+                            : (storesSummary.length > 0 ? storesSummary : []));
 
-                // Populate/enrich stores list dynamically from real stores_summary
-                if (Array.isArray(val.stores_summary) && val.stores_summary.length > 0) {
-                    setStores((prevStores) => {
-                        if (!prevStores || prevStores.length === 0) {
-                            return val.stores_summary.map((s) => ({
-                                id: s.store_id,
-                                name: s.store_name,
-                                is_active: s.is_active !== false,
-                            }));
-                        }
-                        return prevStores;
-                    });
-                }
+                    return {
+                        mode: val.mode || 'all_stores',
+                        store_id: val.store_id ?? null,
+                        store_name: val.store_name ?? null,
+                        today_sales: parseMetric(val.today_sales),
+                        monthly_sales: parseMetric(val.monthly_sales),
+                        total_customers: parseMetric(val.total_customers),
+                        total_revenue: parseMetric(val.total_revenue),
+                        low_stock_products: parseMetric(val.low_stock_products),
+                        stores_summary: resolvedStoresSummary,
+                        total_sales: parseMetric(val.total_sales),
+                        sales_target: parseMetric(val.sales_target),
+                        sales_achievement_percentage: parseMetric(val.sales_achievement_percentage),
+                        total_cost: parseMetric(val.total_cost),
+                        cost_target: parseMetric(val.cost_target),
+                        cost_achievement_percentage: parseMetric(val.cost_achievement_percentage),
+                        products_sold: parseMetric(val.products_sold),
+                        products_target: parseMetric(val.products_target),
+                        products_achievement_percentage: parseMetric(val.products_achievement_percentage),
+                        gross_profit: parseMetric(val.gross_profit),
+                        gross_margin_percentage: parseMetric(val.gross_margin_percentage),
+                        recent_transactions: Array.isArray(val.recent_transactions) ? val.recent_transactions : [],
+                    };
+                });
             } else {
                 hadError = true;
                 errorMsg = summaryResult.reason?.message || 'Failed to load dashboard summary';
                 setSummary(null);
+            }
+
+            // Store summary detail result from /api/v1/stores/{store_id}/summary
+            if (storeSummaryDetailResult && storeSummaryDetailResult.status === 'fulfilled' && storeSummaryDetailResult.value) {
+                setSelectedStoreSummary(storeSummaryDetailResult.value);
+            } else if (!storeFilter) {
+                setSelectedStoreSummary(null);
             }
 
             // 2. Sales Overview Chart
@@ -527,10 +792,32 @@ const Dashboard = () => {
                     ? rawVal.items
                     : [];
                 setOverviewData(list);
+                if ((ovPeriodVal || mainPeriodVal) === 'this_year') {
+                    setYearlyOverviewData(list);
+                }
             } else {
                 hadError = true;
                 if (!errorMsg) errorMsg = overviewResult.reason?.message || 'Failed to load sales overview';
                 setOverviewData(null);
+            }
+
+            if (separateRcOverviewResult && separateRcOverviewResult.status === 'fulfilled' && separateRcOverviewResult.value) {
+                const rawVal = separateRcOverviewResult.value;
+                const list = Array.isArray(rawVal)
+                    ? rawVal
+                    : Array.isArray(rawVal.overview)
+                    ? rawVal.overview
+                    : Array.isArray(rawVal.data)
+                    ? rawVal.data
+                    : Array.isArray(rawVal.items)
+                    ? rawVal.items
+                    : [];
+                setRcOverviewData(list);
+                if (rcPeriodVal === 'this_year') {
+                    setYearlyOverviewData(list);
+                }
+            } else if (!needsSeparateRcOverview) {
+                setRcOverviewData(null);
             }
 
             // 3. Revenue vs Cost Chart
@@ -587,9 +874,14 @@ const Dashboard = () => {
                     : [];
                 if (ordList.length > 0) {
                     txList = ordList;
+                    setHistoricalRecords((prev) => {
+                        const existingIds = new Set(prev.map(p => p.id || p.order_id || p.order_number));
+                        const additions = ordList.filter(o => !existingIds.has(o.id || o.order_id || o.order_number));
+                        return additions.length > 0 ? [...prev, ...additions] : prev;
+                    });
                 }
             }
-            setTransactions(txList.slice(0, 10));
+            setTransactions(txList.slice(0, 20));
 
             // 6. Inventory Valuation Breakdown (Real Backend Integration)
             if (valuationResult.status === 'fulfilled' && valuationResult.value) {
@@ -624,8 +916,8 @@ const Dashboard = () => {
 
     // Trigger fetch on filter change
     useEffect(() => {
-        fetchAllDashboardData(selectedStore, period, overviewChartPeriod, revCostChartPeriod);
-    }, [selectedStore, period, overviewChartPeriod, revCostChartPeriod, fetchAllDashboardData]);
+        fetchAllDashboardData(selectedStore, period, overviewChartPeriod, revCostChartPeriod, false, selectedYear);
+    }, [selectedStore, period, overviewChartPeriod, revCostChartPeriod, selectedYear, fetchAllDashboardData]);
 
     // Handle Main Period Change
     const handlePeriodChange = (newPeriod) => {
@@ -639,20 +931,62 @@ const Dashboard = () => {
     const selectedStoreLabel = useMemo(() => {
         if (!selectedStore) return 'All Stores';
         const found = stores.find((s) => String(s.id) === String(selectedStore));
-        return found ? found.name : `Store #${selectedStore}`;
-    }, [selectedStore, stores]);
+        if (found) return found.name;
+        const fromSummary = storesSummary.find((s) => String(s.store_id) === String(selectedStore)) ||
+                            summary?.stores_summary?.find((s) => String(s.store_id) === String(selectedStore));
+        if (fromSummary) return fromSummary.store_name;
+        return `Store #${selectedStore}`;
+    }, [selectedStore, stores, storesSummary, summary?.stores_summary]);
 
-    // Calculate today's orders count from stores_summary if available
+    // Store list for Store-wise Sales Summary table
+    const effectiveStoresSummary = useMemo(() => {
+        if (Array.isArray(summary?.stores_summary) && summary.stores_summary.length > 0) {
+            return summary.stores_summary;
+        }
+        if (Array.isArray(storesSummary) && storesSummary.length > 0) {
+            return storesSummary;
+        }
+        return [];
+    }, [summary?.stores_summary, storesSummary]);
+
+    const totalStoreCount = effectiveStoresSummary.length;
+
+    // Calculate today's orders count from selectedStoreSummary or stores_summary if available
     const todayOrdersCount = useMemo(() => {
-        if (!summary || !Array.isArray(summary.stores_summary) || summary.stores_summary.length === 0) {
+        if (selectedStore && selectedStoreSummary?.today_orders_count !== undefined && selectedStoreSummary?.today_orders_count !== null) {
+            return Number(selectedStoreSummary.today_orders_count);
+        }
+        if (!effectiveStoresSummary || effectiveStoresSummary.length === 0) {
             return null;
         }
         if (!selectedStore) {
-            return summary.stores_summary.reduce((acc, curr) => acc + Number(curr.orders_count || 0), 0);
+            return effectiveStoresSummary.reduce((acc, curr) => acc + Number(curr.orders_count || 0), 0);
         }
-        const current = summary.stores_summary.find((s) => String(s.store_id) === String(selectedStore));
+        const current = effectiveStoresSummary.find((s) => String(s.store_id) === String(selectedStore));
         return current ? Number(current.orders_count || 0) : null;
-    }, [selectedStore, summary]);
+    }, [selectedStore, effectiveStoresSummary, selectedStoreSummary]);
+
+    // Reset pagination when data count changes
+    useEffect(() => {
+        setStorePage(1);
+    }, [totalStoreCount]);
+
+    useEffect(() => {
+        setTxPage(1);
+    }, [transactions, selectedStore]);
+
+    const totalStorePages = Math.max(1, Math.ceil(totalStoreCount / STORES_PER_PAGE));
+    const paginatedStores = useMemo(() => {
+        const start = (storePage - 1) * STORES_PER_PAGE;
+        return effectiveStoresSummary.slice(start, start + STORES_PER_PAGE);
+    }, [effectiveStoresSummary, storePage]);
+
+    const totalTxPages = Math.max(1, Math.ceil((transactions?.length || 0) / TX_PER_PAGE));
+    const paginatedTransactions = useMemo(() => {
+        const list = transactions || [];
+        const start = (txPage - 1) * TX_PER_PAGE;
+        return list.slice(start, start + TX_PER_PAGE);
+    }, [transactions, txPage]);
 
     // ── Inventory Valuation Breakdown Data Extraction ──
     const valuationSummary = useMemo(() => {
@@ -757,10 +1091,20 @@ const Dashboard = () => {
         };
     }, [revenueVsCost, summary]);
 
-    // Chronologically sorted overview data (all 12 calendar months for yearly, or days 1 - 31 for daily)
+    // Period metadata for Monthly Sales Chart
+    const overviewMeta = useMemo(() => {
+        return getMonthMeta(overviewChartPeriod, selectedYear);
+    }, [overviewChartPeriod, selectedYear]);
+
+    // Period metadata for Revenue vs Cost Chart
+    const revCostMeta = useMemo(() => {
+        return getMonthMeta(revCostChartPeriod, selectedYear);
+    }, [revCostChartPeriod, selectedYear]);
+
+    // ── Monthly Sales Chart Data (12 Months for Yearly, or 1–28/29/30/31 Days for Monthly) ──
     const sortedOverviewData = useMemo(() => {
-        // When viewing yearly revenue, always construct and display all 12 calendar months in chronological order
-        if (overviewChartPeriod === 'this_year') {
+        // 1. When viewing "This Year" or specific year: All 12 calendar months (Jan – Dec)
+        if (overviewChartPeriod === 'this_year' || (typeof overviewChartPeriod === 'string' && /^\d{4}$/.test(overviewChartPeriod.trim()))) {
             const yearlyData = CALENDAR_MONTHS.map((m) => ({
                 month: m.short,
                 shortMonth: m.short,
@@ -788,76 +1132,98 @@ const Dashboard = () => {
             return yearlyData;
         }
 
-        // Daily overview (this_month, last_month)
-        if (!Array.isArray(overviewData) || overviewData.length === 0) return [];
+        // 2. When viewing "This Month" or "Last Month": Complete calendar dates (1 to daysInMonth)
+        const { year, monthIndex, short: monthShort, daysInMonth } = overviewMeta;
+        const dailyData = [];
 
-        const sorted = [...overviewData].sort((a, b) => {
-            const dayA = parseInt(a.month ?? a.day ?? a.date, 10);
-            const dayB = parseInt(b.month ?? b.day ?? b.date, 10);
-            if (!isNaN(dayA) && !isNaN(dayB)) return dayA - dayB;
-            return String(a.month).localeCompare(String(b.month));
-        });
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dayPad = String(d).padStart(2, '0');
+            dailyData.push({
+                day: d,
+                month: dayPad,
+                shortMonth: dayPad,
+                fullMonth: `${dayPad} ${monthShort} ${year}`,
+                monthName: `${dayPad} ${monthShort}`,
+                name: dayPad,
+                date: `${year}-${String(monthIndex + 1).padStart(2, '0')}-${dayPad}`,
+                sales: 0,
+            });
+        }
 
-        return sorted.map((item) => {
-            const label = String(item.month ?? item.date ?? '');
-            return {
-                ...item,
-                month: label,
-                fullMonth: label,
-                monthName: label,
-                sales: Number(item.sales ?? item.revenue ?? 0),
-            };
-        });
-    }, [overviewChartPeriod, overviewData]);
+        // Populate sales from backend overviewData
+        if (Array.isArray(overviewData) && overviewData.length > 0) {
+            overviewData.forEach((item) => {
+                if (!item) return;
+                let dayNum = null;
+                const rawDate = item.date ?? item.created_at;
+                if (rawDate) {
+                    try {
+                        const dt = new Date(rawDate);
+                        if (!isNaN(dt.getTime()) && dt.getFullYear() === year && dt.getMonth() === monthIndex) {
+                            dayNum = dt.getDate();
+                        }
+                    } catch (_) {}
+                }
+                if (dayNum === null) {
+                    dayNum = parseCalendarDay(item.month ?? item.day ?? item.name ?? item.date);
+                }
+                if (dayNum !== null && dayNum >= 1 && dayNum <= daysInMonth) {
+                    const s = Number(item.sales ?? item.revenue ?? item.total ?? item.amount ?? 0);
+                    if (!isNaN(s) && s > 0) {
+                        dailyData[dayNum - 1].sales += s;
+                    }
+                }
+            });
+        }
+
+        // Check transactions as additional real data source if present
+        if (Array.isArray(transactions) && transactions.length > 0) {
+            transactions.forEach((tx) => {
+                if (!tx?.created_at) return;
+                try {
+                    const dt = new Date(tx.created_at);
+                    if (!isNaN(dt.getTime()) && dt.getFullYear() === year && dt.getMonth() === monthIndex) {
+                        const d = dt.getDate();
+                        if (d >= 1 && d <= daysInMonth) {
+                            const amt = Number(tx.amount ?? tx.total_amount ?? 0);
+                            if (!isNaN(amt) && amt > 0 && dailyData[d - 1].sales === 0) {
+                                dailyData[d - 1].sales += amt;
+                            }
+                        }
+                    }
+                } catch (_) {}
+            });
+        }
+
+        // Fallback: If overviewData summed to 0 but summary.monthly_sales exists for this_month, map to today
+        const totalDailySales = dailyData.reduce((acc, d) => acc + d.sales, 0);
+        if (totalDailySales === 0 && overviewChartPeriod === 'this_month' && summary?.monthly_sales > 0) {
+            const today = Math.min(new Date().getDate(), daysInMonth);
+            dailyData[today - 1].sales = Number(summary.monthly_sales);
+        }
+
+        return dailyData;
+    }, [overviewChartPeriod, overviewData, overviewMeta, selectedYear, transactions, summary]);
 
     // Select milestone dates for monthly overview daily chart to guarantee zero overlap on X-axis ticks
     const overviewXAxisTicks = useMemo(() => {
-        if (overviewChartPeriod === 'this_year') {
+        if (overviewChartPeriod === 'this_year' || (typeof overviewChartPeriod === 'string' && /^\d{4}$/.test(overviewChartPeriod.trim()))) {
             return undefined; // All 12 months shown cleanly
         }
-        if (!Array.isArray(sortedOverviewData) || sortedOverviewData.length === 0) {
-            return undefined;
-        }
+        return getMilestoneTicks(overviewMeta.daysInMonth);
+    }, [overviewChartPeriod, overviewMeta]);
 
-        const len = sortedOverviewData.length;
-        // Key milestone dates: 1st, 5th, 10th, 15th, 20th, 25th, and the last day of month (e.g. 30th or 31st)
-        const milestones = [1, 5, 10, 15, 20, 25];
-        const ticks = [];
-
-        sortedOverviewData.forEach((item, idx) => {
-            const str = String(item.month ?? item.date ?? '').trim();
-            let dayNum = null;
-            if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
-                dayNum = parseInt(str.split('-')[2], 10);
-            } else {
-                const match = str.match(/^(\d{1,2})/);
-                if (match) dayNum = parseInt(match[1], 10);
-            }
-
-            const isLast = idx === len - 1;
-            if ((dayNum !== null && milestones.includes(dayNum)) || isLast) {
-                ticks.push(item.month);
-            }
-        });
-
-        // Fallback: if day numbers could not be parsed, sample every 5th item + last item
-        if (ticks.length <= 1 && len > 5) {
-            return sortedOverviewData
-                .filter((_, idx) => idx === 0 || (idx + 1) % 5 === 0 || idx === len - 1)
-                .map((d) => d.month);
-        }
-
-        return ticks;
-    }, [overviewChartPeriod, sortedOverviewData]);
-
-    // Annual sales total matching sum of monthly sales values
+    // Annual/period sales total matching sum of chart data values
     const annualSalesTotal = useMemo(() => {
         return sortedOverviewData.reduce((acc, curr) => acc + (Number(curr.sales) || 0), 0);
     }, [sortedOverviewData]);
 
-    // ── Current-Year Monthly Revenue vs Cost Chart Data (12 Calendar Months Grouped Bars) ──
+    // ── Monthly Revenue vs Cost Chart Data (12 Calendar Months or 1 to daysInMonth Grouped Bars) ──
     const monthlyRevVsCostData = useMemo(() => {
-        if (revCostChartPeriod === 'this_year') {
+        const activeRcOverview = rcOverviewData !== null ? rcOverviewData : overviewData;
+
+        // 1. When viewing "This Year" or specific year: All 12 Calendar Months (Jan – Dec)
+        if (revCostChartPeriod === 'this_year' || (typeof revCostChartPeriod === 'string' && /^\d{4}$/.test(revCostChartPeriod.trim()))) {
             const monthlyData = CALENDAR_MONTHS.map((m) => ({
                 month: m.short,
                 shortMonth: m.short,
@@ -893,39 +1259,61 @@ const Dashboard = () => {
                     }
                 });
             } else {
-                // Synchronize revenue with monthly sales revenue from overviewData
-                if (Array.isArray(sortedOverviewData) && sortedOverviewData.length === 12) {
-                    sortedOverviewData.forEach((item, idx) => {
-                        if (idx < 12) {
-                            monthlyData[idx].revenue = Number(item.sales || 0);
-                        }
-                    });
+                const candidates = [yearlyOverviewData, activeRcOverview, sortedOverviewData];
+                let populated = false;
+
+                for (const list of candidates) {
+                    if (Array.isArray(list) && list.length > 0) {
+                        list.forEach((item) => {
+                            if (!item) return;
+                            const idx = getCalendarMonthIndex(item.month ?? item.date ?? item.name);
+                            if (idx >= 0 && idx < 12) {
+                                const s = Number(item.sales ?? item.revenue ?? item.total ?? item.amount ?? 0);
+                                if (!isNaN(s) && s > 0) {
+                                    monthlyData[idx].revenue += s;
+                                    populated = true;
+                                }
+                            }
+                        });
+                        if (populated) break;
+                    }
                 }
 
-                // If monthly cost breakdown is not available, attribute cost proportionally to actual sales
-                const totalYearRevenue = monthlyData.reduce((sum, d) => sum + d.revenue, 0);
+                let totalYearRevenue = monthlyData.reduce((sum, d) => sum + d.revenue, 0);
                 const totalYearCost = financialMetrics.cost;
 
-                monthlyData.forEach((d) => {
-                    if (totalYearRevenue > 0 && d.revenue > 0) {
-                        d.cost = Math.round(((d.revenue / totalYearRevenue) * totalYearCost) * 100) / 100;
-                    } else {
-                        d.cost = 0;
-                    }
-                });
+                if (totalYearRevenue === 0 && financialMetrics.revenue > 0) {
+                    const currentMonthIdx = Math.min(Math.max(0, new Date().getMonth()), 11);
+                    monthlyData[currentMonthIdx].revenue = financialMetrics.revenue;
+                    totalYearRevenue = financialMetrics.revenue;
+                }
 
-                // Guarantee exact total cost reconciliation with zero rounding drift
-                const sumCosts = monthlyData.reduce((sum, d) => sum + d.cost, 0);
-                const drift = Math.round((totalYearCost - sumCosts) * 100) / 100;
-                if (drift !== 0) {
-                    const topRevMonth = monthlyData.reduce((prev, curr) => (curr.revenue > prev.revenue ? curr : prev), monthlyData[0]);
-                    if (topRevMonth && topRevMonth.revenue > 0) {
-                        topRevMonth.cost = Math.round((topRevMonth.cost + drift) * 100) / 100;
+                if (totalYearRevenue > 0 && totalYearCost > 0) {
+                    const hasExplicitCosts = monthlyData.some((d) => d.cost > 0);
+                    if (!hasExplicitCosts) {
+                        monthlyData.forEach((d) => {
+                            if (d.revenue > 0) {
+                                d.cost = Math.round(((d.revenue / totalYearRevenue) * totalYearCost) * 100) / 100;
+                            } else {
+                                d.cost = 0;
+                            }
+                        });
+
+                        const sumCosts = monthlyData.reduce((sum, d) => sum + d.cost, 0);
+                        const drift = Math.round((totalYearCost - sumCosts) * 100) / 100;
+                        if (drift !== 0) {
+                            const topRevMonth = monthlyData.reduce((prev, curr) => (curr.revenue > prev.revenue ? curr : prev), monthlyData[0]);
+                            if (topRevMonth && topRevMonth.revenue > 0) {
+                                topRevMonth.cost = Math.round((topRevMonth.cost + drift) * 100) / 100;
+                            }
+                        }
                     }
+                } else if (totalYearRevenue === 0 && totalYearCost > 0) {
+                    const currentMonthIdx = Math.min(Math.max(0, new Date().getMonth()), 11);
+                    monthlyData[currentMonthIdx].cost = totalYearCost;
                 }
             }
 
-            // Compute monthly gross profit and margin safely
             monthlyData.forEach((d) => {
                 d.grossProfit = Math.round((d.revenue - d.cost) * 100) / 100;
                 d.grossMargin = d.revenue > 0 ? Math.round(((d.grossProfit / d.revenue) * 100) * 100) / 100 : 0;
@@ -934,152 +1322,404 @@ const Dashboard = () => {
             return monthlyData;
         }
 
-        // For this_month or last_month daily breakdown / single period
-        return [
-            {
-                month: PERIOD_LABELS[revCostChartPeriod] || 'Period',
-                shortMonth: PERIOD_LABELS[revCostChartPeriod] || 'Period',
-                fullMonth: PERIOD_LABELS[revCostChartPeriod] || 'Period',
-                revenue: financialMetrics.revenue,
-                cost: financialMetrics.cost,
-                grossProfit: financialMetrics.grossProfit,
-                grossMargin: financialMetrics.grossMargin,
-            },
-        ];
-    }, [revCostChartPeriod, sortedOverviewData, revenueVsCost, financialMetrics]);
+        // 2. When viewing "This Month" or "Last Month": Complete calendar dates (1 to daysInMonth)
+        const { year, monthIndex, short: monthShort, daysInMonth } = revCostMeta;
+        const dailyData = [];
+
+        for (let d = 1; d <= daysInMonth; d++) {
+            const dayPad = String(d).padStart(2, '0');
+            dailyData.push({
+                day: d,
+                month: dayPad,
+                shortMonth: dayPad,
+                fullMonth: `${dayPad} ${monthShort} ${year}`,
+                monthName: `${dayPad} ${monthShort}`,
+                name: dayPad,
+                date: `${year}-${String(monthIndex + 1).padStart(2, '0')}-${dayPad}`,
+                revenue: 0,
+                cost: 0,
+                grossProfit: 0,
+                grossMargin: 0,
+            });
+        }
+
+        // Check backend explicit daily breakdown if available
+        const rawDaily = Array.isArray(revenueVsCost?.daily)
+            ? revenueVsCost.daily
+            : Array.isArray(revenueVsCost?.data)
+            ? revenueVsCost.data
+            : [];
+
+        if (rawDaily.length > 0) {
+            rawDaily.forEach((item) => {
+                if (!item) return;
+                const dayNum = parseCalendarDay(item.date ?? item.day ?? item.month ?? item.name);
+                if (dayNum !== null && dayNum >= 1 && dayNum <= daysInMonth) {
+                    const r = Number(item.revenue ?? item.sales ?? 0);
+                    if (!isNaN(r) && r >= 0) dailyData[dayNum - 1].revenue = r;
+                    const c = Number(item.cost ?? item.cogs ?? 0);
+                    if (!isNaN(c) && c >= 0) dailyData[dayNum - 1].cost = c;
+                }
+            });
+        } else {
+            // Derive daily revenue from activeRcOverview or sortedOverviewData
+            const candidateList = Array.isArray(activeRcOverview) && activeRcOverview.length > 0
+                ? activeRcOverview
+                : (revCostChartPeriod === overviewChartPeriod ? sortedOverviewData : []);
+
+            if (Array.isArray(candidateList) && candidateList.length > 0) {
+                candidateList.forEach((item) => {
+                    if (!item) return;
+                    let dayNum = null;
+                    const rawDate = item.date ?? item.created_at;
+                    if (rawDate) {
+                        try {
+                            const dt = new Date(rawDate);
+                            if (!isNaN(dt.getTime()) && dt.getFullYear() === year && dt.getMonth() === monthIndex) {
+                                dayNum = dt.getDate();
+                            }
+                        } catch (_) {}
+                    }
+                    if (dayNum === null) {
+                        dayNum = parseCalendarDay(item.month ?? item.day ?? item.name ?? item.date);
+                    }
+                    if (dayNum !== null && dayNum >= 1 && dayNum <= daysInMonth) {
+                        const s = Number(item.sales ?? item.revenue ?? item.total ?? item.amount ?? 0);
+                        if (!isNaN(s) && s > 0) {
+                            dailyData[dayNum - 1].revenue += s;
+                        }
+                    }
+                });
+            }
+
+            let totalPeriodRev = dailyData.reduce((sum, d) => sum + d.revenue, 0);
+            const periodCost = Number(revenueVsCost?.cost !== null && revenueVsCost?.cost !== undefined ? revenueVsCost.cost : financialMetrics.cost);
+
+            if (totalPeriodRev === 0 && financialMetrics.revenue > 0) {
+                const targetDay = revCostChartPeriod === 'this_month' ? Math.min(new Date().getDate(), daysInMonth) : daysInMonth;
+                dailyData[targetDay - 1].revenue = financialMetrics.revenue;
+                totalPeriodRev = financialMetrics.revenue;
+            }
+
+            if (totalPeriodRev > 0 && periodCost > 0) {
+                const hasExplicitCosts = dailyData.some((d) => d.cost > 0);
+                if (!hasExplicitCosts) {
+                    dailyData.forEach((d) => {
+                        if (d.revenue > 0) {
+                            d.cost = Math.round(((d.revenue / totalPeriodRev) * periodCost) * 100) / 100;
+                        } else {
+                            d.cost = 0;
+                        }
+                    });
+
+                    const sumCosts = dailyData.reduce((sum, d) => sum + d.cost, 0);
+                    const drift = Math.round((periodCost - sumCosts) * 100) / 100;
+                    if (drift !== 0) {
+                        const topRevDay = dailyData.reduce((prev, curr) => (curr.revenue > prev.revenue ? curr : prev), dailyData[0]);
+                        if (topRevDay && topRevDay.revenue > 0) {
+                            topRevDay.cost = Math.round((topRevDay.cost + drift) * 100) / 100;
+                        }
+                    }
+                }
+            } else if (totalPeriodRev === 0 && periodCost > 0) {
+                const targetDay = revCostChartPeriod === 'this_month' ? Math.min(new Date().getDate(), daysInMonth) : daysInMonth;
+                dailyData[targetDay - 1].cost = periodCost;
+            }
+        }
+
+        dailyData.forEach((d) => {
+            d.grossProfit = Math.round((d.revenue - d.cost) * 100) / 100;
+            d.grossMargin = d.revenue > 0 ? Math.round(((d.grossProfit / d.revenue) * 100) * 100) / 100 : 0;
+        });
+
+        return dailyData;
+    }, [revCostChartPeriod, rcOverviewData, overviewData, sortedOverviewData, yearlyOverviewData, revenueVsCost, financialMetrics, revCostMeta, selectedYear, transactions, summary]);
+
+    // Select milestone dates for Revenue vs Cost daily chart
+    const revCostXAxisTicks = useMemo(() => {
+        if (revCostChartPeriod === 'this_year' || (typeof revCostChartPeriod === 'string' && /^\d{4}$/.test(revCostChartPeriod.trim()))) {
+            return undefined; // All 12 calendar months shown cleanly
+        }
+        return getMilestoneTicks(revCostMeta.daysInMonth);
+    }, [revCostChartPeriod, revCostMeta]);
+
+    // Complete period-accurate financial metrics for Revenue vs Cost section
+    const effectiveRevCostMetrics = useMemo(() => {
+        const sumRev = monthlyRevVsCostData.reduce((acc, d) => acc + (Number(d.revenue) || 0), 0);
+        const sumCost = monthlyRevVsCostData.reduce((acc, d) => acc + (Number(d.cost) || 0), 0);
+
+        let rev = sumRev;
+        let cost = sumCost;
+
+        if (rev === 0 && financialMetrics.revenue > 0) {
+            rev = financialMetrics.revenue;
+        }
+        if (cost === 0 && financialMetrics.cost > 0) {
+            cost = financialMetrics.cost;
+        }
+
+        const grossProfit = Math.round((rev - cost) * 100) / 100;
+        const grossMargin = rev > 0 ? Math.round(((grossProfit / rev) * 100) * 100) / 100 : 0;
+        const markup = cost > 0 ? Math.round(((grossProfit / cost) * 100) * 100) / 100 : 0;
+
+        return {
+            revenue: rev,
+            cost: cost,
+            grossProfit,
+            grossMargin,
+            markup,
+        };
+    }, [monthlyRevVsCostData, financialMetrics]);
+
+    // ── Dynamic Y-Axis Upper Bounds with Headroom for Revenue vs Cost Chart ──
+    const revAxisMax = useMemo(() => {
+        const dataMax = Math.max(...monthlyRevVsCostData.map((d) => Number(d.revenue) || 0), 0);
+        return getNiceAxisMax(dataMax > 0 ? dataMax : (effectiveRevCostMetrics.revenue || 1000), 1000);
+    }, [monthlyRevVsCostData, effectiveRevCostMetrics.revenue]);
+
+    const costAxisMax = useMemo(() => {
+        const dataMax = Math.max(...monthlyRevVsCostData.map((d) => Number(d.cost) || 0), 0);
+        return getNiceAxisMax(dataMax > 0 ? dataMax : (effectiveRevCostMetrics.cost || 500), 500);
+    }, [monthlyRevVsCostData, effectiveRevCostMetrics.cost]);
+
+    const isRevCostYearly = useMemo(() => {
+        return revCostChartPeriod === 'this_year' || (typeof revCostChartPeriod === 'string' && /^\d{4}$/.test(revCostChartPeriod.trim()));
+    }, [revCostChartPeriod]);
+
+    // ── Dynamic Bar Width & Spacing Settings for Revenue vs Cost Chart ──
+    const revCostChartLayout = useMemo(() => {
+        const isYearly = isRevCostYearly;
+        const count = monthlyRevVsCostData?.length || (isYearly ? 12 : 31);
+
+        if (isYearly) {
+            return {
+                isYearly: true,
+                barGap: 2,
+                barCategoryGap: '16%',
+                maxBarSize: 22,
+                minPointSize: 2,
+            };
+        }
+
+        // Daily mode (28, 29, 30, or 31 days):
+        // Minimize gaps so Revenue and Cost bars remain clearly visible, well-spaced, and sufficiently wide
+        return {
+            isYearly: false,
+            barGap: 1,
+            barCategoryGap: count > 28 ? 2 : 4,
+            maxBarSize: 14,
+            minPointSize: 3,
+        };
+    }, [isRevCostYearly, monthlyRevVsCostData?.length]);
+
+    // ── Collision-Free Label Renderers for Yearly Revenue vs Cost Bars (Disabled for Daily) ──
+    const renderRevBarLabel = useCallback((props) => {
+        if (!isRevCostYearly || !props) return null;
+        const x = props.x ?? props.viewBox?.x ?? 0;
+        const y = props.y ?? props.viewBox?.y ?? 0;
+        const width = props.width ?? props.viewBox?.width ?? 0;
+        const index = props.index;
+        const value = props.value ?? (index !== undefined ? monthlyRevVsCostData[index]?.revenue : null);
+
+        const num = Number(value);
+        if (!num || num <= 0) return null;
+
+        const d = index !== undefined ? monthlyRevVsCostData[index] : null;
+        const costVal = Number(d?.cost || 0);
+
+        // Stagger labels vertically when both Revenue and Cost bars end near each other
+        const revRatio = revAxisMax > 0 ? num / revAxisMax : 0;
+        const costRatio = costAxisMax > 0 ? costVal / costAxisMax : 0;
+        const isHeightClose = costVal > 0 && Math.abs(revRatio - costRatio) < 0.22;
+
+        const yPos = Math.max(14, y - (isHeightClose ? 14 : 6));
+
+        return (
+            <text
+                x={x + width / 2}
+                y={yPos}
+                fill="#1d4ed8"
+                textAnchor="middle"
+                fontSize={9}
+                fontWeight={700}
+            >
+                {formatCompactCurrency(num)}
+            </text>
+        );
+    }, [isRevCostYearly, monthlyRevVsCostData, revAxisMax, costAxisMax]);
+
+    const renderCostBarLabel = useCallback((props) => {
+        if (!isRevCostYearly || !props) return null;
+        const x = props.x ?? props.viewBox?.x ?? 0;
+        const y = props.y ?? props.viewBox?.y ?? 0;
+        const width = props.width ?? props.viewBox?.width ?? 0;
+        const index = props.index;
+        const value = props.value ?? (index !== undefined ? monthlyRevVsCostData[index]?.cost : null);
+
+        const num = Number(value);
+        if (!num || num <= 0) return null;
+
+        const d = index !== undefined ? monthlyRevVsCostData[index] : null;
+        const revVal = Number(d?.revenue || 0);
+
+        const revRatio = revAxisMax > 0 ? revVal / revAxisMax : 0;
+        const costRatio = costAxisMax > 0 ? num / costAxisMax : 0;
+        const isHeightClose = revVal > 0 && Math.abs(revRatio - costRatio) < 0.22;
+
+        const yPos = Math.max(14, y - (isHeightClose ? 2 : 6));
+
+        return (
+            <text
+                x={x + width / 2}
+                y={yPos}
+                fill="#b91c1c"
+                textAnchor="middle"
+                fontSize={9}
+                fontWeight={700}
+            >
+                {formatCompactCurrency(num)}
+            </text>
+        );
+    }, [isRevCostYearly, monthlyRevVsCostData, revAxisMax, costAxisMax]);
+
+    // ── Dedicated Tooltip Display for Revenue vs Cost Chart ──
+    const renderRevCostTooltip = useCallback(({ active, payload, label }) => {
+        if (!active || !payload || !payload.length) return null;
+        const dataItem = payload[0]?.payload;
+        const dateLabel = dataItem?.fullMonth || dataItem?.date || (dataItem?.month ? `${dataItem.month}` : label);
+        const revVal = Number(dataItem?.revenue ?? 0);
+        const costVal = Number(dataItem?.cost ?? 0);
+
+        return (
+            <div
+                style={{
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                    padding: '10px 14px',
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    minWidth: 170,
+                }}
+            >
+                <div style={{ fontWeight: 700, color: '#0f172a', marginBottom: 6, borderBottom: '1px solid #f1f5f9', paddingBottom: 4 }}>
+                    {dateLabel}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, color: '#2563eb', marginBottom: 3 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563eb', display: 'inline-block' }} />
+                        <span>Revenue:</span>
+                    </span>
+                    <span style={{ fontWeight: 700 }}>{formatCurrency(revVal)}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, color: '#ef4444' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', display: 'inline-block' }} />
+                        <span>Cost:</span>
+                    </span>
+                    <span style={{ fontWeight: 700 }}>{formatCurrency(costVal)}</span>
+                </div>
+            </div>
+        );
+    }, []);
+
+    // ── Dynamic Subtitles & KPI Amounts Synchronized with Existing Chart Dropdowns ──
+    const totalSalesSubtitle = useMemo(() => {
+        if (overviewChartPeriod === 'this_month') return 'This Month';
+        if (overviewChartPeriod === 'last_month') return 'Last Month';
+        if (overviewChartPeriod === 'last_year') return 'Last Year';
+        if (typeof overviewChartPeriod === 'string' && /^\d{4}$/.test(overviewChartPeriod.trim())) {
+            return overviewChartPeriod.trim();
+        }
+        if (overviewChartPeriod === 'this_year') {
+            if (selectedYear && selectedYear !== CURRENT_CALENDAR_YEAR) {
+                return String(selectedYear);
+            }
+            return 'This Year';
+        }
+        return PERIOD_LABELS[overviewChartPeriod] || 'This Year';
+    }, [overviewChartPeriod, selectedYear]);
+
+    const totalRevenueSubtitle = useMemo(() => {
+        if (revCostChartPeriod === 'this_month') return 'This Month';
+        if (revCostChartPeriod === 'last_month') return 'Last Month';
+        if (revCostChartPeriod === 'last_year') return 'Last Year';
+        if (typeof revCostChartPeriod === 'string' && /^\d{4}$/.test(revCostChartPeriod.trim())) {
+            return revCostChartPeriod.trim();
+        }
+        if (revCostChartPeriod === 'this_year') {
+            if (selectedYear && selectedYear !== CURRENT_CALENDAR_YEAR) {
+                return String(selectedYear);
+            }
+            return 'This Year';
+        }
+        return PERIOD_LABELS[revCostChartPeriod] || 'Period';
+    }, [revCostChartPeriod, selectedYear]);
+
+    // ── Dynamic Chart Headings (Reflecting Selected Period without hardcoded 'Monthly') ──
+    const overviewChartHeading = useMemo(() => {
+        if (overviewChartPeriod === 'this_month') return 'This Month Sales';
+        if (overviewChartPeriod === 'last_month') return 'Last Month Sales';
+        if (overviewChartPeriod === 'last_year') return 'Last Year Sales';
+        if (typeof overviewChartPeriod === 'string' && /^\d{4}$/.test(overviewChartPeriod.trim())) {
+            return `${overviewChartPeriod.trim()} Sales`;
+        }
+        if (overviewChartPeriod === 'this_year') {
+            if (selectedYear && selectedYear !== CURRENT_CALENDAR_YEAR) {
+                return `${selectedYear} Sales`;
+            }
+            return 'This Year Sales';
+        }
+        return 'This Year Sales';
+    }, [overviewChartPeriod, selectedYear]);
+
+    const revCostChartHeading = useMemo(() => {
+        if (revCostChartPeriod === 'this_month') return 'This Month Revenue vs Cost';
+        if (revCostChartPeriod === 'last_month') return 'Last Month Revenue vs Cost';
+        if (revCostChartPeriod === 'last_year') return 'Last Year Revenue vs Cost';
+        if (typeof revCostChartPeriod === 'string' && /^\d{4}$/.test(revCostChartPeriod.trim())) {
+            return `${revCostChartPeriod.trim()} Revenue vs Cost`;
+        }
+        if (revCostChartPeriod === 'this_year') {
+            if (selectedYear && selectedYear !== CURRENT_CALENDAR_YEAR) {
+                return `${selectedYear} Revenue vs Cost`;
+            }
+            return 'This Year Revenue vs Cost';
+        }
+        return 'This Year Revenue vs Cost';
+    }, [revCostChartPeriod, selectedYear]);
+
+    const totalSalesKpiAmount = useMemo(() => {
+        const overviewSum = sortedOverviewData.reduce((acc, curr) => acc + (Number(curr.sales) || 0), 0);
+        if (overviewChartPeriod === 'this_year' || (typeof overviewChartPeriod === 'string' && /^\d{4}$/.test(overviewChartPeriod.trim()))) {
+            if (overviewSum > 0) return overviewSum;
+            if (selectedYear === CURRENT_CALENDAR_YEAR && summary?.total_sales !== null && summary?.total_sales !== undefined) {
+                return Number(summary.total_sales);
+            }
+            return overviewSum;
+        }
+        if (overviewChartPeriod === 'this_month') {
+            if (overviewSum > 0) return overviewSum;
+            if (summary?.monthly_sales !== null && summary?.monthly_sales !== undefined) {
+                return Number(summary.monthly_sales);
+            }
+            return overviewSum;
+        }
+        return overviewSum;
+    }, [overviewChartPeriod, sortedOverviewData, selectedYear, summary]);
+
+    const totalRevenueKpiAmount = useMemo(() => {
+        return effectiveRevCostMetrics.revenue;
+    }, [effectiveRevCostMetrics]);
 
     return (
-        <div className="dashboard-container">
+        <PageContainer>
             {/* ── Top Header Area ── */}
-            <header className="dashboard-header">
-                <div className="dashboard-title-wrap">
-                    <h1 className="dashboard-title">Dashboard</h1>
-                    <p className="dashboard-subtitle">
-                        Overview of your store performance and key metrics
-                    </p>
-                </div>
-
-                <div className="dashboard-controls">
-                    {/* Store Selector Dropdown */}
-                    <div className="control-group" ref={storeDropdownRef}>
-                        <span className="control-label">Store</span>
-                        <button
-                            type="button"
-                            className={`dropdown-trigger ${isStoreOpen ? 'open' : ''}`}
-                            onClick={() => setIsStoreOpen((prev) => !prev)}
-                            title="Select store filter"
-                        >
-                            <span className="dropdown-trigger-content">
-                                <BsShop className="dropdown-icon" />
-                                <span>{selectedStoreLabel}</span>
-                            </span>
-                            <BsChevronDown className={`dropdown-chevron ${isStoreOpen ? 'open' : ''}`} />
-                        </button>
-
-                        {isStoreOpen && (
-                            <div className="dropdown-menu">
-                                <button
-                                    type="button"
-                                    className={`dropdown-item ${!selectedStore ? 'active' : ''}`}
-                                    onClick={() => {
-                                        setSelectedStore('');
-                                        setIsStoreOpen(false);
-                                    }}
-                                >
-                                    <BsShop />
-                                    <span>All Stores</span>
-                                </button>
-                                {stores.map((s) => (
-                                    <button
-                                        key={s.id}
-                                        type="button"
-                                        className={`dropdown-item ${String(selectedStore) === String(s.id) ? 'active' : ''}`}
-                                        onClick={() => {
-                                            setSelectedStore(String(s.id));
-                                            setIsStoreOpen(false);
-                                        }}
-                                    >
-                                        <BsShop />
-                                        <span>{s.name}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Period Selector Dropdown */}
-                    <div className="control-group" ref={periodDropdownRef}>
-                        <span className="control-label">Period</span>
-                        <button
-                            type="button"
-                            className={`dropdown-trigger ${isPeriodOpen ? 'open' : ''}`}
-                            onClick={() => setIsPeriodOpen((prev) => !prev)}
-                            title="Select reporting period"
-                        >
-                            <span className="dropdown-trigger-content">
-                                <BsCalendar3 className="dropdown-icon" />
-                                <span>{PERIOD_LABELS[period]}</span>
-                            </span>
-                            <BsChevronDown className={`dropdown-chevron ${isPeriodOpen ? 'open' : ''}`} />
-                        </button>
-
-                        {isPeriodOpen && (
-                            <div className="dropdown-menu">
-                                <button
-                                    type="button"
-                                    className={`dropdown-item ${period === 'this_year' ? 'active' : ''}`}
-                                    onClick={() => handlePeriodChange('this_year')}
-                                >
-                                    <span>This Year</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`dropdown-item ${period === 'this_month' ? 'active' : ''}`}
-                                    onClick={() => handlePeriodChange('this_month')}
-                                >
-                                    <span>This Month</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    className={`dropdown-item ${period === 'last_month' ? 'active' : ''}`}
-                                    onClick={() => handlePeriodChange('last_month')}
-                                >
-                                    <span>Last Month</span>
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Live Data Badge with Refresh Trigger & Real Sync Timestamp */}
-                    <div className="live-data-badge-wrap">
-                        <div className="live-data-badge">
-                            <span className="live-dot" />
-                            <span>Live data</span>
-                            <button
-                                type="button"
-                                className={`live-refresh-btn ${refreshing ? 'spinning' : ''}`}
-                                onClick={() => {
-                                    if (refreshing || loading) return;
-                                    fetchAllDashboardData(selectedStore, period, overviewChartPeriod, revCostChartPeriod, true);
-                                }}
-                                disabled={refreshing || loading}
-                                title={refreshing ? 'Refreshing dashboard metrics...' : 'Refresh dashboard metrics'}
-                                aria-label="Refresh dashboard metrics"
-                            >
-                                <BsArrowRepeat size={14} />
-                            </button>
-                        </div>
-                        {lastSyncTime && (
-                            <span
-                                className="last-sync-timestamp"
-                                title={`Last synchronized: ${formatDate(lastSyncTime.toISOString())}`}
-                            >
-                                Synced at {formatSyncTime(lastSyncTime)}
-                            </span>
-                        )}
-                    </div>
-                </div>
-            </header>
+            <PageHeader
+                title="Dashboard"
+                subtitle="Overview of your store performance and key metrics"
+            />
 
             {/* Error Notification with Interactive Retry */}
             {error && (
@@ -1091,117 +1731,82 @@ const Dashboard = () => {
                     <button
                         type="button"
                         className="dashboard-retry-btn"
-                        onClick={() => fetchAllDashboardData(selectedStore, period, overviewChartPeriod, revCostChartPeriod)}
+                        onClick={() => fetchAllDashboardData(selectedStore, period, overviewChartPeriod, revCostChartPeriod, false, selectedYear)}
                     >
                         Retry
                     </button>
                 </div>
             )}
 
-            {/* ── Financial Performance Summary Cards (4 Cards) ── */}
-            <section className="kpi-grid" aria-label="Financial Performance Indicators">
-                {/* 1. Total Sales / Revenue */}
-                <Link to="/reports" className="kpi-card" title="View Sales Reports">
-                    <div className="kpi-icon-wrap revenue">
-                        <BsCashStack />
-                    </div>
-                    <div className="kpi-content">
-                        <span className="kpi-label">Total Sales / Revenue</span>
-                        {loading ? (
-                            <div className="skeleton-box" style={{ width: 110, height: 26, margin: '4px 0' }} />
-                        ) : (
-                            <h2 className="kpi-value">
-                                {formatCurrency(financialMetrics.revenue)}
-                            </h2>
-                        )}
-                        <span className="kpi-subtitle trend-up">
-                            <BsArrowUp style={{ display: 'inline', marginRight: 3 }} />
-                            {PERIOD_LABELS[period]}
-                        </span>
-                    </div>
-                </Link>
+            {/* ── Financial Performance Summary Cards (5 Cards - Dedicated Total Sales + Existing Cards) ── */}
+            <KpiGrid columns={5} ariaLabel="Financial Performance Indicators">
+                {/* 1. Dedicated Total Sales */}
+                <KpiCard
+                    variant="total-sales"
+                    title="Total Sales"
+                    value={formatCurrency(totalSalesKpiAmount)}
+                    subtitle={totalSalesSubtitle}
+                    subtitleIcon={<BsCalendar3 style={{ display: 'inline', fontSize: 10 }} />}
+                    subtitleColor="#2563eb"
+                    icon={<BsCashStack />}
+                    loading={loading}
+                    tooltip={`Total Sales (${totalSalesSubtitle})`}
+                />
 
-                {/* 2. Total Cost (COGS) */}
-                <button
-                    type="button"
-                    className="kpi-card"
-                    title="Click to view Cost of Goods Sold (COGS) breakdown and accounting formula"
+                {/* 2. Total Sales / Revenue (Period-based) */}
+                <KpiCard
+                    to="/reports"
+                    variant="revenue"
+                    title="Total Revenue"
+                    value={formatCurrency(totalRevenueKpiAmount)}
+                    subtitle={totalRevenueSubtitle}
+                    subtitleIcon={<BsArrowUp style={{ display: 'inline' }} />}
+                    subtitleColor="#10b981"
+                    icon={<BsCashStack />}
+                    loading={loading}
+                    tooltip="View Sales Reports"
+                />
+
+                {/* 3. Total Cost (COGS) */}
+                <KpiCard
+                    variant="cost"
+                    title="Total Cost (COGS)"
+                    value={formatCurrency(financialMetrics.cost)}
+                    subtitle="Cost of Goods Sold • Click for details"
+                    subtitleColor="#64748b"
+                    icon={<BsTagFill />}
+                    loading={loading}
                     onClick={() => setActiveMetricModal('cost')}
-                    aria-haspopup="dialog"
-                    aria-label={`Total Cost (COGS): ${formatCurrency(financialMetrics.cost)}. Click to view calculation and breakdown.`}
-                >
-                    <div className="kpi-icon-wrap cost">
-                        <BsTagFill />
-                    </div>
-                    <div className="kpi-content">
-                        <span className="kpi-label">Total Cost (COGS)</span>
-                        {loading ? (
-                            <div className="skeleton-box" style={{ width: 90, height: 26, margin: '4px 0' }} />
-                        ) : (
-                            <h2 className="kpi-value">
-                                {formatCurrency(financialMetrics.cost)}
-                            </h2>
-                        )}
-                        <span className="kpi-subtitle">
-                            Cost of Goods Sold &bull; Click for details
-                        </span>
-                    </div>
-                </button>
+                    tooltip="Click to view Cost of Goods Sold (COGS) breakdown and accounting formula"
+                />
 
-                {/* 3. Gross Profit */}
-                <button
-                    type="button"
-                    className="kpi-card"
-                    title="Click to view Gross Profit breakdown and accounting formula"
+                {/* 4. Gross Profit */}
+                <KpiCard
+                    variant="profit"
+                    title="Gross Profit"
+                    value={formatCurrency(financialMetrics.grossProfit)}
+                    valueColor={financialMetrics.grossProfit >= 0 ? '#059669' : '#dc2626'}
+                    subtitle="Net Sales − COGS • Click for details"
+                    subtitleColor="#64748b"
+                    icon={<BsGraphUpArrow />}
+                    loading={loading}
                     onClick={() => setActiveMetricModal('profit')}
-                    aria-haspopup="dialog"
-                    aria-label={`Gross Profit: ${formatCurrency(financialMetrics.grossProfit)}. Click to view formula and breakdown.`}
-                >
-                    <div className="kpi-icon-wrap profit">
-                        <BsGraphUpArrow />
-                    </div>
-                    <div className="kpi-content">
-                        <span className="kpi-label">Gross Profit</span>
-                        {loading ? (
-                            <div className="skeleton-box" style={{ width: 90, height: 26, margin: '4px 0' }} />
-                        ) : (
-                            <h2 className={`kpi-value ${financialMetrics.grossProfit >= 0 ? 'profit-positive' : 'profit-negative'}`}>
-                                {formatCurrency(financialMetrics.grossProfit)}
-                            </h2>
-                        )}
-                        <span className="kpi-subtitle">
-                            Net Sales &minus; COGS &bull; Click for details
-                        </span>
-                    </div>
-                </button>
+                    tooltip="Click to view Gross Profit breakdown and accounting formula"
+                />
 
-                {/* 4. Gross Profit Margin (%) */}
-                <button
-                    type="button"
-                    className="kpi-card"
-                    title="Click to view Gross Profit Margin and Markup breakdown"
+                {/* 5. Gross Profit Margin (%) */}
+                <KpiCard
+                    variant="margin"
+                    title="Gross Profit Margin"
+                    value={`${financialMetrics.grossMargin.toFixed(2)}%`}
+                    subtitle={`Markup: ${financialMetrics.markup.toFixed(2)}% • Click for details`}
+                    subtitleColor="#64748b"
+                    icon={<BsPercent />}
+                    loading={loading}
                     onClick={() => setActiveMetricModal('margin')}
-                    aria-haspopup="dialog"
-                    aria-label={`Gross Profit Margin: ${financialMetrics.grossMargin.toFixed(2)}%. Click to view formula and breakdown.`}
-                >
-                    <div className="kpi-icon-wrap margin">
-                        <BsPercent />
-                    </div>
-                    <div className="kpi-content">
-                        <span className="kpi-label">Gross Profit Margin</span>
-                        {loading ? (
-                            <div className="skeleton-box" style={{ width: 80, height: 26, margin: '4px 0' }} />
-                        ) : (
-                            <h2 className="kpi-value">
-                                {`${financialMetrics.grossMargin.toFixed(2)}%`}
-                            </h2>
-                        )}
-                        <span className="kpi-subtitle">
-                            Markup: {`${financialMetrics.markup.toFixed(2)}%`} &bull; Click for details
-                        </span>
-                    </div>
-                </button>
-            </section>
+                    tooltip="Click to view Gross Profit Margin and Markup breakdown"
+                />
+            </KpiGrid>
 
             {/* ── Operational Quick Metrics Strip ── */}
             <section className="operational-strip" aria-label="Operational Metrics">
@@ -1265,25 +1870,44 @@ const Dashboard = () => {
                                 <BsBarChartFill />
                             </div>
                             <div>
-                                <h3 className="card-title">Monthly Sales</h3>
+                                <h3 className="card-title">{overviewChartHeading}</h3>
                                 <p className="card-subtitle">
-                                    {overviewChartPeriod === 'this_year'
-                                        ? `Sales revenue for this year (January – December) • Total: ${formatCurrency(annualSalesTotal)}`
-                                        : `Sales revenue for ${PERIOD_LABELS[overviewChartPeriod].toLowerCase()}`}
+                                    {(overviewChartPeriod === 'this_year' || /^\d{4}$/.test(overviewChartPeriod))
+                                        ? `Sales revenue for ${selectedYear && selectedYear !== CURRENT_CALENDAR_YEAR ? selectedYear : (overviewChartPeriod === 'this_year' ? 'this year' : selectedYear)} (January – December) • Total: ${formatCurrency(totalSalesKpiAmount)}`
+                                        : `Daily sales revenue for ${overviewChartPeriod === 'this_month' ? 'this month' : 'last month'} (${overviewMeta.full} ${overviewMeta.year}) • Total: ${formatCurrency(totalSalesKpiAmount)}`}
                                 </p>
                             </div>
                         </div>
 
-                        <select
-                            className="card-period-select"
-                            value={overviewChartPeriod}
-                            onChange={(e) => setOverviewChartPeriod(e.target.value)}
-                            aria-label="Overview chart period"
-                        >
-                            <option value="this_year">This Year</option>
-                            <option value="this_month">This Month</option>
-                            <option value="last_month">Last Month</option>
-                        </select>
+                        <div className="card-period-select-wrap" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                            <select
+                                className="card-period-select"
+                                value={overviewChartPeriod}
+                                onChange={(e) => setOverviewChartPeriod(e.target.value)}
+                                aria-label="Overview chart period"
+                                id="monthly-sales-period-select"
+                            >
+                                <option value="this_year">This Year</option>
+                                <option value="this_month">This Month</option>
+                                <option value="last_month">Last Month</option>
+                            </select>
+                            {(overviewChartPeriod === 'this_year' || /^\d{4}$/.test(overviewChartPeriod)) && (
+                                <select
+                                    className="card-period-select card-year-select"
+                                    value={selectedYear}
+                                    onChange={(e) => handleYearSelect(Number(e.target.value))}
+                                    aria-label="Select sales year"
+                                    id="monthly-sales-year-select"
+                                    title="Select year"
+                                >
+                                    {availableYears.map((yr) => (
+                                        <option key={yr} value={yr}>
+                                            {yr}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
                     </div>
 
                     <div className="chart-content-wrap">
@@ -1310,7 +1934,7 @@ const Dashboard = () => {
                                         ticks={overviewXAxisTicks}
                                         interval={0}
                                         tickFormatter={(val) => {
-                                            if (overviewChartPeriod === 'this_year') return val;
+                                            if (overviewChartPeriod === 'this_year' || /^\d{4}$/.test(overviewChartPeriod)) return val;
                                             if (overviewXAxisTicks && overviewXAxisTicks.length > 0) {
                                                 return overviewXAxisTicks.includes(val) ? val : '';
                                             }
@@ -1339,8 +1963,8 @@ const Dashboard = () => {
                                     <Bar
                                         dataKey="sales"
                                         radius={[4, 4, 0, 0]}
-                                        maxBarSize={32}
-                                        minPointSize={4}
+                                        maxBarSize={(overviewChartPeriod === 'this_year' || /^\d{4}$/.test(overviewChartPeriod)) ? 32 : 14}
+                                        minPointSize={2}
                                     >
                                         {sortedOverviewData.map((entry, index) => (
                                             <Cell
@@ -1358,7 +1982,7 @@ const Dashboard = () => {
                                                 return num > 0 ? formatCompactCurrency(num) : '';
                                             }}
                                             style={{
-                                                fontSize: 10,
+                                                fontSize: (overviewChartPeriod === 'this_year' || /^\d{4}$/.test(overviewChartPeriod)) ? 10 : 8,
                                                 fill: '#1e40af',
                                                 fontWeight: 700,
                                             }}
@@ -1369,7 +1993,7 @@ const Dashboard = () => {
                         )}
 
                         {/* Accessible screen-reader data table for all 12 calendar months */}
-                        {overviewChartPeriod === 'this_year' && (
+                        {(overviewChartPeriod === 'this_year' || /^\d{4}$/.test(overviewChartPeriod)) && (
                             <div className="sr-only" aria-label="12-Month Yearly Sales Data Table">
                                 <table>
                                     <caption>Yearly sales revenue by calendar month</caption>
@@ -1402,7 +2026,7 @@ const Dashboard = () => {
                             <span>Zero Sales (₹0.00)</span>
                         </span>
                         <span className="legend-item legend-total">
-                            <span>{overviewChartPeriod === 'this_year' ? 'Annual Total: ' : 'Month Total: '}<strong>{formatCurrency(annualSalesTotal)}</strong></span>
+                            <span>{(overviewChartPeriod === 'this_year' || /^\d{4}$/.test(overviewChartPeriod)) ? 'Annual Total: ' : `${overviewMeta.short} Total: `}<strong>{formatCurrency(totalSalesKpiAmount)}</strong></span>
                         </span>
                     </div>
                 </div>
@@ -1415,25 +2039,54 @@ const Dashboard = () => {
                                 <BsBarChartFill />
                             </div>
                             <div>
-                                <h3 className="card-title">Monthly Revenue vs Cost</h3>
+                                <h3 className="card-title">{revCostChartHeading}</h3>
                                 <p className="card-subtitle">
-                                    {revCostChartPeriod === 'this_year'
-                                        ? `Monthly comparison for this calendar year (Jan – Dec) • Revenue: ${formatCurrency(financialMetrics.revenue)} | Cost: ${formatCurrency(financialMetrics.cost)}`
-                                        : `Revenue and cost comparison for ${PERIOD_LABELS[revCostChartPeriod].toLowerCase()}`}
+                                    {(revCostChartPeriod === 'this_year' || /^\d{4}$/.test(revCostChartPeriod))
+                                        ? `Monthly comparison for ${selectedYear && selectedYear !== CURRENT_CALENDAR_YEAR ? selectedYear : (revCostChartPeriod === 'this_year' ? 'this calendar year' : selectedYear)} (Jan – Dec) • Revenue: ${formatCurrency(effectiveRevCostMetrics.revenue)} | Cost: ${formatCurrency(effectiveRevCostMetrics.cost)}`
+                                        : `Daily comparison for ${revCostChartPeriod === 'this_month' ? 'this month' : 'last month'} (${revCostMeta.full} ${revCostMeta.year}) • Revenue: ${formatCurrency(effectiveRevCostMetrics.revenue)} | Cost: ${formatCurrency(effectiveRevCostMetrics.cost)}`}
                                 </p>
                             </div>
                         </div>
 
-                        <select
-                            className="card-period-select"
-                            value={revCostChartPeriod}
-                            onChange={(e) => setRevCostChartPeriod(e.target.value)}
-                            aria-label="Revenue vs cost period"
+                        <div
+                            className="card-period-select-wrap rev-cost-filters-wrap"
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                flexWrap: 'nowrap',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                            }}
                         >
-                            <option value="this_year">This Year</option>
-                            <option value="this_month">This Month</option>
-                            <option value="last_month">Last Month</option>
-                        </select>
+                            <select
+                                className="card-period-select"
+                                value={revCostChartPeriod}
+                                onChange={(e) => setRevCostChartPeriod(e.target.value)}
+                                aria-label="Revenue vs cost period"
+                                id="rev-cost-period-select"
+                            >
+                                <option value="this_year">This Year</option>
+                                <option value="this_month">This Month</option>
+                                <option value="last_month">Last Month</option>
+                            </select>
+                            {(revCostChartPeriod === 'this_year' || /^\d{4}$/.test(revCostChartPeriod)) && (
+                                <select
+                                    className="card-period-select card-year-select"
+                                    value={selectedYear}
+                                    onChange={(e) => handleYearSelect(Number(e.target.value))}
+                                    aria-label="Select revenue vs cost year"
+                                    id="rev-cost-year-select"
+                                    title="Select year"
+                                >
+                                    {availableYears.map((yr) => (
+                                        <option key={yr} value={yr}>
+                                            {yr}
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
                     </div>
 
                     <div className="chart-content-wrap">
@@ -1449,7 +2102,9 @@ const Dashboard = () => {
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart
                                     data={monthlyRevVsCostData}
-                                    margin={{ top: 36, right: 32, left: 20, bottom: 8 }}
+                                    margin={{ top: 32, right: 8, left: 0, bottom: 8 }}
+                                    barGap={revCostChartLayout.barGap}
+                                    barCategoryGap={revCostChartLayout.barCategoryGap}
                                 >
                                     <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                                     <XAxis
@@ -1457,8 +2112,15 @@ const Dashboard = () => {
                                         axisLine={false}
                                         tickLine={false}
                                         tick={{ fill: '#64748b', fontSize: 11 }}
-                                        interval={revCostChartPeriod === 'this_year' ? 0 : 'preserveStartEnd'}
-                                        minTickGap={16}
+                                        ticks={revCostXAxisTicks}
+                                        interval={0}
+                                        tickFormatter={(val) => {
+                                            if (revCostChartPeriod === 'this_year' || /^\d{4}$/.test(revCostChartPeriod)) return val;
+                                            if (revCostXAxisTicks && revCostXAxisTicks.length > 0) {
+                                                return revCostXAxisTicks.includes(val) ? val : '';
+                                            }
+                                            return val;
+                                        }}
                                     />
                                     {/* Left Y-Axis for Revenue */}
                                     <YAxis
@@ -1466,10 +2128,11 @@ const Dashboard = () => {
                                         orientation="left"
                                         axisLine={false}
                                         tickLine={false}
-                                        width={64}
+                                        width={50}
+                                        tickCount={5}
                                         tick={{ fill: '#2563eb', fontSize: 11 }}
                                         tickFormatter={formatCompactCurrency}
-                                        domain={[0, (dataMax) => (dataMax > 0 ? Math.ceil(dataMax * 1.35) : 100)]}
+                                        domain={[0, revAxisMax]}
                                     />
                                     {/* Right Y-Axis for Cost (COGS) so ₹1,100 is clearly scaled and visible against ₹83,718 */}
                                     <YAxis
@@ -1477,74 +2140,54 @@ const Dashboard = () => {
                                         orientation="right"
                                         axisLine={false}
                                         tickLine={false}
-                                        width={64}
+                                        width={48}
+                                        tickCount={5}
                                         tick={{ fill: '#ef4444', fontSize: 11 }}
                                         tickFormatter={formatCompactCurrency}
-                                        domain={[0, (dataMax) => (dataMax > 0 ? Math.ceil(dataMax * 1.35) : 50)]}
+                                        domain={[0, costAxisMax]}
                                     />
                                     <Tooltip
                                         cursor={{ fill: 'rgba(37, 99, 235, 0.05)' }}
-                                        labelFormatter={(label, payload) => payload?.[0]?.payload?.fullMonth || payload?.[0]?.payload?.monthName || label}
-                                        formatter={(val, name) => [formatCurrency(val), name]}
-                                        contentStyle={{
-                                            borderRadius: 8,
-                                            border: '1px solid #e2e8f0',
-                                            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                                            fontSize: 12,
-                                        }}
+                                        content={renderRevCostTooltip}
                                     />
                                     <Bar
                                         yAxisId="revAxis"
                                         dataKey="revenue"
                                         name="Revenue"
                                         fill="#2563eb"
-                                        radius={[3, 3, 0, 0]}
-                                        maxBarSize={18}
-                                        minPointSize={5}
+                                        radius={[2, 2, 0, 0]}
+                                        maxBarSize={revCostChartLayout.maxBarSize}
+                                        minPointSize={revCostChartLayout.minPointSize}
                                     >
-                                        <LabelList
-                                            dataKey="revenue"
-                                            position="top"
-                                            formatter={(val) => {
-                                                const num = Number(val);
-                                                return num > 0 ? formatCompactCurrency(num) : '';
-                                            }}
-                                            style={{
-                                                fontSize: 9,
-                                                fill: '#1d4ed8',
-                                                fontWeight: 700,
-                                            }}
-                                        />
+                                        {isRevCostYearly && (
+                                            <LabelList
+                                                dataKey="revenue"
+                                                content={renderRevBarLabel}
+                                            />
+                                        )}
                                     </Bar>
                                     <Bar
                                         yAxisId="costAxis"
                                         dataKey="cost"
                                         name="Cost (COGS)"
                                         fill="#ef4444"
-                                        radius={[3, 3, 0, 0]}
-                                        maxBarSize={18}
-                                        minPointSize={5}
+                                        radius={[2, 2, 0, 0]}
+                                        maxBarSize={revCostChartLayout.maxBarSize}
+                                        minPointSize={revCostChartLayout.minPointSize}
                                     >
-                                        <LabelList
-                                            dataKey="cost"
-                                            position="top"
-                                            formatter={(val) => {
-                                                const num = Number(val);
-                                                return num > 0 ? formatCompactCurrency(num) : '';
-                                            }}
-                                            style={{
-                                                fontSize: 9,
-                                                fill: '#b91c1c',
-                                                fontWeight: 700,
-                                            }}
-                                        />
+                                        {isRevCostYearly && (
+                                            <LabelList
+                                                dataKey="cost"
+                                                content={renderCostBarLabel}
+                                            />
+                                        )}
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         )}
 
                         {/* Accessible screen-reader data table for all 12 calendar months */}
-                        {revCostChartPeriod === 'this_year' && (
+                        {(revCostChartPeriod === 'this_year' || /^\d{4}$/.test(revCostChartPeriod)) && (
                             <div className="sr-only" aria-label="12-Month Revenue vs Cost Data Table">
                                 <table>
                                     <caption>Monthly Revenue and Cost of Goods Sold</caption>
@@ -1577,11 +2220,11 @@ const Dashboard = () => {
                         <div className="chart-legend">
                             <span className="legend-item">
                                 <span className="legend-dot" style={{ backgroundColor: '#2563eb' }} />
-                                <span>Revenue (Left Axis): {formatCurrency(financialMetrics.revenue)}</span>
+                                <span>Revenue (Left Axis): {formatCurrency(effectiveRevCostMetrics.revenue)}</span>
                             </span>
                             <span className="legend-item">
                                 <span className="legend-dot" style={{ backgroundColor: '#ef4444' }} />
-                                <span>Cost (Right Axis): {formatCurrency(financialMetrics.cost)}</span>
+                                <span>Cost (Right Axis): {formatCurrency(effectiveRevCostMetrics.cost)}</span>
                             </span>
                         </div>
 
@@ -1590,43 +2233,43 @@ const Dashboard = () => {
                                 <span className="rev-cost-metric-label">Gross Profit:</span>
                                 <span
                                     className={`rev-cost-metric-value ${
-                                        financialMetrics.grossProfit >= 0 ? 'profit-positive' : 'profit-negative'
+                                        effectiveRevCostMetrics.grossProfit >= 0 ? 'profit-positive' : 'profit-negative'
                                     }`}
                                 >
-                                    {formatCurrency(financialMetrics.grossProfit)}
+                                    {formatCurrency(effectiveRevCostMetrics.grossProfit)}
                                 </span>
                             </div>
                             <div className="rev-cost-metric">
                                 <span className="rev-cost-metric-label">Gross Margin:</span>
                                 <span
                                     className={`rev-cost-metric-value ${
-                                        financialMetrics.grossMargin >= 0 ? 'profit-positive' : 'profit-negative'
+                                        effectiveRevCostMetrics.grossMargin >= 0 ? 'profit-positive' : 'profit-negative'
                                     }`}
                                 >
-                                    {`${financialMetrics.grossMargin.toFixed(2)}%`}
+                                    {`${effectiveRevCostMetrics.grossMargin.toFixed(2)}%`}
                                 </span>
                             </div>
                             <div className="rev-cost-metric">
                                 <span className="rev-cost-metric-label">Markup:</span>
                                 <span
                                     className={`rev-cost-metric-value ${
-                                        financialMetrics.markup >= 0 ? 'profit-positive' : 'profit-negative'
+                                        effectiveRevCostMetrics.markup >= 0 ? 'profit-positive' : 'profit-negative'
                                     }`}
                                 >
-                                    {`${financialMetrics.markup.toFixed(2)}%`}
+                                    {`${effectiveRevCostMetrics.markup.toFixed(2)}%`}
                                 </span>
                             </div>
                         </div>
 
                         <p className="cost-transparency-note">
-                            Cost represents Cost of Goods Sold (COGS: quantity sold × unit cost price). Gross Profit = Net Sales Revenue − COGS (₹{financialMetrics.revenue.toFixed(2)} − ₹{financialMetrics.cost.toFixed(2)} = ₹{financialMetrics.grossProfit.toFixed(2)}). Gross Margin = (Gross Profit ÷ Net Sales Revenue) × 100 ({financialMetrics.grossMargin.toFixed(2)}%). Markup = (Gross Profit ÷ COGS) × 100 ({financialMetrics.markup.toFixed(2)}%).
+                            Cost represents Cost of Goods Sold (COGS: quantity sold × unit cost price). Gross Profit = Net Sales Revenue − COGS ({formatCurrency(effectiveRevCostMetrics.revenue)} − {formatCurrency(effectiveRevCostMetrics.cost)} = {formatCurrency(effectiveRevCostMetrics.grossProfit)}). Gross Margin = (Gross Profit ÷ Net Sales Revenue) × 100 ({effectiveRevCostMetrics.grossMargin.toFixed(2)}%). Markup = (Gross Profit ÷ COGS) × 100 ({effectiveRevCostMetrics.markup.toFixed(2)}%).
                         </p>
                     </div>
                 </div>
             </section>
 
-            {/* ── Store-wise Sales Summary (All Stores Mode) ── */}
-            {!selectedStore && summary?.stores_summary?.length > 0 && (
+            {/* ── Store-wise Sales Summary ── */}
+            {totalStoreCount > 0 && (
                 <section className="dashboard-section store-summary-section" aria-label="Store Summary">
                     <div className="dashboard-card">
                         <div className="dashboard-card-header">
@@ -1636,62 +2279,124 @@ const Dashboard = () => {
                                 </div>
                                 <div>
                                     <h3 className="card-title">Store-wise Sales Summary</h3>
-                                    <p className="card-subtitle">
-                                        Consolidated performance breakdown across all {summary.stores_summary.length} active stores
-                                    </p>
                                 </div>
                             </div>
                         </div>
 
                         <div className="dashboard-table-wrap">
-                            <table className="dashboard-table">
+                            <table className="dashboard-table store-summary-table">
                                 <thead>
                                     <tr>
-                                        <th>Store Name</th>
-                                        <th style={{ textAlign: 'center' }}>Store ID</th>
-                                        <th style={{ textAlign: 'right' }}>Today's Sales</th>
-                                        <th style={{ textAlign: 'right' }}>Monthly Sales</th>
-                                        <th style={{ textAlign: 'center' }}>Orders</th>
-                                        <th style={{ textAlign: 'center' }}>Low Stock</th>
-                                        <th style={{ textAlign: 'center' }}>Status</th>
-                                        <th style={{ textAlign: 'right' }}>Action</th>
+                                        <th className="col-store">Store</th>
+                                        <th className="col-today-sales">Today's Sales</th>
+                                        <th className="col-monthly-sales">Monthly Sales</th>
+                                        <th className="col-orders">Orders</th>
+                                        <th className="col-low-stock">Low Stock</th>
+                                        <th className="col-status">Status</th>
+                                        <th className="col-action">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {summary.stores_summary.map((st) => (
-                                        <tr key={st.store_id}>
-                                            <td style={{ fontWeight: 600 }}>{st.store_name}</td>
-                                            <td style={{ textAlign: 'center', color: '#64748b' }}>#{st.store_id}</td>
-                                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(st.today_sales)}</td>
-                                            <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatCurrency(st.monthly_sales)}</td>
-                                            <td style={{ textAlign: 'center' }}>{formatInteger(st.orders_count)}</td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                {st.low_stock_count > 0 ? (
-                                                    <span style={{ color: '#ef4444', fontWeight: 700 }}>{st.low_stock_count}</span>
-                                                ) : (
-                                                    <span style={{ color: '#10b981' }}>0</span>
-                                                )}
-                                            </td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                <span className={`status-pill ${st.is_active !== false ? 'completed' : 'cancelled'}`}>
-                                                    {st.is_active !== false ? 'Active' : 'Inactive'}
-                                                </span>
-                                            </td>
-                                            <td style={{ textAlign: 'right' }}>
-                                                <button
-                                                    type="button"
-                                                    className="store-filter-btn"
-                                                    onClick={() => setSelectedStore(String(st.store_id))}
-                                                    title={`Filter dashboard for ${st.store_name}`}
-                                                >
-                                                    View Store
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {paginatedStores.map((st) => {
+                                        const storeName = st.store_name || stores.find(s => String(s.id) === String(st.store_id))?.name || (st.store_id ? `Store #${st.store_id}` : '—');
+                                        const isSelected = String(selectedStore) === String(st.store_id);
+                                        return (
+                                            <tr key={st.store_id} style={isSelected ? { background: '#f8fafc' } : {}}>
+                                                <td className="col-store" style={{ fontWeight: 600 }}>{storeName}</td>
+                                                <td className="col-today-sales" style={{ fontWeight: 600 }}>{formatCurrency(st.today_sales)}</td>
+                                                <td className="col-monthly-sales" style={{ fontWeight: 600 }}>{formatCurrency(st.monthly_sales)}</td>
+                                                <td className="col-orders">{formatInteger(st.orders_count)}</td>
+                                                <td className="col-low-stock">
+                                                    {st.low_stock_count > 0 ? (
+                                                        <span style={{ color: '#ef4444', fontWeight: 700 }}>{st.low_stock_count}</span>
+                                                    ) : (
+                                                        <span style={{ color: '#10b981' }}>0</span>
+                                                    )}
+                                                </td>
+                                                <td className="col-status">
+                                                    <span className={`status-pill ${st.is_active !== false ? 'completed' : 'cancelled'}`}>
+                                                        {st.is_active !== false ? 'Active' : 'Inactive'}
+                                                    </span>
+                                                </td>
+                                                <td className="col-action" style={{ verticalAlign: 'middle' }}>
+                                                    <button
+                                                        type="button"
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            padding: '6px 8px',
+                                                            borderRadius: 6,
+                                                            border: isSelected ? '1.5px solid #6366f1' : '1px solid #e5e7eb',
+                                                            background: isSelected ? '#eef2ff' : '#ffffff',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                        onClick={() => setSelectedStore(prev => String(prev) === String(st.store_id) ? '' : String(st.store_id))}
+                                                        title={isSelected ? `Currently viewing ${storeName} (click to clear filter)` : `View metrics for ${storeName}`}
+                                                        aria-label={isSelected ? `Currently viewing ${storeName}. Click to reset to all stores.` : `View dashboard for ${storeName}`}
+                                                        aria-pressed={isSelected}
+                                                    >
+                                                        <BsEye size={14} color={isSelected ? '#4f46e5' : '#6366f1'} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
+
+                        {totalStoreCount > 0 && (
+                            <div className="dashboard-pagination">
+                                <span className="dashboard-pagination-info">
+                                    Showing {(storePage - 1) * STORES_PER_PAGE + 1}–{Math.min(storePage * STORES_PER_PAGE, totalStoreCount)} of {totalStoreCount}
+                                    &nbsp;|&nbsp; Page {storePage} of {totalStorePages}
+                                </span>
+                                <div className="dashboard-pagination-controls">
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary dashboard-pagination-nav-btn"
+                                        style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: storePage === 1 ? 'not-allowed' : 'pointer' }}
+                                        disabled={storePage === 1}
+                                        onClick={() => setStorePage((p) => p - 1)}
+                                    >
+                                        <BsChevronLeft size={12} />
+                                    </button>
+                                    {Array.from({ length: totalStorePages }, (_, i) => i + 1).map((n) => (
+                                        <button
+                                            key={n}
+                                            type="button"
+                                            className={`dashboard-pagination-num-btn ${n === storePage ? 'active' : ''}`}
+                                            onClick={() => setStorePage(n)}
+                                            style={{
+                                                width: 30,
+                                                height: 30,
+                                                borderRadius: 6,
+                                                border: `1.5px solid ${n === storePage ? '#6366f1' : '#e5e7eb'}`,
+                                                background: n === storePage ? '#eef2ff' : '#fff',
+                                                color: n === storePage ? '#6366f1' : '#6b7280',
+                                                fontSize: 12,
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {n}
+                                        </button>
+                                    ))}
+                                    <button
+                                        type="button"
+                                        className="adm-btn-secondary dashboard-pagination-nav-btn"
+                                        style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: storePage === totalStorePages ? 'not-allowed' : 'pointer' }}
+                                        disabled={storePage === totalStorePages}
+                                        onClick={() => setStorePage((p) => p + 1)}
+                                    >
+                                        <BsChevronRight size={12} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </section>
             )}
@@ -2069,7 +2774,7 @@ const Dashboard = () => {
                             </div>
                         </div>
 
-                        <Link to="/orders" className="card-view-all">
+                        <Link to="/invoices" className="card-view-all">
                             View All
                         </Link>
                     </div>
@@ -2091,59 +2796,69 @@ const Dashboard = () => {
                             <table className="dashboard-table">
                                 <thead>
                                     <tr>
-                                        <th>Invoice No.</th>
-                                        <th>Date &amp; Time</th>
-                                        <th>Customer</th>
-                                        <th>Items (Qty)</th>
-                                        <th>Amount</th>
-                                        <th>Status</th>
+                                        <th style={{ textAlign: 'left', padding: '12px 14px' }}>Invoice No.</th>
+                                        <th style={{ textAlign: 'left', padding: '12px 14px' }}>Date &amp; Time</th>
+                                        <th style={{ textAlign: 'left', padding: '12px 14px' }}>Customer</th>
+                                        <th style={{ textAlign: 'right', padding: '12px 14px' }}>Amount</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 14px', minWidth: 125 }}>Order Status</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 14px', minWidth: 110 }}>Payment Status</th>
+                                        <th style={{ textAlign: 'center', padding: '12px 14px', width: 70 }}>Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {transactions.map((ord, idx) => {
+                                    {paginatedTransactions.map((ord, idx) => {
                                         const orderId = ord.order_id || ord.id || idx;
                                         const invoiceNo = ord.order_number || ord.invoice_number || `ORD-${orderId}`;
                                         const customerName = ord.customer_name || ord.customer?.name || (ord.customer_id ? `Customer #${ord.customer_id}` : 'Walk-in Customer');
-                                        const distinctCount = Array.isArray(ord.items) && ord.items.length > 0
-                                            ? ord.items.length
-                                            : (ord.items_count || 1);
-                                        const totalUnits = Array.isArray(ord.items) && ord.items.length > 0
-                                            ? ord.items.reduce((sum, item) => sum + (Number(item.quantity) || 1), 0)
-                                            : (ord.quantity || distinctCount);
                                         const amount = Number(ord.amount ?? ord.total_amount ?? 0);
-                                        const orderStatus = ord.order_status || ord.status || 'Completed';
-                                        const paymentStatus = ord.payment_status || 'Paid';
+                                        const { order: orderStatus, payment: paymentStatus } = parseTransactionStatuses(ord);
 
                                         return (
                                             <tr key={orderId}>
-                                                <td>
-                                                    <Link to={`/orders/${orderId}`} className="table-id-link">
+                                                <td style={{ padding: '12px 14px', verticalAlign: 'middle' }}>
+                                                    <Link to="/invoices" className="table-id-link" title={`View ${invoiceNo}`}>
                                                         {invoiceNo}
                                                     </Link>
                                                 </td>
-                                                <td>{formatDate(ord.created_at)}</td>
-                                                <td>{customerName}</td>
-                                                <td>
-                                                    {ord.items ? (
-                                                        totalUnits > distinctCount
-                                                            ? `${totalUnits} units (${distinctCount} item${distinctCount > 1 ? 's' : ''})`
-                                                            : `${totalUnits} unit${totalUnits > 1 ? 's' : ''}`
-                                                    ) : (
-                                                        `${totalUnits} unit${totalUnits > 1 ? 's' : ''}`
-                                                    )}
+                                                <td style={{ padding: '12px 14px', verticalAlign: 'middle', whiteSpace: 'nowrap', color: '#64748b' }}>
+                                                    {formatDate(ord.created_at)}
                                                 </td>
-                                                <td className="table-amount">{formatCurrency(amount)}</td>
-                                                <td>
-                                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                                        <span className={`status-pill ${orderStatus.toLowerCase()}`}>
-                                                            {orderStatus}
-                                                        </span>
-                                                        {paymentStatus && paymentStatus.toLowerCase() !== orderStatus.toLowerCase() && (
-                                                            <span className={`status-pill ${paymentStatus.toLowerCase()}`}>
-                                                                {paymentStatus}
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                                <td style={{ padding: '12px 14px', verticalAlign: 'middle', fontWeight: 500, color: '#1e293b' }}>
+                                                    {customerName}
+                                                </td>
+                                                <td className="table-amount" style={{ padding: '12px 14px', textAlign: 'right', verticalAlign: 'middle', fontWeight: 600 }}>
+                                                    {formatCurrency(amount)}
+                                                </td>
+                                                <td style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                    <span className={`status-pill ${getStatusClass(orderStatus)}`}>
+                                                        {orderStatus}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                    <span className={`status-pill ${getStatusClass(paymentStatus)}`}>
+                                                        {paymentStatus}
+                                                    </span>
+                                                </td>
+                                                <td style={{ padding: '12px 14px', textAlign: 'center', verticalAlign: 'middle' }}>
+                                                    <Link
+                                                        to="/invoices"
+                                                        className="adm-btn-secondary"
+                                                        style={{
+                                                            padding: '6px 8px',
+                                                            borderRadius: 6,
+                                                            border: '1px solid #e5e7eb',
+                                                            background: '#ffffff',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            textDecoration: 'none',
+                                                            transition: 'all 0.15s ease'
+                                                        }}
+                                                        title={`View details for ${invoiceNo}`}
+                                                    >
+                                                        <BsEye size={14} color="#6366f1" />
+                                                    </Link>
                                                 </td>
                                             </tr>
                                         );
@@ -2152,10 +2867,60 @@ const Dashboard = () => {
                             </table>
                         )}
                     </div>
+
+                    {transactions.length > 0 && (
+                        <div className="dashboard-pagination">
+                            <span className="dashboard-pagination-info">
+                                Showing {(txPage - 1) * TX_PER_PAGE + 1}–{Math.min(txPage * TX_PER_PAGE, transactions.length)} of {transactions.length}
+                                &nbsp;|&nbsp; Page {txPage} of {totalTxPages}
+                            </span>
+                            <div className="dashboard-pagination-controls">
+                                <button
+                                    type="button"
+                                    className="adm-btn-secondary dashboard-pagination-nav-btn"
+                                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: txPage === 1 ? 'not-allowed' : 'pointer' }}
+                                    disabled={txPage === 1}
+                                    onClick={() => setTxPage((p) => p - 1)}
+                                >
+                                    <BsChevronLeft size={12} />
+                                </button>
+                                {Array.from({ length: totalTxPages }, (_, i) => i + 1).map((n) => (
+                                    <button
+                                        key={n}
+                                        type="button"
+                                        className={`dashboard-pagination-num-btn ${n === txPage ? 'active' : ''}`}
+                                        onClick={() => setTxPage(n)}
+                                        style={{
+                                            width: 30,
+                                            height: 30,
+                                            borderRadius: 6,
+                                            border: `1.5px solid ${n === txPage ? '#6366f1' : '#e5e7eb'}`,
+                                            background: n === txPage ? '#eef2ff' : '#fff',
+                                            color: n === txPage ? '#6366f1' : '#6b7280',
+                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {n}
+                                    </button>
+                                ))}
+                                <button
+                                    type="button"
+                                    className="adm-btn-secondary dashboard-pagination-nav-btn"
+                                    style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', cursor: txPage === totalTxPages ? 'not-allowed' : 'pointer' }}
+                                    disabled={txPage === totalTxPages}
+                                    onClick={() => setTxPage((p) => p + 1)}
+                                >
+                                    <BsChevronRight size={12} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* 2. Top Selling Products Table */}
-                <div className="dashboard-card">
+                <div className="dashboard-card top-products-card">
                     <div className="dashboard-card-header">
                         <div className="card-title-group">
                             <div className="card-header-icon yellow">
@@ -2185,20 +2950,20 @@ const Dashboard = () => {
                                 <p className="empty-state-sub">Top products will appear once orders are made.</p>
                             </div>
                         ) : (
-                            <table className="dashboard-table">
+                            <table className="dashboard-table top-products-table">
                                 <thead>
                                     <tr>
-                                        <th style={{ width: 32 }}>#</th>
-                                        <th>Product</th>
-                                        <th style={{ textAlign: 'center' }}>Quantity Sold</th>
-                                        <th style={{ textAlign: 'right' }}>Revenue</th>
+                                        <th className="col-rank">#</th>
+                                        <th className="col-product">Product</th>
+                                        <th className="col-qty">Quantity Sold</th>
+                                        <th className="col-rev">Revenue</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {topProducts.map((p, idx) => (
                                         <tr key={idx}>
-                                            <td style={{ fontWeight: 700, color: '#64748b' }}>{idx + 1}</td>
-                                            <td>
+                                            <td className="col-rank" style={{ fontWeight: 700, color: '#64748b' }}>{idx + 1}</td>
+                                            <td className="col-product">
                                                 <div className="top-product-row-info">
                                                     <div className="product-thumb">
                                                         <BsBox />
@@ -2213,10 +2978,10 @@ const Dashboard = () => {
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                                            <td className="col-qty" style={{ fontWeight: 600 }}>
                                                 {formatInteger(p.quantity_sold)}
                                             </td>
-                                            <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                                            <td className="col-rev" style={{ fontWeight: 700, color: '#0f172a' }}>
                                                 {formatCurrency(p.revenue)}
                                             </td>
                                         </tr>
@@ -2227,104 +2992,6 @@ const Dashboard = () => {
                     </div>
                 </div>
             </section>
-
-            {/* ── Notification Dropdown Panel (Dashboard Module Scope) ── */}
-            {isNotificationOpen &&
-                createPortal(
-                    <div
-                        id="dashboard-notification-panel"
-                        ref={notificationDropdownRef}
-                        className="dashboard-notification-panel"
-                        style={{
-                            top: bellPosition ? `${bellPosition.top}px` : '64px',
-                            right: bellPosition ? `${bellPosition.right}px` : '20px',
-                        }}
-                        role="dialog"
-                        aria-label="Notifications"
-                        aria-modal="false"
-                    >
-                        {/* Header Banner */}
-                        <div className="dashboard-notification-header">
-                            <div className="dashboard-notification-title-wrap">
-                                <BsBell className="dashboard-notification-header-icon" />
-                                <h3 className="dashboard-notification-title">Notifications</h3>
-                                <span className="dashboard-notification-badge">
-                                    {notificationItems.length > 0 ? `${notificationItems.length} New` : '0 New'}
-                                </span>
-                            </div>
-                            <button
-                                type="button"
-                                className="dashboard-notification-close-btn"
-                                onClick={() => {
-                                    setIsNotificationOpen(false);
-                                    if (bellButtonRef.current) bellButtonRef.current.focus();
-                                }}
-                                title="Close notifications"
-                                aria-label="Close notifications"
-                            >
-                                <BsX size={18} />
-                            </button>
-                        </div>
-
-                        {/* Notifications List */}
-                        <div className="dashboard-notification-list">
-                            {notificationItems.length === 0 ? (
-                                <div className="dashboard-notification-empty">
-                                    <div className="dashboard-notification-empty-icon-wrap">
-                                        <BsCheckCircleFill size={22} color="#10b981" />
-                                    </div>
-                                    <p className="dashboard-notification-empty-title">All caught up!</p>
-                                    <p className="dashboard-notification-empty-desc">
-                                        No active inventory alerts or urgent notifications.
-                                    </p>
-                                </div>
-                            ) : (
-                                notificationItems.map((item) => (
-                                    <div key={item.id} className={`dashboard-notification-card ${item.type}`}>
-                                        <div className="dashboard-notification-card-icon">
-                                            {item.type === 'error' ? (
-                                                <BsExclamationCircleFill size={16} />
-                                            ) : (
-                                                <BsBoxSeam size={16} />
-                                            )}
-                                        </div>
-                                        <div className="dashboard-notification-card-body">
-                                            <div className="dashboard-notification-card-header">
-                                                <span className="dashboard-notification-card-title">{item.title}</span>
-                                                <span className="dashboard-notification-card-time">{item.time}</span>
-                                            </div>
-                                            <p className="dashboard-notification-card-msg">{item.message}</p>
-                                            {item.link && (
-                                                <Link
-                                                    to={item.link}
-                                                    className="dashboard-notification-card-link"
-                                                    onClick={() => setIsNotificationOpen(false)}
-                                                >
-                                                    <span>{item.linkText}</span>
-                                                    <BsArrowRight size={12} />
-                                                </Link>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-
-                        {/* Footer */}
-                        {notificationItems.length > 0 && (
-                            <div className="dashboard-notification-footer">
-                                <Link
-                                    to="/inventory"
-                                    className="dashboard-notification-footer-link"
-                                    onClick={() => setIsNotificationOpen(false)}
-                                >
-                                    View inventory items &amp; alerts
-                                </Link>
-                            </div>
-                        )}
-                    </div>,
-                    document.body
-                )}
 
             {/* ── Financial Metric Details Modal ── */}
             {activeMetricModal &&
@@ -2357,7 +3024,7 @@ const Dashboard = () => {
                                             {activeMetricModal === 'margin' && 'Gross Profit Margin & Markup'}
                                         </h3>
                                         <span className="financial-modal-badge">
-                                            {PERIOD_LABELS[period]} &bull; {selectedStoreLabel}
+                                            {totalRevenueSubtitle} &bull; {selectedStoreLabel}
                                         </span>
                                     </div>
                                 </div>
@@ -2517,7 +3184,7 @@ const Dashboard = () => {
                     </div>,
                     document.body
                 )}
-        </div>
+        </PageContainer>
     );
 };
 

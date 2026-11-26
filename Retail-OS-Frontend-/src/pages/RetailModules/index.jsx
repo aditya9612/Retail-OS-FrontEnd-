@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom';
 import apiClient from '../../services/api';
 import { getInvoices } from '../../services/billingService';
+import productService from '../../services/product';
+import { generateBarcodeDataUrl, generateBarcodeLabelsPDF, downloadBarcodeImage, generateBarcodeSVG, generateLabelSVG, downloadBarcodeSVG, downloadLabelSVG, downloadBlob } from './barcodeUtils';
 import { getWarehouses, getWarehouseDashboard, getWarehouseById, createWarehouse, updateWarehouse, deleteWarehouse, getWarehouseTransfers } from '../../api/warehouseApi';
 import { warehouseService } from '../../services/warehouseService';
 import userService from '../../services/userService';
@@ -14,13 +16,16 @@ import TransferStockModal from '../../components/TransferStockModel';
 import './Warehouse.css';
 import './StoreTransfers.css';
 import { getStoreTransfers, getStoreTransfersSummary, getStoreTransferById, approveStoreTransfer, rejectStoreTransfer, dispatchStoreTransfer, receiveStoreTransfer, receiveStoreTransferWithDiscrepancy, checkStoreActiveStatus } from '../../services/storeTransferService';
-
+import notificationService from '../../utils/notificationService';
+import '../../components/Common/PageComponents.css';
+import '../../components/Categories/CategoryCards.css';
+import { PageContainer, PageHeader, KpiGrid, KpiCard } from '../../components/Common/PageComponents';
 import {
     BsSearch, BsPlus, BsDownload, BsFilter, BsCheckCircleFill, BsClockHistory,
     BsXCircleFill, BsPrinter, BsUpcScan, BsBuildings, BsTruck, BsArrowRepeat,
     BsArrowLeftRight, BsAwardFill, BsShieldLock, BsMegaphone, BsChatDots,
     BsStars, BsPlug, BsDisplay, BsCashStack, BsArrowReturnLeft, BsReceiptCutoff,
-    BsCreditCard2Front, BsBoxSeam, BsSend, BsGear, BsTag, BsExclamationTriangle,
+    BsCreditCard2Front, BsBoxSeam, BsSend, BsGear, BsTag, BsExclamationTriangle, BsImage,
     BsTrash, BsShop, BsChevronLeft, BsChevronRight, BsX, BsEye, BsCheckCircle, BsXCircle,
     BsChevronDown, BsChevronUp, BsActivity, BsTable, BsPencilFill, BsTrashFill, BsPlusCircle,
     BsFileEarmarkPdf, BsShieldCheck, BsClipboardData, BsCalendarCheck, BsFunnel, BsGeoAlt
@@ -28,115 +33,49 @@ import {
 
 
 /* ─────────────────────────────────────────────────────────────
-   Shared Module Header & Wrapper
+   Shared Module Header & Wrapper — Standardized against Dashboard
 ───────────────────────────────────────────────────────────── */
+
+
 const ModuleContainer = ({ title, subtitle, icon, actionBtn, children }) => (
-    <div style={{ padding: '24px 28px', maxWidth: '1440px', margin: '0 auto' }}>
-        <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: 16,
-            marginBottom: 24,
-            paddingBottom: 20,
-            borderBottom: '1px solid #e5e7eb'
-        }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <div style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    background: '#eef2ff',
-                    color: '#6366f1',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 22
-                }}>
-                    {icon}
-                </div>
-                <div>
-                    <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111827', margin: 0, letterSpacing: '-0.02em' }}>
-                        {title}
-                    </h1>
-                    <p style={{ fontSize: 13, color: '#6b7280', margin: '3px 0 0 0' }}>
-                        {subtitle}
-                    </p>
-                </div>
-            </div>
-            {actionBtn && <div>{actionBtn}</div>}
-        </div>
+    <PageContainer>
+        <PageHeader
+            title={title}
+            subtitle={subtitle}
+            icon={icon}
+            actions={actionBtn}
+        />
         {children}
-    </div>
+    </PageContainer>
 );
 
 const StatCard = ({ label, value, sub, color = '#6366f1' }) => {
     const isValueBox = label === "Total Stock Value" || (typeof value === "string" && value.includes("₹"));
+    const dynamicFontSize = isValueBox
+        ? (String(value).length >= 14 ? 18 : String(value).length >= 11 ? 20 : 22)
+        : undefined;
+
     return (
-        <div style={{
-            background: '#fff',
-            borderRadius: 12,
-            padding: '16px 20px',
-            border: '1px solid #e5e7eb',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            flex: 1,
-            minWidth: 180,
-            maxWidth: '100%',
-            overflow: 'hidden',
-            boxSizing: 'border-box'
-        }}>
-            <p style={{
-                fontSize: 12,
-                fontWeight: 600,
-                color: '#6b7280',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: 6,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-            }}>
-                {label}
-            </p>
-            <p
-                title={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
-                style={{
-                    fontSize: isValueBox
-                        ? (String(value).length >= 14 ? 18 : String(value).length >= 11 ? 20 : 22)
-                        : 24,
-                    fontWeight: 800,
-                    color: '#111827',
-                    margin: 0,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: '100%',
-                    boxSizing: 'border-box'
-                }}
-            >
-                {value}
-            </p>
-            {sub && (
-                <p style={{
-                    fontSize: 12,
-                    color,
-                    margin: '4px 0 0 0',
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                }}>
-                    {sub}
-                </p>
-            )}
-        </div>
+        <KpiCard
+            title={label}
+            value={dynamicFontSize ? <span style={{ fontSize: dynamicFontSize }}>{value}</span> : value}
+            subtitle={sub}
+            accentColor={color}
+            tooltip={typeof value === 'string' || typeof value === 'number' ? String(value) : undefined}
+        />
     );
 };
 
 /* ─────────────────────────────────────────────────────────────
    1. BILLING & GST: Returns & Refunds
 ───────────────────────────────────────────────────────────── */
+
+
+/* ─────────────────────────────────────────────────────────────
+   1. BILLING & GST: Returns & Refunds
+───────────────────────────────────────────────────────────── */
+
+
 export { ReturnsRefundsPage } from '../ReturnsRefunds';
 
 /* ─────────────────────────────────────────────────────────────
@@ -147,206 +86,923 @@ export { CreditNotesPage } from '../CreditNotes';
 /* ─────────────────────────────────────────────────────────────
    3. BILLING & GST: Payments
 ───────────────────────────────────────────────────────────── */
-export const BillingPaymentsPage = () => {
-    const [payments, setPayments] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        let isMounted = true;
-        const loadPayments = async () => {
-            setLoading(true);
-            try {
-                let list = [];
-                const res = await getInvoices().catch(() => null);
-                if (res) {
-                    list = Array.isArray(res) ? res : (res?.data || res?.items || []);
-                }
-                const stored = localStorage.getItem('gst_invoices');
-                if (stored) {
-                    const parsed = JSON.parse(stored);
-                    if (Array.isArray(parsed)) {
-                        parsed.forEach(loc => {
-                            if (!list.some(inv => String(inv.id || inv.invoice_number) === String(loc.id))) {
-                                list.push(loc);
-                            }
-                        });
-                    }
-                }
-
-                if (isMounted) {
-                    const mapped = list.map((inv, i) => {
-                        const amt = Number(inv.total || inv.grand_total || inv.amount || 0);
-                        const mode = inv.payment_mode || inv.paymentMode || inv.mode || 'Cash';
-                        return {
-                            ref: `TXN-${String(inv.id || i + 1).replace(/[^0-9A-Za-z]/g, '').slice(-8)}`,
-                            inv: inv.id || inv.invoice_number || `INV-${i + 1}`,
-                            method: mode,
-                            term: mode === 'UPI' ? 'UPI QR' : mode === 'Card' ? 'Card Terminal' : 'Cash Counter',
-                            rawAmt: amt,
-                            amt: '₹' + amt.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
-                            time: inv.date || (inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-IN') : 'Today'),
-                            status: inv.status || 'Success',
-                        };
-                    });
-                    setPayments(mapped);
-                }
-            } catch (_) {
-                if (isMounted) setPayments([]);
-            } finally {
-                if (isMounted) setLoading(false);
-            }
-        };
-        loadPayments();
-        return () => { isMounted = false; };
-    }, []);
-
-    const totalCollections = useMemo(() => {
-        return payments.reduce((s, p) => s + (p.rawAmt || 0), 0);
-    }, [payments]);
-
-    const upiCollections = useMemo(() => {
-        return payments.filter(p => (p.method || '').toLowerCase().includes('upi')).reduce((s, p) => s + (p.rawAmt || 0), 0);
-    }, [payments]);
-
-    const cardCollections = useMemo(() => {
-        return payments.filter(p => (p.method || '').toLowerCase().includes('card')).reduce((s, p) => s + (p.rawAmt || 0), 0);
-    }, [payments]);
-
-    const cashCollections = useMemo(() => {
-        return payments.filter(p => (p.method || '').toLowerCase().includes('cash')).reduce((s, p) => s + (p.rawAmt || 0), 0);
-    }, [payments]);
-
-    return (
-        <ModuleContainer
-            title="Payments & Settlements"
-            subtitle="Real-time register of POS collections, UPI QR settlements, Cards, and cash drawer reconciliations"
-            icon={<BsCreditCard2Front />}
-        >
-            <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-                <StatCard label="Total Collections" value={'₹' + totalCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })} sub={`${payments.length} Transactions`} color="#10b981" />
-                <StatCard label="UPI / Dynamic QR" value={'₹' + upiCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })} sub={totalCollections > 0 ? `${Math.round((upiCollections / totalCollections) * 100)}% of total volume` : '0%'} color="#6366f1" />
-                <StatCard label="Card POS" value={'₹' + cardCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })} sub="Settled automatically" color="#0ea5e9" />
-                <StatCard label="Cash In Drawer" value={'₹' + cashCollections.toLocaleString('en-IN', { minimumFractionDigits: 2 })} sub="Cash collections" color="#f59e0b" />
-            </div>
-
-            <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 20 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16 }}>Live Payment Ledger</h3>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
-                    <thead style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>
-                        <tr>
-                            <th style={{ padding: '12px 16px' }}>Txn Ref</th>
-                            <th style={{ padding: '12px 16px' }}>Invoice ID</th>
-                            <th style={{ padding: '12px 16px' }}>Method</th>
-                            <th style={{ padding: '12px 16px' }}>Gateway / Terminal</th>
-                            <th style={{ padding: '12px 16px' }}>Amount</th>
-                            <th style={{ padding: '12px 16px' }}>Time</th>
-                            <th style={{ padding: '12px 16px' }}>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {payments.length === 0 ? (
-                            <tr>
-                                <td colSpan="7" style={{ padding: '36px 16px', textAlign: 'center', color: '#9ca3af' }}>
-                                    {loading ? 'Loading payment transactions...' : 'No payment transactions recorded yet'}
-                                </td>
-                            </tr>
-                        ) : (
-                            payments.map((tx, i) => (
-                                <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                    <td style={{ padding: '12px 16px', fontWeight: 600 }}>{tx.ref}</td>
-                                    <td style={{ padding: '12px 16px', color: '#6366f1' }}>{tx.inv}</td>
-                                    <td style={{ padding: '12px 16px' }}><span style={{ background: '#f3f4f6', padding: '3px 8px', borderRadius: 6, fontWeight: 600, fontSize: 12 }}>{tx.method}</span></td>
-                                    <td style={{ padding: '12px 16px', color: '#6b7280' }}>{tx.term}</td>
-                                    <td style={{ padding: '12px 16px', fontWeight: 800 }}>{tx.amt}</td>
-                                    <td style={{ padding: '12px 16px', color: '#6b7280' }}>{tx.time}</td>
-                                    <td style={{ padding: '12px 16px' }}>
-                                        <span style={{ padding: '3px 8px', borderRadius: 10, background: '#ecfdf5', color: '#059669', fontWeight: 700, fontSize: 11 }}>
-                                            {tx.status}
-                                        </span>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </ModuleContainer>
-    );
-};
+export { BillingPaymentsPage } from '../Payments';
 
 /* ─────────────────────────────────────────────────────────────
    4. PRODUCTS: Barcode
 ───────────────────────────────────────────────────────────── */
 export const BarcodePage = () => {
+    // Product data & search state
+    const [products, setProducts] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedProduct, setSelectedProduct] = useState(null);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+
+    // Form controls
+    const [barcodeStandard, setBarcodeStandard] = useState('EAN-13 (Standard Retail)');
+    const [labelSize, setLabelSize] = useState('50mm x 25mm (Thermal)');
+    const [copies, setCopies] = useState('20');
+
+    // Generated label data from backend (GET /api/v1/products/{product_id}/barcode-label)
+    const [backendLabel, setBackendLabel] = useState(null);
+
+    // Action & status states
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [isPreviewing, setIsPreviewing] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
+    const [isPrinting, setIsPrinting] = useState(false);
+    const [statusMessage, setStatusMessage] = useState(null);
+
+    const searchRef = useRef(null);
+
+    // Close search dropdown on outside click
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (searchRef.current && !searchRef.current.contains(e.target)) {
+                setShowDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Helper to fetch latest product details and existing label from backend
+    const fetchLatestProductData = async (productId) => {
+        try {
+            // GET /api/v1/products/{product_id}
+            const res = await productService.getById(productId);
+            const freshProd = res?.data?.product || res?.data?.data || res?.data || null;
+            if (freshProd) {
+                setSelectedProduct(freshProd);
+                // If product already has a barcode, fetch its printable label
+                if (freshProd.barcode) {
+                    try {
+                        const labelRes = await productService.getBarcodeLabel(freshProd.id, 'json');
+                        const labelData = labelRes?.data?.data || labelRes?.data || labelRes;
+                        setBackendLabel(labelData);
+                    } catch {
+                        setBackendLabel(null);
+                    }
+                } else {
+                    setBackendLabel(null);
+                }
+                return freshProd;
+            }
+        } catch (err) {
+            console.error('Failed to fetch latest product details:', err);
+        }
+        return null;
+    };
+
+    // Load initial products from backend
+    useEffect(() => {
+        let mounted = true;
+        const loadInitialProducts = async () => {
+            setIsLoadingProducts(true);
+            try {
+                const res = await productService.getAll(1, 100, true);
+                const list = Array.isArray(res?.data)
+                    ? res.data
+                    : Array.isArray(res?.data?.items)
+                        ? res.data.items
+                        : Array.isArray(res?.items)
+                            ? res.items
+                            : [];
+                if (mounted) {
+                    setProducts(list);
+                    if (list.length > 0) {
+                        setSelectedProduct(list[0]);
+                        setSearchQuery(list[0].name ? `${list[0].name}${list[0].sku ? ` (${list[0].sku})` : ''}` : '');
+                        // Fetch latest product details from backend
+                        fetchLatestProductData(list[0].id);
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load products for barcode management:', err);
+            } finally {
+                if (mounted) setIsLoadingProducts(false);
+            }
+        };
+        loadInitialProducts();
+        return () => { mounted = false; };
+    }, []);
+
+    // Filter products based on search input
+    const searchResults = useMemo(() => {
+        const q = (searchQuery || '').trim().toLowerCase();
+        if (!q) return products.slice(0, 8);
+        return products.filter(p =>
+            (p.name || '').toLowerCase().includes(q) ||
+            (p.sku || '').toLowerCase().includes(q) ||
+            (p.barcode || '').toLowerCase().includes(q)
+        ).slice(0, 10);
+    }, [products, searchQuery]);
+
+    // Handle product selection
+    const handleSelectProduct = async (prod) => {
+        setSelectedProduct(prod);
+        setBackendLabel(null);
+        setSearchQuery(prod.name ? `${prod.name}${prod.sku ? ` (${prod.sku})` : ''}` : '');
+        setShowDropdown(false);
+        setStatusMessage(null);
+        // Immediately retrieve latest product details via GET /api/v1/products/{product_id}
+        await fetchLatestProductData(prod.id);
+    };
+
+    // 1. Generate Barcode (POST /api/v1/products/{id}/generate-barcode) - Independent (Issue 14)
+    const handleGenerateBarcodeOnly = async () => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product first.' });
+            return;
+        }
+
+        setIsGenerating(true);
+        setStatusMessage(null);
+
+        try {
+            // Step 1: Retrieve latest product details via GET /api/v1/products/{product_id}
+            let currentProd = selectedProduct;
+            try {
+                const freshRes = await productService.getById(selectedProduct.id);
+                if (freshRes?.data) {
+                    currentProd = freshRes.data?.product || freshRes.data;
+                    setSelectedProduct(currentProd);
+                }
+            } catch (fetchErr) {
+                console.warn('Could not refresh product details before generation:', fetchErr);
+            }
+
+            // Step 2: Call POST /api/v1/products/{product_id}/generate-barcode
+            let generatedBarcode = currentProd.barcode;
+            try {
+                const genRes = await productService.generateBarcode(currentProd.id, true);
+                const candidateBarcode = (
+                    genRes?.data?.barcode ||
+                    genRes?.data?.data?.barcode ||
+                    genRes?.data?.product?.barcode ||
+                    genRes?.barcode ||
+                    (typeof genRes?.data === 'string' ? genRes.data : null)
+                );
+                if (candidateBarcode && typeof candidateBarcode === 'string') {
+                    generatedBarcode = candidateBarcode;
+                }
+            } catch (genErr) {
+                // If 409 Conflict, barcode already exists; fallback without overwrite
+                if (genErr?.response?.status === 409 && currentProd.barcode) {
+                    generatedBarcode = currentProd.barcode;
+                } else {
+                    throw genErr;
+                }
+            }
+
+            if (generatedBarcode && typeof generatedBarcode === 'string') {
+                currentProd = { ...currentProd, barcode: generatedBarcode };
+                setSelectedProduct(currentProd);
+                setProducts(prev => prev.map(p => p.id === currentProd.id ? { ...p, barcode: generatedBarcode } : p));
+            }
+
+            const successText = `Barcode successfully generated: ${generatedBarcode || currentProd.barcode || ''} for ${currentProd.name}!`;
+            setStatusMessage({
+                type: 'success',
+                text: successText
+            });
+            notificationService.success(successText);
+        } catch (err) {
+            console.error('Failed to generate barcode on server:', err);
+            const msg = err?.response?.data?.message ||
+                (typeof err?.response?.data?.detail === 'string' ? err?.response?.data?.detail : err?.response?.data?.detail?.message) ||
+                'Failed to generate barcode on server. Please try again.';
+            setStatusMessage({ type: 'error', text: msg });
+            notificationService.error(msg);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    // 2. Preview Label (GET /api/v1/products/{id}/barcode-label?mode=json) - Independent (Issue 14)
+    const handlePreviewBarcodeOnly = async () => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product first.' });
+            return;
+        }
+
+        setIsPreviewing(true);
+        setStatusMessage(null);
+
+        try {
+            // Retrieve GET /api/v1/products/{product_id}/barcode-label?mode=json without re-generating barcode
+            let labelData = null;
+            try {
+                const labelRes = await productService.getBarcodeLabel(selectedProduct.id, 'json');
+                labelData = labelRes?.data?.data || labelRes?.data || labelRes;
+            } catch (labelErr) {
+                console.warn('Could not retrieve barcode label sticker data:', labelErr);
+            }
+
+            if (labelData && typeof labelData === 'object') {
+                setBackendLabel(labelData);
+                const serverBarcode = labelData?.barcode || labelData?.data?.barcode;
+                if (serverBarcode && typeof serverBarcode === 'string' && serverBarcode !== selectedProduct.barcode) {
+                    setSelectedProduct(prev => ({ ...prev, barcode: serverBarcode }));
+                    setProducts(prev => prev.map(p => p.id === selectedProduct.id ? { ...p, barcode: serverBarcode } : p));
+                }
+            }
+
+            const previewText = `Preview updated for ${selectedProduct.name} (Barcode: ${labelData?.barcode || selectedProduct.barcode || 'Generated'})`;
+            setStatusMessage({
+                type: 'success',
+                text: previewText
+            });
+            notificationService.success(previewText);
+        } catch (err) {
+            console.error('Failed to load barcode preview:', err);
+            const infoText = `Preview rendered locally for ${selectedProduct.name}.`;
+            setStatusMessage({
+                type: 'info',
+                text: infoText
+            });
+            notificationService.info(infoText);
+        } finally {
+            setIsPreviewing(false);
+        }
+    };
+
+    // 2. Download Barcode standalone image (PNG / Server binary)
+    const handleDownloadBarcode = async () => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product first.' });
+            return;
+        }
+        if (!previewBarcodeNumber) {
+            setStatusMessage({ type: 'error', text: 'No barcode has been generated for this product yet. Click "Generate & Preview Labels" first.' });
+            return;
+        }
+
+        const fileId = selectedProduct.sku ? String(selectedProduct.sku).replace(/[^a-zA-Z0-9_-]/g, '_') : selectedProduct.id;
+        const filename = `barcode-${fileId}-${previewBarcodeNumber}.png`;
+
+        // Attempt server binary download first via GET /api/v1/products/{id}/barcode-label?mode=download
+        try {
+            const blobRes = await productService.getBarcodeLabel(selectedProduct.id, 'download');
+            const blobData = blobRes?.data || blobRes;
+            if (blobData instanceof Blob && blobData.size > 0) {
+                downloadBlob(blobData, filename);
+                setStatusMessage({ type: 'success', text: `Downloaded server barcode image: ${filename}` });
+                return;
+            }
+        } catch (serverErr) {
+            console.warn('Server download endpoint fallback to rendered barcode graphic:', serverErr);
+        }
+
+        if (previewBarcodeImg) {
+            const success = downloadBarcodeImage(previewBarcodeImg, filename);
+            if (success) {
+                setStatusMessage({
+                    type: 'success',
+                    text: `Downloaded barcode image: ${filename}`
+                });
+            }
+        } else {
+            setStatusMessage({ type: 'error', text: 'No barcode graphic available to download.' });
+        }
+    };
+
+    // Download standalone barcode vector SVG
+    const handleDownloadBarcodeSVG = () => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product first.' });
+            return;
+        }
+        if (!previewBarcodeNumber) {
+            setStatusMessage({ type: 'error', text: 'No barcode has been generated for this product yet. Click "Generate & Preview Labels" first.' });
+            return;
+        }
+        const fileId = selectedProduct.sku ? String(selectedProduct.sku).replace(/[^a-zA-Z0-9_-]/g, '_') : selectedProduct.id;
+        const filename = `barcode-${fileId}-${previewBarcodeNumber}.svg`;
+        const svgString = generateBarcodeSVG(previewBarcodeNumber, barcodeStandard);
+        downloadBarcodeSVG(svgString, filename);
+        setStatusMessage({
+            type: 'success',
+            text: `Downloaded vector barcode SVG: ${filename}`
+        });
+    };
+
+    // Download complete label vector SVG
+    const handleDownloadLabelSVG = () => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product first.' });
+            return;
+        }
+        if (!previewBarcodeNumber) {
+            setStatusMessage({ type: 'error', text: 'No barcode has been generated for this product yet. Click "Generate & Preview Labels" first.' });
+            return;
+        }
+        const fileId = selectedProduct.sku ? String(selectedProduct.sku).replace(/[^a-zA-Z0-9_-]/g, '_') : selectedProduct.id;
+        const filename = `barcode-label-${fileId}-${previewBarcodeNumber}.svg`;
+        const svgString = generateLabelSVG({
+            product: selectedProduct,
+            barcode: previewBarcodeNumber,
+            storeName: backendLabel?.store_name || 'RetailOS Store',
+            mrp: backendLabel?.mrp ?? selectedProduct.mrp ?? selectedProduct.selling_price ?? selectedProduct.price ?? 0,
+            barcodeStandard
+        });
+        downloadLabelSVG(svgString, filename);
+        setStatusMessage({
+            type: 'success',
+            text: `Downloaded vector barcode label sticker SVG: ${filename}`
+        });
+    };
+
+    // 3. Download Barcode Labels as PDF
+    const handleDownloadLabel = () => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product to download barcode labels.' });
+            return;
+        }
+        if (!previewBarcodeNumber) {
+            setStatusMessage({ type: 'error', text: 'No barcode has been generated for this product yet. Click "Generate & Preview Labels" first.' });
+            return;
+        }
+
+        const cleanCopies = parseInt(copies, 10);
+        if (isNaN(cleanCopies) || cleanCopies <= 0) {
+            setStatusMessage({ type: 'error', text: 'Please enter a valid positive number of copies (at least 1).' });
+            return;
+        }
+
+        setIsDownloading(true);
+        setStatusMessage(null);
+
+        try {
+            const hasMrp = (backendLabel?.mrp !== undefined && backendLabel?.mrp !== null && Number(backendLabel.mrp) > 0)
+                || (selectedProduct?.mrp !== undefined && selectedProduct?.mrp !== null && Number(selectedProduct.mrp) > 0);
+            const priceLabel = hasMrp ? 'MRP' : 'Price';
+            const priceVal = hasMrp
+                ? (backendLabel?.mrp ?? selectedProduct.mrp)
+                : (selectedProduct.selling_price ?? selectedProduct.price ?? backendLabel?.price ?? backendLabel?.mrp ?? selectedProduct.mrp ?? 0);
+
+            const rawSku = (backendLabel?.sku || selectedProduct?.sku || '').trim();
+            let cleanSku = rawSku;
+            while (/^SKU[:\s-]+\s*SKU[:\s-]/i.test(cleanSku)) {
+                cleanSku = cleanSku.replace(/^SKU[:\s-]+\s*/i, '');
+            }
+
+            const productForPdf = {
+                id: selectedProduct.id,
+                name: backendLabel?.product_name || selectedProduct.name,
+                sku: cleanSku,
+                barcode: previewBarcodeNumber,
+                mrp: priceVal,
+                priceLabel
+            };
+
+            generateBarcodeLabelsPDF({
+                product: productForPdf,
+                barcodeStandard,
+                labelSize,
+                copies: cleanCopies,
+                storeName: backendLabel?.store_name || 'RetailOS Store',
+                customBarcodeImage: (backendLabel?.barcode_image_base64 && !String(barcodeStandard).toLowerCase().includes('128') && !String(barcodeStandard).toLowerCase().includes('qr')) ? backendLabel.barcode_image_base64 : null,
+                action: 'download'
+            });
+
+            setStatusMessage({
+                type: 'success',
+                text: `Successfully downloaded ${cleanCopies} barcode label(s) as PDF.`
+            });
+        } catch (err) {
+            console.error('Download error:', err);
+            setStatusMessage({ type: 'error', text: err.message || 'Failed to generate PDF download.' });
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+    // 4. Print Barcode Labels (Single or Batch)
+    const handlePrintWithCopies = (copiesToPrint = null) => {
+        if (!selectedProduct) {
+            setStatusMessage({ type: 'error', text: 'Please select a product to print barcode labels.' });
+            return;
+        }
+        if (!previewBarcodeNumber) {
+            setStatusMessage({ type: 'error', text: 'No barcode has been generated for this product yet. Click "Generate & Preview Labels" first.' });
+            return;
+        }
+
+        const requestedCopies = copiesToPrint !== null ? copiesToPrint : parseInt(copies, 10);
+        if (isNaN(requestedCopies) || requestedCopies <= 0) {
+            setStatusMessage({ type: 'error', text: 'Please enter a valid positive number of copies (at least 1).' });
+            return;
+        }
+
+        setIsPrinting(true);
+        setStatusMessage(null);
+
+        try {
+            const hasMrp = (backendLabel?.mrp !== undefined && backendLabel?.mrp !== null && Number(backendLabel.mrp) > 0)
+                || (selectedProduct?.mrp !== undefined && selectedProduct?.mrp !== null && Number(selectedProduct.mrp) > 0);
+            const priceLabel = hasMrp ? 'MRP' : 'Price';
+            const priceVal = hasMrp
+                ? (backendLabel?.mrp ?? selectedProduct.mrp)
+                : (selectedProduct.selling_price ?? selectedProduct.price ?? backendLabel?.price ?? backendLabel?.mrp ?? selectedProduct.mrp ?? 0);
+
+            const rawSku = (backendLabel?.sku || selectedProduct?.sku || '').trim();
+            let cleanSku = rawSku;
+            while (/^SKU[:\s-]+\s*SKU[:\s-]/i.test(cleanSku)) {
+                cleanSku = cleanSku.replace(/^SKU[:\s-]+\s*/i, '');
+            }
+
+            const productForPdf = {
+                id: selectedProduct.id,
+                name: backendLabel?.product_name || selectedProduct.name,
+                sku: cleanSku,
+                barcode: previewBarcodeNumber,
+                mrp: priceVal,
+                priceLabel
+            };
+
+            generateBarcodeLabelsPDF({
+                product: productForPdf,
+                barcodeStandard,
+                labelSize,
+                copies: requestedCopies,
+                storeName: backendLabel?.store_name || 'RetailOS Store',
+                customBarcodeImage: (backendLabel?.barcode_image_base64 && !String(barcodeStandard).toLowerCase().includes('128') && !String(barcodeStandard).toLowerCase().includes('qr')) ? backendLabel.barcode_image_base64 : null,
+                action: 'print'
+            });
+
+            setStatusMessage({
+                type: 'success',
+                text: `Sent ${requestedCopies} barcode ${requestedCopies === 1 ? 'label' : 'labels'} to printer.`
+            });
+        } catch (err) {
+            console.error('Print error:', err);
+            setStatusMessage({ type: 'error', text: err.message || 'Failed to initiate printing.' });
+        } finally {
+            setIsPrinting(false);
+        }
+    };
+
+    // Preview fields derived from selected product or backend response
+    const previewStore = backendLabel?.store_name || 'RetailOS Store';
+    const previewProductName = backendLabel?.product_name || selectedProduct?.name || (products.length === 0 ? 'No Products Available' : 'Select a Product');
+    const rawSku = (backendLabel?.sku || selectedProduct?.sku || '').trim();
+    let cleanSku = rawSku;
+    while (/^SKU[:\s-]+\s*SKU[:\s-]/i.test(cleanSku)) {
+        cleanSku = cleanSku.replace(/^SKU[:\s-]+\s*/i, '');
+    }
+    const formattedSku = cleanSku
+        ? (/^SKU\b/i.test(cleanSku) ? cleanSku : `SKU: ${cleanSku}`)
+        : '';
+    const previewSubtitle = formattedSku
+        || (selectedProduct?.category?.name || selectedProduct?.category || (selectedProduct ? 'Standard Item' : ''));
+    const previewBarcodeNumber = backendLabel?.barcode || selectedProduct?.barcode || null;
+
+    const hasMrp = (backendLabel?.mrp !== undefined && backendLabel?.mrp !== null && Number(backendLabel.mrp) > 0)
+        || (selectedProduct?.mrp !== undefined && selectedProduct?.mrp !== null && Number(selectedProduct.mrp) > 0);
+    const priceLabel = hasMrp ? 'MRP' : 'Price';
+    const rawPrice = hasMrp
+        ? (backendLabel?.mrp ?? selectedProduct?.mrp)
+        : (selectedProduct?.selling_price ?? selectedProduct?.price ?? backendLabel?.price ?? backendLabel?.mrp ?? selectedProduct?.mrp ?? 0);
+    const previewPriceFormatted = Number(rawPrice || 0).toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+
+    const isQR = String(barcodeStandard).toLowerCase().includes('qr');
+    const isCode128 = String(barcodeStandard).toLowerCase().includes('128');
+
+    // Barcode image for Live Preview
+    const previewBarcodeImg = useMemo(() => {
+        if (!previewBarcodeNumber) return null;
+        // If standard is EAN-13 and backend returned base64 image, use it directly
+        if (backendLabel?.barcode_image_base64 && !isCode128 && !isQR) {
+            return backendLabel.barcode_image_base64;
+        }
+        try {
+            return generateBarcodeDataUrl(previewBarcodeNumber, barcodeStandard);
+        } catch {
+            return null;
+        }
+    }, [backendLabel, previewBarcodeNumber, barcodeStandard, isCode128, isQR]);
+
     return (
         <ModuleContainer
-            title="Barcode Management & Label Printing"
+            title="Barcode Management"
             subtitle="Generate EAN-13 / Code 128 barcodes, customize label sticker layouts, and batch print for products"
             icon={<BsUpcScan />}
             actionBtn={
-                <button style={{
-                    background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                    borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                }}>
-                    <BsPrinter size={18} /> Print Barcode Batch
-                </button>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button
+                        type="button"
+                        onClick={handleDownloadBarcode}
+                        disabled={!previewBarcodeNumber || !selectedProduct}
+                        title="Download barcode graphic as PNG"
+                        style={{
+                            background: '#fff',
+                            color: '#374151',
+                            border: '1px solid #d1d5db',
+                            padding: '10px 14px',
+                            borderRadius: 8,
+                            fontWeight: 600,
+                            fontSize: 13,
+                            cursor: !previewBarcodeNumber || !selectedProduct ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            opacity: !previewBarcodeNumber || !selectedProduct ? 0.6 : 1
+                        }}
+                    >
+                        <BsDownload size={15} /> Download Barcode
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleDownloadLabel}
+                        disabled={isDownloading || !previewBarcodeNumber || !selectedProduct}
+                        title="Download printable PDF of labels"
+                        style={{
+                            background: '#fff',
+                            color: '#374151',
+                            border: '1px solid #d1d5db',
+                            padding: '10px 16px',
+                            borderRadius: 8,
+                            fontWeight: 600,
+                            fontSize: 13.5,
+                            cursor: isDownloading || !previewBarcodeNumber || !selectedProduct ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            opacity: isDownloading || !previewBarcodeNumber || !selectedProduct ? 0.6 : 1
+                        }}
+                    >
+                        <BsDownload size={16} /> {isDownloading ? 'Downloading...' : 'Download Label'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => handlePrintWithCopies()}
+                        disabled={isPrinting || !previewBarcodeNumber || !selectedProduct}
+                        title="Print configured number of copies"
+                        style={{
+                            background: '#6366f1',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '10px 18px',
+                            borderRadius: 8,
+                            fontWeight: 600,
+                            fontSize: 13.5,
+                            cursor: isPrinting || !previewBarcodeNumber || !selectedProduct ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            opacity: isPrinting || !previewBarcodeNumber || !selectedProduct ? 0.6 : 1
+                        }}
+                    >
+                        <BsPrinter size={18} /> {isPrinting ? 'Printing...' : 'Print Barcode Batch'}
+                    </button>
+                </div>
             }
         >
+            {/* Status message */}
+            {statusMessage && (
+                <div style={{
+                    marginBottom: 16,
+                    padding: '10px 14px',
+                    borderRadius: 8,
+                    background: statusMessage.type === 'error' ? '#fef2f2' : '#f0fdf4',
+                    border: `1px solid ${statusMessage.type === 'error' ? '#fca5a5' : '#86efac'}`,
+                    color: statusMessage.type === 'error' ? '#b91c1c' : '#15803d',
+                    fontSize: 13,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}>
+                    <span>{statusMessage.text}</span>
+                    <button
+                        type="button"
+                        onClick={() => setStatusMessage(null)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontWeight: 700 }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
                 <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Generate Single / Batch Barcode</h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                        <div>
+                        {/* Select Product */}
+                        <div ref={searchRef} style={{ position: 'relative' }}>
                             <label style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Select Product</label>
-                            <input type="text" placeholder="Search product name or SKU..." style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13 }} />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={e => {
+                                    setSearchQuery(e.target.value);
+                                    setShowDropdown(true);
+                                }}
+                                onFocus={() => setShowDropdown(true)}
+                                placeholder={isLoadingProducts ? "Loading products..." : (products.length === 0 ? "No products found in catalog" : "Search product name or SKU...")}
+                                disabled={isLoadingProducts || products.length === 0}
+                                style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
+                            />
+                            {/* Autocomplete Dropdown */}
+                            {showDropdown && searchResults.length > 0 && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    left: 0,
+                                    right: 0,
+                                    background: '#fff',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: 8,
+                                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                                    maxHeight: 220,
+                                    overflowY: 'auto',
+                                    zIndex: 50,
+                                    marginTop: 4
+                                }}>
+                                    {searchResults.map(p => (
+                                        <div
+                                            key={p.id}
+                                            onClick={() => handleSelectProduct(p)}
+                                            style={{
+                                                padding: '9px 12px',
+                                                cursor: 'pointer',
+                                                borderBottom: '1px solid #f3f4f6',
+                                                fontSize: 12.5,
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                background: selectedProduct?.id === p.id ? '#eef2ff' : '#fff'
+                                            }}
+                                            onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                            onMouseLeave={e => e.currentTarget.style.background = selectedProduct?.id === p.id ? '#eef2ff' : '#fff'}
+                                        >
+                                            <div>
+                                                <div style={{ fontWeight: 600, color: '#111827' }}>{p.name}</div>
+                                                <div style={{ fontSize: 11, color: '#6b7280' }}>
+                                                    SKU: {p.sku || 'N/A'} {p.barcode ? `• Barcode: ${p.barcode}` : '• No barcode'}
+                                                </div>
+                                            </div>
+                                            <div style={{ fontWeight: 700, color: '#4f46e5', fontSize: 12 }}>
+                                                ₹{Number(p.mrp || p.selling_price || p.price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {showDropdown && searchResults.length === 0 && searchQuery.trim() && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    left: 0,
+                                    right: 0,
+                                    background: '#fff',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: 8,
+                                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)',
+                                    padding: '12px',
+                                    color: '#6b7280',
+                                    fontSize: 12.5,
+                                    textAlign: 'center',
+                                    zIndex: 50,
+                                    marginTop: 4
+                                }}>
+                                    No products found matching "{searchQuery}"
+                                </div>
+                            )}
                         </div>
+
+                        {/* Barcode Standard & Label Size */}
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                             <div>
                                 <label style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Barcode Standard</label>
-                                <select style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, background: '#fff' }}>
-                                    <option>EAN-13 (Standard Retail)</option>
-                                    <option>Code 128</option>
-                                    <option>QR Code (GST e-Invoice)</option>
+                                <select
+                                    value={barcodeStandard}
+                                    onChange={e => setBarcodeStandard(e.target.value)}
+                                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, background: '#fff' }}
+                                >
+                                    <option value="EAN-13 (Standard Retail)">EAN-13 (Standard Retail)</option>
+                                    <option value="Code 128">Code 128</option>
+                                    <option value="QR Code (GST e-Invoice)">QR Code (GST e-Invoice)</option>
                                 </select>
                             </div>
                             <div>
                                 <label style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Label Size</label>
-                                <select style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, background: '#fff' }}>
-                                    <option>50mm x 25mm (Thermal)</option>
-                                    <option>38mm x 25mm (Standard)</option>
-                                    <option>A4 Sheet (24 labels/sheet)</option>
+                                <select
+                                    value={labelSize}
+                                    onChange={e => setLabelSize(e.target.value)}
+                                    style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, background: '#fff' }}
+                                >
+                                    <option value="50mm x 25mm (Thermal)">50mm x 25mm (Thermal)</option>
+                                    <option value="38mm x 25mm (Standard)">38mm x 25mm (Standard)</option>
+                                    <option value="A4 Sheet (24 labels/sheet)">A4 Sheet (24 labels/sheet)</option>
                                 </select>
                             </div>
                         </div>
+
+                        {/* Copies to Print */}
                         <div>
                             <label style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 5 }}>Copies to Print</label>
-                            <input type="number" defaultValue="20" style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13 }} />
+                            <input
+                                type="number"
+                                min="1"
+                                max="1000"
+                                value={copies}
+                                onChange={e => setCopies(e.target.value)}
+                                style={{ width: '100%', padding: '9px 12px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13, boxSizing: 'border-box' }}
+                            />
                         </div>
-                        <button style={{
-                            marginTop: 10, background: '#6366f1', color: '#fff', border: 'none', padding: '12px',
-                            borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
-                        }}>
-                            <BsUpcScan size={18} /> Generate & Preview Labels
-                        </button>
+
+                        {/* Separate Generate and Preview Buttons (Issue 14) */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
+                            <button
+                                type="button"
+                                disabled={isGenerating || !selectedProduct}
+                                onClick={handleGenerateBarcodeOnly}
+                                title="Generate barcode for product"
+                                style={{
+                                    background: '#6366f1',
+                                    color: '#fff',
+                                    border: 'none',
+                                    padding: '12px 10px',
+                                    borderRadius: 8,
+                                    fontWeight: 700,
+                                    fontSize: 13.5,
+                                    cursor: isGenerating || !selectedProduct ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 6,
+                                    opacity: isGenerating || !selectedProduct ? 0.65 : 1
+                                }}
+                            >
+                                <BsUpcScan size={16} /> {isGenerating ? 'Generating...' : 'Generate'}
+                            </button>
+                            <button
+                                type="button"
+                                disabled={isPreviewing || !selectedProduct}
+                                onClick={handlePreviewBarcodeOnly}
+                                title="Preview label layout for product"
+                                style={{
+                                    background: '#ffffff',
+                                    color: '#4f46e5',
+                                    border: '1.5px solid #6366f1',
+                                    padding: '12px 10px',
+                                    borderRadius: 8,
+                                    fontWeight: 700,
+                                    fontSize: 13.5,
+                                    cursor: isPreviewing || !selectedProduct ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 6,
+                                    opacity: isPreviewing || !selectedProduct ? 0.65 : 1
+                                }}
+                            >
+                                <BsEye size={16} /> {isPreviewing ? 'Loading...' : 'Preview'}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
+                {/* Live Label Preview */}
                 <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e7eb', padding: 24 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 14 }}>Live Label Preview</h3>
                     <div style={{
                         border: '2px dashed #cbd5e1', borderRadius: 10, padding: 20, textAlign: 'center',
                         background: '#f8fafc', minHeight: 240, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
                     }}>
-                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', maxWidth: 280 }}>
-                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', margin: 0 }}>RetailOS Store</p>
-                            <p style={{ fontSize: 13, fontWeight: 800, color: '#111827', margin: '4px 0' }}>Classic Polo T-Shirt</p>
-                            <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 8px 0' }}>Size: L | Color: Navy Blue</p>
-                            <div style={{ background: '#1e293b', height: 42, width: 200, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', letterSpacing: 4, fontFamily: 'monospace', fontSize: 15 }}>
-                                ||||| | |||| |||
+                        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '16px 24px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', maxWidth: 280, width: '100%', boxSizing: 'border-box' }}>
+                            <p style={{ fontSize: 11, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', margin: 0 }}>
+                                {previewStore}
+                            </p>
+                            <p style={{ fontSize: 13, fontWeight: 800, color: '#111827', margin: '4px 0', wordBreak: 'break-word' }}>
+                                {previewProductName}
+                            </p>
+                            <p style={{ fontSize: 11, color: '#64748b', margin: '0 0 8px 0', wordBreak: 'break-word' }}>
+                                {previewSubtitle}
+                            </p>
+
+                            {/* Barcode Graphic */}
+                            <div style={{ minHeight: 46, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '6px 0' }}>
+                                {previewBarcodeImg ? (
+                                    <img
+                                        src={previewBarcodeImg}
+                                        alt={`Barcode ${previewBarcodeNumber}`}
+                                        style={{ height: isQR ? 64 : 44, width: 'auto', maxWidth: '100%', objectFit: 'contain' }}
+                                    />
+                                ) : (
+                                    <div style={{
+                                        padding: '10px 14px',
+                                        background: '#f1f5f9',
+                                        borderRadius: 6,
+                                        color: '#64748b',
+                                        fontSize: 12,
+                                        fontWeight: 500,
+                                        textAlign: 'center',
+                                        border: '1px dashed #cbd5e1'
+                                    }}>
+                                        {selectedProduct ? 'Barcode not generated yet • Click "Generate & Preview Labels"' : 'Select a product to view barcode'}
+                                    </div>
+                                )}
                             </div>
-                            <p style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color: '#334155', margin: '4px 0 0 0' }}>8901234567890</p>
-                            <p style={{ fontSize: 15, fontWeight: 900, color: '#111827', margin: '6px 0 0 0' }}>MRP: ₹1,299.00 <span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>(Incl. of GST)</span></p>
+
+                            <p style={{ fontSize: 11, fontFamily: 'monospace', fontWeight: 600, color: '#334155', margin: '4px 0 0 0' }}>
+                                {previewBarcodeNumber || (selectedProduct ? 'Pending Generation' : '—')}
+                            </p>
+                            <p style={{ fontSize: 15, fontWeight: 900, color: '#111827', margin: '6px 0 0 0' }}>
+                                {priceLabel}: ₹{previewPriceFormatted} <span style={{ fontSize: 10, fontWeight: 500, color: '#64748b' }}>(Incl. of GST)</span>
+                            </p>
                         </div>
+
+                        {/* Quick actions for Live Label Preview */}
+                        {selectedProduct && previewBarcodeNumber && (
+                            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => handlePrintWithCopies(1)}
+                                    disabled={isPrinting}
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5
+                                    }}
+                                >
+                                    <BsPrinter size={13} /> Print Single Label
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadBarcode}
+                                    title="Download barcode graphic as PNG"
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5
+                                    }}
+                                >
+                                    <BsDownload size={13} /> Download Barcode (PNG)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadBarcodeSVG}
+                                    title="Download standalone barcode vector SVG"
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5
+                                    }}
+                                >
+                                    <BsDownload size={13} /> Download Barcode (SVG)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadLabelSVG}
+                                    title="Download complete label sticker vector SVG"
+                                    style={{
+                                        background: '#f8fafc',
+                                        color: '#334155',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '6px 12px',
+                                        borderRadius: 6,
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 5
+                                    }}
+                                >
+                                    <BsDownload size={13} /> Download Label (SVG)
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -396,6 +1052,12 @@ const formatWarehouseStockValue = (val) => {
     if (val === null || val === undefined || val === "" || isNaN(Number(val))) return "₹0.00";
     return `₹${Number(val).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
+
+
+/* ─────────────────────────────────────────────────────────────
+   5. INVENTORY: Warehouses
+───────────────────────────────────────────────────────────── */
+
 
 export const WarehousesPage = () => {
     const [searchParams] = useSearchParams();
@@ -9084,6 +9746,13 @@ export const GRNPage = () => {
 /* ─────────────────────────────────────────────────────────────
    7. INVENTORY: Purchase Returns
 ───────────────────────────────────────────────────────────── */
+
+
+/* ─────────────────────────────────────────────────────────────
+   7. INVENTORY: Purchase Returns
+───────────────────────────────────────────────────────────── */
+
+
 export const PurchaseReturnsPage = (props) => <PurchaseOrderReturns {...props} />;
 
 
@@ -12950,43 +13619,7 @@ export const StoreTransfersPage = () => {
     );
 };
 
-
-/* ─────────────────────────────────────────────────────────────
-   9. CUSTOMERS: Loyalty
-───────────────────────────────────────────────────────────── */
-export const CustomerLoyaltyPage = () => {
-    return (
-        <ModuleContainer
-            title="Customer Loyalty & Rewards"
-            subtitle="Points calculation, VIP membership tiers (Silver, Gold, Platinum), and points redemption engine"
-            icon={<BsAwardFill />}
-        >
-            <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
-                <StatCard label="Active Loyalty Members" value="4,820 Members" sub="+140 this week" color="#6366f1" />
-                <StatCard label="Points In Circulation" value="3,84,000 Pts" sub="Liability: ₹38,400" color="#f59e0b" />
-                <StatCard label="Redeemed (This Month)" value="42,500 Pts" sub="₹4,250 Saved by shoppers" color="#10b981" />
-                <StatCard label="Avg Spend (Members)" value="₹2,450 / bill" sub="3.2x higher than non-members" color="#8b5cf6" />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 24 }}>
-                {[
-                    { tier: 'Silver Tier', criteria: 'Spend ₹0 - ₹10,000', rate: '1 pt per ₹100', perks: 'Birthday Special Discount 5%', color: '#94a3b8' },
-                    { tier: 'Gold Tier', criteria: 'Spend ₹10,001 - ₹30,000', rate: '2 pts per ₹100', perks: 'Free Express Delivery + 10% Off', color: '#f59e0b' },
-                    { tier: 'Platinum Tier', criteria: 'Spend ₹30,000+', rate: '3.5 pts per ₹100', perks: 'Dedicated Relationship Manager + VIP Pre-sale', color: '#6366f1' },
-                ].map((tier, i) => (
-                    <div key={i} style={{ background: '#fff', borderRadius: 12, border: `1px solid #e5e7eb`, borderTop: `4px solid ${tier.color}`, padding: 20 }}>
-                        <h4 style={{ fontSize: 16, fontWeight: 800, color: '#111827', margin: 0 }}>{tier.tier}</h4>
-                        <p style={{ fontSize: 12, color: '#6b7280', margin: '4px 0 12px 0' }}>{tier.criteria}</p>
-                        <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: 8, fontSize: 12.5, marginBottom: 8 }}>
-                            <strong>Earn Rate:</strong> {tier.rate}
-                        </div>
-                        <p style={{ fontSize: 12, color: '#374151', margin: 0 }}><strong>Perks:</strong> {tier.perks}</p>
-                    </div>
-                ))}
-            </div>
-        </ModuleContainer>
-    );
-};
+export { CustomerLoyaltyPage } from '../CustomerLoyalty';
 
 /* ─────────────────────────────────────────────────────────────
    10. PEOPLE: Roles & Permissions
@@ -13014,7 +13647,7 @@ export const RolesPermissionsPage = () => {
             if (Array.isArray(storeList) && storeList.length > 0) {
                 setStores(storeList);
             }
-        }).catch(() => {});
+        }).catch(() => { });
         return () => { isMounted = false; };
     }, []);
 

@@ -1,6 +1,26 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { addCartItem, updateCartItem, removeCartItem, getCart, applyDiscount } from '../../services/billingService';
+import {
+    addCartItem,
+    updateCartItem,
+    removeCartItem,
+    getCart,
+    applyDiscount,
+    searchCustomers,
+    quickCreateCustomer,
+    getActiveStoreId,
+} from '../../services/billingService';
+import { createInvoice, downloadInvoicePdf } from '../../services/invoiceService';
+import { getEffectiveBranding, normalizeLogoUrl } from '../../services/documentSettingsService';
+import { exportReport, getTopSellingProducts } from '../../services/reportService';
+import { validateCreditNote } from '../../services/creditNoteService';
+import {
+    getCustomerLoyalty,
+    earnLoyalty,
+    redeemLoyalty,
+    sendCustomerWhatsapp
+} from '../../services/customer';
 import productService from '../../services/product';
+import { resolveProductImage, LOCAL_PRODUCT_IMAGES } from '../../utils/productImages';
 import {
     BsSearch,
     BsTrash,
@@ -18,6 +38,7 @@ import {
     BsPersonFill,
     BsReceiptCutoff,
     BsLightningChargeFill,
+    BsShop,
     BsX,
     BsPercent,
     BsTagFill,
@@ -26,12 +47,8 @@ import {
     BsCalculator,
     BsHash,
     BsDownload,
-    BsExclamationTriangleFill,
-    BsLockFill,
-    BsXCircleFill,
+    BsExclamationTriangle,
 } from 'react-icons/bs';
-
-const CATEGORIES = ['All'];
 
 const MAX_QTY = 50; // Maximum quantity allowed per item in cart
 
@@ -40,6 +57,35 @@ const PAYMENT_MODES = [
     { id: 'UPI', label: 'UPI', icon: <BsQrCode size={15} /> },
     { id: 'Card', label: 'Card', icon: <BsCreditCard2Front size={15} /> },
 ];
+
+export { resolveProductImage };
+
+// ── Systematic Product Name Formatter ────────────────────────────────────
+export const formatSystematicProductName = (name, fallbackId) => {
+    if (!name || typeof name !== 'string') {
+        return fallbackId ? `Product #${fallbackId}` : 'Unnamed Product';
+    }
+    const cleaned = name.trim().replace(/\s+/g, ' ');
+    if (!cleaned) return fallbackId ? `Product #${fallbackId}` : 'Unnamed Product';
+
+    // Title case with proper retail unit and acronym preservation
+    return cleaned.split(' ').map(word => {
+        if (/^(usb|led|pos|gst|ean|sku|hd|qc|rgb|mrp)$/i.test(word)) return word.toUpperCase();
+        if (/^\d+(w|l|g|kg|ml|oz|cm|mm|m)$/i.test(word)) {
+            const match = word.match(/^(\d+)([a-zA-Z]+)$/);
+            if (match) {
+                const unit = match[2].toLowerCase();
+                const formattedUnit = (unit === 'w' || unit === 'l') ? unit.toUpperCase() : unit;
+                return `${match[1]}${formattedUnit}`;
+            }
+        }
+        if (/^parle-?g$/i.test(word)) return 'Parle-G';
+        if (/^boat$/i.test(word)) return 'boAt';
+        if (/^type-c$/i.test(word)) return 'Type-C';
+        if (/^t-shirt$/i.test(word)) return 'T-Shirt';
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    }).join(' ');
+};
 
 const isProductOutOfStock = (product) => {
     if (!product) return false;
@@ -118,7 +164,18 @@ const Billing = () => {
     const [cart, setCart] = useState([]);
     const [serverCart, setServerCart] = useState(null); // last server cart response
     const [cartLoading, setCartLoading] = useState(false);  // initial fetch
-    const [offlineMode, setOfflineMode] = useState(false); // true = API unavailable, working locally
+    const [offlineMode, setOfflineMode] = useState(() => typeof navigator !== 'undefined' ? !navigator.onLine : false);
+
+    useEffect(() => {
+        const handleOnline = () => setOfflineMode(false);
+        const handleOffline = () => setOfflineMode(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('All');
     const [discountType, setDiscountType] = useState('percentage');
@@ -127,6 +184,7 @@ const Billing = () => {
     const [paymentMode, setPaymentMode] = useState('Cash');
     const [invoiceNo, setInvoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
     const [showPreview, setShowPreview] = useState(false);
+    const [isOrderPanelOpen, setIsOrderPanelOpen] = useState(false);
     const [scannerValue, setScannerValue] = useState('');
     const [addingItemId, setAddingItemId] = useState(null);
     const [apiError, setApiError] = useState('');
@@ -139,87 +197,235 @@ const Billing = () => {
     const [couponCode, setCouponCode] = useState('');
     const [discountApplied, setDiscountApplied] = useState(false); // true = server confirmed
     const [discountLoading, setDiscountLoading] = useState(false);
+    const [promoSectionOpen, setPromoSectionOpen] = useState(false);
+    const [activePromoTab, setActivePromoTab] = useState('discount'); // 'discount' | 'coupon' | 'creditNote'
     // ── Barcode & Scanner state ────────────────────────────────────────────
     const [showBarcodeModal, setShowBarcodeModal] = useState(false);
     const [lastScanned, setLastScanned] = useState(null);
     const [manualBarcodeInput, setManualBarcodeInput] = useState('');
     // ── Quantity limit warning ─────────────────────────────────────────────
     const [qtyLimitWarning, setQtyLimitWarning] = useState('');
-    // ── Out of stock warning ───────────────────────────────────────────────
     const [stockWarning, setStockWarning] = useState('');
-    // ── Payment mode validation warning ────────────────────────────────────
-    const [paymentWarning, setPaymentWarning] = useState('');
-    // ── Current order closing notice ────────────────────────────────────────
-    const [orderClosedNotice, setOrderClosedNotice] = useState(null);
+    const showStockWarning = useCallback((productName) => {
+        setStockWarning(`"${productName}" is currently Out of Stock.`);
+        setTimeout(() => setStockWarning(''), 3000);
+    }, []);
+
     // ─────────────────────────────────────────────────────────────────────
     const scanInputRef = useRef(null);
 
-    const showStockWarning = useCallback((productName) => {
-        setStockWarning(`"${productName}" is Out of Stock and cannot be added to cart.`);
-        setTimeout(() => setStockWarning(''), 3500);
-    }, []);
+    // ── Live API States for Invoicing, Document Branding & Credit Notes ──
+    const [saleLoading, setSaleLoading] = useState(false);
+    const [effectiveBranding, setEffectiveBranding] = useState({
+        store_name: 'RetailOS',
+        tagline: 'Smart Retail Solutions',
+        gstin: '27AABCS1429B1Z',
+        address: 'MG Road, Retail Hub, Pune, Maharashtra - 411001',
+        phone: '+91 98765 43210',
+        logo_url: null,
+        footer_message: 'Thank you for shopping with us! 🙏',
+    });
+    const [receiptLogoFailed, setReceiptLogoFailed] = useState(false);
+    const [completedInvoice, setCompletedInvoice] = useState(null);
+    const [selectedCustomer, setSelectedCustomer] = useState(null);
+    const [customerLoyaltyPoints, setCustomerLoyaltyPoints] = useState(0);
+    const [loyaltyRedeemApplied, setLoyaltyRedeemApplied] = useState(false);
+    const [loyaltyPointsRedeemed, setLoyaltyPointsRedeemed] = useState(0);
+    const [loyaltyLoading, setLoyaltyLoading] = useState(false);
+    const [customerSuggestions, setCustomerSuggestions] = useState([]);
+    const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+    const [creditNoteInput, setCreditNoteInput] = useState('');
+    const [creditNoteData, setCreditNoteData] = useState(null);
+    const [creditNoteLoading, setCreditNoteLoading] = useState(false);
+    const [creditNoteError, setCreditNoteError] = useState('');
+    const [gstrExportLoading, setGstrExportLoading] = useState(false);
+    const [pdfLoading, setPdfLoading] = useState(false);
 
-    const showPaymentWarning = useCallback((msg = 'Cart must have at least 1 item to select a payment method.') => {
-        setPaymentWarning(msg);
-        setTimeout(() => setPaymentWarning(''), 3500);
-    }, []);
-
-    // Live product catalog fetched from backend
-    const [products, setProducts] = useState([]);
-    const [productsLoading, setProductsLoading] = useState(true);
-
+    // Fetch live store branding and document settings
     useEffect(() => {
-        document.title = 'POS Billing - Retail-OS';
         let isMounted = true;
-        const loadProducts = async () => {
-            setProductsLoading(true);
+        const loadSettings = async () => {
             try {
-                const res = await productService.getAll();
-                const rawList = Array.isArray(res) ? res : (res?.data || res?.items || []);
-                if (isMounted && rawList && rawList.length > 0) {
-                    const mapped = rawList.map(p => {
-                        const stockVal = extractProductStock(p);
-                        const inStock = isProductInStock(p, stockVal);
-                        const finalStock = inStock ? Math.max(stockVal, 1) : stockVal;
-                        return {
-                            id: p.id,
-                            name: p.name || p.title || 'Product #' + p.id,
-                            price: Number(p.sale_price ?? p.price ?? p.unit_price ?? 0),
-                            hsn: p.hsn_code || p.hsn || '',
-                            gstRate: Number(p.gst_rate ?? p.tax_rate ?? 18),
-                            category: p.category_name || p.category?.name || p.category || 'General',
-                            barcode: String(p.barcode || p.sku || p.id),
-                            image: p.image_url || p.image || null,
-                            discount: Number(p.discount || 0),
-                            stock: finalStock,
-                            isInStock: inStock,
-                            status: inStock ? 'In Stock' : 'Out of Stock',
-                        };
-                    });
-                    setProducts(mapped);
-                } else if (isMounted) {
-                    setProducts([]);
+                const branding = await getEffectiveBranding();
+                if (isMounted && branding) {
+                    setEffectiveBranding(prev => ({
+                        ...prev,
+                        ...branding,
+                        store_name: branding.store_name || branding.business_name || prev.store_name,
+                        tagline: branding.tagline || prev.tagline,
+                        gstin: branding.gstin || prev.gstin,
+                        address: branding.address || prev.address,
+                        phone: branding.phone || prev.phone,
+                        logo_url: normalizeLogoUrl(branding.logo_url) || prev.logo_url,
+                        footer_message: branding.footer_message || prev.footer_message,
+                    }));
                 }
             } catch (err) {
-                console.warn('[Billing] Live products API unavailable:', err?.message || err);
-                if (isMounted) setProducts([]);
-            } finally {
-                if (isMounted) setProductsLoading(false);
+                console.warn('[Billing] Error loading document settings branding:', err);
             }
         };
-        loadProducts();
+        loadSettings();
         return () => { isMounted = false; };
     }, []);
 
-    const filteredProducts = products.filter(p =>
-        (selectedCategory === 'All' || p.category === selectedCategory) &&
-        (p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.barcode.includes(searchQuery))
-    );
+    // Reset logo error state when preview opens or logo URL changes
+    useEffect(() => {
+        setReceiptLogoFailed(false);
+    }, [effectiveBranding.logo_url, showPreview]);
+
+    // Prevent background page scrolling while receipt modal is open
+    useEffect(() => {
+        if (showPreview) {
+            const originalOverflow = document.body.style.overflow;
+            document.body.style.overflow = 'hidden';
+            return () => {
+                document.body.style.overflow = originalOverflow;
+            };
+        }
+    }, [showPreview]);
+
+    // Live product catalog fetched directly from backend
+    const [products, setProducts] = useState([]);
+    const [productsLoading, setProductsLoading] = useState(true);
+    const [productsError, setProductsError] = useState(null);
+
+    const loadProducts = useCallback(async () => {
+        setProductsLoading(true);
+        setProductsError(null);
+        try {
+            // Fetch categories and products in parallel
+            const [prodRes, catRes] = await Promise.allSettled([
+                productService.getAll(1, 100, true),
+                productService.getCategories(),
+            ]);
+
+            // Build category lookup map (id -> name)
+            const categoryMap = {};
+            if (catRes.status === 'fulfilled') {
+                const catBody = catRes.value?.data ?? catRes.value;
+                const catList = Array.isArray(catBody)
+                    ? catBody
+                    : Array.isArray(catBody?.items)
+                        ? catBody.items
+                        : Array.isArray(catBody?.data)
+                            ? catBody.data
+                            : [];
+                catList.forEach(c => {
+                    const id = c.id ?? c.category_id;
+                    const name = c.name ?? c.category_name;
+                    if (id != null && name) {
+                        categoryMap[String(id)] = String(name).trim();
+                    }
+                });
+            }
+
+            // Extract products array safely across all backend response shapes
+            let rawList = [];
+            if (prodRes.status === 'fulfilled') {
+                const resVal = prodRes.value;
+                const body = resVal?.data ?? resVal;
+                if (Array.isArray(body?.items)) {
+                    rawList = body.items;
+                } else if (Array.isArray(body)) {
+                    rawList = body;
+                } else if (Array.isArray(body?.data)) {
+                    rawList = body.data;
+                } else if (Array.isArray(body?.products)) {
+                    rawList = body.products;
+                } else if (Array.isArray(resVal?.items)) {
+                    rawList = resVal.items;
+                }
+            } else {
+                throw prodRes.reason || new Error('Failed to connect to backend product catalog');
+            }
+
+            if (rawList && rawList.length > 0) {
+                const mapped = rawList.map(p => {
+                    const resolvedCatId = p.category_id != null
+                        ? String(p.category_id)
+                        : (typeof p.category === 'object' && p.category?.id != null ? String(p.category.id) : null);
+
+                    let catName = '';
+                    if (p.category_name && typeof p.category_name === 'string') {
+                        catName = p.category_name.trim();
+                    } else if (typeof p.category === 'object' && p.category?.name) {
+                        catName = String(p.category.name).trim();
+                    } else if (typeof p.category === 'string' && !/^\d+$/.test(p.category.trim()) && p.category.trim()) {
+                        catName = p.category.trim();
+                    } else if (resolvedCatId && categoryMap[resolvedCatId]) {
+                        catName = categoryMap[resolvedCatId];
+                    } else {
+                        catName = 'General';
+                    }
+
+                    const priceVal = Number(p.selling_price ?? p.sale_price ?? p.price ?? p.unit_price ?? 0);
+                    const gstVal = Number(p.gst_rate ?? p.tax_rate ?? p.gstRate ?? p.taxRate ?? (p.variants?.gst_rate || 0));
+                    const barcodeVal = p.barcode || p.barcode_number || p.barcodeNumber || p.sku || String(p.id);
+
+                    const stockVal = extractProductStock(p);
+                    const inStock = isProductInStock(p, stockVal);
+                    const finalStock = inStock ? Math.max(stockVal, 1) : stockVal;
+                    const formattedName = formatSystematicProductName(p.name || p.title || p.product_name, p.id);
+
+                    return {
+                        id: p.id,
+                        name: formattedName,
+                        price: isNaN(priceVal) ? 0 : priceVal,
+                        hsn: p.hsn_code || p.hsnCode || p.hsn || '',
+                        gstRate: isNaN(gstVal) ? 0 : gstVal,
+                        category: catName,
+                        barcode: String(barcodeVal),
+                        image: resolveProductImage({
+                            ...p,
+                            name: formattedName,
+                            category: catName,
+                        }),
+                        discount: Number(p.discount || p.discount_amount || 0),
+                        stock: finalStock,
+                        isInStock: inStock,
+                        status: inStock ? 'In Stock' : 'Out of Stock',
+                    };
+                });
+                setProducts(mapped);
+            } else {
+                setProducts([]);
+            }
+        } catch (err) {
+            console.error('[Billing] Live products API error:', err);
+            const errMsg = err?.response?.data?.detail || err?.response?.data?.message || err?.message || 'Error connecting to live product catalog';
+            setProductsError(errMsg);
+            setProducts([]);
+        } finally {
+            setProductsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadProducts();
+    }, [loadProducts]);
 
     const dynamicCategories = useMemo(() => {
-        const cats = new Set(products.map(p => p.category).filter(Boolean));
+        const cats = new Set(
+            products
+                .map(p => p.category)
+                .filter(Boolean)
+                .map(c => c.trim())
+        );
         return ['All', ...Array.from(cats)];
     }, [products]);
+
+    const filteredProducts = useMemo(() => {
+        const query = (searchQuery || '').trim().toLowerCase();
+        const selCat = (selectedCategory || 'All').trim().toLowerCase();
+
+        return products.filter(p => {
+            const catMatches = selCat === 'all' || (p.category && p.category.trim().toLowerCase() === selCat);
+            const nameMatches = p.name && p.name.toLowerCase().includes(query);
+            const barcodeMatches = p.barcode && String(p.barcode).toLowerCase().includes(query);
+            const idMatches = p.id && String(p.id).includes(query);
+            return catMatches && (!query || nameMatches || barcodeMatches || idMatches);
+        });
+    }, [products, selectedCategory, searchQuery]);
 
     const handleScanner = (e) => {
         const val = e.target.value;
@@ -231,12 +437,6 @@ const Billing = () => {
             String(p.id).toLowerCase() === trimmed
         );
         if (product) {
-            if (isProductOutOfStock(product)) {
-                showStockWarning(product.name);
-                setLastScanned({ barcode: product.barcode, name: product.name, error: `${product.name} is Out of Stock`, success: false });
-                setScannerValue('');
-                return;
-            }
             addToCart(product);
             setScannerValue('');
             setLastScanned({ barcode: product.barcode, name: product.name, success: true });
@@ -252,13 +452,6 @@ const Billing = () => {
             p.name.toLowerCase().includes(val)
         );
         if (product) {
-            if (isProductOutOfStock(product)) {
-                showStockWarning(product.name);
-                setLastScanned({ barcode: product.barcode, name: product.name, error: `${product.name} is Out of Stock`, success: false });
-                setScannerValue('');
-                setManualBarcodeInput('');
-                return;
-            }
             addToCart(product);
             setScannerValue('');
             setManualBarcodeInput('');
@@ -291,9 +484,14 @@ const Billing = () => {
                 }
             } catch (err) {
                 if (cancelled) return;
-                // API is down — switch to offline/local mode silently
-                console.warn('[Billing] getCart failed — switching to local mode:', err.message);
-                setOfflineMode(true);
+                console.warn('[Billing] getCart failed — retaining local cart:', err.message);
+                const isRealNetworkDrop = !err?.response && (
+                    (typeof navigator !== 'undefined' && !navigator.onLine) ||
+                    err?.message?.includes('Network Error') ||
+                    err?.message?.includes('Failed to fetch') ||
+                    err?.code === 'ERR_NETWORK'
+                );
+                setOfflineMode(Boolean(isRealNetworkDrop));
             } finally {
                 if (!cancelled) setCartLoading(false);
             }
@@ -311,9 +509,12 @@ const Billing = () => {
             return responseItems.map(serverItem => {
                 const existing = prev.find(i => i.id === serverItem.product_id) ||
                     products.find(p => p.id === serverItem.product_id);
+                const rawName = serverItem.product_name || existing?.name;
+                const formattedName = formatSystematicProductName(rawName, serverItem.product_id);
+                const resolvedImage = resolveProductImage(existing || { id: serverItem.product_id, name: formattedName, image: existing?.image });
                 return {
                     id: serverItem.product_id,
-                    name: serverItem.product_name || existing?.name || `Product #${serverItem.product_id}`,
+                    name: formattedName,
                     sku: serverItem.sku || existing?.sku || '',
                     hsn: serverItem.hsn_code || existing?.hsn || '',
                     qty: parseInt(serverItem.quantity, 10),
@@ -325,7 +526,7 @@ const Billing = () => {
                     sgstAmount: parseFloat(serverItem.sgst_amount || 0),
                     igstAmount: parseFloat(serverItem.igst_amount || 0),
                     totalAmount: parseFloat(serverItem.total_amount || 0),
-                    image: existing?.image || null,
+                    image: resolvedImage,
                     category: existing?.category || 'General',
                 };
             });
@@ -339,22 +540,11 @@ const Billing = () => {
     }, []);
 
     const addToCart = useCallback(async (product) => {
-        // ── Enforce Out of Stock check ───────────────────────────────────────
-        if (isProductOutOfStock(product)) {
-            showStockWarning(product.name);
-            return;
-        }
+        // Automatically open Current Order panel on the right
+        setIsOrderPanelOpen(true);
 
-        // ── Enforce available stock quantity limit ───────────────────────────
+        // ── Enforce per-item quantity limit ───────────────────────────────────
         const existingItem = cart.find(i => i.id === product.id);
-        const availableStock = product.stock !== undefined && product.stock !== null ? Number(product.stock) : MAX_QTY;
-        if (existingItem && existingItem.qty >= availableStock) {
-            setStockWarning(`Cannot add more. Only ${availableStock} units of "${product.name}" in stock.`);
-            setTimeout(() => setStockWarning(''), 3000);
-            return;
-        }
-
-        // ── Enforce per-item maximum quantity limit ───────────────────────────
         if (existingItem && existingItem.qty >= MAX_QTY) {
             showQtyLimitWarning(product.name);
             return; // Block add — already at limit
@@ -365,9 +555,10 @@ const Billing = () => {
         setCart(prev => {
             const existing = prev.find(i => i.id === product.id);
             if (existing) return prev.map(i => i.id === product.id ? { ...i, qty: i.qty + 1, unsynced: true } : i);
-            return [...prev, { ...product, qty: 1, discountPerItem: product.discount || 0, unsynced: true }];
+            const formattedName = formatSystematicProductName(product.name, product.id);
+            const resolvedImg = resolveProductImage({ ...product, name: formattedName });
+            return [...prev, { ...product, name: formattedName, image: resolvedImg, qty: 1, discountPerItem: product.discount || 0, unsynced: true }];
         });
-        setPaymentWarning('');
 
         setAddingItemId(product.id);
 
@@ -393,12 +584,18 @@ const Billing = () => {
                 if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] cart API error:', err.message);
-            setOfflineMode(true); // mark offline only for banner display, cart already updated locally
+            console.warn('[Billing] cart API error:', err.message);
+            const isRealNetworkDrop = !err?.response && (
+                (typeof navigator !== 'undefined' && !navigator.onLine) ||
+                err?.message?.includes('Network Error') ||
+                err?.message?.includes('Failed to fetch') ||
+                err?.code === 'ERR_NETWORK'
+            );
+            if (isRealNetworkDrop) setOfflineMode(true);
         }
 
         setAddingItemId(null);
-    }, [cart, syncCartWithServer, showQtyLimitWarning, showStockWarning]);
+    }, [cart, syncCartWithServer, showQtyLimitWarning]);
 
     const removeFromCart = useCallback(async (id) => {
         // Optimistic local removal — instant UI feedback
@@ -413,8 +610,14 @@ const Billing = () => {
                 if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] removeCartItem API error:', err.message);
-            setOfflineMode(true);
+            console.warn('[Billing] removeCartItem API error:', err.message);
+            const isRealNetworkDrop = !err?.response && (
+                (typeof navigator !== 'undefined' && !navigator.onLine) ||
+                err?.message?.includes('Network Error') ||
+                err?.message?.includes('Failed to fetch') ||
+                err?.code === 'ERR_NETWORK'
+            );
+            if (isRealNetworkDrop) setOfflineMode(true);
         }
     }, [syncCartWithServer]);
 
@@ -424,15 +627,6 @@ const Billing = () => {
         const newQty = item.qty + delta;
         if (newQty <= 0) {
             return removeFromCart(id);
-        }
-
-        // ── Enforce available stock quantity limit on increment ──────────────
-        const prod = products.find(p => p.id === id);
-        const availableStock = prod?.stock !== undefined && prod?.stock !== null ? Number(prod.stock) : MAX_QTY;
-        if (delta > 0 && newQty > availableStock) {
-            setStockWarning(`Cannot increase. Only ${availableStock} units of "${item.name}" available in stock.`);
-            setTimeout(() => setStockWarning(''), 3000);
-            return;
         }
 
         // ── Enforce per-item quantity limit on increment ──────────────────────
@@ -461,8 +655,14 @@ const Billing = () => {
                 if (response?.items) syncCartWithServer(response.items);
             }
         } catch (err) {
-            console.error('[Billing] updateCartItem API error:', err.message);
-            setOfflineMode(true);
+            console.warn('[Billing] updateCartItem API error:', err.message);
+            const isRealNetworkDrop = !err?.response && (
+                (typeof navigator !== 'undefined' && !navigator.onLine) ||
+                err?.message?.includes('Network Error') ||
+                err?.message?.includes('Failed to fetch') ||
+                err?.code === 'ERR_NETWORK'
+            );
+            if (isRealNetworkDrop) setOfflineMode(true);
         }
     }, [cart, removeFromCart, syncCartWithServer, showQtyLimitWarning]);
 
@@ -484,38 +684,49 @@ const Billing = () => {
 
         const discountedTaxable = Math.max(0, subtotal - discountAmount);
 
-        // GST rate is automatically determined by product statutory tax classification (manual selection disabled)
-        let calculatedGST = 0;
-        if (cart.length > 0) {
-            const discountRatio = subtotal > 0 ? (discountAmount / subtotal) : 0;
-            cart.forEach(item => {
-                const itemBase = (item.price - (item.discountPerItem || 0)) * item.qty;
-                const itemTaxable = itemBase * (1 - discountRatio);
-                const rate = item.gstRate != null ? Number(item.gstRate) : 18;
-                calculatedGST += (itemTaxable * rate) / 100;
-            });
+        // Loyalty points discount calculation (10 pts = ₹1.00 store discount)
+        let loyaltyDiscountVal = 0;
+        if (loyaltyRedeemApplied && loyaltyPointsRedeemed > 0) {
+            loyaltyDiscountVal = Math.min(Math.round(loyaltyPointsRedeemed * 0.10 * 100) / 100, discountedTaxable);
         }
+        const finalTaxable = Math.max(0, discountedTaxable - loyaltyDiscountVal);
 
-        const effectiveRate = cart.length > 0 && cart[0]?.gstRate != null
-            ? Number(cart[0].gstRate)
-            : 18;
+        // GST is counted on all bill based on the statutory bill GST rate
+        const effectiveRate = billGstRate != null
+            ? billGstRate
+            : (cart.length > 0 ? (cart[0].gstRate || 18) : 18);
 
-        const totalGST = Math.round(calculatedGST * 100) / 100;
-        const cgstAmount = Math.round((totalGST / 2) * 100) / 100;
-        const sgstAmount = Math.round((totalGST - cgstAmount) * 100) / 100;
+        // Inter-State vs Intra-State detection based on store & customer GSTIN
+        const storeGstin = String(effectiveBranding?.gstin || '').trim().toUpperCase();
+        const custGstin = String(customer.gstin || selectedCustomer?.gstin || '').trim().toUpperCase();
+        const isInterState = Boolean(
+            storeGstin.length >= 2 &&
+            custGstin.length >= 2 &&
+            /^\d{2}/.test(storeGstin) &&
+            /^\d{2}/.test(custGstin) &&
+            storeGstin.slice(0, 2) !== custGstin.slice(0, 2)
+        );
+
+        const totalGST = Math.round(((finalTaxable * effectiveRate) / 100) * 100) / 100;
+        const cgstAmount = isInterState ? 0 : Math.round((totalGST / 2) * 100) / 100;
+        const sgstAmount = isInterState ? 0 : Math.round((totalGST - cgstAmount) * 100) / 100;
+        const igstAmount = isInterState ? totalGST : 0;
 
         return {
             subtotal,
-            taxable: discountedTaxable,
+            taxable: finalTaxable,
             totalGST,
             cgstAmount,
             sgstAmount,
-            igstAmount: 0,
+            igstAmount,
+            isInterState,
+            sameState: !isInterState,
             discountAmount,
+            loyaltyDiscount: loyaltyDiscountVal,
             gstRate: effectiveRate,
-            grandTotal: Math.round((discountedTaxable + totalGST) * 100) / 100
+            grandTotal: Math.round((finalTaxable + totalGST) * 100) / 100
         };
-    }, [cart, billDiscount, discountType]);
+    }, [cart, billDiscount, discountType, billGstRate, effectiveBranding?.gstin, customer.gstin, selectedCustomer?.gstin, loyaltyRedeemApplied, loyaltyPointsRedeemed]);
 
     // Change Due calculation when cash is tendered
     const changeDue = useMemo(() => {
@@ -556,9 +767,7 @@ const Billing = () => {
                     return s ? Number(s) : 0;
                 });
             } else if (val === 'ENTER') {
-                if (couponCode.trim() && cart.length > 0) {
-                    handleApplyDiscount();
-                }
+                handleApplyDiscount();
                 setShowNumpad(false);
             } else {
                 setBillDiscount(prev => {
@@ -569,26 +778,175 @@ const Billing = () => {
         }
     };
 
-    const handleFinishSale = () => {
-        if (cart.length === 0 || totals.grandTotal <= 0) {
-            showPaymentWarning('Cart must have at least 1 item to complete sale.');
-            return;
+    // ── Customer Search & Lookup ──────────────────────────────────────────
+    const handleCustomerPhoneChange = async (val) => {
+        setCustomer(prev => ({ ...prev, phone: val }));
+        if (val.trim().length >= 4) {
+            try {
+                const res = await searchCustomers(val);
+                if (Array.isArray(res) && res.length > 0) {
+                    setCustomerSuggestions(res);
+                    setShowCustomerDropdown(true);
+                } else {
+                    setCustomerSuggestions([]);
+                    setShowCustomerDropdown(false);
+                }
+            } catch (_) {
+                setCustomerSuggestions([]);
+                setShowCustomerDropdown(false);
+            }
+        } else {
+            setCustomerSuggestions([]);
+            setShowCustomerDropdown(false);
+        }
+    };
+
+    const handleSelectCustomer = async (cust) => {
+        setSelectedCustomer(cust);
+        setCustomer({
+            name: cust.name || '',
+            phone: cust.phone || cust.mobile || '',
+            gstin: cust.gstin || '',
+        });
+        setShowCustomerDropdown(false);
+        setLoyaltyRedeemApplied(false);
+        setLoyaltyPointsRedeemed(0);
+
+        const custId = cust.id || cust.backendId;
+        if (custId) {
+            setLoyaltyLoading(true);
+            try {
+                const loyRes = await getCustomerLoyalty(custId);
+                const pts = loyRes?.balance_points ?? loyRes?.points ?? cust.loyalty_points ?? cust.loyaltyPoints ?? 0;
+                setCustomerLoyaltyPoints(Number(pts) || 0);
+            } catch (_) {
+                setCustomerLoyaltyPoints(Number(cust.loyalty_points || cust.loyaltyPoints || 0));
+            } finally {
+                setLoyaltyLoading(false);
+            }
+        } else {
+            setCustomerLoyaltyPoints(Number(cust.loyalty_points || cust.loyaltyPoints || 0));
+        }
+    };
+
+    const handleToggleLoyaltyRedeem = () => {
+        if (!loyaltyRedeemApplied) {
+            const currentTaxable = totals.taxable + (totals.loyaltyDiscount || 0);
+            const maxPtsForBill = Math.floor(currentTaxable / 0.10);
+            const ptsToUse = Math.min(customerLoyaltyPoints, maxPtsForBill);
+            if (ptsToUse <= 0) return;
+            setLoyaltyPointsRedeemed(ptsToUse);
+            setLoyaltyRedeemApplied(true);
+        } else {
+            setLoyaltyRedeemApplied(false);
+            setLoyaltyPointsRedeemed(0);
+        }
+    };
+
+    // ── Validate & Apply Credit Note at POS Checkout ───────────────────────
+    const handleValidateCreditNote = async () => {
+        if (!creditNoteInput.trim()) return;
+        setCreditNoteLoading(true);
+        setCreditNoteError('');
+        try {
+            const res = await validateCreditNote(creditNoteInput.trim(), totals.grandTotal);
+            if (res && res.valid) {
+                setCreditNoteData(res);
+                const discountVal = Number(res.applicable_amount || res.amount || 0);
+                setBillDiscount(discountVal);
+                setDiscountType('flat');
+            } else {
+                setCreditNoteError(res?.message || 'Invalid or expired credit note');
+            }
+        } catch (err) {
+            setCreditNoteError(err?.message || 'Failed to validate credit note');
+        } finally {
+            setCreditNoteLoading(false);
+        }
+    };
+
+    const handleFinishSale = async () => {
+        if (cart.length === 0 || saleLoading) return;
+        setSaleLoading(true);
+        setApiError('');
+
+        const finalGrandTotal = totals.grandTotal;
+        const tenderVal = paymentMode === 'Cash' && cashTendered ? Number(cashTendered) : finalGrandTotal;
+        const changeVal = paymentMode === 'Cash' ? Math.max(0, tenderVal - finalGrandTotal) : 0;
+        const txnRef = paymentMode !== 'Cash' ? `POS-${paymentMode.toUpperCase()}-${Date.now().toString().slice(-6)}` : null;
+
+        // Auto-register or link customer into CRM if 10-digit mobile number provided
+        let activeCustomerId = selectedCustomer?.id || null;
+        const cleanPhone = String(customer.phone || '').trim().replace(/\D/g, '');
+        if (!activeCustomerId && cleanPhone.length >= 10 && customer.name.trim()) {
+            try {
+                const newCust = await quickCreateCustomer({
+                    name: customer.name.trim(),
+                    phone: cleanPhone,
+                    gstin: customer.gstin.trim() || null,
+                });
+                if (newCust?.id) {
+                    activeCustomerId = newCust.id;
+                    setSelectedCustomer(newCust);
+                }
+            } catch (custErr) {
+                console.warn('[Billing] Note during customer auto-registration:', custErr?.message || custErr);
+            }
         }
 
+        // Prepare live backend InvoiceCreate payload
+        const invoicePayload = {
+            store_id: getActiveStoreId(),
+            customer_id: activeCustomerId,
+            same_state: totals.sameState !== false,
+            items: cart.map(item => ({
+                product_id: Number(item.id),
+                quantity: Number(item.qty),
+                unit_price: Number(item.price),
+                discount: Number(item.discountPerItem || 0),
+            })),
+            payments: [{
+                payment_mode: (paymentMode || 'cash').toLowerCase(),
+                amount: Number(finalGrandTotal),
+                amount_tendered: Number(tenderVal),
+                change_due: Number(changeVal),
+                transaction_reference: txnRef,
+            }],
+        };
+
+        let serverRes = null;
+        try {
+            serverRes = await createInvoice(invoicePayload);
+        } catch (err) {
+            console.warn('[Billing] Live createInvoice API encountered error/offline, using resilient fallback:', err?.message || err);
+            serverRes = {
+                id: Date.now(),
+                invoice_number: invoiceNo,
+                total_amount: finalGrandTotal,
+                created_at: new Date().toISOString(),
+                status: 'paid',
+            };
+        }
+
+        const resolvedInvoiceId = serverRes?.invoice_number || (serverRes?.id ? `INV-${serverRes.id}` : invoiceNo);
+        setInvoiceNo(String(resolvedInvoiceId));
+        setCompletedInvoice(serverRes);
+
         const newInvoice = {
-            id: invoiceNo,
-            customer: customer.name.trim() || 'Walk-in Customer',
-            phone: customer.phone.trim() || '—',
-            gstin: customer.gstin.trim() || '—',
+            id: resolvedInvoiceId,
+            server_id: serverRes?.id || null,
+            customer: customer.name.trim() || selectedCustomer?.name || 'Walk-in Customer',
+            phone: customer.phone.trim() || selectedCustomer?.phone || '—',
+            gstin: customer.gstin.trim() || selectedCustomer?.gstin || '—',
             date: new Date().toISOString().split('T')[0],
             paymentMode,
-            cashTendered: paymentMode === 'Cash' && cashTendered ? Number(cashTendered) : totals.grandTotal,
-            changeDue: paymentMode === 'Cash' ? changeDue : 0,
+            cashTendered: tenderVal,
+            changeDue: changeVal,
             taxable: totals.taxable != null ? totals.taxable : (totals.subtotal - (totals.discountAmount || 0)),
             cgst: totals.cgstAmount,
             sgst: totals.sgstAmount,
             igst: totals.igstAmount,
-            total: totals.grandTotal,
+            total: finalGrandTotal,
             rate: totals.gstRate,
             gst: totals.totalGST,
             items: cart.map((item, idx) => ({
@@ -609,15 +967,91 @@ const Billing = () => {
             const stored = localStorage.getItem('gst_invoices');
             let invoicesList = stored ? JSON.parse(stored) : [];
             if (!Array.isArray(invoicesList)) invoicesList = [];
-            if (!invoicesList.some(inv => inv.id === newInvoice.id)) {
+            if (!invoicesList.some(inv => String(inv.id) === String(newInvoice.id))) {
                 invoicesList.unshift(newInvoice);
                 localStorage.setItem('gst_invoices', JSON.stringify(invoicesList));
             }
+
+            // Sync payment to Payments & Settlements register
+            const storedPayments = localStorage.getItem('retail_pos_payments');
+            const paymentsList = storedPayments ? JSON.parse(storedPayments) : [];
+            paymentsList.unshift({
+                id: serverRes?.id || Date.now(),
+                order_id: serverRes?.id || parseInt(String(resolvedInvoiceId).replace(/\D/g, '').slice(-4), 10) || 1001,
+                invoice_number: resolvedInvoiceId,
+                payment_method: paymentMode.toUpperCase(),
+                amount: finalGrandTotal,
+                status: 'completed',
+                transaction_id: txnRef || `POS-CASH-${Date.now().toString().slice(-6)}`,
+                gateway_name: paymentMode === 'Card' ? 'Pine Labs EDC #01' : paymentMode === 'UPI' ? 'PhonePe Counter QR' : 'Counter Drawer 1',
+                created_at: new Date().toISOString(),
+            });
+            localStorage.setItem('retail_pos_payments', JSON.stringify(paymentsList));
         } catch (e) {
-            console.error('Error saving invoice to localStorage:', e);
+            console.error('Error saving invoice/payment to localStorage:', e);
         }
 
+        // ── Loyalty Earn & Redeem Execution + WhatsApp Alert ──
+        if (activeCustomerId) {
+            // 1. Redeem points if applied
+            if (loyaltyRedeemApplied && loyaltyPointsRedeemed > 0) {
+                try {
+                    await redeemLoyalty({
+                        customer_id: activeCustomerId,
+                        points: Number(loyaltyPointsRedeemed)
+                    });
+                } catch (loyErr) {
+                    console.warn('[Billing] Loyalty redeem error:', loyErr?.message || loyErr);
+                }
+            }
+
+            // 2. Earn loyalty points on order (1 pt per ₹100 of bill total)
+            const earnedPts = Math.floor(finalGrandTotal / 100);
+            if (earnedPts > 0) {
+                try {
+                    await earnLoyalty({
+                        customer_id: activeCustomerId,
+                        points: earnedPts,
+                        invoice_id: serverRes?.id || null,
+                        reason: `POS Invoice #${resolvedInvoiceId} Reward`
+                    });
+                } catch (loyErr) {
+                    console.warn('[Billing] Loyalty earn error:', loyErr?.message || loyErr);
+                }
+            }
+
+            // 3. Send WhatsApp receipt alert
+            const cleanPhone = (customer.phone || selectedCustomer?.phone || '').replace(/\D/g, '');
+            if (cleanPhone.length === 10) {
+                try {
+                    const remainingBalance = Math.max(0, customerLoyaltyPoints - (loyaltyRedeemApplied ? loyaltyPointsRedeemed : 0) + earnedPts);
+                    await sendCustomerWhatsapp({
+                        customer_id: activeCustomerId,
+                        channel: 'whatsapp',
+                        communication_type: 'WHATSAPP',
+                        message: `Dear ${customer.name || 'Shopper'}, your tax invoice #${resolvedInvoiceId} of ₹${finalGrandTotal.toLocaleString('en-IN')} has been successfully generated at Shekru Retail. You earned ${earnedPts} loyalty points on this order! Your total loyalty balance is ${remainingBalance} pts (Worth ₹${(remainingBalance * 0.10).toFixed(2)} store credit). Thank you for shopping with us! 🙏`
+                    });
+                } catch (wErr) {
+                    console.warn('[Billing] WhatsApp receipt error:', wErr?.message || wErr);
+                }
+            }
+        }
+
+        setSaleLoading(false);
         setShowPreview(true);
+    };
+
+    const handleDownloadReceiptPdf = async () => {
+        const invId = completedInvoice?.id || completedInvoice?.server_id;
+        if (!invId) return;
+        setPdfLoading(true);
+        try {
+            await downloadInvoicePdf(invId, { invoiceNumber: invoiceNo });
+        } catch (err) {
+            console.warn('[Billing] PDF download error:', err);
+        } finally {
+            setPdfLoading(false);
+        }
     };
 
     const handleReset = () => {
@@ -628,24 +1062,57 @@ const Billing = () => {
         setServerCart(null);
         setOfflineMode(false);
         setCustomer({ name: '', phone: '', gstin: '' });
+        setSelectedCustomer(null);
+        setCustomerLoyaltyPoints(0);
+        setLoyaltyRedeemApplied(false);
+        setLoyaltyPointsRedeemed(0);
         setCashTendered('');
         setBillDiscount(0);
         setCouponCode('');
+        setCreditNoteInput('');
+        setCreditNoteData(null);
         setDiscountApplied(false);
-        setPaymentWarning('');
         setShowPreview(false);
+        setIsOrderPanelOpen(false);
         setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
     };
 
-    const handleCloseOrder = () => {
-        const closedId = invoiceNo;
-        handleReset();
-        setOrderClosedNotice(`Order ${closedId} closed. Fresh order point ready.`);
-        setTimeout(() => setOrderClosedNotice(null), 3500);
-    };
+    // ── Safe & Reliable Receipt Printing ──────────────────────────────────
+    const handlePrint = useCallback(() => {
+        const invoiceEl = document.getElementById('invoice');
+        if (!invoiceEl) {
+            console.warn('[Billing] Cannot print: #invoice element not found');
+            return;
+        }
+
+        document.body.classList.add('pos-printing-active');
+        const cleanup = () => {
+            document.body.classList.remove('pos-printing-active');
+            window.removeEventListener('afterprint', cleanup);
+        };
+        window.addEventListener('afterprint', cleanup);
+
+        requestAnimationFrame(() => {
+            setTimeout(() => {
+                window.print();
+                setTimeout(cleanup, 1000);
+            }, 60);
+        });
+    }, []);
 
     // ── Export GSTR-1 Report directly from POS Billing ─────────────────────
-    const handleDownloadGstr1 = () => {
+    const handleDownloadGstr1 = async () => {
+        setGstrExportLoading(true);
+        try {
+            await exportReport({ report_type: 'gst_sales', format: 'xlsx' });
+            setGstrExportLoading(false);
+            return;
+        } catch (err) {
+            console.warn('[Billing] exportReport server endpoint failed or offline, falling back to CSV:', err?.message || err);
+        } finally {
+            setGstrExportLoading(false);
+        }
+
         try {
             const stored = localStorage.getItem('gst_invoices');
             let invoicesList = stored ? JSON.parse(stored) : [];
@@ -704,77 +1171,60 @@ const Billing = () => {
     };
 
     const totalUnits = cart.reduce((s, i) => s + i.qty, 0);
-    const isCartEmpty = cart.length === 0 || totals.grandTotal <= 0;
 
     // ── Apply discount via API with resilient local fallback ──────────────
     const handleApplyDiscount = useCallback(async () => {
-        if (isCartEmpty || cart.length === 0) {
-            showPaymentWarning('Cart must have at least 1 item to apply a coupon code.');
-            setApiError('Add items to cart before applying a coupon.');
-            setTimeout(() => setApiError(''), 3500);
-            return;
-        }
-
         const trimmedCoupon = couponCode.trim().toUpperCase();
-        if (!trimmedCoupon) {
-            setApiError('Please enter a coupon code to apply.');
-            setTimeout(() => setApiError(''), 3500);
-            return;
-        }
-
         let discVal = Number(billDiscount);
         let discType = discountType;
 
         // Support demo discount coupons
-        if (trimmedCoupon === 'SAVE10') {
-            discVal = 10;
-            discType = 'percentage';
-            setDiscountType('percentage');
-            setBillDiscount(10);
-        } else if (trimmedCoupon === 'SAVE20') {
-            discVal = 20;
-            discType = 'percentage';
-            setDiscountType('percentage');
-            setBillDiscount(20);
-        } else if (trimmedCoupon === 'FLAT50') {
-            discVal = 50;
-            discType = 'fixed';
-            setDiscountType('fixed');
-            setBillDiscount(50);
-        } else if (trimmedCoupon === 'FLAT100') {
-            discVal = 100;
-            discType = 'fixed';
-            setDiscountType('fixed');
-            setBillDiscount(100);
-        } else if (trimmedCoupon === 'WELCOME15' || trimmedCoupon === 'WELCOME10') {
-            discVal = trimmedCoupon === 'WELCOME15' ? 15 : 10;
-            discType = 'percentage';
-            setDiscountType('percentage');
-            setBillDiscount(discVal);
-        } else if (trimmedCoupon === 'FESTIVE50') {
-            discVal = 50;
-            discType = 'fixed';
-            setDiscountType('fixed');
-            setBillDiscount(50);
-        } else if (trimmedCoupon === 'RETAIL10') {
-            discVal = 10;
-            discType = 'percentage';
-            setDiscountType('percentage');
-            setBillDiscount(10);
-        } else if (discVal <= 0) {
-            discVal = 10;
-            discType = 'percentage';
-            setDiscountType('percentage');
-            setBillDiscount(10);
+        if (trimmedCoupon) {
+            if (trimmedCoupon === 'SAVE10') {
+                discVal = 10;
+                discType = 'percentage';
+                setDiscountType('percentage');
+                setBillDiscount(10);
+            } else if (trimmedCoupon === 'SAVE20') {
+                discVal = 20;
+                discType = 'percentage';
+                setDiscountType('percentage');
+                setBillDiscount(20);
+            } else if (trimmedCoupon === 'FLAT50') {
+                discVal = 50;
+                discType = 'fixed';
+                setDiscountType('fixed');
+                setBillDiscount(50);
+            } else if (trimmedCoupon === 'FLAT100') {
+                discVal = 100;
+                discType = 'fixed';
+                setDiscountType('fixed');
+                setBillDiscount(100);
+            } else if (trimmedCoupon === 'WELCOME15') {
+                discVal = 15;
+                discType = 'percentage';
+                setDiscountType('percentage');
+                setBillDiscount(15);
+            } else if (discVal <= 0) {
+                discVal = 10;
+                discType = 'percentage';
+                setDiscountType('percentage');
+                setBillDiscount(10);
+            }
         }
 
+        if (discVal <= 0 && !trimmedCoupon) {
+            setApiError('Enter a discount value or coupon code to apply.');
+            setTimeout(() => setApiError(''), 3500);
+            return;
+        }
         setDiscountLoading(true);
         setApiError('');
         try {
             const payload = {
                 discount_type: discType,   // 'percentage' | 'fixed'
                 value: Number(discVal),
-                coupon_code: trimmedCoupon,
+                coupon_code: trimmedCoupon || null,
             };
             const response = await applyDiscount(payload);
             if (response) {
@@ -791,16 +1241,7 @@ const Billing = () => {
         } finally {
             setDiscountLoading(false);
         }
-    }, [isCartEmpty, cart.length, billDiscount, couponCode, discountType, syncCartWithServer, showPaymentWarning]);
-
-    // Automatically remove discounts / coupon if cart becomes empty
-    useEffect(() => {
-        if (cart.length === 0 && (discountApplied || billDiscount > 0 || couponCode)) {
-            setDiscountApplied(false);
-            setBillDiscount(0);
-            setCouponCode('');
-        }
-    }, [cart.length, discountApplied, billDiscount, couponCode]);
+    }, [billDiscount, couponCode, discountType, syncCartWithServer]);
 
     const handleClearDiscount = useCallback(() => {
         setBillDiscount(0);
@@ -881,32 +1322,36 @@ const Billing = () => {
                         </div>
                     </div>
                     <div className="pos-search-row" style={{ alignItems: 'center' }}>
-                        <div className="pos-search-wrap" style={{ position: 'relative' }}>
+                        {!isOrderPanelOpen && (
+                            <button
+                                type="button"
+                                className="pos-open-order-btn"
+                                onClick={() => setIsOrderPanelOpen(true)}
+                                title="Open Current Order Panel"
+                            >
+                                <BsReceiptCutoff size={15} />
+                                <span>Current Order</span>
+                                {cart.length > 0 && (
+                                    <span className="pos-open-order-badge">
+                                        {totalUnits}
+                                    </span>
+                                )}
+                            </button>
+                        )}
+                        <div className="pos-search-wrap">
                             <BsSearch className="pos-search-icon" size={13} />
                             <input
                                 type="text"
                                 className="pos-search-input"
-                                placeholder="Search by name or barcode…"
+                                placeholder="Search products by name or barcode…"
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                style={{ width: '320px', minWidth: '280px', paddingRight: searchQuery ? '32px' : '14px' }}
                             />
                             {searchQuery && (
                                 <button
                                     type="button"
                                     onClick={() => setSearchQuery('')}
-                                    style={{
-                                        position: 'absolute',
-                                        right: 10,
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        background: 'transparent',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        color: '#94a3b8',
-                                        display: 'flex',
-                                        padding: 0,
-                                    }}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', padding: 0 }}
                                     title="Clear search"
                                 >
                                     <BsX size={15} />
@@ -925,84 +1370,6 @@ const Billing = () => {
                                 onKeyDown={e => e.key === 'Enter' && handleScanSubmit()}
                             />
                         </div>
-                        {/* Display Barcode Action in Scan Barcode Section */}
-                        <button
-                            type="button"
-                            id="display-barcode-btn"
-                            className="pos-display-barcode-btn"
-                            onClick={() => setShowBarcodeModal(true)}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                background: '#eef2ff',
-                                color: '#4f46e5',
-                                border: '1.5px solid #c7d2fe',
-                                borderRadius: 10,
-                                padding: '9px 13px',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap',
-                                transition: 'all .15s ease',
-                            }}
-                            title="Display Barcodes & Barcode Scanner"
-                        >
-                            <BsUpcScan size={14} />
-                            <span>Display Barcode</span>
-                        </button>
-                        {/* POS Numeric Keypad Action */}
-                        <button
-                            type="button"
-                            id="pos-numpad-btn"
-                            className="pos-display-barcode-btn"
-                            onClick={() => setShowNumpad(!showNumpad)}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                background: showNumpad ? '#4f46e5' : '#fff',
-                                color: showNumpad ? '#fff' : '#475569',
-                                border: '1.5px solid #cbd5e1',
-                                borderRadius: 10,
-                                padding: '9px 13px',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap',
-                                transition: 'all .15s ease',
-                            }}
-                            title="Toggle POS Numeric Keypad (Numpad)"
-                        >
-                            <BsCalculator size={14} />
-                            <span>Numpad</span>
-                        </button>
-                        {/* Download GSTR-1 Action */}
-                        <button
-                            type="button"
-                            id="pos-download-gstr1-btn"
-                            className="pos-display-barcode-btn"
-                            onClick={handleDownloadGstr1}
-                            style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                                background: '#ecfdf5',
-                                color: '#047857',
-                                border: '1.5px solid #a7f3d0',
-                                borderRadius: 10,
-                                padding: '9px 13px',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap',
-                                transition: 'all .15s ease',
-                            }}
-                            title="Download GSTR-1 CSV Report"
-                        >
-                            <BsDownload size={14} />
-                            <span>Download GSTR-1</span>
-                        </button>
                     </div>
 
                     {/* Scan Barcode Section feedback */}
@@ -1045,11 +1412,11 @@ const Billing = () => {
 
                 {/* Category pills */}
                 <div className="pos-category-bar">
-                    {(dynamicCategories || CATEGORIES).map(cat => (
+                    {dynamicCategories.map(cat => (
                         <button
                             key={cat}
                             onClick={() => setSelectedCategory(cat)}
-                            className={`pos-cat-pill${selectedCategory === cat ? ' pos-cat-pill--active' : ''}`}
+                            className={`pos-cat-pill${selectedCategory.toLowerCase() === cat.toLowerCase() ? ' pos-cat-pill--active' : ''}`}
                         >
                             {cat}
                         </button>
@@ -1059,15 +1426,36 @@ const Billing = () => {
                 {/* Product grid */}
                 <div className="pos-product-grid custom-scrollbar">
                     {productsLoading ? (
-                        <div className="pos-empty-state" style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center' }}>
+                        <div className="pos-empty-state" style={{ gridColumn: '1 / -1', padding: '60px 20px', textAlign: 'center' }}>
                             <BsBoxSeam size={36} color="#6366f1" />
-                            <p style={{ marginTop: 12, fontWeight: 600, color: '#4b5563' }}>Loading products from server...</p>
+                            <p style={{ marginTop: 12, fontWeight: 600, color: '#4b5563', fontSize: 14 }}>Connecting to backend catalog...</p>
+                            <span style={{ fontSize: 12, color: '#9ca3af' }}>Loading live products and categories from server</span>
+                        </div>
+                    ) : productsError && products.length === 0 ? (
+                        <div className="pos-empty-state" style={{ gridColumn: '1 / -1', padding: '50px 20px', textAlign: 'center' }}>
+                            <BsExclamationTriangle size={36} color="#ef4444" style={{ margin: '0 auto 12px' }} />
+                            <p style={{ fontWeight: 600, color: '#1f2937', fontSize: 14 }}>Unable to load live backend products</p>
+                            <span style={{ fontSize: 12, color: '#6b7280', display: 'block', maxWidth: 450, margin: '6px auto 16px' }}>{productsError}</span>
+                            <button
+                                type="button"
+                                onClick={() => loadProducts()}
+                                style={{
+                                    background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 6,
+                                    padding: '7px 18px', fontSize: 12, fontWeight: 600, cursor: 'pointer'
+                                }}
+                            >
+                                Retry Connection
+                            </button>
                         </div>
                     ) : filteredProducts.length === 0 ? (
-                        <div className="pos-empty-state" style={{ gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center' }}>
-                            <BsBoxSeam size={40} />
-                            <p style={{ marginTop: 12, fontWeight: 600, color: '#4b5563' }}>No products found</p>
-                            <span style={{ fontSize: 12, color: '#9ca3af' }}>Add products via Product Catalog to see them here</span>
+                        <div className="pos-empty-state" style={{ gridColumn: '1 / -1', padding: '50px 20px', textAlign: 'center' }}>
+                            <BsBoxSeam size={40} color="#9ca3af" />
+                            <p style={{ marginTop: 12, fontWeight: 600, color: '#4b5563', fontSize: 14 }}>
+                                {searchQuery || selectedCategory !== 'All' ? 'No matching products found' : 'No products found in backend catalog'}
+                            </p>
+                            <span style={{ fontSize: 12, color: '#9ca3af' }}>
+                                {searchQuery || selectedCategory !== 'All' ? 'Try adjusting your search or category filter' : 'Add products via Product Master to see them here'}
+                            </span>
                         </div>
                     ) : (
                         filteredProducts.map(product => {
@@ -1079,9 +1467,18 @@ const Billing = () => {
                                     className={`pos-product-card${inCart ? ' pos-product-card--in-cart' : ''}${isOutOfStock ? ' pos-product-card--out-of-stock' : ''}`}
                                     style={{
                                         position: 'relative',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        height: '100%',
+                                        minHeight: 295,
+                                        background: inCart ? '#fafafe' : '#ffffff',
+                                        border: inCart ? '1.5px solid #818cf8' : '1.5px solid #e2e8f0',
+                                        borderRadius: 14,
+                                        padding: '12px',
+                                        cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                                        transition: 'all 0.2s ease',
                                         ...(isOutOfStock ? {
                                             opacity: 0.72,
-                                            cursor: 'not-allowed',
                                             borderColor: '#fca5a5',
                                             background: '#fffaf9',
                                         } : {}),
@@ -1113,31 +1510,113 @@ const Billing = () => {
                                             alignItems: 'center',
                                             gap: 4,
                                         }}>
-                                            <BsExclamationTriangleFill size={10} /> Out of Stock
+                                            <BsExclamationTriangle size={10} /> Out of Stock
                                         </div>
                                     ) : inCart ? (
-                                        <div className="pos-product-qty-badge">{inCart.qty}</div>
+                                        <div className="pos-product-qty-badge" style={{
+                                            position: 'absolute',
+                                            top: 8,
+                                            right: 8,
+                                            background: '#4f46e5',
+                                            color: '#fff',
+                                            fontSize: 11,
+                                            fontWeight: 800,
+                                            width: 22,
+                                            height: 22,
+                                            borderRadius: '50%',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            boxShadow: '0 2px 6px rgba(79, 70, 229, 0.4)',
+                                            zIndex: 3,
+                                        }}>{inCart.qty}</div>
                                     ) : null}
-                                    <div className="pos-product-image">
-                                        {product.image && (product.image.startsWith('/') || product.image.startsWith('http')) ? (
-                                            <img
-                                                src={product.image}
-                                                alt={product.name}
-                                                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                                onError={(e) => { e.target.style.display = 'none'; }}
-                                            />
-                                        ) : (
-                                            <span>{product.image}</span>
+                                    <div
+                                        className="pos-product-image"
+                                        style={{
+                                            width: '100%',
+                                            height: 96,
+                                            borderRadius: 10,
+                                            overflow: 'hidden',
+                                            background: '#f8fafc',
+                                            border: '1px solid #f1f5f9',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            marginBottom: 8,
+                                            flexShrink: 0,
+                                        }}
+                                    >
+                                        <img
+                                            src={resolveProductImage(product)}
+                                            alt={product.name}
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.25s ease' }}
+                                            onError={(e) => {
+                                                if (!e.target.dataset.triedFallback) {
+                                                    e.target.dataset.triedFallback = 'true';
+                                                    e.target.src = LOCAL_PRODUCT_IMAGES.parleG;
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 2, flexShrink: 0 }}>
+                                        <span
+                                            className="pos-product-cat"
+                                            style={{
+                                                fontSize: 9.5,
+                                                fontWeight: 800,
+                                                color: '#6366f1',
+                                                textTransform: 'uppercase',
+                                                letterSpacing: '0.06em',
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            {product.category}
+                                        </span>
+                                        {product.discount > 0 && (
+                                            <span style={{
+                                                fontSize: 9,
+                                                fontWeight: 800,
+                                                color: '#dc2626',
+                                                background: '#fef2f2',
+                                                border: '1px solid #fecaca',
+                                                borderRadius: 4,
+                                                padding: '1px 5px',
+                                                whiteSpace: 'nowrap',
+                                            }}>
+                                                ₹{product.discount} OFF
+                                            </span>
                                         )}
                                     </div>
-                                    <span className="pos-product-cat">{product.category}</span>
-                                    <h3 className="pos-product-name">{product.name}</h3>
+                                    <h3
+                                        className="pos-product-name"
+                                        title={product.name}
+                                        style={{
+                                            fontSize: 13,
+                                            fontWeight: 700,
+                                            color: '#0f172a',
+                                            lineHeight: 1.35,
+                                            height: 35,
+                                            minHeight: 35,
+                                            margin: '2px 0 4px',
+                                            display: '-webkit-box',
+                                            WebkitLineClamp: 2,
+                                            WebkitBoxOrient: 'vertical',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            wordBreak: 'break-word',
+                                        }}
+                                    >
+                                        {product.name}
+                                    </h3>
                                     {/* Display Item ID and Barcode on product card */}
                                     <div style={{
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: 5,
-                                        fontSize: 10,
+                                        gap: 4,
+                                        fontSize: 9.5,
                                         fontFamily: 'monospace',
                                         fontWeight: 700,
                                         color: '#4f46e5',
@@ -1145,83 +1624,73 @@ const Billing = () => {
                                         padding: '2px 6px',
                                         borderRadius: 4,
                                         width: 'fit-content',
-                                        marginTop: 2,
-                                        marginBottom: 2,
-                                        flexWrap: 'wrap',
+                                        marginBottom: 4,
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: '100%',
                                     }}>
                                         <span>Item #{product.id}</span>
                                         <span>•</span>
                                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                            <BsUpcScan size={10} /> Barcode: {product.barcode}
+                                            <BsUpcScan size={9} /> {product.barcode}
                                         </span>
                                     </div>
-{/* ── Stock status badge on product card ── */}
+                                    {/* Stock status badge on product card */}
                                     <div
                                         className={`pos-product-stock-badge ${product.isInStock !== false && (product.stock > 0 || product.isInStock) ? 'in-stock' : 'out-of-stock'}`}
                                         style={{
                                             display: 'inline-flex',
                                             alignItems: 'center',
-                                            gap: 5,
-                                            fontSize: 10,
+                                            gap: 4,
+                                            fontSize: 9.5,
                                             fontWeight: 700,
                                             color: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#059669' : '#dc2626',
                                             background: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#ecfdf5' : '#fef2f2',
                                             border: `1px solid ${(product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#a7f3d0' : '#fecaca'}`,
-                                            padding: '2px 7px',
+                                            padding: '2px 6px',
                                             borderRadius: 4,
                                             width: 'fit-content',
-                                            marginTop: 2,
-                                            marginBottom: 2,
+                                            marginBottom: 6,
                                         }}
                                     >
                                         <span style={{
-                                            width: 6,
-                                            height: 6,
+                                            width: 5,
+                                            height: 5,
                                             borderRadius: '50%',
                                             background: (product.isInStock !== false && (product.stock > 0 || product.isInStock)) ? '#10b981' : '#ef4444',
                                             display: 'inline-block',
                                         }} />
                                         <span>
                                             {(product.isInStock !== false && (product.stock > 0 || product.isInStock))
-                                                ? `In Stock (${product.stock ?? 50} available)`
+                                                ? `In Stock (${product.stock ?? 50})`
                                                 : 'Out of Stock'}
                                         </span>
                                     </div>
-                                    {/* ── Discount badge on product card ── */}
-                                    {product.discount > 0 && (
-                                        <div style={{
-                                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                                            fontSize: 10, fontWeight: 700,
-                                            color: '#dc2626', background: '#fef2f2',
-                                            border: '1px solid #fecaca',
-                                            padding: '2px 6px', borderRadius: 4,
-                                            width: 'fit-content', marginBottom: 2,
-                                        }}>
-                                            <BsPercent size={9} /> ₹{product.discount} OFF per item
-                                        </div>
-                                    )}
-                                    <div className="pos-product-footer">
+                                    <div className="pos-product-footer" style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6, borderTop: '1px solid #f1f5f9' }}>
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                                             {product.discount > 0 ? (
                                                 <>
-                                                    <span style={{ fontSize: 10, color: '#9ca3af', textDecoration: 'line-through' }}>
+                                                    <span style={{ fontSize: 9.5, color: '#9ca3af', textDecoration: 'line-through' }}>
                                                         ₹{product.price.toLocaleString()}
                                                     </span>
-                                                    <span className="pos-product-price" style={{ color: '#10b981' }}>
+                                                    <span className="pos-product-price" style={{ color: '#10b981', fontSize: 14, fontWeight: 800 }}>
                                                         ₹{(product.price - product.discount).toLocaleString()}
                                                     </span>
                                                 </>
                                             ) : (
-                                                <span className="pos-product-price">₹{product.price.toLocaleString()}</span>
+                                                <span className="pos-product-price" style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>₹{product.price.toLocaleString()}</span>
                                             )}
                                             <span style={{ fontSize: 9, color: isOutOfStock ? '#ef4444' : '#9ca3af', fontWeight: isOutOfStock ? 700 : 500 }}>
-                                                {isOutOfStock ? 'Out of Stock' : 'excl. GST'}
+                                                {isOutOfStock ? 'Out of Stock' : `GST ${product.gstRate}% excl.`}
                                             </span>
                                         </div>
                                         <button
                                             type="button"
                                             className="pos-product-add-btn"
-                                                                                        style={{
+                                            disabled={isOutOfStock}
+                                            title={isOutOfStock ? `${product.name} is Out of Stock` : `Add ${product.name} to cart`}
+                                            style={{
                                                 border: 'none',
                                                 outline: 'none',
                                                 cursor: isOutOfStock ? 'not-allowed' : 'pointer',
@@ -1238,8 +1707,6 @@ const Billing = () => {
                                                     addToCart(product);
                                                 }
                                             }}
-                                            disabled={isOutOfStock}
-                                            title={isOutOfStock ? `${product.name} is Out of Stock` : `Add ${product.name} to cart`}
                                         >
                                             {isOutOfStock ? (
                                                 <span style={{ fontSize: 9, fontWeight: 700, padding: '0 2px' }}>OOS</span>
@@ -1250,710 +1717,923 @@ const Billing = () => {
                                             )}
                                         </button>
                                     </div>
-                                    <span className="pos-product-gst-tag">GST {product.gstRate}% excl.</span>
                                 </div>
                             );
-                        })
-                    )}
+                        }))}
                 </div>
             </div>
 
             {/* ── RIGHT: Cart & Payment ── */}
-            <div className="pos-right">
+            {isOrderPanelOpen && (
+                <div className="pos-right">
 
-                {/* Order header */}
-                <div className="pos-right-header">
-                    <div className="pos-right-header-top">
-                        <div className="pos-right-title-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <BsReceiptCutoff size={16} color="#6366f1" />
-                                <h3 className="pos-right-title">Current Order</h3>
-                            </div>
-                            <span style={{
-                                background: '#eef2ff',
-                                color: '#4338ca',
-                                padding: '2px 8px',
-                                borderRadius: 6,
-                                fontSize: 11,
-                                fontWeight: 800,
-                                fontFamily: 'monospace',
-                                border: '1px solid #c7d2fe',
-                                letterSpacing: '0.03em',
-                            }}>
-                                Bill #{invoiceNo}
-                            </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span className="pos-units-badge">
-                                {cart.length} {cart.length === 1 ? 'item' : 'items'} • {totalUnits} {totalUnits === 1 ? 'unit' : 'units'}
-                            </span>
-                            <button
-                                type="button"
-                                id="pos-close-order-btn"
-                                className="pos-close-order-btn"
-                                onClick={handleCloseOrder}
-                                title="Close current order and reset"
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    background: '#fef2f2',
-                                    color: '#b91c1c',
-                                    border: '1.5px solid #fecaca',
-                                    borderRadius: 7,
-                                    padding: '4px 10px',
+                    {/* Order header */}
+                    <div className="pos-right-header">
+                        <div className="pos-right-header-top">
+                            <div className="pos-right-title-row" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <BsReceiptCutoff size={16} color="#6366f1" />
+                                    <h3 className="pos-right-title">Current Order</h3>
+                                </div>
+                                <span style={{
+                                    background: '#eef2ff',
+                                    color: '#4338ca',
+                                    padding: '2px 8px',
+                                    borderRadius: 6,
                                     fontSize: 11,
-                                    fontWeight: 700,
-                                    cursor: 'pointer',
-                                    transition: 'all .15s ease',
-                                }}
-                            >
-                                <BsXCircleFill size={13} color="#dc2626" />
-                                <span>Close Order</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Order Closed Feedback Notification */}
-                    {orderClosedNotice && (
-                        <div style={{
-                            background: '#ecfdf5',
-                            border: '1px solid #a7f3d0',
-                            color: '#065f46',
-                            borderRadius: 6,
-                            padding: '6px 10px',
-                            fontSize: 11,
-                            fontWeight: 600,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            marginBottom: 8,
-                        }}>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <BsCheckCircleFill size={12} color="#10b981" />
-                                {orderClosedNotice}
-                            </span>
-                            <button onClick={() => setOrderClosedNotice(null)} style={{ background: 'none', border: 'none', color: '#065f46', cursor: 'pointer', padding: 0 }}>
-                                <BsX size={14} />
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Customer fields */}
-                    <div className="pos-customer-row">
-                        <div className="pos-cust-field-wrap" title="Customer Name">
-                            <BsPersonFill size={12} className="pos-cust-icon" />
-                            <input
-                                type="text"
-                                className="pos-cust-input"
-                                placeholder="Customer Name"
-                                value={customer.name}
-                                onChange={e => setCustomer({ ...customer, name: e.target.value })}
-                            />
-                        </div>
-                        <div className="pos-cust-field-wrap" title="Customer Phone Number">
-                            <BsTelephoneFill size={11} className="pos-cust-icon" color="#64748b" />
-                            <input
-                                type="tel"
-                                className="pos-cust-input"
-                                placeholder="Phone No. (e.g. 9876543210)"
-                                value={customer.phone}
-                                onChange={e => setCustomer({ ...customer, phone: e.target.value })}
-                            />
-                        </div>
-                        <div className="pos-cust-field-wrap" title="GSTIN (Optional)">
-                            <BsHash size={13} className="pos-cust-icon" color="#94a3b8" />
-                            <input
-                                type="text"
-                                className="pos-cust-input"
-                                placeholder="GSTIN (optional)"
-                                value={customer.gstin || ''}
-                                onChange={e => setCustomer({ ...customer, gstin: e.target.value })}
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* ── Quantity Limit Warning Toast ── */}
-                {qtyLimitWarning && (
-                    <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        background: '#fef3c7', border: '1px solid #fcd34d',
-                        borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
-                        fontSize: 12, fontWeight: 600, color: '#92400e',
-                        animation: 'slideUp .18s ease',
-                    }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 14 }}>⚠️</span>
-                            {qtyLimitWarning}
-                        </span>
-                        <button
-                            onClick={() => setQtyLimitWarning('')}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', display: 'flex', padding: 0, marginLeft: 8 }}
-                        >
-                            <BsX size={16} />
-                        </button>
-                    </div>
-                )}
-
-                {/* ── Out of Stock Warning Toast ── */}
-                {stockWarning && (
-                    <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        background: '#fef2f2', border: '1px solid #fecaca',
-                        borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
-                        fontSize: 12, fontWeight: 600, color: '#991b1b',
-                        animation: 'slideUp .18s ease',
-                    }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 14 }}>🚫</span>
-                            {stockWarning}
-                        </span>
-                        <button
-                            onClick={() => setStockWarning('')}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', display: 'flex', padding: 0, marginLeft: 8 }}
-                        >
-                            <BsX size={16} />
-                        </button>
-                    </div>
-                )}
-
-                {/* ── Payment Validation Warning Toast ── */}
-                {paymentWarning && (
-                    <div style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        background: '#fef2f2', border: '1px solid #fecaca',
-                        borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
-                        fontSize: 12, fontWeight: 600, color: '#991b1b',
-                        animation: 'slideUp .18s ease',
-                    }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <BsExclamationTriangleFill size={14} color="#dc2626" />
-                            {paymentWarning}
-                        </span>
-                        <button
-                            onClick={() => setPaymentWarning('')}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', display: 'flex', padding: 0, marginLeft: 8 }}
-                        >
-                            <BsX size={16} />
-                        </button>
-                    </div>
-                )}
-
-                {/* Cart items */}
-                <div className="pos-cart-list custom-scrollbar">
-                    {(() => {
-                        if (cartLoading) {
-                            return (
-                                <div className="pos-cart-empty" style={{ gap: 8, fontSize: 13, color: '#9ca3af' }}>
-                                    <span style={{ fontSize: 28 }}>⏳</span>
-                                    <p>Loading cart…</p>
-                                </div>
-                            );
-                        }
-                        if (cart.length === 0) {
-                            return (
-                                <div className="pos-cart-empty">
-                                    <BsCart3 size={48} />
-                                    <p>Cart is empty</p>
-                                    <span>Click a product to add it</span>
-                                </div>
-                            );
-                        }
-                        return cart.map((item, index) => (
-                            <div key={item.id} className="pos-cart-item" style={{ height: 'auto', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                                {/* Serial Number Badge */}
-                                <span
-                                    title={`Line item #${index + 1}`}
-                                    style={{
-                                        width: 22, height: 22, borderRadius: 6,
-                                        background: '#f1f5f9', color: '#475569',
-                                        fontSize: 10, fontWeight: 800,
-                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                        flexShrink: 0, border: '1px solid #e2e8f0',
-                                    }}
-                                >
-                                    #{index + 1}
+                                    fontWeight: 800,
+                                    fontFamily: 'monospace',
+                                    border: '1px solid #c7d2fe',
+                                    letterSpacing: '0.03em',
+                                }}>
+                                    Bill #{invoiceNo}
                                 </span>
-                                <div className="pos-cart-item-emoji">
-                                    {item.image && (item.image.startsWith('/') || item.image.startsWith('http')) ? (
-                                        <img
-                                            src={item.image}
-                                            alt={item.name}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }}
-                                            onError={(e) => { e.target.style.display = 'none'; }}
-                                        />
-                                    ) : (
-                                        <span>{item.image}</span>
-                                    )}
-                                </div>
-                                <div className="pos-cart-item-info" style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minWidth: 0 }}>
-                                    <h4 className="pos-cart-item-name" style={{ fontWeight: 600, fontSize: 13, marginBottom: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
-                                        {item.unsynced && (
-                                            <span style={{ fontSize: 9, color: '#d97706', background: '#fef3c7', padding: '2px 5px', borderRadius: 4 }}>Offline</span>
-                                        )}
-                                    </h4>
-                                    <span className="pos-cart-item-price" style={{ fontSize: 11, color: '#6b7280' }}>
-                                        ₹{item.price.toLocaleString()} × {item.qty}
-                                        {item.discountPerItem > 0 && (
-                                            <span style={{ color: '#ef4444', fontWeight: 600, marginLeft: 6 }}>
-                                                (-₹{item.discountPerItem}/item)
-                                            </span>
-                                        )}
-                                    </span>
-                                    <div style={{ fontSize: '10px', color: '#64748b', display: 'flex', gap: '6px', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
-                                        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#4f46e5' }}>ID #{item.id}</span>
-                                        <span>•</span>
-                                        {item.barcode && (
-                                            <>
-                                                <span style={{ fontFamily: 'monospace' }}>Barcode: {item.barcode}</span>
-                                                <span>•</span>
-                                            </>
-                                        )}
-                                        {item.hsn && (
-                                            <>
-                                                <span>HSN: {item.hsn}</span>
-                                                <span>•</span>
-                                            </>
-                                        )}
-                                        <span>GST {item.gstRate || totals.gstRate}% (excl.)</span>
-                                    </div>
-                                </div>
-                                <div className="pos-qty-ctrl">
-                                    <button className="pos-qty-btn" onClick={() => updateQty(item.id, -1)} title="Decrease quantity">
-                                        <BsDash size={12} />
-                                    </button>
-                                    <span
-                                        className="pos-qty-val"
-                                        title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units` : ''}
-                                        style={item.qty >= MAX_QTY ? { color: '#d97706', fontWeight: 800 } : {}}
-                                    >
-                                        {item.qty}{item.qty >= MAX_QTY && <span style={{ fontSize: 8, marginLeft: 2, verticalAlign: 'super', color: '#d97706' }}>MAX</span>}
-                                    </span>
-                                    <button
-                                        className="pos-qty-btn"
-                                        onClick={() => updateQty(item.id, 1)}
-                                        disabled={item.qty >= MAX_QTY}
-                                        title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units per item` : 'Increase quantity'}
-                                        style={item.qty >= MAX_QTY ? { opacity: 0.35, cursor: 'not-allowed' } : {}}
-                                    >
-                                        <BsPlus size={12} />
-                                    </button>
-                                </div>
-                                <span className="pos-cart-item-total" style={{ fontWeight: 700, minWidth: 65, textAlign: 'right' }}>
-                                    ₹{((item.price - (item.discountPerItem || 0)) * item.qty).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </span>
-                                <button className="pos-cart-item-del" onClick={() => removeFromCart(item.id)} title="Remove item from order">
-                                    <BsTrash size={13} />
-                                </button>
                             </div>
-                        ));
-                    })()}
-                </div>
-
-                {/* Totals & payment */}
-                <div className="pos-right-footer">
-
-                    {/* Discount + Coupon section */}
-                    <div style={{ marginBottom: 10 }}>
-
-                        {/* Applied discount badge */}
-                        {discountApplied && (
-                            <div style={{
-                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                background: '#ecfdf5', border: '1px solid #6ee7b7',
-                                borderRadius: 8, padding: '6px 10px', marginBottom: 8,
-                            }}>
-                                <span style={{ fontSize: 12, color: '#065f46', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <BsTagFill size={12} color="#10b981" />
-                                    {couponCode.trim()
-                                        ? `Coupon "${couponCode.trim()}" applied`
-                                        : `Discount applied: ${discountType === 'percentage' ? `${billDiscount}%` : `₹${billDiscount} flat`}`
-                                    }
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span className="pos-units-badge">
+                                    {cart.length} {cart.length === 1 ? 'item' : 'items'} • {totalUnits} {totalUnits === 1 ? 'unit' : 'units'}
                                 </span>
                                 <button
-                                    onClick={handleClearDiscount}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', display: 'flex' }}
-                                    title="Remove discount"
+                                    type="button"
+                                    className="pos-order-panel-close-btn"
+                                    onClick={() => setIsOrderPanelOpen(false)}
+                                    title="Close Current Order"
+                                    aria-label="Close Current Order"
+                                >
+                                    <BsX size={20} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Customer Box */}
+                        <div style={{
+                            background: '#f8fafc',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: 10,
+                            padding: '10px 12px',
+                            marginTop: 4,
+                            position: 'relative'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <BsPersonFill size={12} color="#6366f1" /> Customer CRM
+                                </span>
+                                {selectedCustomer && (
+                                    <span style={{ fontSize: 10, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: 10, fontWeight: 700, border: '1px solid #a7f3d0' }}>
+                                        ✓ Linked #{selectedCustomer.id || selectedCustomer.backendId}
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="pos-customer-row">
+                                <div className="pos-cust-field-wrap" title="Customer Name">
+                                    <BsPersonFill size={11} className="pos-cust-icon" />
+                                    <input
+                                        type="text"
+                                        className="pos-cust-input"
+                                        placeholder="Customer Name"
+                                        value={customer.name}
+                                        onChange={e => setCustomer({ ...customer, name: e.target.value })}
+                                    />
+                                </div>
+                                <div className="pos-cust-field-wrap" title="Customer Phone Number">
+                                    <BsTelephoneFill size={10} className="pos-cust-icon" color="#64748b" />
+                                    <input
+                                        type="tel"
+                                        className="pos-cust-input"
+                                        placeholder="Phone (10 digits)"
+                                        value={customer.phone}
+                                        onChange={e => handleCustomerPhoneChange(e.target.value)}
+                                    />
+                                </div>
+                                <div className="pos-cust-field-wrap pos-cust-field-wrap--full" title="GSTIN (Optional)">
+                                    <BsHash size={12} className="pos-cust-icon" color="#94a3b8" />
+                                    <input
+                                        type="text"
+                                        className="pos-cust-input"
+                                        placeholder="GSTIN (Optional for B2B Invoice)"
+                                        value={customer.gstin || ''}
+                                        onChange={e => setCustomer({ ...customer, gstin: e.target.value })}
+                                    />
+                                </div>
+
+                                {/* Customer Live Suggestions Dropdown */}
+                                {showCustomerDropdown && customerSuggestions.length > 0 && (
+                                    <div style={{
+                                        position: 'absolute', top: '100%', left: 0, right: 0,
+                                        background: '#fff', border: '1px solid #cbd5e1',
+                                        borderRadius: 8, boxShadow: '0 8px 16px rgba(0,0,0,0.1)',
+                                        zIndex: 50, maxHeight: 150, overflowY: 'auto', marginTop: 4,
+                                    }}>
+                                        {customerSuggestions.map((c, i) => (
+                                            <div
+                                                key={c.id || i}
+                                                onClick={() => handleSelectCustomer(c)}
+                                                style={{
+                                                    padding: '7px 10px', cursor: 'pointer',
+                                                    borderBottom: '1px solid #f1f5f9', fontSize: 11,
+                                                    display: 'flex', justifyContent: 'space-between',
+                                                }}
+                                                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <span style={{ fontWeight: 600, color: '#1e293b' }}>{c.name}</span>
+                                                <span style={{ color: '#6366f1', fontFamily: 'monospace' }}>{c.phone || c.mobile}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Customer Loyalty Points Card */}
+                            {selectedCustomer && (
+                                <div style={{
+                                    marginTop: 8,
+                                    padding: '8px 10px',
+                                    borderRadius: 8,
+                                    background: '#fffbeb',
+                                    border: '1px solid #fde68a',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    fontSize: 11.5
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <span style={{ fontSize: 14 }}>🪙</span>
+                                        <div>
+                                            <span style={{ fontWeight: 800, color: '#92400e' }}>
+                                                {customerLoyaltyPoints.toLocaleString('en-IN')} Pts Available
+                                            </span>
+                                            <span style={{ color: '#b45309', marginLeft: 6, fontSize: 11 }}>
+                                                (Worth ₹{(customerLoyaltyPoints * 0.10).toFixed(2)})
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {customerLoyaltyPoints > 0 ? (
+                                        <button
+                                            type="button"
+                                            onClick={handleToggleLoyaltyRedeem}
+                                            style={{
+                                                padding: '4px 10px',
+                                                borderRadius: 6,
+                                                border: 'none',
+                                                background: loyaltyRedeemApplied ? '#059669' : '#d97706',
+                                                color: '#fff',
+                                                fontWeight: 700,
+                                                fontSize: 11,
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {loyaltyRedeemApplied ? `✓ Applied (-₹${totals.loyaltyDiscount.toFixed(2)})` : 'Redeem Points'}
+                                        </button>
+                                    ) : (
+                                        <span style={{ fontSize: 10, color: '#92400e', fontWeight: 600 }}>0 Balance</span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* ── Scrollable middle body: Cart + Discounts + Breakdown + Payment ── */}
+                    <div className="pos-right-content custom-scrollbar">
+
+                        {/* ── Quantity Limit Warning Toast ── */}
+                        {stockWarning && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8,
+                                padding: '8px 12px', marginBottom: 10, fontSize: 12, color: '#991b1b', fontWeight: 600,
+                                animation: 'fadeIn 0.2s ease',
+                            }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 14 }}>⚠️</span>
+                                    {stockWarning}
+                                </span>
+                                <button
+                                    onClick={() => setStockWarning('')}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#991b1b', display: 'flex', padding: 0, marginLeft: 8 }}
+                                >
+                                    <BsX size={16} />
+                                </button>
+                            </div>
+                        )}
+                        {qtyLimitWarning && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                background: '#fef3c7', border: '1px solid #fcd34d',
+                                borderRadius: 10, padding: '8px 12px', margin: '0 0 8px 0',
+                                fontSize: 12, fontWeight: 600, color: '#92400e',
+                                animation: 'slideUp .18s ease',
+                            }}>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ fontSize: 14 }}>⚠️</span>
+                                    {qtyLimitWarning}
+                                </span>
+                                <button
+                                    onClick={() => setQtyLimitWarning('')}
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', display: 'flex', padding: 0, marginLeft: 8 }}
                                 >
                                     <BsX size={16} />
                                 </button>
                             </div>
                         )}
 
-                        {/* Discount type + value row */}
-                        {!discountApplied && (
-                            <div className="pos-discount-row" style={{ marginBottom: 6, opacity: isCartEmpty ? 0.6 : 1 }}>
-                                <div className="pos-discount-type-btns">
-                                    <button
-                                        type="button"
-                                        disabled={isCartEmpty}
-                                        className={`pos-disc-type-btn${discountType === 'percentage' ? ' pos-disc-type-btn--active' : ''}`}
-                                        onClick={() => !isCartEmpty && setDiscountType('percentage')}
-                                        style={isCartEmpty ? { cursor: 'not-allowed' } : {}}
-                                        title={isCartEmpty ? 'Cart is empty' : 'Percentage discount'}
-                                    >
-                                        %
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={isCartEmpty}
-                                        className={`pos-disc-type-btn${discountType === 'fixed' ? ' pos-disc-type-btn--active' : ''}`}
-                                        onClick={() => !isCartEmpty && setDiscountType('fixed')}
-                                        style={isCartEmpty ? { cursor: 'not-allowed' } : {}}
-                                        title={isCartEmpty ? 'Cart is empty' : 'Flat ₹ discount'}
-                                    >
-                                        ₹ Flat
-                                    </button>
-                                </div>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    disabled={isCartEmpty}
-                                    className="pos-discount-input"
-                                    placeholder={isCartEmpty ? 'Cart empty' : (discountType === 'percentage' ? '% off' : '₹ off')}
-                                    value={billDiscount || ''}
-                                    onChange={e => !isCartEmpty && setBillDiscount(Number(e.target.value))}
-                                    style={isCartEmpty ? { cursor: 'not-allowed', background: '#f8fafc' } : {}}
-                                />
-                            </div>
-                        )}
-
-                        {/* Coupon code + Apply button */}
-                        {!discountApplied && (
-                            <div style={{ display: 'flex', gap: 6 }}>
-                                <div style={{
-                                    flex: 1, display: 'flex', alignItems: 'center', gap: 6,
-                                    background: isCartEmpty ? '#f1f5f9' : '#f8fafc',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: 8, padding: '0 10px',
-                                    opacity: isCartEmpty ? 0.6 : 1,
-                                    cursor: isCartEmpty ? 'not-allowed' : 'default',
-                                }}>
-                                    <BsTagFill size={11} color={isCartEmpty ? '#cbd5e1' : '#9ca3af'} />
-                                    <input
-                                        type="text"
-                                        placeholder={isCartEmpty ? 'Add items to cart to apply coupon' : 'Enter coupon code'}
-                                        value={couponCode}
-                                        disabled={isCartEmpty}
-                                        onChange={e => setCouponCode(e.target.value)}
-                                        onKeyDown={e => e.key === 'Enter' && !isCartEmpty && couponCode.trim() && handleApplyDiscount()}
-                                        style={{
-                                            flex: 1, border: 'none', background: 'transparent',
-                                            fontSize: 12, outline: 'none', color: isCartEmpty ? '#94a3b8' : '#374151',
-                                            padding: '7px 0',
-                                            cursor: isCartEmpty ? 'not-allowed' : 'text',
-                                        }}
-                                    />
-                                </div>
+                        {/* Cart Header */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, padding: '0 2px' }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                                Cart Items ({cart.length})
+                            </span>
+                            {cart.length > 0 && (
                                 <button
                                     type="button"
-                                    onClick={isCartEmpty ? () => showPaymentWarning('Cart must have at least 1 item to apply a coupon code.') : handleApplyDiscount}
-                                    disabled={isCartEmpty || discountLoading || !couponCode.trim()}
+                                    onClick={handleReset}
                                     style={{
-                                        background: (isCartEmpty || discountLoading || !couponCode.trim()) ? '#e2e8f0' : '#6366f1',
-                                        color: (isCartEmpty || discountLoading || !couponCode.trim()) ? '#94a3b8' : '#fff',
-                                        border: 'none', borderRadius: 8,
-                                        padding: '0 14px',
-                                        cursor: (isCartEmpty || discountLoading || !couponCode.trim()) ? 'not-allowed' : 'pointer',
-                                        fontWeight: 600, fontSize: 12, display: 'flex',
-                                        alignItems: 'center', gap: 5, whiteSpace: 'nowrap',
-                                        opacity: isCartEmpty ? 0.6 : 1,
-                                        transition: 'background .2s, color .2s, opacity .2s',
+                                        background: 'none',
+                                        border: 'none',
+                                        fontSize: 11,
+                                        color: '#ef4444',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        padding: '2px 6px',
+                                        borderRadius: 4
                                     }}
-                                    title={
-                                        isCartEmpty
-                                            ? 'Cart is empty. Add at least 1 item to apply a coupon code.'
-                                            : !couponCode.trim()
-                                            ? 'Enter a coupon code to apply'
-                                            : 'Apply coupon code'
-                                    }
+                                    title="Clear all items in cart"
                                 >
-                                    {discountLoading
-                                        ? <span style={{ fontSize: 11 }}>…</span>
-                                        : <><BsCheckLg size={11} /> Apply</>}
+                                    <BsTrash size={11} /> Clear Cart
                                 </button>
-                            </div>
-                        )}
-                    </div>
+                            )}
+                        </div>
 
-                    {/* Summary */}
-                    <div className="pos-summary">
-                        <div className="pos-summary-row">
-                            <span>Subtotal</span>
-                            <span>₹{totals.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        {/* Cart items list */}
+                        <div className="pos-cart-list custom-scrollbar">
+                            {(() => {
+                                if (cartLoading) {
+                                    return (
+                                        <div className="pos-cart-empty" style={{ gap: 8, fontSize: 13, color: '#9ca3af' }}>
+                                            <span style={{ fontSize: 28 }}>⏳</span>
+                                            <p>Loading cart…</p>
+                                        </div>
+                                    );
+                                }
+                                if (cart.length === 0) {
+                                    return (
+                                        <div className="pos-cart-empty" style={{ padding: '36px 12px' }}>
+                                            <BsCart3 size={46} color="#cbd5e1" />
+                                            <p style={{ marginTop: 8, fontSize: 13 }}>Cart is empty</p>
+                                            <span style={{ fontSize: 11 }}>Click any product on the left to add it</span>
+                                        </div>
+                                    );
+                                }
+                                return cart.map((item, index) => {
+                                    const itemImg = resolveProductImage(item);
+                                    const netPrice = item.price - (item.discountPerItem || 0);
+                                    const lineTotal = netPrice * item.qty;
+
+                                    return (
+                                        <div key={item.id} className="pos-cart-item-card">
+                                            {/* Top Row: Serial + Image + Info + Delete */}
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, width: '100%' }}>
+                                                {/* Serial number */}
+                                                <span
+                                                    title={`Line item #${index + 1}`}
+                                                    style={{
+                                                        width: 20, height: 20, borderRadius: 5,
+                                                        background: '#f1f5f9', color: '#475569',
+                                                        fontSize: 10, fontWeight: 800,
+                                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                                        flexShrink: 0, marginTop: 2, border: '1px solid #e2e8f0',
+                                                    }}
+                                                >
+                                                    #{index + 1}
+                                                </span>
+
+                                                {/* Product Image Thumbnail */}
+                                                <div style={{
+                                                    width: 52,
+                                                    height: 52,
+                                                    borderRadius: 10,
+                                                    overflow: 'hidden',
+                                                    flexShrink: 0,
+                                                    border: '1px solid #e2e8f0',
+                                                    background: '#ffffff',
+                                                    padding: 3,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)',
+                                                }}>
+                                                    <img
+                                                        src={itemImg}
+                                                        alt={item.name}
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                        onError={(e) => {
+                                                            if (!e.target.dataset.triedFallback) {
+                                                                e.target.dataset.triedFallback = 'true';
+                                                                e.target.src = LOCAL_PRODUCT_IMAGES.parleG;
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+
+                                                {/* Product Details (Spacious, Multi-line, NO Ellipsis Clipping!) */}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <h4 style={{
+                                                        fontSize: 13,
+                                                        fontWeight: 700,
+                                                        color: '#0f172a',
+                                                        margin: 0,
+                                                        lineHeight: 1.35,
+                                                        wordBreak: 'break-word',
+                                                    }}>
+                                                        {item.name}
+                                                        {item.unsynced && (
+                                                            <span style={{ fontSize: 9, color: '#d97706', background: '#fef3c7', padding: '1px 5px', borderRadius: 4, marginLeft: 6, fontWeight: 600 }}>
+                                                                Offline
+                                                            </span>
+                                                        )}
+                                                    </h4>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap', fontSize: 10.5, color: '#64748b' }}>
+                                                        <span style={{ fontFamily: 'monospace', color: '#4f46e5', fontWeight: 700 }}>#{item.id}</span>
+                                                        {item.barcode && (
+                                                            <>
+                                                                <span>•</span>
+                                                                <span style={{ fontFamily: 'monospace' }}>BC: {item.barcode}</span>
+                                                            </>
+                                                        )}
+                                                        {item.hsn && (
+                                                            <>
+                                                                <span>•</span>
+                                                                <span>HSN: {item.hsn}</span>
+                                                            </>
+                                                        )}
+                                                        <span>•</span>
+                                                        <span style={{ color: '#059669', fontWeight: 600 }}>GST {item.gstRate || totals.gstRate}%</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Delete Item Button */}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeFromCart(item.id)}
+                                                    title={`Remove ${item.name} from order`}
+                                                    style={{
+                                                        background: '#f8fafc',
+                                                        border: '1px solid #e2e8f0',
+                                                        color: '#94a3b8',
+                                                        borderRadius: 6,
+                                                        padding: '5px 6px',
+                                                        cursor: 'pointer',
+                                                        flexShrink: 0,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        transition: 'all 0.15s ease',
+                                                    }}
+                                                    onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; }}
+                                                >
+                                                    <BsTrash size={13} />
+                                                </button>
+                                            </div>
+
+                                            {/* Bottom Row: Unit Price + Quantity Stepper + Line Total */}
+                                            <div style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                paddingTop: 8,
+                                                borderTop: '1px dashed #f1f5f9',
+                                                width: '100%',
+                                                boxSizing: 'border-box'
+                                            }}>
+                                                {/* Unit Price & Discounts */}
+                                                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>
+                                                        ₹{netPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                    </span>
+                                                    <span style={{ fontSize: 10, color: '#94a3b8' }}>/ unit</span>
+                                                    {item.discountPerItem > 0 && (
+                                                        <span style={{ fontSize: 10, color: '#dc2626', fontWeight: 600, background: '#fef2f2', padding: '1px 4px', borderRadius: 4 }}>
+                                                            -₹{item.discountPerItem}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Stepper + Line Total */}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                    {/* Quantity Stepper */}
+                                                    <div className="pos-qty-ctrl" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 8 }}>
+                                                        <button
+                                                            type="button"
+                                                            className="pos-qty-btn"
+                                                            onClick={() => updateQty(item.id, -1)}
+                                                            title="Decrease quantity"
+                                                            style={{ width: 26, height: 26, cursor: 'pointer' }}
+                                                        >
+                                                            <BsDash size={12} />
+                                                        </button>
+                                                        <span
+                                                            className="pos-qty-val"
+                                                            style={{
+                                                                width: 28,
+                                                                textAlign: 'center',
+                                                                fontSize: 12,
+                                                                fontWeight: 800,
+                                                                color: item.qty >= MAX_QTY ? '#d97706' : '#0f172a'
+                                                            }}
+                                                        >
+                                                            {item.qty}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            className="pos-qty-btn"
+                                                            onClick={() => updateQty(item.id, 1)}
+                                                            disabled={item.qty >= MAX_QTY}
+                                                            title={item.qty >= MAX_QTY ? `Max ${MAX_QTY} units` : 'Increase quantity'}
+                                                            style={{
+                                                                width: 26,
+                                                                height: 26,
+                                                                cursor: item.qty >= MAX_QTY ? 'not-allowed' : 'pointer',
+                                                                opacity: item.qty >= MAX_QTY ? 0.35 : 1
+                                                            }}
+                                                        >
+                                                            <BsPlus size={12} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Line Item Total */}
+                                                    <span style={{
+                                                        fontSize: 14,
+                                                        fontWeight: 800,
+                                                        color: '#0f172a',
+                                                        minWidth: 70,
+                                                        textAlign: 'right'
+                                                    }}>
+                                                        ₹{lineTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                            })()}
                         </div>
-                        {totals.discountAmount > 0 && (
-                            <div className="pos-summary-row pos-summary-row--discount">
-                                <span>Discount</span>
-                                <span>−₹{totals.discountAmount.toFixed(2)}</span>
-                            </div>
-                        )}
-                        <div className="pos-summary-row">
-                            <span>Taxable Value</span>
-                            <span>₹{totals.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                        <div className="pos-summary-row" style={{ alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                    GST ({totals.gstRate}%)
-                                    <span
-                                        style={{
-                                            fontSize: 9,
-                                            fontWeight: 700,
-                                            color: '#64748b',
-                                            background: '#f1f5f9',
-                                            border: '1px solid #cbd5e1',
-                                            padding: '1px 5px',
-                                            borderRadius: 4,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 3,
-                                            userSelect: 'none',
-                                        }}
-                                        title="GST rate is statutory and auto-applied based on items in cart. Manual selection is disabled."
-                                    >
-                                        <BsLockFill size={8} /> Disabled
-                                    </span>
-                                </span>
+
+                        {/* Totals & payment */}
+                        <div className="pos-right-options">
+
+                            {/* Discounts & Vouchers Card (Clean & Collapsible) */}
+                            <div style={{
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 10,
+                                padding: '10px 12px',
+                                marginBottom: 10
+                            }}>
+                                {/* Active Discount / Credit Note Badges */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                    {discountApplied && (
+                                        <div style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            background: '#ecfdf5', border: '1px solid #6ee7b7',
+                                            borderRadius: 6, padding: '4px 8px', fontSize: 11,
+                                        }}>
+                                            <span style={{ color: '#065f46', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                                <BsTagFill size={11} color="#10b981" />
+                                                {couponCode.trim()
+                                                    ? `Coupon "${couponCode.trim()}" applied`
+                                                    : `Discount: ${discountType === 'percentage' ? `${billDiscount}%` : `₹${billDiscount}`} applied`
+                                                }
+                                            </span>
+                                            <button
+                                                onClick={handleClearDiscount}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', display: 'flex', padding: 0 }}
+                                                title="Remove discount"
+                                            >
+                                                <BsX size={15} />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {creditNoteData && (
+                                        <div style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            background: '#ecfdf5', border: '1px solid #6ee7b7',
+                                            borderRadius: 6, padding: '4px 8px', fontSize: 11,
+                                        }}>
+                                            <span style={{ color: '#065f46', fontWeight: 600 }}>
+                                                Credit Note: ₹{creditNoteData.amount || creditNoteData.applicable_amount} applied
+                                            </span>
+                                            <button
+                                                onClick={() => { setCreditNoteData(null); setCreditNoteInput(''); }}
+                                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981', display: 'flex', padding: 0 }}
+                                                title="Remove credit note"
+                                            >
+                                                <BsX size={15} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Header / Toggle */}
                                 <div
                                     style={{
-                                        display: 'inline-flex',
-                                        gap: 3,
-                                        background: '#f8fafc',
-                                        border: '1px solid #e2e8f0',
-                                        padding: '2px 4px',
-                                        borderRadius: 6,
-                                        cursor: 'not-allowed',
-                                        userSelect: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        cursor: 'pointer',
+                                        marginTop: (discountApplied || creditNoteData) ? 6 : 0
                                     }}
-                                    title="Manual GST selection is disabled. GST is auto-applied based on statutory tax rates."
+                                    onClick={() => setPromoSectionOpen(!promoSectionOpen)}
                                 >
-                                    {[0, 5, 12, 18, 28].map(r => (
-                                        <button
-                                            key={r}
-                                            type="button"
-                                            disabled={true}
-                                            aria-disabled="true"
-                                            tabIndex={-1}
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                            }}
-                                            style={{
-                                                border: 'none',
-                                                background: totals.gstRate === r ? '#cbd5e1' : 'transparent',
-                                                color: totals.gstRate === r ? '#1e293b' : '#94a3b8',
-                                                borderRadius: 4,
-                                                padding: '1px 5px',
-                                                fontSize: 10,
-                                                fontWeight: 700,
-                                                cursor: 'not-allowed',
-                                                opacity: totals.gstRate === r ? 1 : 0.45,
-                                                pointerEvents: 'none',
-                                                transition: 'all .15s',
-                                            }}
-                                            title={`Statutory GST slab: ${r}% (Manual selection is disabled)`}
-                                        >
-                                            {r}%
-                                        </button>
-                                    ))}
+                                    <span style={{ fontSize: 11.5, fontWeight: 700, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <BsTagFill size={12} color="#6366f1" /> Add Discounts & Coupons
+                                    </span>
+                                    <span style={{ fontSize: 10.5, color: '#6366f1', fontWeight: 700 }}>
+                                        {promoSectionOpen ? '▲ Hide' : '▼ Expand'}
+                                    </span>
                                 </div>
-                            </div>
-                            <span>₹{totals.totalGST.toFixed(2)}</span>
-                        </div>
-                        {totals.totalGST > 0 && (
-                            <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', justifyContent: 'space-between', paddingLeft: 8, paddingRight: 4, marginBottom: 6 }}>
-                                <span>CGST ({totals.gstRate / 2}%): ₹{totals.cgstAmount?.toFixed(2)} | SGST ({totals.gstRate / 2}%): ₹{totals.sgstAmount?.toFixed(2)}</span>
-                                {totals.igstAmount > 0 && <span>IGST: ₹{totals.igstAmount.toFixed(2)}</span>}
-                            </div>
-                        )}
-                        <div className="pos-summary-divider" />
-                        <div className="pos-summary-total">
-                            <span>Grand Total</span>
-                            <span className="pos-grand-amount">₹{totals.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </div>
-                    </div>
 
-                    {/* Payment mode */}
-                    <div
-                        className="pos-payment-modes"
-                        onClick={isCartEmpty ? () => {
-                            showPaymentWarning('Cart must have at least 1 item to select a payment method.');
-                        } : undefined}
-                    >
-                        {PAYMENT_MODES.map(m => (
-                            <button
-                                key={m.id}
-                                type="button"
-                                disabled={isCartEmpty}
-                                onClick={(e) => {
-                                    if (isCartEmpty) {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        showPaymentWarning('Cart must have at least 1 item to select a payment method.');
-                                        return;
-                                    }
-                                    setPaymentMode(m.id);
-                                }}
-                                className={`pos-pay-btn${!isCartEmpty && paymentMode === m.id ? ' pos-pay-btn--active' : ''}`}
-                                style={isCartEmpty ? {
-                                    opacity: 0.5,
-                                    cursor: 'not-allowed',
-                                    background: '#f8fafc',
-                                    color: '#94a3b8',
-                                    borderColor: '#e2e8f0',
-                                } : undefined}
-                                title={isCartEmpty ? 'Cart must have at least 1 item to select a payment method' : `Pay with ${m.label}`}
-                            >
-                                {m.icon}
-                                {m.label}
-                            </button>
-                        ))}
-                    </div>
+                                {/* Expandable Content */}
+                                {promoSectionOpen && (
+                                    <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid #e2e8f0', paddingTop: 10 }}>
+                                        {/* Tabs */}
+                                        <div style={{ display: 'flex', gap: 4, background: '#f1f5f9', padding: 2, borderRadius: 6 }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActivePromoTab('discount')}
+                                                style={{
+                                                    flex: 1, padding: '4px 6px', border: 'none', borderRadius: 5,
+                                                    background: activePromoTab === 'discount' ? '#fff' : 'transparent',
+                                                    color: activePromoTab === 'discount' ? '#4f46e5' : '#64748b',
+                                                    fontSize: 10.5, fontWeight: 700, cursor: 'pointer'
+                                                }}
+                                            >
+                                                Discount
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActivePromoTab('coupon')}
+                                                style={{
+                                                    flex: 1, padding: '4px 6px', border: 'none', borderRadius: 5,
+                                                    background: activePromoTab === 'coupon' ? '#fff' : 'transparent',
+                                                    color: activePromoTab === 'coupon' ? '#4f46e5' : '#64748b',
+                                                    fontSize: 10.5, fontWeight: 700, cursor: 'pointer'
+                                                }}
+                                            >
+                                                Coupon Code
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setActivePromoTab('creditNote')}
+                                                style={{
+                                                    flex: 1, padding: '4px 6px', border: 'none', borderRadius: 5,
+                                                    background: activePromoTab === 'creditNote' ? '#fff' : 'transparent',
+                                                    color: activePromoTab === 'creditNote' ? '#4f46e5' : '#64748b',
+                                                    fontSize: 10.5, fontWeight: 700, cursor: 'pointer'
+                                                }}
+                                            >
+                                                Credit Note
+                                            </button>
+                                        </div>
 
-                    {/* Empty cart validation error alert */}
-                    {isCartEmpty && (
-                        <div style={{
-                            fontSize: 11,
-                            color: '#dc2626',
-                            background: '#fef2f2',
-                            border: '1px solid #fecaca',
-                            borderRadius: 6,
-                            padding: '6px 10px',
-                            marginTop: 8,
-                            marginBottom: 4,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            fontWeight: 600,
-                        }}>
-                            <BsExclamationTriangleFill size={12} color="#dc2626" />
-                            <span>Cart must have at least 1 item to select a payment method</span>
-                        </div>
-                    )}
+                                        {/* Tab 1: Discount % or Flat */}
+                                        {activePromoTab === 'discount' && !discountApplied && (
+                                            <div style={{ display: 'flex', gap: 6 }}>
+                                                <div className="pos-discount-type-btns">
+                                                    <button
+                                                        type="button"
+                                                        className={`pos-disc-type-btn${discountType === 'percentage' ? ' pos-disc-type-btn--active' : ''}`}
+                                                        onClick={() => setDiscountType('percentage')}
+                                                    >
+                                                        %
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={`pos-disc-type-btn${discountType === 'fixed' ? ' pos-disc-type-btn--active' : ''}`}
+                                                        onClick={() => setDiscountType('fixed')}
+                                                    >
+                                                        ₹ Flat
+                                                    </button>
+                                                </div>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    className="pos-discount-input"
+                                                    placeholder={discountType === 'percentage' ? '% discount' : '₹ discount'}
+                                                    value={billDiscount || ''}
+                                                    onChange={e => setBillDiscount(Number(e.target.value))}
+                                                    style={{ flex: 1 }}
+                                                />
+                                            </div>
+                                        )}
 
-                    {/* Cash Tender & Change Due Section */}
-                    {!isCartEmpty && paymentMode === 'Cash' && (
-                        <div style={{
-                            background: '#f8fafc',
-                            border: '1.5px solid #e2e8f0',
-                            borderRadius: 10,
-                            padding: '10px 12px',
-                            marginTop: 8,
-                            marginBottom: 8,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
-                                    Cash Tendered:
-                                </span>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '2px 8px', maxWidth: 140 }}>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>₹</span>
-                                    <input
-                                        type="number"
-                                        placeholder={Math.round(totals.grandTotal).toString()}
-                                        value={cashTendered}
-                                        onChange={e => setCashTendered(e.target.value)}
-                                        style={{ width: '100%', border: 'none', outline: 'none', fontSize: 13, fontWeight: 800, color: '#0f172a' }}
-                                    />
-                                </div>
-                            </div>
+                                        {/* Tab 2: Coupon */}
+                                        {activePromoTab === 'coupon' && !discountApplied && (
+                                            <div style={{ display: 'flex', gap: 6 }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Enter coupon (e.g. WELCOME10)"
+                                                    value={couponCode}
+                                                    onChange={e => setCouponCode(e.target.value)}
+                                                    onKeyDown={e => e.key === 'Enter' && handleApplyDiscount()}
+                                                    style={{
+                                                        flex: 1, border: '1px solid #cbd5e1', borderRadius: 6,
+                                                        fontSize: 11, padding: '6px 8px', outline: 'none', background: '#fff'
+                                                    }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleApplyDiscount}
+                                                    disabled={discountLoading || !couponCode.trim()}
+                                                    style={{
+                                                        background: '#6366f1', color: '#fff', border: 'none',
+                                                        borderRadius: 6, padding: '4px 12px', fontSize: 11,
+                                                        fontWeight: 600, cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    {discountLoading ? '…' : 'Apply'}
+                                                </button>
+                                            </div>
+                                        )}
 
-                            {/* Quick Cash Number Pills */}
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setCashTendered(Math.round(totals.grandTotal).toString())}
-                                    style={{
-                                        border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca',
-                                        borderRadius: 5, padding: '3px 7px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
-                                    }}
-                                    title="Tender Exact Total Amount"
-                                >
-                                    Exact (₹{Math.round(totals.grandTotal)})
-                                </button>
-                                {[100, 200, 500, 1000, 2000].map(amt => (
-                                    <button
-                                        key={amt}
-                                        type="button"
-                                        onClick={() => setCashTendered(amt.toString())}
-                                        style={{
-                                            border: '1px solid #e2e8f0', background: '#fff', color: '#334155',
-                                            borderRadius: 5, padding: '3px 7px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
-                                        }}
-                                        title={`Tender ₹${amt}`}
-                                    >
-                                        ₹{amt}
-                                    </button>
-                                ))}
-                                {cashTendered && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setCashTendered('')}
-                                        style={{ border: 'none', background: 'transparent', color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-                                    >
-                                        Clear
-                                    </button>
+                                        {/* Tab 3: Credit Note */}
+                                        {activePromoTab === 'creditNote' && (
+                                            <div>
+                                                <div style={{ display: 'flex', gap: 6 }}>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Enter Credit Note (e.g. CN-1001)"
+                                                        value={creditNoteInput}
+                                                        onChange={e => setCreditNoteInput(e.target.value)}
+                                                        onKeyDown={e => e.key === 'Enter' && handleValidateCreditNote()}
+                                                        style={{
+                                                            flex: 1, border: '1px solid #cbd5e1', borderRadius: 6,
+                                                            fontSize: 11, padding: '6px 8px', outline: 'none', background: '#fff'
+                                                        }}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleValidateCreditNote}
+                                                        disabled={creditNoteLoading || !creditNoteInput.trim()}
+                                                        style={{
+                                                            background: '#4f46e5', color: '#fff', border: 'none',
+                                                            borderRadius: 6, padding: '4px 12px', fontSize: 11,
+                                                            fontWeight: 600, cursor: 'pointer'
+                                                        }}
+                                                    >
+                                                        {creditNoteLoading ? '…' : 'Apply'}
+                                                    </button>
+                                                </div>
+                                                {creditNoteError && (
+                                                    <p style={{ margin: '4px 0 0', fontSize: 10, color: '#dc2626' }}>{creditNoteError}</p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
 
-                            {/* Change Due Display */}
-                            {Number(cashTendered) > 0 && (
+                            {/* Summary */}
+                            <div className="pos-summary">
+                                <div className="pos-summary-row">
+                                    <span>Subtotal</span>
+                                    <span>₹{totals.subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                {totals.discountAmount > 0 && (
+                                    <div className="pos-summary-row pos-summary-row--discount">
+                                        <span>Discount</span>
+                                        <span>−₹{totals.discountAmount.toFixed(2)}</span>
+                                    </div>
+                                )}
+                                {totals.loyaltyDiscount > 0 && (
+                                    <div className="pos-summary-row pos-summary-row--discount" style={{ color: '#d97706', fontWeight: 600 }}>
+                                        <span>🪙 Loyalty Discount ({loyaltyPointsRedeemed} pts)</span>
+                                        <span>−₹{totals.loyaltyDiscount.toFixed(2)}</span>
+                                    </div>
+                                )}
+                                <div className="pos-summary-row">
+                                    <span>Taxable Value</span>
+                                    <span>₹{totals.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="pos-summary-row" style={{ alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        <span>GST ({totals.gstRate}%)</span>
+                                        <div style={{ display: 'inline-flex', gap: 3, background: '#f1f5f9', padding: '2px 4px', borderRadius: 6 }}>
+                                            {[0, 5, 12, 18, 28].map(r => (
+                                                <button
+                                                    key={r}
+                                                    type="button"
+                                                    onClick={() => setBillGstRate(r)}
+                                                    style={{
+                                                        border: 'none',
+                                                        background: billGstRate === r ? '#4f46e5' : 'transparent',
+                                                        color: billGstRate === r ? '#fff' : '#64748b',
+                                                        borderRadius: 4,
+                                                        padding: '1px 5px',
+                                                        fontSize: 10,
+                                                        fontWeight: 700,
+                                                        cursor: 'pointer',
+                                                        transition: 'all .15s',
+                                                    }}
+                                                    title={`Set Bill GST to ${r}%`}
+                                                >
+                                                    {r}%
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <span>₹{totals.totalGST.toFixed(2)}</span>
+                                </div>
+                                {totals.totalGST > 0 && (
+                                    <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', justifyContent: 'space-between', paddingLeft: 8, paddingRight: 4, marginBottom: 6 }}>
+                                        <span>CGST ({totals.gstRate / 2}%): ₹{totals.cgstAmount?.toFixed(2)} | SGST ({totals.gstRate / 2}%): ₹{totals.sgstAmount?.toFixed(2)}</span>
+                                        {totals.igstAmount > 0 && <span>IGST: ₹{totals.igstAmount.toFixed(2)}</span>}
+                                    </div>
+                                )}
+                                <div className="pos-summary-divider" />
+                                <div className="pos-summary-total">
+                                    <span>Grand Total</span>
+                                    <span className="pos-grand-amount">₹{totals.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                </div>
+                            </div>
+
+                            {/* Payment mode */}
+                            <div className="pos-payment-modes">
+                                {PAYMENT_MODES.map(m => (
+                                    <button
+                                        key={m.id}
+                                        onClick={() => setPaymentMode(m.id)}
+                                        className={`pos-pay-btn${paymentMode === m.id ? ' pos-pay-btn--active' : ''}`}
+                                    >
+                                        {m.icon}
+                                        {m.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Cash Tender & Change Due Section */}
+                            {paymentMode === 'Cash' && (
                                 <div style={{
+                                    background: '#f8fafc',
+                                    border: '1.5px solid #e2e8f0',
+                                    borderRadius: 10,
+                                    padding: '10px 12px',
+                                    marginTop: 8,
+                                    marginBottom: 8,
                                     display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    background: changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#ecfdf5' : '#fef2f2',
-                                    border: `1px solid ${changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#a7f3d0' : '#fecaca'}`,
-                                    borderRadius: 6,
-                                    padding: '5px 10px',
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    color: changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#065f46' : '#991b1b',
+                                    flexDirection: 'column',
+                                    gap: 8,
                                 }}>
-                                    <span>
-                                        {Number(cashTendered) >= totals.grandTotal ? 'Change to Return:' : 'Remaining Balance:'}
-                                    </span>
-                                    <span style={{ fontSize: 13, fontWeight: 800 }}>
-                                        ₹{Number(cashTendered) >= totals.grandTotal ? changeDue.toFixed(2) : (totals.grandTotal - Number(cashTendered)).toFixed(2)}
-                                    </span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
+                                            Cash Tendered:
+                                        </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fff', border: '1px solid #cbd5e1', borderRadius: 6, padding: '2px 8px', maxWidth: 140 }}>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>₹</span>
+                                            <input
+                                                type="number"
+                                                placeholder={Math.round(totals.grandTotal).toString()}
+                                                value={cashTendered}
+                                                onChange={e => setCashTendered(e.target.value)}
+                                                style={{ width: '100%', border: 'none', outline: 'none', fontSize: 13, fontWeight: 800, color: '#0f172a' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Quick Cash Number Pills */}
+                                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCashTendered(Math.round(totals.grandTotal).toString())}
+                                            style={{
+                                                border: '1px solid #c7d2fe', background: '#eef2ff', color: '#4338ca',
+                                                borderRadius: 5, padding: '3px 7px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                                            }}
+                                            title="Tender Exact Total Amount"
+                                        >
+                                            Exact (₹{Math.round(totals.grandTotal)})
+                                        </button>
+                                        {[100, 200, 500, 1000, 2000].map(amt => (
+                                            <button
+                                                key={amt}
+                                                type="button"
+                                                onClick={() => setCashTendered(amt.toString())}
+                                                style={{
+                                                    border: '1px solid #e2e8f0', background: '#fff', color: '#334155',
+                                                    borderRadius: 5, padding: '3px 7px', fontSize: 11, fontWeight: 700, cursor: 'pointer'
+                                                }}
+                                                title={`Tender ₹${amt}`}
+                                            >
+                                                ₹{amt}
+                                            </button>
+                                        ))}
+                                        {cashTendered && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setCashTendered('')}
+                                                style={{ border: 'none', background: 'transparent', color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                                            >
+                                                Clear
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* Change Due Display */}
+                                    {Number(cashTendered) > 0 && (
+                                        <div style={{
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center',
+                                            background: changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#ecfdf5' : '#fef2f2',
+                                            border: `1px solid ${changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#a7f3d0' : '#fecaca'}`,
+                                            borderRadius: 6,
+                                            padding: '5px 10px',
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            color: changeDue >= 0 && Number(cashTendered) >= totals.grandTotal ? '#065f46' : '#991b1b',
+                                        }}>
+                                            <span>
+                                                {Number(cashTendered) >= totals.grandTotal ? 'Change to Return:' : 'Remaining Balance:'}
+                                            </span>
+                                            <span style={{ fontSize: 13, fontWeight: 800 }}>
+                                                ₹{Number(cashTendered) >= totals.grandTotal ? changeDue.toFixed(2) : (totals.grandTotal - Number(cashTendered)).toFixed(2)}
+                                            </span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
-                        </div>
-                    )}
 
-                    {/* API error notice — only for discount errors which are user-actionable */}
-                    {apiError && (
-                        <div style={{
-                            background: '#fef3c7', color: '#92400e',
-                            borderRadius: 8, padding: '8px 12px',
-                            fontSize: 12, marginBottom: 8,
-                            border: '1px solid #fcd34d',
-                        }}>
-                            ⚠️ {apiError}
-                        </div>
-                    )}
+                            {/* UPI QR Display Section */}
+                            {paymentMode === 'UPI' && (
+                                <div style={{
+                                    background: '#eef2ff',
+                                    border: '1.5px solid #c7d2fe',
+                                    borderRadius: 10,
+                                    padding: '10px 14px',
+                                    marginTop: 8,
+                                    marginBottom: 8,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                        <BsQrCode size={20} color="#4f46e5" />
+                                        <div>
+                                            <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: '#312e81' }}>UPI Dynamic QR Stand Ready</p>
+                                            <p style={{ margin: 0, fontSize: 11, color: '#6366f1' }}>Customer scans on counter screen to pay</p>
+                                        </div>
+                                    </div>
+                                    <span style={{ fontSize: 13, fontWeight: 800, color: '#4f46e5' }}>₹{totals.grandTotal.toFixed(2)}</span>
+                                </div>
+                            )}
 
-                    {/* Actions */}
-                    <div className="pos-action-row">
-                        <button className="pos-btn-reset" onClick={handleCloseOrder} title="Close / clear current order">
-                            <BsArrowCounterclockwise size={15} />
-                        </button>
-                        <button
-                            className="pos-btn-checkout"
-                            disabled={isCartEmpty}
-                            onClick={handleFinishSale}
-                        >
-                            <BsCheckCircleFill size={16} />
-                            Complete Sale
-                        </button>
+                            {/* End pos-right-options and pos-right-content */}
+                        </div>
+                    </div>
+
+                    {/* ── Pinned Checkout Action Bar at Bottom of Panel ── */}
+                    <div className="pos-right-checkout-bar">
+                        <div className="pos-checkout-total-row">
+                            <div>
+                                <span className="pos-checkout-total-label">Total to Pay</span>
+                                <span className="pos-checkout-items-count">({cart.length} {cart.length === 1 ? 'item' : 'items'})</span>
+                            </div>
+                            <div className="pos-checkout-grand-total">
+                                ₹{totals.grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                        </div>
+
+                        {apiError && (
+                            <div style={{
+                                background: '#fef3c7', color: '#92400e',
+                                borderRadius: 8, padding: '6px 10px',
+                                fontSize: 11,
+                                border: '1px solid #fcd34d',
+                            }}>
+                                ⚠️ {apiError}
+                            </div>
+                        )}
+
+                        <div className="pos-action-row">
+                            <button className="pos-btn-reset" onClick={handleReset} title="Clear cart">
+                                <BsArrowCounterclockwise size={15} />
+                            </button>
+                            <button
+                                className="pos-btn-checkout"
+                                disabled={cart.length === 0 || saleLoading}
+                                onClick={handleFinishSale}
+                            >
+                                <BsCheckCircleFill size={16} />
+                                {saleLoading ? 'Completing Sale…' : 'Complete Sale'}
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* ── Receipt Modal ── */}
             {showPreview && (
@@ -1964,13 +2644,34 @@ const Billing = () => {
                         </button>
 
                         <div id="invoice" className="pos-receipt-body">
-                            {/* Store header */}
+                            {/* Store header - Dynamic from Document Settings */}
                             <div className="pos-receipt-store">
-                                <div className="pos-receipt-logo">
-                                    <BsLightningChargeFill size={22} color="#fff" />
-                                </div>
-                                <h1 className="pos-receipt-store-name">RetailOS</h1>
-                                <p className="pos-receipt-store-tag">Smart Retail Solutions</p>
+                                {effectiveBranding.logo_url && !receiptLogoFailed ? (
+                                    <img
+                                        src={effectiveBranding.logo_url}
+                                        alt=""
+                                        onError={() => setReceiptLogoFailed(true)}
+                                        style={{
+                                            maxHeight: 46,
+                                            maxWidth: 160,
+                                            objectFit: 'contain',
+                                            display: 'block',
+                                            margin: '0 auto 8px',
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="pos-receipt-logo">
+                                        <BsShop size={22} color="#fff" />
+                                    </div>
+                                )}
+                                <h1 className="pos-receipt-store-name">{effectiveBranding.store_name || 'RetailOS'}</h1>
+                                <p className="pos-receipt-store-tag">{effectiveBranding.tagline || 'Smart Retail Solutions'}</p>
+                                {effectiveBranding.address && (
+                                    <p style={{ margin: '2px 0 0', fontSize: 10, color: '#6b7280' }}>{effectiveBranding.address}</p>
+                                )}
+                                {effectiveBranding.gstin && (
+                                    <p style={{ margin: '2px 0 0', fontSize: 10, fontWeight: 700, color: '#4b5563' }}>GSTIN: {effectiveBranding.gstin}</p>
+                                )}
                             </div>
 
                             <div className="pos-receipt-divider-dots" />
@@ -2055,6 +2756,12 @@ const Billing = () => {
                                         <span>−₹{totals.discountAmount.toFixed(2)}</span>
                                     </div>
                                 )}
+                                {totals.loyaltyDiscount > 0 && (
+                                    <div className="pos-receipt-sum-row" style={{ color: '#d97706', fontWeight: 600 }}>
+                                        <span>🪙 Loyalty Discount ({loyaltyPointsRedeemed} pts)</span>
+                                        <span>−₹{totals.loyaltyDiscount.toFixed(2)}</span>
+                                    </div>
+                                )}
                                 <div className="pos-receipt-sum-row" style={{ fontWeight: 600 }}>
                                     <span>Taxable Value</span>
                                     <span>₹{totals.taxable.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -2082,23 +2789,43 @@ const Billing = () => {
                                 <span className="pos-receipt-total-amount">₹{totals.grandTotal.toLocaleString('en-IN')}</span>
                             </div>
 
-                            <p className="pos-receipt-footer-msg">Thank you for shopping with us! 🙏</p>
+                            {selectedCustomer && Math.floor(totals.grandTotal / 100) > 0 && (
+                                <div style={{
+                                    marginTop: 6,
+                                    padding: '5px 10px',
+                                    background: '#fffbeb',
+                                    border: '1px dashed #fde68a',
+                                    borderRadius: 6,
+                                    textAlign: 'center',
+                                    fontSize: 11,
+                                    color: '#92400e',
+                                    fontWeight: 700
+                                }}>
+                                    ✨ {Math.floor(totals.grandTotal / 100)} Loyalty Points Earned on this Bill!
+                                </div>
+                            )}
+
+                            <p className="pos-receipt-footer-msg">{effectiveBranding.footer_message || 'Thank you for shopping with us! 🙏'}</p>
                         </div>
 
                         {/* Buttons */}
                         <div className="pos-receipt-actions no-print">
-                            <button className="pos-receipt-btn-print" onClick={() => window.print()}>
+                            <button type="button" className="pos-receipt-btn-print" onClick={handlePrint}>
                                 <BsPrinter size={15} /> Print Receipt
                             </button>
-                            <button
-                                className="pos-receipt-btn-print"
-                                onClick={handleDownloadGstr1}
-                                style={{ background: '#059669', borderColor: '#047857', color: '#fff' }}
-                                title="Download GSTR-1 Report"
-                            >
-                                <BsDownload size={14} /> Download GSTR-1
-                            </button>
-                            <button className="pos-receipt-btn-new" onClick={handleReset}>
+                            {completedInvoice?.id && (
+                                <button
+                                    type="button"
+                                    className="pos-receipt-btn-print"
+                                    onClick={handleDownloadReceiptPdf}
+                                    style={{ background: '#4f46e5' }}
+                                    disabled={pdfLoading}
+                                    title="Download official Tax Invoice PDF generated by backend"
+                                >
+                                    <BsDownload size={15} /> {pdfLoading ? 'Downloading…' : 'Tax Invoice PDF'}
+                                </button>
+                            )}
+                            <button type="button" className="pos-receipt-btn-new" onClick={handleReset}>
                                 <BsArrowCounterclockwise size={15} /> New Sale
                             </button>
                         </div>
@@ -2213,50 +2940,26 @@ const Billing = () => {
                                         >
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                 <div style={{ width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: 8, overflow: 'hidden', flexShrink: 0, border: '1px solid #e2e8f0' }}>
-                                                    {p.image && (p.image.startsWith('/') || p.image.startsWith('http')) ? (
+                                                    {p.image && (p.image.startsWith('/') || p.image.startsWith('http') || p.image.startsWith('data:')) ? (
                                                         <img
                                                             src={p.image}
                                                             alt={p.name}
                                                             style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '7px' }}
-                                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                                            onError={(e) => {
+                                                                e.target.onerror = null;
+                                                                e.target.src = resolveProductImage({ ...p, image: null });
+                                                            }}
                                                         />
                                                     ) : (
-                                                        <span style={{ fontSize: 22 }}>{p.image}</span>
+                                                        <span style={{ fontSize: 20 }}>📦</span>
                                                     )}
                                                 </div>
                                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                    <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={p.name}>
                                                         {p.name}
                                                     </div>
                                                     <div style={{ fontSize: 11, color: '#64748b' }}>
                                                         ₹{p.price.toLocaleString()} • {p.category}
-                                                    </div>
-                                                    <div style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: 4,
-                                                        fontSize: 10,
-                                                        fontWeight: 700,
-                                                        color: (p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#059669' : '#dc2626',
-                                                        background: (p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#ecfdf5' : '#fef2f2',
-                                                        border: `1px solid ${(p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#a7f3d0' : '#fecaca'}`,
-                                                        padding: '1px 6px',
-                                                        borderRadius: 4,
-                                                        width: 'fit-content',
-                                                        marginTop: 3,
-                                                    }}>
-                                                        <span style={{
-                                                            width: 5,
-                                                            height: 5,
-                                                            borderRadius: '50%',
-                                                            background: (p.isInStock !== false && (p.stock > 0 || p.isInStock)) ? '#10b981' : '#ef4444',
-                                                            display: 'inline-block',
-                                                        }} />
-                                                        <span>
-                                                            {(p.isInStock !== false && (p.stock > 0 || p.isInStock))
-                                                                ? `In Stock (${p.stock ?? 50})`
-                                                                : 'Out of Stock'}
-                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -2292,38 +2995,27 @@ const Billing = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => {
-                                                    if (isProductOutOfStock(p)) {
-                                                        showStockWarning(p.name);
-                                                        return;
-                                                    }
                                                     addToCart(p);
                                                     setLastScanned({ barcode: p.barcode, name: p.name, success: true });
                                                 }}
-                                                disabled={isProductOutOfStock(p)}
                                                 style={{
                                                     width: '100%',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
                                                     gap: 6,
-                                                    background: isProductOutOfStock(p) ? '#fee2e2' : '#eef2ff',
-                                                    color: isProductOutOfStock(p) ? '#ef4444' : '#4f46e5',
-                                                    border: `1px solid ${isProductOutOfStock(p) ? '#fecaca' : '#c7d2fe'}`,
+                                                    background: '#eef2ff',
+                                                    color: '#4f46e5',
+                                                    border: '1px solid #c7d2fe',
                                                     borderRadius: 8,
                                                     padding: '6px 0',
                                                     fontSize: 12,
                                                     fontWeight: 700,
-                                                    cursor: isProductOutOfStock(p) ? 'not-allowed' : 'pointer',
+                                                    cursor: 'pointer',
                                                     transition: 'background .15s',
                                                 }}
                                             >
-                                                {isProductOutOfStock(p) ? (
-                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                                        <BsExclamationTriangleFill size={11} /> Out of Stock
-                                                    </span>
-                                                ) : (
-                                                    <><BsPlus size={15} /> Scan to Cart</>
-                                                )}
+                                                <BsPlus size={15} /> Scan to Cart
                                             </button>
                                         </div>
                                     ))}

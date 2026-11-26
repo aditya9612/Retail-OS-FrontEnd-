@@ -246,13 +246,23 @@ export function generateBarcodeLabelsPDF({
     const cleanCopies = Math.max(1, parseInt(copies, 10) || 1);
     const barcodeNumber = String(product.barcode || product.barcode_number || '8901234567890');
     const productName = String(product.name || 'Classic Polo T-Shirt');
-    const subtitle = String(product.subtitle || (product.sku ? `SKU: ${product.sku}` : 'Size: L | Color: Navy Blue'));
-    const rawPrice = product.mrp ?? product.sellingPrice ?? product.price ?? 1299;
+    const rawSku = String(product.sku || '').trim();
+    let cleanSku = rawSku;
+    while (/^SKU[:\s-]+\s*SKU[:\s-]/i.test(cleanSku)) {
+        cleanSku = cleanSku.replace(/^SKU[:\s-]+\s*/i, '');
+    }
+    const formattedSku = cleanSku
+        ? (/^SKU\b/i.test(cleanSku) ? cleanSku : `SKU: ${cleanSku}`)
+        : '';
+    const subtitle = String(product.subtitle || formattedSku || (product.category || 'Standard Item'));
+    const hasMrp = (product.mrp !== undefined && product.mrp !== null && Number(product.mrp) > 0);
+    const priceLabel = product.priceLabel || (hasMrp ? 'MRP' : 'Price');
+    const rawPrice = hasMrp ? product.mrp : (product.sellingPrice ?? product.price ?? product.selling_price ?? 0);
     const formattedPrice = Number(rawPrice).toLocaleString('en-IN', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     });
-    const priceText = `MRP: Rs. ${formattedPrice} (Incl. of GST)`;
+    const priceText = `${priceLabel}: Rs. ${formattedPrice} (Incl. of GST)`;
 
     const barcodeImage = customBarcodeImage || generateBarcodeDataUrl(barcodeNumber, barcodeStandard);
     const isQR = String(barcodeStandard).toLowerCase().includes('qr');
@@ -451,4 +461,133 @@ export function downloadBarcodeImage(dataUrl, filename = 'barcode.png') {
     link.click();
     document.body.removeChild(link);
     return true;
+}
+
+/**
+ * Download a Blob as a file
+ */
+export function downloadBlob(blob, filename = 'download') {
+    if (!blob || typeof document === 'undefined') return false;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    return true;
+}
+
+/**
+ * Generate a standalone scalable vector SVG string for the barcode
+ */
+export function generateBarcodeSVG(barcode, standard = 'EAN-13') {
+    const stdLower = String(standard || '').toLowerCase();
+    let bits = '';
+    let displayText = String(barcode || '').trim();
+
+    if (stdLower.includes('128')) {
+        const res = getCode128Bits(displayText);
+        bits = res.bits;
+        displayText = res.text;
+    } else {
+        const res = getEAN13Bits(displayText);
+        bits = res.bits;
+        displayText = res.digits;
+    }
+
+    const quietZone = 10;
+    const barWidth = 2;
+    const height = 80;
+    const totalWidth = (bits.length + quietZone * 2) * barWidth;
+
+    let rects = '';
+    for (let i = 0; i < bits.length; i++) {
+        if (bits[i] === '1') {
+            const x = (quietZone + i) * barWidth;
+            rects += `    <rect x="${x}" y="10" width="${barWidth}" height="${height - 30}" fill="#000000" />\n`;
+        }
+    }
+
+    return `<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${totalWidth}" height="${height}" viewBox="0 0 ${totalWidth} ${height}">
+    <rect width="${totalWidth}" height="${height}" fill="#ffffff" />
+${rects}
+    <text x="${totalWidth / 2}" y="${height - 5}" text-anchor="middle" font-family="monospace, Courier, sans-serif" font-size="14" font-weight="bold" fill="#000000">${displayText}</text>
+</svg>`;
+}
+
+/**
+ * Generate a scalable vector SVG string for a complete printable thermal barcode label sticker
+ */
+export function generateLabelSVG({
+    product,
+    barcode,
+    storeName = 'RetailOS Store',
+    mrp = 0,
+    barcodeStandard = 'EAN-13',
+    priceLabel = 'MRP'
+}) {
+    const prodName = String(product?.name || 'Retail Product').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const rawSku = String(product?.sku || '').trim();
+    let cleanSku = rawSku;
+    while (/^SKU[:\s-]+\s*SKU[:\s-]/i.test(cleanSku)) {
+        cleanSku = cleanSku.replace(/^SKU[:\s-]+\s*/i, '');
+    }
+    const formattedSku = cleanSku
+        ? (/^SKU\b/i.test(cleanSku) ? cleanSku : `SKU: ${cleanSku}`)
+        : '';
+    const sku = String(product?.subtitle || formattedSku || (product?.category || '')).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const store = String(storeName).toUpperCase().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const barcodeNum = String(barcode || product?.barcode || '0000000000000');
+    const formattedPrice = Number(mrp).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    const stdLower = String(barcodeStandard || '').toLowerCase();
+    let bits = '';
+    if (stdLower.includes('128')) {
+        bits = getCode128Bits(barcodeNum).bits;
+    } else {
+        bits = getEAN13Bits(barcodeNum).bits;
+    }
+
+    const width = 360;
+    const height = 180;
+    const barWidth = 2;
+    const barcodeVisualWidth = bits.length * barWidth;
+    const startX = Math.max(10, Math.floor((width - barcodeVisualWidth) / 2));
+
+    let rects = '';
+    for (let i = 0; i < bits.length; i++) {
+        if (bits[i] === '1') {
+            rects += `    <rect x="${startX + i * barWidth}" y="68" width="${barWidth}" height="52" fill="#000000" />\n`;
+        }
+    }
+
+    return `<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+    <rect width="${width}" height="${height}" rx="8" ry="8" fill="#ffffff" stroke="#e2e8f0" stroke-width="2" />
+    <text x="${width / 2}" y="24" text-anchor="middle" font-family="sans-serif" font-size="11" font-weight="bold" fill="#6366f1">${store}</text>
+    <text x="${width / 2}" y="42" text-anchor="middle" font-family="sans-serif" font-size="13" font-weight="bold" fill="#111827">${prodName.length > 32 ? prodName.slice(0, 31) + '...' : prodName}</text>
+    <text x="${width / 2}" y="58" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#64748b">${sku}</text>
+${rects}
+    <text x="${width / 2}" y="134" text-anchor="middle" font-family="monospace, Courier, sans-serif" font-size="11" font-weight="bold" fill="#334155">${barcodeNum}</text>
+    <text x="${width / 2}" y="158" text-anchor="middle" font-family="sans-serif" font-size="14" font-weight="bold" fill="#111827">${priceLabel}: ₹${formattedPrice} <tspan font-size="10" font-weight="normal" fill="#64748b">(Incl. of GST)</tspan></text>
+</svg>`;
+}
+
+/**
+ * Download SVG Barcode string as a .svg vector file
+ */
+export function downloadBarcodeSVG(svgString, filename = 'barcode.svg') {
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    return downloadBlob(blob, filename);
+}
+
+/**
+ * Download SVG Label string as a .svg vector file
+ */
+export function downloadLabelSVG(svgString, filename = 'barcode-label.svg') {
+    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    return downloadBlob(blob, filename);
 }

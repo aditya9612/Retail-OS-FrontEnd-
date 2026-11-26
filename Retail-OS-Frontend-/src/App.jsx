@@ -1,4 +1,6 @@
 import React from 'react';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import {
     BrowserRouter as Router,
     Routes,
@@ -101,6 +103,8 @@ function App() {
                         <Route path="/billing" element={<Billing />} />
                         <Route path="/invoices" element={<BillingManagement />} />
                         <Route path="/billing-management" element={<BillingManagement />} />
+                        <Route path="/orders" element={<BillingManagement />} />
+                        <Route path="/orders/:id" element={<BillingManagement />} />
                         <Route path="/billing/returns" element={<ReturnsRefundsPage />} />
                         <Route path="/billing/credit-notes" element={<CreditNotesPage />} />
                         <Route path="/gst-management" element={<GSTManagement />} />
@@ -199,6 +203,15 @@ function App() {
                 />
 
             </Routes>
+            <ToastContainer
+                position="top-right"
+                autoClose={3000}
+                hideProgressBar={false}
+                newestOnTop
+                closeOnClick
+                pauseOnHover
+                theme="colored"
+            />
         </Router>
         </ErrorBoundary>
     );
