@@ -1,0 +1,1361 @@
+/* ==========================================================================
+   RetailOS Store Transfers Module - Professional SaaS Styling
+   Scoped under .store-transfers-page-root to avoid side-effects on other modules.
+   ========================================================================== */
+
+/* ── Container & Layout: Full Width & Compact Spacing ── */
+.store-transfers-page-root {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+    color: #0f172a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+    background: transparent;
+}
+
+.store-transfers-page-root > div {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 16px 20px 24px 20px !important;
+    box-sizing: border-box !important;
+}
+
+@media (max-width: 768px) {
+    .store-transfers-page-root > div {
+        padding: 12px 14px 20px 14px !important;
+    }
+}
+
+/* ── Custom Scrollbars ── */
+.store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar {
+    width: 7px;
+    height: 7px;
+}
+
+.store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-track {
+    background: #f8fafc;
+    border-radius: 6px;
+}
+
+.store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 6px;
+    border: 2px solid #f8fafc;
+    transition: background 0.15s ease;
+}
+
+.store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.store-transfers-page-root .store-transfers-table-container {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f8fafc;
+}
+
+/* ── Search & Filter Toolbar Card ── */
+.store-transfers-page-root .st-toolbar-card {
+    background: #ffffff;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.store-transfers-page-root .st-toolbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.store-transfers-page-root .st-search-box {
+    position: relative;
+    min-width: 260px;
+    flex: 1;
+    max-width: 440px;
+}
+
+.store-transfers-page-root .st-search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #64748b;
+    pointer-events: none;
+}
+
+.store-transfers-page-root .st-search-input {
+    width: 100%;
+    height: 38px;
+    padding: 0 14px 0 34px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    background: #f8fafc;
+    color: #0f172a;
+    outline: none;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
+}
+
+.store-transfers-page-root .st-search-input:hover {
+    border-color: #94a3b8;
+    background: #ffffff;
+}
+
+.store-transfers-page-root .st-search-box:focus-within .st-search-icon {
+    color: #4f46e5;
+}
+
+.store-transfers-page-root .st-search-input {
+    width: 100%;
+    height: 38px;
+    padding: 0 14px 0 36px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    background: #f8fafc;
+    color: #0f172a;
+    outline: none;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
+}
+
+.store-transfers-page-root .st-search-input:hover {
+    border-color: #94a3b8;
+    background: #ffffff;
+}
+
+.store-transfers-page-root .st-search-input:focus {
+    background: #ffffff;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.store-transfers-page-root .st-filter-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.store-transfers-page-root .st-filter-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e293b;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+    user-select: none;
+    cursor: pointer;
+}
+
+.store-transfers-page-root .st-filter-label svg {
+    color: #4f46e5;
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+}
+
+.store-transfers-page-root .st-filter-group:hover .st-filter-label svg {
+    transform: scale(1.08);
+}
+
+.store-transfers-page-root .st-filter-select {
+    height: 38px;
+    padding: 0 12px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: inherit;
+    color: #0f172a;
+    background: #ffffff;
+    outline: none;
+    cursor: pointer;
+    min-width: 170px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
+}
+
+.store-transfers-page-root .st-filter-select:hover {
+    border-color: #94a3b8;
+    background: #f8fafc;
+}
+
+.store-transfers-page-root .st-filter-select:focus {
+    background: #ffffff;
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.store-transfers-page-root .st-toolbar-badge {
+    font-size: 12px;
+    color: #475569;
+    font-weight: 600;
+    background: #f1f5f9;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+}
+
+/* ── Store Transfers Table Card ── */
+.store-transfers-page-root .store-transfers-table-card {
+    background: #ffffff;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+}
+
+.store-transfers-page-root .store-transfers-table-container {
+    overflow-x: auto;
+    overflow-y: visible;
+    width: 100%;
+    position: relative;
+}
+
+.store-transfers-page-root .store-transfers-table {
+    width: 100%;
+    min-width: 1180px;
+    border-collapse: separate;
+    border-spacing: 0;
+    text-align: left;
+    font-size: 13px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+    table-layout: fixed;
+}
+
+.store-transfers-page-root .st-thead-row {
+    background: #f8fafc;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.store-transfers-page-root .st-th {
+    position: sticky;
+    top: 0;
+    background: #f8fafc;
+    padding: 12px 14px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    border-bottom: 2px solid #e2e8f0;
+    z-index: 10;
+    box-sizing: border-box;
+    vertical-align: middle;
+    font-family: inherit;
+    user-select: none;
+}
+
+.store-transfers-page-root .st-th.st-th-center {
+    text-align: center;
+}
+
+.store-transfers-page-root .st-th.st-th-right {
+    text-align: right;
+}
+
+.store-transfers-page-root .st-tbody-row {
+    border-bottom: 1px solid #f1f5f9;
+    transition: background-color 0.15s ease;
+}
+
+.store-transfers-page-root .st-tbody-row:hover {
+    background-color: #f8fafc !important;
+}
+
+.store-transfers-page-root .st-tbody-row:hover td {
+    background-color: #f8fafc !important;
+}
+
+.store-transfers-page-root .st-tbody-row td {
+    padding: 13px 14px;
+    vertical-align: middle;
+    font-size: 13px;
+    font-family: inherit;
+    color: #0f172a;
+    border-bottom: 1px solid #f1f5f9;
+    box-sizing: border-box;
+}
+
+.store-transfers-page-root .st-tbody-row td.st-td-center {
+    text-align: center;
+}
+
+.store-transfers-page-root .st-tbody-row td.st-td-right {
+    text-align: right;
+}
+
+/* ── Optimized Column Widths (100% Proportional Grid) ── */
+.store-transfers-page-root .st-col-tr-num {
+    width: 10%;
+    min-width: 120px;
+    text-align: left;
+}
+
+.store-transfers-page-root .st-col-src-store {
+    width: 11%;
+    min-width: 130px;
+    text-align: left;
+}
+
+.store-transfers-page-root .st-col-dst-store {
+    width: 11%;
+    min-width: 130px;
+    text-align: left;
+}
+
+.store-transfers-page-root .st-col-product {
+    width: 17%;
+    min-width: 170px;
+    text-align: left;
+}
+
+.store-transfers-page-root .st-col-items {
+    width: 6%;
+    min-width: 65px;
+    text-align: center;
+}
+
+.store-transfers-page-root .st-col-qty {
+    width: 7%;
+    min-width: 80px;
+    text-align: center;
+}
+
+.store-transfers-page-root .st-col-status {
+    width: 9%;
+    min-width: 105px;
+    text-align: center;
+}
+
+.store-transfers-page-root .st-col-date {
+    width: 11%;
+    min-width: 120px;
+    text-align: center;
+}
+
+.store-transfers-page-root .st-col-approver {
+    width: 9%;
+    min-width: 100px;
+    text-align: left;
+}
+
+.store-transfers-page-root .st-col-actions {
+    width: 9%;
+    min-width: 110px;
+    text-align: center;
+}
+
+/* ── Column Content Typography & Layout ── */
+
+/* 1. Transfer Number */
+.store-transfers-page-root .st-tr-num-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.store-transfers-page-root .st-code-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #4338ca;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    padding: 2.5px 8px;
+    border-radius: 6px;
+    width: fit-content;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.store-transfers-page-root .st-id-sub {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+/* 2. Store Cells */
+.store-transfers-page-root .st-store-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.store-transfers-page-root .st-store-icon {
+    flex-shrink: 0;
+}
+
+.store-transfers-page-root .st-icon-src {
+    color: #0284c7;
+}
+
+.store-transfers-page-root .st-icon-dst {
+    color: #059669;
+}
+
+.store-transfers-page-root .st-store-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #0f172a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.store-transfers-page-root .st-inactive-badge {
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-weight: 600;
+    background: #fee2e2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    white-space: nowrap;
+}
+
+/* 3. Product Details */
+.store-transfers-page-root .st-product-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.store-transfers-page-root .st-product-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+    line-height: 1.3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.store-transfers-page-root .st-product-sub {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: #64748b;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.store-transfers-page-root .st-more-items-badge {
+    color: #4f46e5;
+    background: #eef2ff;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 11px;
+    border: 1px solid #c7d2fe;
+}
+
+/* 4. Items & Quantity */
+.store-transfers-page-root .st-items-count {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+    text-align: center;
+}
+
+.store-transfers-page-root .st-quantity-val {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+    text-align: center;
+}
+
+/* 5. Status Badges */
+.store-transfers-page-root .st-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 3.5px 11px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 700;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    text-transform: capitalize;
+    letter-spacing: 0.01em;
+}
+
+.store-transfers-page-root .st-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* Status variants */
+.store-transfers-page-root .st-status-pending {
+    background: #fffbeb;
+    color: #b45309;
+    border-color: #fde68a;
+}
+.store-transfers-page-root .st-status-pending .st-status-dot {
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.store-transfers-page-root .st-status-approved {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+}
+.store-transfers-page-root .st-status-approved .st-status-dot {
+    background: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.store-transfers-page-root .st-status-dispatched,
+.store-transfers-page-root .st-status-in-transit {
+    background: #f5f3ff;
+    color: #7c3aed;
+    border-color: #ddd6fe;
+}
+.store-transfers-page-root .st-status-dispatched .st-status-dot,
+.store-transfers-page-root .st-status-in-transit .st-status-dot {
+    background: #8b5cf6;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.store-transfers-page-root .st-status-received {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #a7f3d0;
+}
+.store-transfers-page-root .st-status-received .st-status-dot {
+    background: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.store-transfers-page-root .st-status-rejected {
+    background: #fef2f2;
+    color: #b91c1c;
+    border-color: #fecaca;
+}
+.store-transfers-page-root .st-status-rejected .st-status-dot {
+    background: #ef4444;
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
+/* 6. Created Date */
+.store-transfers-page-root .st-date-text {
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #334155;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* 7. Approved By */
+.store-transfers-page-root .st-approver-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #0f172a;
+    max-width: 100%;
+}
+
+.store-transfers-page-root .st-approver-icon {
+    color: #10b981;
+    flex-shrink: 0;
+}
+
+.store-transfers-page-root .st-approver-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.store-transfers-page-root .st-empty-dash {
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+/* ── 8. Actions Column & Icon Buttons ── */
+.store-transfers-page-root .st-actions-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    flex-wrap: nowrap;
+}
+
+.store-transfers-page-root .st-action-divider {
+    width: 1px;
+    height: 16px;
+    background: #e2e8f0;
+    margin: 0 2px;
+    flex-shrink: 0;
+}
+
+.store-transfers-page-root .store-transfer-action-btn {
+    position: relative;
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    padding: 0 !important;
+    font-size: 13px !important;
+    border-radius: 7px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    box-sizing: border-box !important;
+    flex-shrink: 0 !important;
+    border: 1px solid transparent;
+}
+
+.store-transfers-page-root .store-transfer-action-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+.store-transfers-page-root .store-transfer-action-btn:active {
+    transform: translateY(0);
+}
+
+/* Action Button Variants */
+.store-transfers-page-root .store-transfer-btn-view {
+    background: #eef2ff !important;
+    color: #4f46e5 !important;
+    border: 1px solid #c7d2fe !important;
+}
+.store-transfers-page-root .store-transfer-btn-view:hover:not(:disabled) {
+    background: #4f46e5 !important;
+    color: #ffffff !important;
+    border-color: #4f46e5 !important;
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
+}
+
+.store-transfers-page-root .store-transfer-btn-approve {
+    background: #ecfdf5 !important;
+    color: #059669 !important;
+    border: 1px solid #a7f3d0 !important;
+}
+.store-transfers-page-root .store-transfer-btn-approve:hover:not(:disabled) {
+    background: #059669 !important;
+    color: #ffffff !important;
+    border-color: #059669 !important;
+    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
+}
+
+.store-transfers-page-root .store-transfer-btn-reject {
+    background: #fef2f2 !important;
+    color: #dc2626 !important;
+    border: 1px solid #fecaca !important;
+}
+.store-transfers-page-root .store-transfer-btn-reject:hover:not(:disabled) {
+    background: #dc2626 !important;
+    color: #ffffff !important;
+    border-color: #dc2626 !important;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
+}
+
+.store-transfers-page-root .store-transfer-btn-dispatch {
+    background: #f5f3ff !important;
+    color: #7c3aed !important;
+    border: 1px solid #ddd6fe !important;
+}
+.store-transfers-page-root .store-transfer-btn-dispatch:hover:not(:disabled) {
+    background: #7c3aed !important;
+    color: #ffffff !important;
+    border-color: #7c3aed !important;
+    box-shadow: 0 2px 6px rgba(124, 58, 237, 0.25);
+}
+
+.store-transfers-page-root .store-transfer-btn-receive {
+    background: #f0fdfa !important;
+    color: #0d9488 !important;
+    border: 1px solid #99f6e4 !important;
+}
+.store-transfers-page-root .store-transfer-btn-receive:hover:not(:disabled) {
+    background: #0d9488 !important;
+    color: #ffffff !important;
+    border-color: #0d9488 !important;
+    box-shadow: 0 2px 6px rgba(13, 148, 136, 0.25);
+}
+
+.store-transfers-page-root .store-transfer-btn-discrepancy {
+    background: #fffbeb !important;
+    color: #d97706 !important;
+    border: 1px solid #fde68a !important;
+}
+.store-transfers-page-root .store-transfer-btn-discrepancy:hover:not(:disabled) {
+    background: #d97706 !important;
+    color: #ffffff !important;
+    border-color: #d97706 !important;
+    box-shadow: 0 2px 6px rgba(217, 119, 6, 0.25);
+}
+
+/* Tooltip bubble */
+.store-transfers-page-root .store-transfer-action-btn[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 7px);
+    left: 50%;
+    transform: translateX(-50%) translateY(3px);
+    padding: 5px 8px;
+    background: #0f172a;
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    z-index: 99999;
+    transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+}
+
+.store-transfers-page-root .store-transfer-action-btn[data-tooltip]::before {
+    content: "";
+    position: absolute;
+    bottom: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    border-width: 5px 5px 0 5px;
+    border-style: solid;
+    border-color: #0f172a transparent transparent transparent;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    z-index: 99999;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+}
+
+.store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::after,
+.store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::before,
+.store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::after,
+.store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+.store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::after,
+.store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::after {
+    transform: translateX(-50%) translateY(0);
+}
+
+.store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]::after {
+    bottom: auto;
+    top: calc(100% + 7px);
+    transform: translateX(-50%) translateY(-3px);
+}
+
+.store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]:hover::after,
+.store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]:focus-visible::after {
+    transform: translateX(-50%) translateY(0);
+}
+
+.store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]::before {
+    bottom: auto;
+    top: calc(100% + 2px);
+    border-width: 0 5px 5px 5px;
+    border-color: transparent transparent #0f172a transparent;
+}
+
+.store-transfers-page-root .st-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::after {
+    left: auto;
+    right: 0;
+    transform: translateY(3px);
+}
+.store-transfers-page-root .st-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:hover::after,
+.store-transfers-page-root .st-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:focus-visible::after {
+    transform: translateY(0);
+}
+.store-transfers-page-root .st-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::before {
+    left: auto;
+    right: 11px;
+}
+.store-transfers-page-root table tbody tr:nth-child(-n+2) .st-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::after {
+    left: auto;
+    right: 0;
+    transform: translateY(-3px);
+}
+.store-transfers-page-root table tbody tr:nth-child(-n+2) .st-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:hover::after,
+.store-transfers-page-root table tbody tr:nth-child(-n+2) .st-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:focus-visible::after {
+    transform: translateY(0);
+}
+
+/* ── Expandable Items Breakdown Table ── */
+.store-transfers-page-root .st-expandable-card {
+    background: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    padding: 12px 14px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.store-transfers-page-root .st-expandable-header {
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.store-transfers-page-root .st-sub-table {
+    width: 100%;
+    min-width: 550px;
+    border-collapse: collapse;
+    font-size: 12.5px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+}
+
+.store-transfers-page-root .st-sub-table th {
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475569;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.store-transfers-page-root .st-sub-table td {
+    padding: 8px 12px;
+    font-size: 12.5px;
+    color: #0f172a;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+/* ── Page Header Action Buttons ── */
+.store-transfers-page-root .st-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.store-transfers-page-root .st-header-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    outline: none;
+    font-family: inherit;
+}
+
+.store-transfers-page-root .st-header-btn-refresh {
+    background: #ffffff;
+    color: #334155;
+    border: 1.5px solid #cbd5e1;
+}
+
+.store-transfers-page-root .st-header-btn-refresh:hover:not(:disabled) {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
+.store-transfers-page-root .st-header-btn-refresh:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.store-transfers-page-root .st-header-btn-create {
+    background: #4f46e5;
+    color: #ffffff;
+    border: 1px solid #4f46e5;
+    box-shadow: 0 1px 2px rgba(79, 70, 229, 0.2);
+}
+
+.store-transfers-page-root .st-header-btn-create:hover {
+    background: #4338ca;
+    border-color: #4338ca;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3);
+}
+
+/* ── Pagination Footer (3-Column Layout) ── */
+.store-transfers-page-root .store-transfers-pagination-footer {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 10px 16px;
+    margin-top: 12px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.store-transfers-page-root .store-transfers-pagination-left {
+    display: flex;
+    align-items: center;
+    justify-self: start;
+}
+
+.store-transfers-page-root .st-page-size-select {
+    height: 32px;
+    min-width: 58px;
+    padding: 0 8px;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #ffffff;
+    color: #0f172a;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.store-transfers-page-root .st-page-size-select:hover {
+    border-color: #94a3b8;
+}
+
+.store-transfers-page-root .st-page-size-select:focus {
+    border-color: #4f46e5;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+.store-transfers-page-root .store-transfers-pagination-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    justify-self: center;
+    font-size: 13px;
+    color: #64748b;
+    font-weight: 500;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.store-transfers-page-root .store-transfers-pagination-center strong {
+    color: #0f172a;
+    font-weight: 700;
+    margin: 0 2px;
+}
+
+.store-transfers-page-root .store-transfers-pagination-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    justify-self: end;
+    gap: 6px;
+    min-height: 32px;
+}
+
+.store-transfers-page-root .st-page-numbers-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.store-transfers-page-root .st-page-btn {
+    height: 32px;
+    padding: 0 11px;
+    border-radius: 6px;
+    border: 1.5px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    outline: none;
+}
+
+.store-transfers-page-root .st-page-btn:hover:not(:disabled) {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #0f172a;
+}
+
+.store-transfers-page-root .st-page-num-btn {
+    min-width: 32px;
+    padding: 0 7px;
+}
+
+.store-transfers-page-root .st-page-num-btn.is-active {
+    background: #4f46e5 !important;
+    border-color: #4f46e5 !important;
+    color: #ffffff !important;
+    font-weight: 700;
+    box-shadow: 0 2px 4px rgba(79, 70, 229, 0.25);
+}
+
+.store-transfers-page-root .st-page-ellipsis {
+    min-width: 24px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 600;
+    user-select: none;
+}
+
+/* ── Responsive Pagination ── */
+@media (max-width: 768px) {
+    .store-transfers-page-root .store-transfers-pagination-footer {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 10px;
+    }
+
+    .store-transfers-page-root .store-transfers-pagination-left,
+    .store-transfers-page-root .store-transfers-pagination-center,
+    .store-transfers-page-root .store-transfers-pagination-right {
+        width: 100%;
+        justify-content: center;
+        justify-self: center;
+        text-align: center;
+    }
+}
+
+/* ── Transfer Analytics & Insights (4-Column Single Row Layout) ── */
+.store-transfers-page-root .st-analytics-panel {
+    background: #ffffff;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+.store-transfers-page-root .st-analytics-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.store-transfers-page-root .st-analytics-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.store-transfers-page-root .st-analytics-main-title {
+    margin: 0;
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+}
+
+.store-transfers-page-root .st-analytics-sub-title {
+    margin: 2px 0 0 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.store-transfers-page-root .st-analytics-toggle-btn {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s ease;
+}
+
+.store-transfers-page-root .st-analytics-toggle-btn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+
+.store-transfers-page-root .st-analytics-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
+    align-items: stretch;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.store-transfers-page-root .st-analytics-card {
+    background: #f8fafc;
+    border-radius: 9px;
+    border: 1px solid #e2e8f0;
+    padding: 13px 14px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    box-sizing: border-box;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+    transition: border-color 0.15s ease;
+}
+
+.store-transfers-page-root .st-analytics-card:hover {
+    border-color: #cbd5e1;
+}
+
+.store-transfers-page-root .st-analytics-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 11px;
+    border-bottom: 1px solid #e2e8f0;
+    padding-bottom: 8px;
+    min-height: 26px;
+}
+
+.store-transfers-page-root .st-analytics-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.store-transfers-page-root .st-analytics-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+}
+
+.store-transfers-page-root .st-analytics-row {
+    background: #ffffff;
+    padding: 7px 10px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    font-size: 12.5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+    min-width: 0;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.store-transfers-page-root .st-analytics-row:hover {
+    background-color: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+.store-transfers-page-root .st-analytics-store-name {
+    font-weight: 600;
+    font-size: 12.5px;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    flex: 1;
+}
+
+.store-transfers-page-root .st-analytics-badge-source {
+    background: #e0e7ff;
+    color: #4338ca;
+    padding: 2.5px 8px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 11.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.store-transfers-page-root .st-analytics-badge-dest {
+    background: #dcfce7;
+    color: #15803d;
+    padding: 2.5px 8px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 11.5px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.store-transfers-page-root .st-analytics-prod-info {
+    min-width: 0;
+    flex: 1;
+    padding-right: 6px;
+}
+
+.store-transfers-page-root .st-analytics-prod-name {
+    font-weight: 600;
+    font-size: 12px;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.store-transfers-page-root .st-analytics-prod-sku {
+    font-size: 10.5px;
+    color: #64748b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.store-transfers-page-root .st-analytics-prod-qty {
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.store-transfers-page-root .st-analytics-qty-num {
+    display: block;
+    font-weight: 700;
+    font-size: 12px;
+    color: #0284c7;
+    line-height: 1.1;
+}
+
+.store-transfers-page-root .st-analytics-qty-unit {
+    display: block;
+    font-size: 10px;
+    color: #64748b;
+    line-height: 1;
+}
+
+.store-transfers-page-root .st-analytics-activity-row {
+    background: #ffffff;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    padding: 6px 9px;
+    font-size: 11.5px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+    min-width: 0;
+}
+
+.store-transfers-page-root .st-analytics-activity-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 2px;
+    gap: 6px;
+}
+
+.store-transfers-page-root .st-analytics-activity-tr {
+    font-weight: 700;
+    color: #4f46e5;
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.store-transfers-page-root .st-analytics-activity-status {
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.store-transfers-page-root .st-analytics-activity-route {
+    color: #475569;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 0;
+}
+
+.store-transfers-page-root .st-truncate-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.store-transfers-page-root .st-analytics-activity-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 2px;
+    font-size: 10px;
+    color: #94a3b8;
+}
+
+.store-transfers-page-root .st-analytics-empty {
+    font-size: 11.5px;
+    color: #94a3b8;
+    font-style: italic;
+    padding: 12px 0;
+    text-align: center;
+}
+
+@media (max-width: 1200px) {
+    .store-transfers-page-root .st-analytics-grid-4 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+}
+
+@media (max-width: 640px) {
+    .store-transfers-page-root .st-analytics-grid-4 {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+}

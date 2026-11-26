@@ -215,7 +215,6 @@ const InventoryTable = ({
             <th>Product</th>
             <th>SKU</th>
             <th>Category</th>
-            <th>Supplier</th>
             <th>Store Name</th>
             <th>Store ID</th>
             <th>Available Qty</th>
@@ -270,18 +269,6 @@ const InventoryTable = ({
               item.category_name ||
               item.categoryName ||
               (item.category_id ? `Category #${item.category_id}` : "—");
-
-            /* =====================================================
-               SUPPLIER
-            ===================================================== */
-
-            const supplier =
-              (typeof item.supplier_name === "string" && item.supplier_name.trim() ? item.supplier_name : null) ||
-              (typeof item.supplierName === "string" && item.supplierName.trim() ? item.supplierName : null) ||
-              (typeof item.supplier === "string" && item.supplier.trim() ? item.supplier : null) ||
-              item.supplier?.name ||
-              item.supplier?.supplier_name ||
-              "—";
 
             /* =====================================================
                LOCATION / WAREHOUSE
@@ -608,25 +595,6 @@ const isMissingRequiredExpiry =
                     }}
                   >
                     {category || "—"}
-                  </span>
-                </td>
-
-                {/* =================================================
-                   SUPPLIER
-                ================================================= */}
-
-                <td>
-                  <span
-                    style={{
-                      background: "#f0fdf4",
-                      color: "#16a34a",
-                      padding: "4px 8px",
-                      borderRadius: 20,
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {supplier}
                   </span>
                 </td>
 

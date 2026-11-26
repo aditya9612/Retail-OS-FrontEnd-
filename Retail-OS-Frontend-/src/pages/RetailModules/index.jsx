@@ -13,6 +13,8 @@ import { getPurchaseOrders, getPurchaseOrder } from '../../api/purchaseOrdersApi
 import { listSuppliers } from '../../api/supplierApi';
 import PurchaseOrderReturns from '../PurchaseOrderReturns';
 import TransferStockModal from '../../components/TransferStockModel';
+import './Warehouse.css';
+import './StoreTransfers.css';
 import { getStoreTransfers, getStoreTransfersSummary, getStoreTransferById, approveStoreTransfer, rejectStoreTransfer, dispatchStoreTransfer, receiveStoreTransfer, receiveStoreTransferWithDiscrepancy, checkStoreActiveStatus } from '../../services/storeTransferService';
 import notificationService from '../../utils/notificationService';
 import {
@@ -23,7 +25,7 @@ import {
     BsCreditCard2Front, BsBoxSeam, BsSend, BsGear, BsTag, BsExclamationTriangle, BsImage,
     BsTrash, BsShop, BsChevronLeft, BsChevronRight, BsX, BsEye, BsCheckCircle, BsXCircle,
     BsChevronDown, BsChevronUp, BsActivity, BsTable, BsPencilFill, BsTrashFill, BsPlusCircle,
-    BsFileEarmarkPdf, BsShieldCheck, BsClipboardData, BsCalendarCheck, BsFunnel
+    BsFileEarmarkPdf, BsShieldCheck, BsClipboardData, BsCalendarCheck, BsFunnel, BsGeoAlt
 } from 'react-icons/bs';
 
 
@@ -1133,7 +1135,7 @@ export const WarehousesPage = () => {
     const [statusFilter, setStatusFilter] = useState("all");
     const [storeFilter, setStoreFilter] = useState("all");
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
+    const [pageSize, setPageSize] = useState(8);
     const [viewMode, setViewMode] = useState("table");
     const [togglingStatusId, setTogglingStatusId] = useState(null);
     const [statusToast, setStatusToast] = useState(null);
@@ -1943,746 +1945,116 @@ export const WarehousesPage = () => {
             ? formatWarehouseStockValue(dashboardData.total_stock_value)
             : "₹0.00";
 
-    const WarehouseStatCard = ({ label, value, sub, icon, iconBg, iconColor }) => (
-        <div className="wh-stat-card" style={{
-            background: '#ffffff',
-            borderRadius: 12,
-            padding: '18px 20px',
-            border: '1px solid #e2e8f0',
-            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            boxSizing: 'border-box'
-        }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <span style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: '#64748b',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em'
-                }}>
-                    {label}
-                </span>
-                <div style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: iconBg,
-                    color: iconColor,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0
-                }}>
+    const WarehouseStatCard = ({ label, value, sub, icon, iconBg, iconColor, accentColor, trendType }) => (
+        <div className={`wh-stat-card wh-stat-card-${accentColor || 'indigo'}`}>
+            <div className="wh-stat-card-header">
+                <span className="wh-stat-label">{label}</span>
+                <div className="wh-stat-icon-wrapper" style={{ background: iconBg, color: iconColor }}>
                     {icon}
                 </div>
             </div>
-            <div>
-                <div style={{
-                    fontSize: 26,
-                    fontWeight: 800,
-                    color: '#0f172a',
-                    lineHeight: 1.15,
-                    letterSpacing: '-0.02em',
-                    marginBottom: 5,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                }}>
-                    {value}
-                </div>
-                {sub && (
-                    <div style={{
-                        fontSize: 11.5,
-                        fontWeight: 500,
-                        color: '#64748b',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                    }}>
-                        {sub}
-                    </div>
-                )}
+            <div className="wh-stat-value" title={String(value)}>
+                {value}
             </div>
+            {sub && (
+                <div className="wh-stat-sub">
+                    <span className={`wh-stat-dot wh-stat-dot-${trendType || 'neutral'}`} />
+                    <span>{sub}</span>
+                </div>
+            )}
         </div>
     );
 
     return (
-        <div className="warehouse-page-root" style={{ width: '100%', minHeight: '100%' }}>
-            <style>{`
-                /* Warehouse Page Full-Width & External Whitespace Elimination */
-                .warehouse-page-root {
-                    width: 100% !important;
-                    max-width: 100% !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    box-sizing: border-box !important;
-                }
-                .warehouse-page-root > div {
-                    max-width: 100% !important;
-                    width: 100% !important;
-                    margin: 0 !important;
-                    padding: 20px 24px !important;
-                    box-sizing: border-box !important;
-                }
-                @media (max-width: 768px) {
-                    .warehouse-page-root > div {
-                        padding: 14px 16px !important;
-                    }
-                }
+        <div className="warehouse-page-root">
+            <div className="wh-page-inner">
+                {/* 1. Page Header */}
+                <header className="wh-page-header">
+                    <div className="wh-header-left">
+                        <div className="wh-header-icon-box">
+                            <BsBuildings size={22} />
+                        </div>
+                        <div className="wh-header-text">
+                            <h1 className="wh-page-title">Warehouses &amp; Stock Locations</h1>
+                            <p className="wh-page-subtitle">Central depots, store stockrooms, transit hubs and multi-location inventory levels</p>
+                        </div>
+                    </div>
+                    <div className="wh-header-actions">
+                        <button
+                            type="button"
+                            onClick={handleRefresh}
+                            disabled={loading || dashboardLoading}
+                            title="Refresh Warehouses"
+                            className="wh-refresh-btn"
+                        >
+                            <BsArrowRepeat size={16} className={loading || dashboardLoading ? "wh-spin" : ""} />
+                            <span>Refresh</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleOpenAddModal}
+                            title="Add New Warehouse"
+                            className="wh-add-btn"
+                        >
+                            <BsPlus size={20} />
+                            <span>Add Warehouse</span>
+                        </button>
+                    </div>
+                </header>
 
-                /* Page-level vertical scrollbar enhancements */
-                .warehouse-main-scroll::-webkit-scrollbar,
-                main:has(.warehouse-page-root)::-webkit-scrollbar,
-                body:has(.warehouse-page-root) main::-webkit-scrollbar {
-                    width: 10px !important;
-                    height: 10px !important;
-                }
-                .warehouse-main-scroll::-webkit-scrollbar-track,
-                main:has(.warehouse-page-root)::-webkit-scrollbar-track,
-                body:has(.warehouse-page-root) main::-webkit-scrollbar-track {
-                    background: #f1f5f9 !important;
-                    border-radius: 6px;
-                    border: 1px solid #e2e8f0;
-                }
-                .warehouse-main-scroll::-webkit-scrollbar-thumb,
-                main:has(.warehouse-page-root)::-webkit-scrollbar-thumb,
-                body:has(.warehouse-page-root) main::-webkit-scrollbar-thumb {
-                    background: #94a3b8 !important;
-                    border-radius: 6px;
-                    border: 2px solid #f1f5f9;
-                }
-                .warehouse-main-scroll::-webkit-scrollbar-thumb:hover,
-                main:has(.warehouse-page-root)::-webkit-scrollbar-thumb:hover,
-                body:has(.warehouse-page-root) main::-webkit-scrollbar-thumb:hover {
-                    background: #64748b !important;
-                }
-                .warehouse-main-scroll,
-                main:has(.warehouse-page-root) {
-                    scrollbar-width: thin !important;
-                    scrollbar-color: #94a3b8 #f1f5f9 !important;
-                }
-
-                /* Table horizontal & vertical scrollbar enhancements */
-                .warehouse-page-root .warehouse-table-scroll {
-                    width: 100%;
-                    max-height: 480px;
-                    overflow-x: auto !important;
-                    overflow-y: auto !important;
-                    scrollbar-width: thin !important;
-                    scrollbar-color: #94a3b8 #f1f5f9 !important;
-                    -webkit-overflow-scrolling: touch;
-                    position: relative;
-                }
-                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar {
-                    width: 10px !important;
-                    height: 10px !important;
-                }
-                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-track {
-                    background: #f1f5f9 !important;
-                    border-radius: 6px;
-                    border: 1px solid #e2e8f0;
-                }
-                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-thumb {
-                    background: #94a3b8 !important;
-                    border-radius: 6px;
-                    border: 2px solid #f1f5f9;
-                }
-                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-thumb:hover {
-                    background: #64748b !important;
-                }
-                .warehouse-page-root .warehouse-table-scroll::-webkit-scrollbar-corner {
-                    background: #f1f5f9 !important;
-                }
-
-                /* Warehouse Stat Card Hover Interaction */
-                .wh-stat-card {
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                }
-                .wh-stat-card:hover {
-                    transform: translateY(-2px) !important;
-                    box-shadow: 0 8px 24px -4px rgba(15, 23, 42, 0.08) !important;
-                    border-color: #cbd5e1 !important;
-                }
-
-                /* Professional SaaS Search Bar & Filters Styling - Unified Single Row */
-                .warehouse-page-root .wh-toolbar-container {
-                    padding: 14px 18px !important;
-                    background: #ffffff !important;
-                }
-
-                .warehouse-page-root .wh-toolbar-row {
-                    display: flex !important;
-                    align-items: center !important;
-                    flex-wrap: wrap !important;
-                    gap: 12px !important;
-                    width: 100% !important;
-                }
-
-                .warehouse-page-root .wh-search-form {
-                    display: flex !important;
-                    align-items: center !important;
-                    margin: 0 !important;
-                    flex: 1 1 280px !important;
-                    max-width: 360px !important;
-                    min-width: 240px !important;
-                }
-
-                .warehouse-page-root .wh-search-box {
-                    position: relative !important;
-                    width: 100% !important;
-                    display: flex !important;
-                    align-items: center !important;
-                }
-
-                .warehouse-page-root .wh-search-icon {
-                    position: absolute !important;
-                    left: 12px !important;
-                    top: 50% !important;
-                    transform: translateY(-50%) !important;
-                    color: #64748b !important;
-                    pointer-events: none !important;
-                }
-
-                .warehouse-page-root .wh-search-input {
-                    width: 100% !important;
-                    height: 38px !important;
-                    padding: 0 32px 0 34px !important;
-                    border: 1.5px solid #cbd5e1 !important;
-                    border-radius: 8px !important;
-                    font-size: 13px !important;
-                    font-weight: 500 !important;
-                    background: #f8fafc !important;
-                    color: #0f172a !important;
-                    outline: none !important;
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                    box-sizing: border-box !important;
-                }
-                .warehouse-page-root .wh-search-input::placeholder {
-                    color: #64748b !important;
-                    opacity: 1 !important;
-                    font-weight: 400 !important;
-                }
-                .warehouse-page-root .wh-search-input:hover {
-                    border-color: #94a3b8 !important;
-                    background: #ffffff !important;
-                }
-                .warehouse-page-root .wh-search-input:focus {
-                    background: #ffffff !important;
-                    border-color: #6366f1 !important;
-                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
-                }
-
-                .warehouse-page-root .wh-search-clear-btn {
-                    position: absolute !important;
-                    right: 8px !important;
-                    top: 50% !important;
-                    transform: translateY(-50%) !important;
-                    background: #e2e8f0 !important;
-                    border: none !important;
-                    border-radius: 50% !important;
-                    width: 20px !important;
-                    height: 20px !important;
-                    cursor: pointer !important;
-                    color: #475569 !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    padding: 0 !important;
-                    transition: all 0.15s ease !important;
-                }
-                .warehouse-page-root .wh-search-clear-btn:hover {
-                    background: #cbd5e1 !important;
-                    color: #0f172a !important;
-                }
-
-                /* Filter Dropdown Wrappers in Single Row */
-                .warehouse-page-root .wh-filter-wrapper {
-                    position: relative !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    height: 38px !important;
-                    flex: 0 1 auto !important;
-                }
-
-                .warehouse-page-root .wh-store-filter-wrapper {
-                    min-width: 200px !important;
-                    max-width: 260px !important;
-                    flex: 1 1 220px !important;
-                }
-
-                .warehouse-page-root .wh-status-filter-wrapper {
-                    min-width: 150px !important;
-                    max-width: 180px !important;
-                    flex: 1 1 160px !important;
-                }
-
-                .warehouse-page-root .wh-filter-prefix-icon {
-                    position: absolute !important;
-                    left: 11px !important;
-                    top: 50% !important;
-                    transform: translateY(-50%) !important;
-                    pointer-events: none !important;
-                    z-index: 2 !important;
-                }
-
-                .warehouse-page-root .wh-store-filter-wrapper .wh-filter-prefix-icon {
-                    color: #10b981 !important;
-                }
-
-                .warehouse-page-root .wh-status-filter-wrapper .wh-filter-prefix-icon {
-                    color: #6366f1 !important;
-                }
-
-                .warehouse-page-root .wh-filter-select {
-                    width: 100% !important;
-                    height: 38px !important;
-                    padding: 0 28px 0 32px !important;
-                    border: 1.5px solid #cbd5e1 !important;
-                    border-radius: 8px !important;
-                    font-size: 13px !important;
-                    font-weight: 500 !important;
-                    background: #ffffff !important;
-                    color: #0f172a !important;
-                    outline: none !important;
-                    cursor: pointer !important;
-                    appearance: none !important;
-                    -webkit-appearance: none !important;
-                    -moz-appearance: none !important;
-                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-                    box-sizing: border-box !important;
-                    text-overflow: ellipsis !important;
-                    white-space: nowrap !important;
-                }
-                .warehouse-page-root .wh-filter-select:hover {
-                    border-color: #94a3b8 !important;
-                    background: #f8fafc !important;
-                }
-                .warehouse-page-root .wh-filter-select:focus {
-                    background: #ffffff !important;
-                    border-color: #6366f1 !important;
-                    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16) !important;
-                }
-                .warehouse-page-root .wh-filter-select.is-active {
-                    background: #eef2ff !important;
-                    border-color: #6366f1 !important;
-                    color: #3730a3 !important;
-                    font-weight: 600 !important;
-                }
-                .warehouse-page-root .wh-filter-select-icon {
-                    position: absolute !important;
-                    right: 10px !important;
-                    top: 50% !important;
-                    transform: translateY(-50%) !important;
-                    color: #64748b !important;
-                    pointer-events: none !important;
-                    z-index: 2 !important;
-                }
-
-                /* Active Filter Badge & Reset Button Group */
-                .warehouse-page-root .wh-filter-actions-group {
-                    display: flex !important;
-                    align-items: center !important;
-                    gap: 8px !important;
-                    margin-left: auto !important;
-                    flex-wrap: wrap !important;
-                }
-
-                .warehouse-page-root .wh-active-filter-badge {
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    gap: 5px !important;
-                    padding: 0 11px !important;
-                    height: 36px !important;
-                    background: #eef2ff !important;
-                    color: #4338ca !important;
-                    border: 1px solid #c7d2fe !important;
-                    border-radius: 20px !important;
-                    font-size: 12px !important;
-                    font-weight: 600 !important;
-                    white-space: nowrap !important;
-                }
-
-                .warehouse-page-root .wh-clear-btn {
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    gap: 4px !important;
-                    padding: 0 12px !important;
-                    height: 36px !important;
-                    font-size: 12.5px !important;
-                    font-weight: 600 !important;
-                    color: #b91c1c !important;
-                    background: #fef2f2 !important;
-                    border: 1px solid #fecaca !important;
-                    border-radius: 8px !important;
-                    cursor: pointer !important;
-                    transition: all 0.15s ease !important;
-                    white-space: nowrap !important;
-                }
-                .warehouse-page-root .wh-clear-btn:hover {
-                    background: #dc2626 !important;
-                    color: #ffffff !important;
-                    border-color: #dc2626 !important;
-                    transform: translateY(-1px) !important;
-                    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.2) !important;
-                }
-
-                /* Action Button & Tooltip Styles */
-                .wh-actions {
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    gap: 6px;
-                }
-                .wh-action-btn {
-                    position: relative;
-                    width: 32px;
-                    height: 32px;
-                    padding: 0;
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 7px;
-                    font-size: 13px;
-                    cursor: pointer;
-                    transition: all 0.15s ease;
-                    border: 1px solid transparent;
-                    flex-shrink: 0;
-                    box-sizing: border-box;
-                }
-                .wh-action-btn:active {
-                    transform: translateY(0);
-                }
-                .wh-btn-view {
-                    background: #eef2ff;
-                    color: #4f46e5;
-                    border: 1.5px solid #c7d2fe;
-                }
-                .wh-btn-view:hover {
-                    background: #4f46e5;
-                    color: #ffffff;
-                    border-color: #4f46e5;
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.25);
-                }
-                .wh-btn-create {
-                    background: #ecfdf5;
-                    color: #059669;
-                    border: 1.5px solid #a7f3d0;
-                }
-                .wh-btn-create:hover {
-                    background: #059669;
-                    color: #ffffff;
-                    border-color: #059669;
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 6px rgba(5, 150, 105, 0.25);
-                }
-                .wh-btn-edit {
-                    background: #f8fafc;
-                    color: #334155;
-                    border: 1.5px solid #cbd5e1;
-                }
-                .wh-btn-edit:hover {
-                    background: #0284c7;
-                    color: #ffffff;
-                    border-color: #0284c7;
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 6px rgba(2, 132, 199, 0.25);
-                }
-                .wh-btn-delete {
-                    background: #fef2f2;
-                    color: #dc2626;
-                    border: 1.5px solid #fecaca;
-                }
-                .wh-btn-delete:hover:not(:disabled) {
-                    background: #dc2626;
-                    color: #ffffff;
-                    border-color: #dc2626;
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
-                }
-                .wh-btn-delete:disabled {
-                    cursor: not-allowed;
-                    opacity: 0.5;
-                }
-
-                /* Tooltip base styling & stacking */
-                .wh-action-btn:hover,
-                .wh-action-btn:focus-visible {
-                    z-index: 1000 !important;
-                }
-                .warehouse-table tbody tr:hover td {
-                    z-index: 35 !important;
-                }
-
-                .wh-action-btn[data-tooltip]::after {
-                    content: attr(data-tooltip);
-                    position: absolute;
-                    top: calc(100% + 7px);
-                    bottom: auto;
-                    padding: 5px 9px;
-                    background: #0f172a;
-                    color: #ffffff;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                    font-size: 11px;
-                    font-weight: 600;
-                    line-height: 1.2;
-                    letter-spacing: 0.01em;
-                    white-space: nowrap;
-                    border-radius: 6px;
-                    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.28);
-                    pointer-events: none;
-                    opacity: 0;
-                    visibility: hidden;
-                    z-index: 99999;
-                    transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
-                }
-
-                .wh-action-btn[data-tooltip]::before {
-                    content: "";
-                    position: absolute;
-                    top: calc(100% + 2px);
-                    bottom: auto;
-                    border-width: 0 5px 5px 5px;
-                    border-style: solid;
-                    border-color: transparent transparent #0f172a transparent;
-                    pointer-events: none;
-                    opacity: 0;
-                    visibility: hidden;
-                    z-index: 99999;
-                    transition: opacity 0.15s ease, visibility 0.15s ease;
-                }
-
-                .wh-action-btn[data-tooltip]:hover::after,
-                .wh-action-btn[data-tooltip]:hover::before,
-                .wh-action-btn[data-tooltip]:focus-visible::after,
-                .wh-action-btn[data-tooltip]:focus-visible::before {
-                    opacity: 1;
-                    visibility: visible;
-                }
-
-                /* Header Action Button (Add Warehouse): opens downward, aligned to right edge of button */
-                .warehouse-table thead th .wh-btn-create[data-tooltip]::after {
-                    top: calc(100% + 7px);
-                    bottom: auto;
-                    left: auto;
-                    right: 0;
-                    transform: translateY(-3px);
-                }
-                .warehouse-table thead th .wh-btn-create[data-tooltip]:hover::after,
-                .warehouse-table thead th .wh-btn-create[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .warehouse-table thead th .wh-btn-create[data-tooltip]::before {
-                    top: calc(100% + 2px);
-                    bottom: auto;
-                    left: auto;
-                    right: 8px;
-                    transform: none;
-                    border-width: 0 5px 5px 5px;
-                    border-color: transparent transparent #0f172a transparent;
-                }
-
-                /* Row: View button (leftmost): opens downward, aligned to left edge of button */
-                .wh-actions .wh-btn-view[data-tooltip]::after {
-                    top: calc(100% + 7px);
-                    bottom: auto;
-                    left: 0;
-                    right: auto;
-                    transform: translateY(-3px);
-                }
-                .wh-actions .wh-btn-view[data-tooltip]:hover::after,
-                .wh-actions .wh-btn-view[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .wh-actions .wh-btn-view[data-tooltip]::before {
-                    top: calc(100% + 2px);
-                    bottom: auto;
-                    left: 11px;
-                    right: auto;
-                    transform: none;
-                    border-width: 0 5px 5px 5px;
-                    border-color: transparent transparent #0f172a transparent;
-                }
-
-                /* Row: Edit button (middle): opens downward, centered horizontally */
-                .wh-actions .wh-btn-edit[data-tooltip]::after {
-                    top: calc(100% + 7px);
-                    bottom: auto;
-                    left: 50%;
-                    right: auto;
-                    transform: translateX(-50%) translateY(-3px);
-                }
-                .wh-actions .wh-btn-edit[data-tooltip]:hover::after,
-                .wh-actions .wh-btn-edit[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .wh-actions .wh-btn-edit[data-tooltip]::before {
-                    top: calc(100% + 2px);
-                    bottom: auto;
-                    left: 50%;
-                    right: auto;
-                    transform: translateX(-50%);
-                    border-width: 0 5px 5px 5px;
-                    border-color: transparent transparent #0f172a transparent;
-                }
-
-                /* Row: Delete button (rightmost): opens downward, aligned to right edge of button */
-                .wh-actions .wh-btn-delete[data-tooltip]::after {
-                    top: calc(100% + 7px);
-                    bottom: auto;
-                    left: auto;
-                    right: 0;
-                    transform: translateY(-3px);
-                }
-                .wh-actions .wh-btn-delete[data-tooltip]:hover::after,
-                .wh-actions .wh-btn-delete[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .wh-actions .wh-btn-delete[data-tooltip]::before {
-                    top: calc(100% + 2px);
-                    bottom: auto;
-                    left: auto;
-                    right: 11px;
-                    transform: none;
-                    border-width: 0 5px 5px 5px;
-                    border-color: transparent transparent #0f172a transparent;
-                }
-
-                /* Bottom 2 rows of table: flip upward so tooltip never overflows bottom table boundary */
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]::after {
-                    top: auto;
-                    bottom: calc(100% + 7px);
-                    transform: translateY(3px);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]:hover::after,
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-view[data-tooltip]::before {
-                    top: auto;
-                    bottom: calc(100% + 2px);
-                    border-width: 5px 5px 0 5px;
-                    border-color: #0f172a transparent transparent transparent;
-                }
-
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]::after {
-                    top: auto;
-                    bottom: calc(100% + 7px);
-                    transform: translateX(-50%) translateY(3px);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]:hover::after,
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]:focus-visible::after {
-                    transform: translateX(-50%) translateY(0);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-edit[data-tooltip]::before {
-                    top: auto;
-                    bottom: calc(100% + 2px);
-                    border-width: 5px 5px 0 5px;
-                    border-color: #0f172a transparent transparent transparent;
-                }
-
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]::after {
-                    top: auto;
-                    bottom: calc(100% + 7px);
-                    transform: translateY(3px);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]:hover::after,
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .warehouse-table tbody tr:nth-last-child(-n+2) .wh-actions .wh-btn-delete[data-tooltip]::before {
-                    top: auto;
-                    bottom: calc(100% + 2px);
-                    border-width: 5px 5px 0 5px;
-                    border-color: #0f172a transparent transparent transparent;
-                }
-
-                @keyframes spin {
-                    from { transform: rotate(0deg); }
-                    to { transform: rotate(360deg); }
-                }
-            `}</style>
-            <ModuleContainer
-                className="warehouse-page-container"
-                title="Warehouses & Stock Locations"
-                subtitle="Central depots, store stockrooms, transit hubs and multi-location inventory levels"
-                icon={<BsBuildings />}
-                headerStyle={{ marginBottom: 14, paddingBottom: 12 }}
-                style={{ width: '100%', maxWidth: '100%', margin: 0, padding: '16px 24px 20px 24px', boxSizing: 'border-box' }}
-                actionBtn={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <button
-                        onClick={handleRefresh}
-                        disabled={loading || dashboardLoading}
-                        title="Refresh Warehouses"
-                        style={{
-                            background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', padding: '10px 14px',
-                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: (loading || dashboardLoading) ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                        }}
-                    >
-                        <BsArrowRepeat size={16} /> Refresh
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleOpenAddModal}
-                        title="Add New Warehouse"
-                        style={{
-                            background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                            borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-                            transition: 'background-color 0.15s ease'
-                        }}
-                    >
-                        <BsPlus size={18} /> Add Warehouse
-                    </button>
+                {/* 2. SaaS KPI Summary Cards */}
+                <div className="wh-kpi-grid">
+                    <WarehouseStatCard
+                        label="Total Warehouses"
+                        value={dashboardLoading ? '...' : totalWarehouses}
+                        sub="Registered stock locations"
+                        icon={<BsBuildings size={18} />}
+                        iconBg="#eef2ff"
+                        iconColor="#4f46e5"
+                        accentColor="indigo"
+                        trendType="neutral"
+                    />
+                    <WarehouseStatCard
+                        label="Active Warehouses"
+                        value={dashboardLoading ? '...' : activeWarehouses}
+                        sub="Operational & ready"
+                        icon={<BsCheckCircleFill size={18} />}
+                        iconBg="#ecfdf5"
+                        iconColor="#059669"
+                        accentColor="emerald"
+                        trendType="success"
+                    />
+                    <WarehouseStatCard
+                        label="Inactive Warehouses"
+                        value={dashboardLoading ? '...' : inactiveWarehouses}
+                        sub={Number(inactiveWarehouses) > 0 ? "Requires attention" : "All operational"}
+                        icon={<BsExclamationTriangle size={18} />}
+                        iconBg={Number(inactiveWarehouses) > 0 ? "#fff1f2" : "#f8fafc"}
+                        iconColor={Number(inactiveWarehouses) > 0 ? "#e11d48" : "#64748b"}
+                        accentColor={Number(inactiveWarehouses) > 0 ? "rose" : "neutral"}
+                        trendType={Number(inactiveWarehouses) > 0 ? "danger" : "neutral"}
+                    />
+                    <WarehouseStatCard
+                        label="Total Stock Units"
+                        value={dashboardLoading ? '...' : totalStockUnits}
+                        sub="Units in warehouses"
+                        icon={<BsBoxSeam size={18} />}
+                        iconBg="#f0f9ff"
+                        iconColor="#0284c7"
+                        accentColor="sky"
+                        trendType="info"
+                    />
+                    <WarehouseStatCard
+                        label="Total Stock Value"
+                        value={dashboardLoading ? '...' : totalStockValue}
+                        sub="Inventory valuation"
+                        icon={<BsCashStack size={18} />}
+                        iconBg="#f5f3ff"
+                        iconColor="#7c3aed"
+                        accentColor="violet"
+                        trendType="purple"
+                    />
                 </div>
-            }
-        >
-            {/* Authoritative Warehouse SaaS KPI Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16, marginBottom: 24 }}>
-                <WarehouseStatCard
-                    label="Total Warehouses"
-                    value={dashboardLoading ? '...' : totalWarehouses}
-                    sub="Registered stock locations"
-                    icon={<BsBuildings size={17} />}
-                    iconBg="#eef2ff"
-                    iconColor="#4f46e5"
-                />
-                <WarehouseStatCard
-                    label="Active Warehouses"
-                    value={dashboardLoading ? '...' : activeWarehouses}
-                    sub="Operational & ready"
-                    icon={<BsCheckCircleFill size={17} />}
-                    iconBg="#ecfdf5"
-                    iconColor="#059669"
-                />
-                <WarehouseStatCard
-                    label="Inactive Warehouses"
-                    value={dashboardLoading ? '...' : inactiveWarehouses}
-                    sub={Number(inactiveWarehouses) > 0 ? "Requires attention" : "All operational"}
-                    icon={<BsExclamationTriangle size={17} />}
-                    iconBg={Number(inactiveWarehouses) > 0 ? "#fff1f2" : "#f8fafc"}
-                    iconColor={Number(inactiveWarehouses) > 0 ? "#e11d48" : "#64748b"}
-                />
-                <WarehouseStatCard
-                    label="Total Stock Units"
-                    value={dashboardLoading ? '...' : totalStockUnits}
-                    sub="Units in warehouses"
-                    icon={<BsBoxSeam size={17} />}
-                    iconBg="#f0f9ff"
-                    iconColor="#0284c7"
-                />
-                <WarehouseStatCard
-                    label="Total Stock Value"
-                    value={dashboardLoading ? '...' : totalStockValue}
-                    sub="Inventory valuation"
-                    icon={<BsCashStack size={17} />}
-                    iconBg="#f5f3ff"
-                    iconColor="#7c3aed"
-                />
-            </div>
 
             {dashboardError && (
                 <div style={{
@@ -2814,7 +2186,7 @@ export const WarehousesPage = () => {
 
 
             {/* Search and Filters Toolbar Container - Unified Single Horizontal Row */}
-            <div style={{ background: '#ffffff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)', marginBottom: 20 }}>
+            <div className="wh-toolbar-card">
                 <div className="wh-toolbar-container">
                     <div className="wh-toolbar-row">
                         {/* 1. Search Input: compact & balanced */}
@@ -3010,80 +2382,29 @@ export const WarehousesPage = () => {
             ) : (
                 <>
                     {viewMode === "table" ? (
-                    <div style={{
-                        background: '#ffffff',
-                        borderRadius: 12,
-                        border: '1px solid #e5e7eb',
-                        overflow: 'hidden',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-                    }}>
-                        <div
-                            className="warehouse-table-scroll custom-scrollbar"
-                            style={{
-                                maxHeight: '480px',
-                                overflowY: 'auto',
-                                overflowX: 'auto',
-                                scrollBehavior: 'smooth',
-                                position: 'relative'
-                            }}
-                        >
-                            <table
-                                className="warehouse-table"
-                                style={{
-                                    width: '100%',
-                                    minWidth: '1150px',
-                                    borderCollapse: 'separate',
-                                    borderSpacing: 0,
-                                    textAlign: 'left',
-                                    fontSize: 13
-                                }}
-                            >
-                                <thead style={{
-                                    position: 'sticky',
-                                    top: 0,
-                                    zIndex: 20,
-                                    background: '#f9fafb',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
-                                }}>
-                                    <tr>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Warehouse Code</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Warehouse Name</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Store</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', minWidth: 240, whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Address / Location</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Tenant ID</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Created Date</th>
-                                        <th style={{ position: 'sticky', top: 0, background: '#f9fafb', zIndex: 20, padding: '11px 16px', whiteSpace: 'nowrap', borderBottom: '1px solid #e5e7eb', color: '#4b5563', fontWeight: 600 }}>Status</th>
-                                        <th style={{
-                                            position: 'sticky',
-                                            top: 0,
-                                            right: 0,
-                                            zIndex: 25,
-                                            background: '#f9fafb',
-                                            padding: '8px 14px',
-                                            textAlign: 'center',
-                                            whiteSpace: 'nowrap',
-                                            borderBottom: '1px solid #e5e7eb',
-                                            color: '#4b5563',
-                                            fontWeight: 600,
-                                            minWidth: 155,
-                                            width: 155,
-                                            boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                        }}>
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                                                <span>Action</span>
-                                                <button
-                                                    type="button"
-                                                    className="wh-action-btn wh-btn-create"
-                                                    data-tooltip="Add Warehouse"
-                                                    title="Add Warehouse"
-                                                    aria-label="Add Warehouse"
-                                                    onClick={handleOpenAddModal}
-                                                    style={{ width: 26, height: 26, borderRadius: 6 }}
-                                                >
-                                                    <BsPlus size={18} />
-                                                </button>
-                                            </div>
-                                        </th>
+                    <div className="wh-table-card">
+                        <div className="warehouse-table-scroll custom-scrollbar">
+                            <table className="warehouse-table">
+                                <colgroup>
+                                    <col className="wh-col-code" style={{ width: '12%' }} />
+                                    <col className="wh-col-name" style={{ width: '16%' }} />
+                                    <col className="wh-col-store" style={{ width: '17%' }} />
+                                    <col className="wh-col-location" style={{ width: '23%' }} />
+                                    <col className="wh-col-tenant" style={{ width: '7%' }} />
+                                    <col className="wh-col-date" style={{ width: '10%' }} />
+                                    <col className="wh-col-status" style={{ width: '8%' }} />
+                                    <col className="wh-col-action" style={{ width: '7%' }} />
+                                </colgroup>
+                                <thead className="wh-thead">
+                                    <tr className="wh-thead-row">
+                                        <th className="wh-th wh-col-code" style={{ textAlign: 'left' }}>Warehouse Code</th>
+                                        <th className="wh-th wh-col-name" style={{ textAlign: 'left' }}>Warehouse Name</th>
+                                        <th className="wh-th wh-col-store" style={{ textAlign: 'left' }}>Store</th>
+                                        <th className="wh-th wh-col-location" style={{ textAlign: 'center' }}>Address / Location</th>
+                                        <th className="wh-th wh-col-tenant" style={{ textAlign: 'center' }}>Tenant ID</th>
+                                        <th className="wh-th wh-col-date" style={{ textAlign: 'center' }}>Created Date</th>
+                                        <th className="wh-th wh-col-status" style={{ textAlign: 'center' }}>Status</th>
+                                        <th className="wh-th wh-col-action" style={{ textAlign: 'center' }}>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -3100,120 +2421,69 @@ export const WarehousesPage = () => {
                                         const isActive = wh.is_active === true || wh.status === "Active" || wh.status === "active";
 
                                         return (
-                                            <tr
-                                                key={wh.id || i}
-                                                style={{
-                                                    borderBottom: '1px solid #f3f4f6',
-                                                    transition: 'background-color 0.15s ease'
-                                                }}
-                                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                                            >
-                                                <td style={{ padding: '14px 18px' }}>
+                                            <tr key={wh.id || i} className="wh-tbody-row">
+                                                <td className="wh-col-code" style={{ textAlign: 'left' }}>
                                                     {code !== "—" ? (
-                                                        <span style={{
-                                                            fontSize: 12,
-                                                            fontWeight: 700,
-                                                            color: '#4f46e5',
-                                                            background: '#eef2ff',
-                                                            padding: '3px 8px',
-                                                            borderRadius: 6,
-                                                            display: 'inline-block',
-                                                            letterSpacing: '0.02em'
-                                                        }}>
-                                                            {code}
-                                                        </span>
+                                                        <span className="wh-code-badge">{code}</span>
                                                     ) : (
-                                                        <span style={{ color: '#9ca3af', fontWeight: 500 }}>—</span>
+                                                        <span className="wh-empty-dash">—</span>
                                                     )}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', fontWeight: 700, color: '#111827' }}>
-                                                    {name}
+                                                <td className="wh-col-name" style={{ textAlign: 'left' }}>
+                                                    <div className="wh-name-wrap">
+                                                        <span className="wh-name-text" title={name}>{name}</span>
+                                                        {wh.id != null && <span className="wh-id-sub">ID: #{wh.id}</span>}
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#374151' }}>
-                                                    {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : '—')}
+                                                <td className="wh-col-store" style={{ textAlign: 'left' }}>
+                                                    <div className="wh-store-wrap" title={storeName || ''}>
+                                                        <BsShop className="wh-store-icon" size={13} />
+                                                        <span>
+                                                            {storeName ? `${storeName}${storeId != null ? ` (#${storeId})` : ''}` : (storeId != null ? `Store #${storeId}` : '—')}
+                                                        </span>
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#6b7280' }}>
-                                                    {address}
+                                                <td className="wh-col-location" style={{ textAlign: 'center' }}>
+                                                    <div className="wh-location-wrap">
+                                                        <div className="wh-location-row">
+                                                            <BsGeoAlt className="wh-location-icon" size={12} />
+                                                            <span className="wh-address-text" title={address}>{address}</span>
+                                                        </div>
+                                                        {wh.city && <span className="wh-city-sub">{wh.city}{wh.state ? `, ${wh.state}` : ''}</span>}
+                                                    </div>
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#10b981', fontWeight: 600 }}>
-                                                    {tenantId !== undefined && tenantId !== null ? `#${tenantId}` : '—'}
+                                                <td className="wh-col-tenant" style={{ textAlign: 'center' }}>
+                                                    {tenantId !== undefined && tenantId !== null ? (
+                                                        <span className="wh-tenant-badge">#{tenantId}</span>
+                                                    ) : (
+                                                        <span className="wh-empty-dash">—</span>
+                                                    )}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', color: '#6b7280', fontSize: 12.5 }}>
-                                                    {wh.created_at ? new Date(wh.created_at).toLocaleDateString() : '—'}
+                                                <td className="wh-col-date wh-td-date" style={{ textAlign: 'center' }}>
+                                                    {wh.created_at ? new Date(wh.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
                                                 </td>
-                                                <td style={{ padding: '14px 18px', whiteSpace: 'nowrap' }}>
+                                                <td className="wh-col-status" style={{ textAlign: 'center' }}>
                                                     <button
                                                         type="button"
                                                         onClick={() => handleToggleStatus(wh)}
                                                         disabled={togglingStatusId === wh.id}
                                                         title={togglingStatusId === wh.id ? "Updating status..." : `Click to change status to ${isActive ? 'Inactive' : 'Active'}`}
-                                                        style={{
-                                                            display: 'inline-flex',
-                                                            alignItems: 'center',
-                                                            gap: 6,
-                                                            padding: '4px 12px',
-                                                            borderRadius: 20,
-                                                            fontSize: 12,
-                                                            fontWeight: 700,
-                                                            background: isActive ? '#ecfdf5' : '#fef2f2',
-                                                            color: isActive ? '#059669' : '#dc2626',
-                                                            border: '1px solid ' + (isActive ? '#a7f3d0' : '#fecaca'),
-                                                            cursor: togglingStatusId === wh.id ? 'wait' : 'pointer',
-                                                            transition: 'all 0.15s ease',
-                                                            outline: 'none',
-                                                            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
-                                                        }}
-                                                        onMouseEnter={(e) => {
-                                                            if (togglingStatusId !== wh.id) {
-                                                                e.currentTarget.style.transform = 'scale(1.02)';
-                                                                e.currentTarget.style.boxShadow = '0 2px 5px rgba(0,0,0,0.08)';
-                                                            }
-                                                        }}
-                                                        onMouseLeave={(e) => {
-                                                            e.currentTarget.style.transform = 'scale(1)';
-                                                            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.03)';
-                                                        }}
+                                                        className={`wh-status-pill ${isActive ? 'is-active' : 'is-inactive'}`}
                                                     >
                                                         {togglingStatusId === wh.id ? (
                                                             <>
-                                                                <span style={{
-                                                                    display: 'inline-block',
-                                                                    width: 10,
-                                                                    height: 10,
-                                                                    border: '2px solid currentColor',
-                                                                    borderTopColor: 'transparent',
-                                                                    borderRadius: '50%',
-                                                                    animation: 'spin 0.8s linear infinite'
-                                                                }} />
+                                                                <span className="wh-spinner" />
                                                                 <span>Updating...</span>
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <span style={{
-                                                                    width: 7,
-                                                                    height: 7,
-                                                                    borderRadius: '50%',
-                                                                    background: isActive ? '#10b981' : '#ef4444',
-                                                                    boxShadow: isActive ? '0 0 0 2px rgba(16, 185, 129, 0.25)' : '0 0 0 2px rgba(239, 68, 68, 0.25)'
-                                                                }} />
+                                                                <span className={`wh-status-dot ${isActive ? 'is-active' : 'is-inactive'}`} />
                                                                 <span>{isActive ? 'Active' : 'Inactive'}</span>
                                                             </>
                                                         )}
                                                     </button>
                                                 </td>
-                                                <td style={{
-                                                    position: 'sticky',
-                                                    right: 0,
-                                                    zIndex: 10,
-                                                    background: '#ffffff',
-                                                    padding: '11px 16px',
-                                                    textAlign: 'center',
-                                                    whiteSpace: 'nowrap',
-                                                    minWidth: 155,
-                                                    width: 155,
-                                                    boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                                }}>
+                                                <td className="wh-col-action wh-td-action" style={{ textAlign: 'center' }}>
                                                     <div className="wh-actions">
                                                         {/* VIEW */}
                                                         <button
@@ -3259,8 +2529,7 @@ export const WarehousesPage = () => {
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                ) : (
+                    </div>) : (
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
                         {paginatedWarehouses.map((wh, i) => {
                             const rawCode = wh.code ?? wh.warehouse_code ?? wh.warehouseCode ?? wh.wh_code;
@@ -3423,74 +2692,61 @@ export const WarehousesPage = () => {
                 
                 {/* Warehouse Table Pagination Controls */}
                 {!loading && filteredWarehouses.length > 0 && (
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: totalPages > 1 ? 'space-between' : 'flex-start',
-                        padding: '14px 20px',
-                        borderTop: '1px solid #e2e8f0',
-                        background: '#ffffff',
-                        flexWrap: 'wrap',
-                        gap: 12
-                    }}>
-                        {/* Warehouse Showing Info */}
-                        <div style={{ fontSize: 13, color: '#64748b', fontWeight: 500 }}>
+                    <div className="wh-pagination-container">
+                        {/* Left side: Rows Per Page dropdown */}
+                        <div className="wh-pagination-left">
+                            <select
+                                className="wh-rows-per-page-select"
+                                value={pageSize}
+                                onChange={(e) => {
+                                    setPageSize(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                                aria-label="Select rows per page"
+                            >
+                                <option value={8}>8</option>
+                                <option value={10}>10</option>
+                                <option value={20}>20</option>
+                                <option value={50}>50</option>
+                                <option value={100}>100</option>
+                            </select>
+                        </div>
+
+                        {/* Center: Record count info */}
+                        <div className="wh-pagination-center">
                             Showing <strong>{filteredWarehouses.length === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to <strong>{Math.min(filteredWarehouses.length, page * pageSize)}</strong> of <strong>{filteredWarehouses.length}</strong> {filteredWarehouses.length === 1 ? 'warehouse' : 'warehouses'}
                             {search.trim() ? ` matching "${search.trim()}"` : ''}
                         </div>
 
-                        {/* Page Numbers only (Rows per page & Previous/Next removed as requested) */}
-                        {totalPages > 1 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {getPageNumbers().map((p, idx) => {
-                                    if (p === '...') {
+                        {/* Right side: Page numbers (Previous and Next buttons completely removed) */}
+                        <div className="wh-pagination-right">
+                            {totalPages > 1 && (
+                                <div className="wh-page-numbers-group">
+                                    {getPageNumbers().map((p, idx) => {
+                                        if (p === '...') {
+                                            return (
+                                                <span key={`ellipsis-${idx}`} className="wh-page-ellipsis">
+                                                    …
+                                                </span>
+                                            );
+                                        }
+                                        const isActive = p === page;
                                         return (
-                                            <span
-                                                key={`ellipsis-${idx}`}
-                                                style={{
-                                                    minWidth: 28,
-                                                    height: 34,
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    color: '#94a3b8',
-                                                    fontSize: 13,
-                                                    fontWeight: 600
-                                                }}
+                                            <button
+                                                key={p}
+                                                type="button"
+                                                className={`wh-page-btn wh-page-num-btn ${isActive ? 'is-active' : ''}`}
+                                                onClick={() => setPage(p)}
+                                                aria-label={`Page ${p}`}
+                                                aria-current={isActive ? 'page' : undefined}
                                             >
-                                                …
-                                            </span>
+                                                {p}
+                                            </button>
                                         );
-                                    }
-                                    const isActive = p === page;
-                                    return (
-                                        <button
-                                            key={p}
-                                            type="button"
-                                            onClick={() => setPage(p)}
-                                            style={{
-                                                minWidth: 34,
-                                                height: 34,
-                                                padding: '0 8px',
-                                                borderRadius: 8,
-                                                border: isActive ? '1.5px solid #4f46e5' : '1.5px solid #cbd5e1',
-                                                background: isActive ? '#4f46e5' : '#ffffff',
-                                                color: isActive ? '#ffffff' : '#334155',
-                                                fontSize: 12.5,
-                                                fontWeight: 700,
-                                                cursor: 'pointer',
-                                                transition: 'all 0.15s ease',
-                                                boxShadow: isActive ? '0 1px 3px rgba(79, 70, 229, 0.3)' : 'none'
-                                            }}
-                                            aria-label={`Page ${p}`}
-                                            aria-current={isActive ? 'page' : undefined}
-                                        >
-                                            {p}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
+                                    })}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </>
@@ -4796,7 +4052,7 @@ export const WarehousesPage = () => {
                     </div>
                 </div>
             )}
-        </ModuleContainer>
+                    </div>
         </div>
     );
 };
@@ -8460,18 +7716,16 @@ export const GRNPage = () => {
                 {/* GRN List Pagination Controls */}
                 {!loading && grns.length > 0 && (
                     <div style={{
-                        display: 'flex',
+                        display: 'grid',
+                        gridTemplateColumns: '1fr auto 1fr',
                         alignItems: 'center',
-                        justifyContent: 'space-between',
                         padding: '14px 20px',
                         borderTop: '1px solid #e2e8f0',
                         background: '#ffffff',
-                        flexWrap: 'wrap',
                         gap: 12
                     }}>
-                        {/* Left: Rows Per Page Selector */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 12.5, color: '#64748b', fontWeight: 600 }}>Rows per page:</span>
+                        {/* Left: Rows Per Page Selector (Dropdown only, no label) */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifySelf: 'start' }}>
                             <select
                                 value={pageSize}
                                 onChange={(e) => {
@@ -8481,18 +7735,20 @@ export const GRNPage = () => {
                                 style={{
                                     height: 32,
                                     padding: '0 10px',
-                                    border: '1.5px solid #e2e8f0',
-                                    borderRadius: 7,
-                                    fontSize: 12.5,
+                                    border: '1.5px solid #cbd5e1',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
                                     background: '#ffffff',
-                                    color: '#1e293b',
+                                    color: '#0f172a',
                                     outline: 'none',
                                     cursor: 'pointer',
-                                    fontWeight: 500
+                                    transition: 'all 0.15s ease'
                                 }}
                                 aria-label="Select rows per page"
                             >
                                 <option value={5}>5</option>
+                                <option value={8}>8</option>
                                 <option value={10}>10</option>
                                 <option value={20}>20</option>
                                 <option value={50}>50</option>
@@ -8500,32 +7756,41 @@ export const GRNPage = () => {
                             </select>
                         </div>
 
-                        {/* Right: Page Navigation Controls */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <button
-                                type="button"
-                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                disabled={currentPage <= 1}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    height: 34,
-                                    padding: '0 12px',
-                                    borderRadius: 8,
-                                    border: '1.5px solid #cbd5e1',
-                                    background: currentPage <= 1 ? '#f8fafc' : '#ffffff',
-                                    color: currentPage <= 1 ? '#94a3b8' : '#334155',
-                                    fontSize: 12.5,
-                                    fontWeight: 600,
-                                    cursor: currentPage <= 1 ? 'not-allowed' : 'pointer',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                aria-label="Previous Page"
-                            >
-                                <BsChevronLeft size={12} /> Previous
-                            </button>
+                        {/* Center: Pagination Information */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            justifySelf: 'center',
+                            fontSize: 13,
+                            color: '#64748b',
+                            fontWeight: 500,
+                            whiteSpace: 'nowrap',
+                            textAlign: 'center'
+                        }}>
+                            Showing{' '}
+                            <strong style={{ color: '#0f172a', fontWeight: 700, margin: '0 4px' }}>
+                                {grns.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}
+                            </strong>{' '}
+                            to{' '}
+                            <strong style={{ color: '#0f172a', fontWeight: 700, margin: '0 4px' }}>
+                                {Math.min(grns.length, currentPage * pageSize)}
+                            </strong>{' '}
+                            of{' '}
+                            <strong style={{ color: '#0f172a', fontWeight: 700, margin: '0 4px' }}>
+                                {grns.length}
+                            </strong>{' '}
+                            {grns.length === 1 ? 'GRN' : 'GRNs'}
+                        </div>
 
+                        {/* Right: Page Navigation Controls (Page numbers with active highlight) */}
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            justifySelf: 'end',
+                            gap: 6
+                        }}>
                             {getPageNumbers().map((p, idx) => {
                                 if (p === '...') {
                                     return (
@@ -8570,35 +7835,12 @@ export const GRNPage = () => {
                                             transition: 'all 0.15s ease'
                                         }}
                                         aria-current={isActive ? 'page' : undefined}
+                                        aria-label={`Page ${p}`}
                                     >
                                         {p}
                                     </button>
                                 );
                             })}
-
-                            <button
-                                type="button"
-                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                disabled={currentPage >= totalPages}
-                                style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 5,
-                                    height: 34,
-                                    padding: '0 12px',
-                                    borderRadius: 8,
-                                    border: '1.5px solid #cbd5e1',
-                                    background: currentPage >= totalPages ? '#f8fafc' : '#ffffff',
-                                    color: currentPage >= totalPages ? '#94a3b8' : '#334155',
-                                    fontSize: 12.5,
-                                    fontWeight: 600,
-                                    cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer',
-                                    transition: 'all 0.15s ease'
-                                }}
-                                aria-label="Next Page"
-                            >
-                                Next <BsChevronRight size={12} />
-                            </button>
                         </div>
                     </div>
                 )}
@@ -10565,7 +9807,7 @@ export const StoreTransfersPage = () => {
 
     // Pagination State (Client view with skip/limit support)
     const [page, setPage] = useState(1);
-    const pageSize = 10;
+    const [pageSize, setPageSize] = useState(10);
 
     // Expandable item details state: set of expanded transfer IDs
     const [expandedTransferIds, setExpandedTransferIds] = useState(new Set());
@@ -10598,7 +9840,7 @@ export const StoreTransfersPage = () => {
                     if (chk?.isInactiveOrDeleted) {
                         setInactiveStoreIds((prev) => new Set(prev).add(Number(data.source_store_id)));
                     }
-                }).catch(() => { });
+                }).catch(() => {});
             }
         } catch (err) {
             console.error(`Failed to fetch store transfer #${transferId} details:`, err);
@@ -11209,8 +10451,8 @@ export const StoreTransfersPage = () => {
             }
 
             const accounted = (Number.isSafeInteger(rec) ? rec : 0) +
-                (Number.isSafeInteger(dmg) ? dmg : 0) +
-                (Number.isSafeInteger(mis) ? mis : 0);
+                              (Number.isSafeInteger(dmg) ? dmg : 0) +
+                              (Number.isSafeInteger(mis) ? mis : 0);
 
             if (accounted !== dispatched) {
                 errors.push(`${prodName}: Accounted quantity (${accounted}) does not match dispatched quantity (${dispatched}). [Received: ${rec || 0} + Damaged: ${dmg || 0} + Missing: ${mis || 0} = ${accounted}]`);
@@ -11558,1542 +10800,1115 @@ export const StoreTransfersPage = () => {
         setPage(1);
     }, [searchTerm, statusFilter, selectedStoreId]);
 
+    // Ensure page stays within totalPages bounds
+    useEffect(() => {
+        if (page > totalPages && totalPages > 0) {
+            setPage(totalPages);
+        }
+    }, [page, totalPages]);
+
     return (
         <div className="store-transfers-page-root" style={{ width: '100%', minHeight: '100%' }}>
-            <style>{`
-                /* Store Transfers Page Full-Width & External Whitespace Elimination */
-                .store-transfers-page-root {
-                    width: 100% !important;
-                    max-width: 100% !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    box-sizing: border-box !important;
-                }
-                .store-transfers-page-root > div {
-                    max-width: 100% !important;
-                    width: 100% !important;
-                    margin: 0 !important;
-                    padding: 20px 24px !important;
-                    box-sizing: border-box !important;
-                }
-                @media (max-width: 768px) {
-                    .store-transfers-page-root > div {
-                        padding: 14px 16px !important;
-                    }
-                }
-
-                /* Page-level and table custom scrollbars */
-                main:has(.store-transfers-page-root)::-webkit-scrollbar,
-                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar {
-                    width: 8px !important;
-                    height: 8px !important;
-                }
-                main:has(.store-transfers-page-root)::-webkit-scrollbar-track,
-                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-track {
-                    background: #f1f5f9 !important;
-                    border-radius: 4px;
-                }
-                main:has(.store-transfers-page-root)::-webkit-scrollbar-thumb,
-                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-thumb {
-                    background: #cbd5e1 !important;
-                    border-radius: 4px;
-                }
-                main:has(.store-transfers-page-root)::-webkit-scrollbar-thumb:hover,
-                .store-transfers-page-root .store-transfers-table-container::-webkit-scrollbar-thumb:hover {
-                    background: #94a3b8 !important;
-                }
-                .store-transfers-page-root .store-transfers-table-container {
-                    scrollbar-width: thin !important;
-                    scrollbar-color: #cbd5e1 #f1f5f9 !important;
-                }
-
-                /* Clean, modern icon-only action buttons with hover tooltips */
-                .store-transfers-page-root .store-transfer-action-btn {
-                    position: relative !important;
-                    width: 32px !important;
-                    height: 32px !important;
-                    min-width: 32px !important;
-                    padding: 0 !important;
-                    font-size: 13px !important;
-                    border-radius: 7px !important;
-                    display: inline-flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    cursor: pointer !important;
-                    transition: all 0.15s ease !important;
-                    box-sizing: border-box !important;
-                    flex-shrink: 0 !important;
-                    border: 1px solid transparent;
-                }
-                .store-transfers-page-root .store-transfer-action-btn svg {
-                    width: 14px !important;
-                    height: 14px !important;
-                    flex-shrink: 0 !important;
-                }
-                .store-transfers-page-root .store-transfer-action-btn:hover:not(:disabled) {
-                    transform: translateY(-1px);
-                }
-                .store-transfers-page-root .store-transfer-action-btn:active {
-                    transform: translateY(0);
-                }
-
-                /* Tooltip bubble (default: opens upwards) */
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]::after {
-                    content: attr(data-tooltip);
-                    position: absolute;
-                    bottom: calc(100% + 7px);
-                    left: 50%;
-                    transform: translateX(-50%) translateY(3px);
-                    padding: 5px 8px;
-                    background: #0f172a;
-                    color: #ffffff;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                    font-size: 11px;
-                    font-weight: 600;
-                    line-height: 1;
-                    white-space: nowrap;
-                    border-radius: 6px;
-                    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
-                    pointer-events: none;
-                    opacity: 0;
-                    visibility: hidden;
-                    z-index: 99999;
-                    transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
-                }
-
-                /* Tooltip caret / arrow */
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]::before {
-                    content: "";
-                    position: absolute;
-                    bottom: calc(100% + 2px);
-                    left: 50%;
-                    transform: translateX(-50%);
-                    border-width: 5px 5px 0 5px;
-                    border-style: solid;
-                    border-color: #0f172a transparent transparent transparent;
-                    pointer-events: none;
-                    opacity: 0;
-                    visibility: hidden;
-                    z-index: 99999;
-                    transition: opacity 0.15s ease, visibility 0.15s ease;
-                }
-
-                /* Show tooltip on hover or keyboard focus */
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::after,
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::before,
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::after,
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::before {
-                    opacity: 1;
-                    visibility: visible;
-                }
-
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:hover::after,
-                .store-transfers-page-root .store-transfer-action-btn[data-tooltip]:focus-visible::after {
-                    transform: translateX(-50%) translateY(0);
-                }
-
-                /* First 2 rows: open downward to avoid clipping by sticky header or table boundary */
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]::after {
-                    bottom: auto;
-                    top: calc(100% + 7px);
-                    transform: translateX(-50%) translateY(-3px);
-                }
-
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]:hover::after,
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]:focus-visible::after {
-                    transform: translateX(-50%) translateY(0);
-                }
-
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfer-action-btn[data-tooltip]::before {
-                    bottom: auto;
-                    top: calc(100% + 2px);
-                    border-width: 0 5px 5px 5px;
-                    border-color: transparent transparent #0f172a transparent;
-                }
-
-                /* Rightmost button alignment to prevent right-edge clipping */
-                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::after {
-                    left: auto;
-                    right: 0;
-                    transform: translateY(3px);
-                }
-                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:hover::after,
-                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::before {
-                    left: auto;
-                    right: 11px;
-                }
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]::after {
-                    left: auto;
-                    right: 0;
-                    transform: translateY(-3px);
-                }
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:hover::after,
-                .store-transfers-page-root table tbody tr:nth-child(-n+2) .store-transfers-actions-wrapper .store-transfer-action-btn:last-child[data-tooltip]:focus-visible::after {
-                    transform: translateY(0);
-                }
-                .store-transfers-page-root table tbody tr:hover td {
-                    background-color: #f8fafc;
-                }
-                .store-transfers-page-root table tbody tr:hover td.store-transfers-actions-cell {
-                    background-color: #f8fafc !important;
-                }
-
-                /* Store Transfers Pagination Grid & Exact Centering */
-                .store-transfers-pagination-footer {
-                    display: grid !important;
-                    grid-template-columns: 1fr auto 1fr !important;
-                    align-items: center !important;
-                    margin-top: 16px !important;
-                    padding: 8px 4px !important;
-                    width: 100% !important;
-                    box-sizing: border-box !important;
-                }
-                .store-transfers-pagination-left {
-                    display: flex;
-                    align-items: center;
-                    justify-self: start;
-                }
-                .store-transfers-pagination-center {
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    justify-self: center;
-                    text-align: center;
-                }
-                .store-transfers-pagination-right {
-                    display: flex;
-                    align-items: center;
-                    gap: 8px;
-                    justify-self: end;
-                }
-                @media (max-width: 640px) {
-                    .store-transfers-pagination-footer {
-                        display: flex !important;
-                        flex-direction: column !important;
-                        gap: 10px !important;
-                        align-items: center !important;
-                        justify-content: center !important;
-                    }
-                    .store-transfers-pagination-left {
-                        display: none !important;
-                    }
-                    .store-transfers-pagination-center {
-                        width: 100% !important;
-                        text-align: center !important;
-                        justify-content: center !important;
-                        order: 1 !important;
-                    }
-                    .store-transfers-pagination-right {
-                        width: 100% !important;
-                        justify-content: center !important;
-                        order: 2 !important;
-                    }
-                }
-            `}</style>
             <ModuleContainer
-                title="Inter-Store Stock Transfers"
-                subtitle="Transfer products between retail outlets, generate gate passes and track in-transit stock"
-                icon={<BsArrowLeftRight />}
-                actionBtn={
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <button
-                            onClick={handleRefresh}
-                            disabled={loading}
-                            title="Refresh Transfers & Summary Analytics"
-                            style={{
-                                background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', padding: '10px 14px',
-                                borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: loading ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                            }}
-                        >
-                            <BsArrowRepeat size={16} /> {loading ? "Refreshing..." : "Refresh"}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setIsCreateModalOpen(true)}
-                            style={{
-                                background: '#6366f1', color: '#fff', border: 'none', padding: '10px 18px',
-                                borderRadius: 8, fontWeight: 600, fontSize: 13.5, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6
-                            }}
-                        >
-                            <BsPlus size={18} /> Request Stock Transfer
-                        </button>
-                    </div>
-                }
-            >
-                {/* Create Success Banner */}
-                {createSuccessMsg && (
-                    <div style={{
-                        background: '#f0fdf4',
-                        border: '1px solid #bbf7d0',
-                        color: '#15803d',
-                        padding: '12px 18px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        fontSize: 13.5,
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <span>✓ {createSuccessMsg}</span>
-                        <button
-                            type="button"
-                            onClick={() => setCreateSuccessMsg("")}
-                            style={{ background: 'transparent', border: 'none', color: '#15803d', cursor: 'pointer', fontSize: 14 }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Approval Error Alert */}
-                {approveError && (
-                    <div style={{
-                        background: '#fef2f2',
-                        border: '1px solid #fecaca',
-                        borderRadius: 8,
-                        padding: '12px 18px',
-                        marginBottom: 16,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 12
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                            <span style={{ fontSize: 16, color: '#dc2626', marginTop: 1 }}>⚠</span>
-                            <div>
-                                <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 13.5 }}>
-                                    {approveError.message}
-                                </div>
-                                {approveError.backendDetail && approveError.backendDetail !== approveError.message && (
-                                    <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
-                                        Backend validation message: <em>{approveError.backendDetail}</em> (HTTP {approveError.status})
-                                    </div>
-                                )}
-                                <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
-                                    Store Transfer {approveError.transferNumber} remains in its current status. No changes were applied.
-                                </div>
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setApproveError(null)}
-                            style={{ background: 'transparent', border: 'none', color: '#991b1b', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Approval Success Banner */}
-                {approveSuccessMsg && (
-                    <div style={{
-                        background: '#f0fdf4',
-                        border: '1px solid #bbf7d0',
-                        color: '#15803d',
-                        padding: '12px 18px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        fontSize: 13.5,
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <span>✓ {approveSuccessMsg}</span>
-                        <button
-                            type="button"
-                            onClick={() => setApproveSuccessMsg("")}
-                            style={{ background: 'transparent', border: 'none', color: '#15803d', cursor: 'pointer', fontSize: 14 }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Rejection Error Alert Banner */}
-                {rejectError && (
-                    <div style={{
-                        background: '#fef2f2',
-                        border: '1px solid #fecaca',
-                        padding: '12px 18px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 12
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                            <span style={{ fontSize: 16, color: '#dc2626', marginTop: 1 }}>⚠</span>
-                            <div>
-                                <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 13.5 }}>
-                                    {rejectError.message}
-                                </div>
-                                {rejectError.backendDetail && rejectError.backendDetail !== rejectError.message && (
-                                    <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
-                                        Backend validation message: <em>{rejectError.backendDetail}</em> (HTTP {rejectError.status})
-                                    </div>
-                                )}
-                                <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
-                                    Store Transfer {rejectError.transferNumber} remains in its current status. No changes were applied.
-                                </div>
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setRejectError(null)}
-                            style={{ background: 'transparent', border: 'none', color: '#991b1b', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Rejection Success Banner */}
-                {rejectSuccessMsg && (
-                    <div style={{
-                        background: '#f0fdf4',
-                        border: '1px solid #bbf7d0',
-                        color: '#15803d',
-                        padding: '12px 18px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        fontSize: 13.5,
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <span>✓ {rejectSuccessMsg}</span>
-                        <button
-                            type="button"
-                            onClick={() => setRejectSuccessMsg("")}
-                            style={{ background: 'transparent', border: 'none', color: '#15803d', cursor: 'pointer', fontSize: 14 }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Dispatch Error Alert Banner */}
-                {dispatchError && (
-                    <div style={{
-                        background: '#fef2f2',
-                        border: '1px solid #fecaca',
-                        padding: '12px 18px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 12
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                            <span style={{ fontSize: 16, color: '#dc2626', marginTop: 1 }}>⚠</span>
-                            <div>
-                                <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 13.5 }}>
-                                    {dispatchError.message}
-                                </div>
-                                {dispatchError.backendDetail && dispatchError.backendDetail !== dispatchError.message && (
-                                    <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
-                                        Backend validation message: <em>{dispatchError.backendDetail}</em> (HTTP {dispatchError.status})
-                                    </div>
-                                )}
-                                <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
-                                    Store Transfer {dispatchError.transferNumber} remains in its current status. No changes were applied.
-                                </div>
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setDispatchError(null)}
-                            style={{ background: 'transparent', border: 'none', color: '#991b1b', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Dispatch Success Banner */}
-                {dispatchSuccessMsg && (
-                    <div style={{
-                        background: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        color: '#1d4ed8',
-                        padding: '12px 18px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        fontSize: 13.5,
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <span>✓ {dispatchSuccessMsg}</span>
-                        <button
-                            type="button"
-                            onClick={() => setDispatchSuccessMsg("")}
-                            style={{ background: 'transparent', border: 'none', color: '#1d4ed8', cursor: 'pointer', fontSize: 14 }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Receive Error Alert Banner */}
-                {receiveError && (
-                    <div style={{
-                        background: '#fef2f2',
-                        border: '1px solid #fecaca',
-                        padding: '12px 18px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 12
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                            <span style={{ fontSize: 16, color: '#dc2626', marginTop: 1 }}>⚠</span>
-                            <div>
-                                <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 13.5 }}>
-                                    {receiveError.message}
-                                </div>
-                                {receiveError.backendDetail && receiveError.backendDetail !== receiveError.message && (
-                                    <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
-                                        Backend validation message: <em>{receiveError.backendDetail}</em> (HTTP {receiveError.status})
-                                    </div>
-                                )}
-                                <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
-                                    Store Transfer {receiveError.transferNumber} remains in its current status. No changes were applied.
-                                </div>
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setReceiveError(null)}
-                            style={{ background: 'transparent', border: 'none', color: '#991b1b', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Receive Success Banner */}
-                {receiveSuccessMsg && (
-                    <div style={{
-                        background: '#ecfdf5',
-                        border: '1px solid #a7f3d0',
-                        color: '#065f46',
-                        padding: '12px 18px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        fontSize: 13.5,
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <span>✓ {receiveSuccessMsg}</span>
-                        <button
-                            type="button"
-                            onClick={() => setReceiveSuccessMsg("")}
-                            style={{ background: 'transparent', border: 'none', color: '#065f46', cursor: 'pointer', fontSize: 14 }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Discrepancy Error Alert Banner (e.g. 400 Bad Request / 422 Validation) */}
-                {discrepancyError && (
-                    <div style={{
-                        background: '#fef2f2',
-                        border: '1px solid #fecaca',
-                        padding: '12px 18px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 12
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                            <span style={{ fontSize: 16, color: '#dc2626', marginTop: 1 }}>⚠</span>
-                            <div>
-                                <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 13.5 }}>
-                                    {discrepancyError.message}
-                                </div>
-                                {discrepancyError.backendDetail && discrepancyError.backendDetail !== discrepancyError.message && (
-                                    <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
-                                        Backend validation message: <em>{discrepancyError.backendDetail}</em> (HTTP {discrepancyError.status})
-                                    </div>
-                                )}
-                                {Array.isArray(discrepancyError.allErrors) && discrepancyError.allErrors.length > 1 && (
-                                    <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12, color: '#991b1b' }}>
-                                        {discrepancyError.allErrors.map((err, i) => (
-                                            <li key={i}>{err}</li>
-                                        ))}
-                                    </ul>
-                                )}
-                                {discrepancyError.transferNumber && (
-                                    <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
-                                        Store Transfer {discrepancyError.transferNumber} status was verified before submission.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setDiscrepancyError(null)}
-                            style={{ background: 'transparent', border: 'none', color: '#991b1b', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Discrepancy Status Warning Alert Banner */}
-                {discrepancyStatusWarning && (
-                    <div style={{
-                        background: '#fffbeb',
-                        border: '1px solid #fde68a',
-                        padding: '12px 18px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        justifyContent: 'space-between',
-                        gap: 12
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                            <span style={{ fontSize: 16, color: '#d97706', marginTop: 1 }}>ℹ️</span>
-                            <div>
-                                <div style={{ fontWeight: 700, color: '#92400e', fontSize: 13.5 }}>
-                                    Discrepancy Action Restriction Notice
-                                </div>
-                                <div style={{ fontSize: 12.5, color: '#b45309', marginTop: 2 }}>
-                                    {discrepancyStatusWarning}
-                                </div>
-                            </div>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={() => setDiscrepancyStatusWarning("")}
-                            style={{ background: 'transparent', border: 'none', color: '#92400e', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Discrepancy Success Banner */}
-                {discrepancySuccessMsg && (
-                    <div style={{
-                        background: '#fffbeb',
-                        border: '1px solid #fde68a',
-                        color: '#92400e',
-                        padding: '12px 18px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        fontSize: 13.5,
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <BsCheckCircleFill color="#d97706" /> {discrepancySuccessMsg}
-                        </span>
-                        <button
-                            type="button"
-                            onClick={() => setDiscrepancySuccessMsg("")}
-                            style={{ background: 'transparent', border: 'none', color: '#92400e', cursor: 'pointer', fontSize: 14 }}
-                        >
-                            ✕
-                        </button>
-                    </div>
-                )}
-
-                {/* Summary Error Alert (Non-blocking) */}
-                {summaryError && (
-                    <div style={{
-                        background: '#fffbeb',
-                        border: '1px solid #fef3c7',
-                        color: '#92400e',
-                        padding: '10px 16px',
-                        borderRadius: 8,
-                        marginBottom: 16,
-                        fontSize: 13,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                    }}>
-                        <span>ℹ️ Summary analytics notice: {summaryError}. Showing direct store transfers list.</span>
-                        <button
-                            type="button"
-                            onClick={() => fetchSummary(selectedStoreId)}
-                            style={{
-                                background: '#f59e0b',
-                                color: '#fff',
-                                border: 'none',
-                                padding: '4px 10px',
-                                borderRadius: 6,
-                                fontSize: 12,
-                                fontWeight: 600,
-                                cursor: 'pointer'
-                            }}
-                        >
-                            Retry Summary
-                        </button>
-                    </div>
-                )}
-
-                {/* Authoritative Summary Cards */}
-                <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                    gap: 16,
-                    marginBottom: 24
-                }}>
-                    <StatCard
-                        label="Total Transfers"
-                        value={loading && !summary ? "..." : `${totalTransfersVal} Transfers`}
-                        sub={totalUnitsVal != null ? `${Number(totalUnitsVal).toLocaleString('en-IN')} units transferred` : (selectedStoreId === "all" ? "Company-wide transfers" : `Store #${selectedStoreId} volume`)}
-                        color="#6366f1"
-                    />
-                    <StatCard
-                        label="Pending Transfers"
-                        value={loading && !summary ? "..." : `${pendingTransfersVal} Transfers`}
-                        sub="Awaiting dispatch or check-in"
-                        color="#f59e0b"
-                    />
-                    <StatCard
-                        label="Received Transfers"
-                        value={loading && !summary ? "..." : `${receivedTransfersVal} Transfers`}
-                        sub="Successfully received"
-                        color="#10b981"
-                    />
-                    <StatCard
-                        label="Rejected Transfers"
-                        value={loading && !summary ? "..." : `${rejectedTransfersVal} Transfers`}
-                        sub="Declined or cancelled"
-                        color="#ef4444"
-                    />
-                    {summary && (inTransitTransfersVal + approvedTransfersVal + dispatchedTransfersVal) > 0 && (
-                        <StatCard
-                            label="In Transit / Active"
-                            value={`${inTransitTransfersVal + approvedTransfersVal + dispatchedTransfersVal} Transfers`}
-                            sub={`In Transit: ${inTransitTransfersVal} • Dispatched: ${dispatchedTransfersVal} • Approved: ${approvedTransfersVal}`}
-                            color="#8b5cf6"
-                        />
-                    )}
+            title="Inter-Store Stock Transfers"
+            subtitle="Transfer products between retail outlets, generate gate passes and track in-transit stock"
+            icon={<BsArrowLeftRight />}
+            actionBtn={
+                <div className="st-header-actions">
+                    <button
+                        onClick={handleRefresh}
+                        disabled={loading}
+                        title="Refresh Transfers & Summary Analytics"
+                        className="st-header-btn st-header-btn-refresh"
+                    >
+                        <BsArrowRepeat size={16} /> {loading ? "Refreshing..." : "Refresh"}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="st-header-btn st-header-btn-create"
+                    >
+                        <BsPlus size={18} /> Request Stock Transfer
+                    </button>
                 </div>
-
-                {/* Store Transfer Analytics & Insights (from GET /api/v1/store-transfers/summary) */}
-                {summary && (
-                    <div style={{
-                        background: '#fff',
-                        borderRadius: 12,
-                        border: '1px solid #e5e7eb',
-                        padding: '16px 20px',
-                        marginBottom: 20,
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-                    }}>
-                        <div
-                            style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                marginBottom: showAnalytics ? 16 : 0,
-                                cursor: 'pointer'
-                            }}
-                            onClick={() => setShowAnalytics(!showAnalytics)}
-                        >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <span style={{ fontSize: 18, color: '#6366f1' }}>📊</span>
-                                <div>
-                                    <h3 style={{ margin: 0, fontSize: 14.5, fontWeight: 700, color: '#111827' }}>
-                                        Transfer Analytics & Insights
-                                    </h3>
-                                    <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280' }}>
-                                        Route volume, top transferred products, and recent transfer activity
-                                    </p>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                style={{
-                                    background: '#f3f4f6',
-                                    border: '1px solid #d1d5db',
-                                    borderRadius: 6,
-                                    padding: '4px 10px',
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: '#374151',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 4
-                                }}
-                            >
-                                {showAnalytics ? <>Collapse Insights <BsChevronUp size={12} /></> : <>Expand Insights <BsChevronDown size={12} /></>}
-                            </button>
-                        </div>
-
-                        {showAnalytics && (
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))',
-                                gap: 16
-                            }}>
-                                {/* 1. Top Store Routes (Source & Destination) */}
-                                <div style={{ background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb', padding: 14 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, borderBottom: '1px solid #e5e7eb', paddingBottom: 8 }}>
-                                        <BsShop style={{ color: '#6366f1' }} />
-                                        <span style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>
-                                            Top Store Routes
-                                        </span>
-                                    </div>
-
-                                    {/* Top Source Stores */}
-                                    <div style={{ marginBottom: 12 }}>
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>
-                                            Top Source Stores
-                                        </div>
-                                        {Array.isArray(summary.top_source_stores) && summary.top_source_stores.length > 0 ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                                {summary.top_source_stores.map((st, i) => (
-                                                    <div key={st.store_id || i} style={{
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                        background: '#fff', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12.5
-                                                    }}>
-                                                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{st.store_name}</span>
-                                                        <span style={{ background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 10, fontWeight: 700, fontSize: 11.5 }}>
-                                                            {st.transfer_count} transfers
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic' }}>No source store data</div>
-                                        )}
-                                    </div>
-
-                                    {/* Top Destination Stores */}
-                                    <div>
-                                        <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginBottom: 6 }}>
-                                            Top Destination Stores
-                                        </div>
-                                        {Array.isArray(summary.top_destination_stores) && summary.top_destination_stores.length > 0 ? (
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                                {summary.top_destination_stores.map((st, i) => (
-                                                    <div key={st.store_id || i} style={{
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                        background: '#fff', padding: '6px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12.5
-                                                    }}>
-                                                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{st.store_name}</span>
-                                                        <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 8px', borderRadius: 10, fontWeight: 700, fontSize: 11.5 }}>
-                                                            {st.transfer_count} transfers
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic' }}>No destination store data</div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* 2. Top Transferred Products */}
-                                <div style={{ background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb', padding: 14 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, borderBottom: '1px solid #e5e7eb', paddingBottom: 8 }}>
-                                        <BsBoxSeam style={{ color: '#0ea5e9' }} />
-                                        <span style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>
-                                            Top Transferred Products
-                                        </span>
-                                    </div>
-
-                                    {Array.isArray(summary.top_transferred_products) && summary.top_transferred_products.length > 0 ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                            {summary.top_transferred_products.map((p, i) => (
-                                                <div key={p.product_id || i} style={{
-                                                    background: '#fff', borderRadius: 6, border: '1px solid #e5e7eb',
-                                                    padding: '7px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-                                                }}>
-                                                    <div style={{ minWidth: 0, flex: 1, paddingRight: 8 }}>
-                                                        <div style={{ fontWeight: 600, fontSize: 12.5, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                            {p.product_name}
-                                                        </div>
-                                                        <div style={{ fontSize: 11, color: '#64748b' }}>
-                                                            {p.sku ? `SKU: ${p.sku}` : `ID: #${p.product_id}`}
-                                                        </div>
-                                                    </div>
-                                                    <div style={{ textAlign: 'right' }}>
-                                                        <div style={{ fontWeight: 700, fontSize: 13, color: '#0284c7' }}>
-                                                            {Number(p.total_quantity || 0).toLocaleString('en-IN')}
-                                                        </div>
-                                                        <div style={{ fontSize: 10.5, color: '#64748b' }}>units</div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : (
-                                        <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic', padding: '12px 0', textAlign: 'center' }}>
-                                            No product transfer metrics available
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* 3. Recent Transfers Snapshot */}
-                                <div style={{ background: '#f9fafb', borderRadius: 10, border: '1px solid #e5e7eb', padding: 14 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, borderBottom: '1px solid #e5e7eb', paddingBottom: 8 }}>
-                                        <BsClockHistory style={{ color: '#f59e0b' }} />
-                                        <span style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>
-                                            Recent Activity Snapshot
-                                        </span>
-                                    </div>
-
-                                    {Array.isArray(summary.recent_transfers) && summary.recent_transfers.length > 0 ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                            {summary.recent_transfers.slice(0, 5).map((rt, i) => {
-                                                const stNorm = normalizeStatus(rt.status);
-                                                let badgeBg = '#fef3c7';
-                                                let badgeColor = '#b45309';
-                                                if (stNorm === 'received') {
-                                                    badgeBg = '#dcfce7';
-                                                    badgeColor = '#15803d';
-                                                } else if (stNorm === 'rejected') {
-                                                    badgeBg = '#fee2e2';
-                                                    badgeColor = '#b91c1c';
-                                                }
-                                                return (
-                                                    <div key={rt.id || i} style={{
-                                                        background: '#fff', borderRadius: 6, border: '1px solid #e5e7eb',
-                                                        padding: '7px 10px', fontSize: 12
-                                                    }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-                                                            <span style={{ fontWeight: 700, color: '#4f46e5' }}>
-                                                                {rt.transfer_number || `#${rt.id}`}
-                                                            </span>
-                                                            <span style={{ background: badgeBg, color: badgeColor, padding: '2px 6px', borderRadius: 8, fontSize: 10.5, fontWeight: 700 }}>
-                                                                {rt.status || 'Pending'}
-                                                            </span>
-                                                        </div>
-                                                        <div style={{ color: '#475569', fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                            <span>{rt.source_store_name || 'Source'}</span>
-                                                            <span>→</span>
-                                                            <span style={{ fontWeight: 600, color: '#047857' }}>{rt.destination_store_name || 'Destination'}</span>
-                                                        </div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 3, fontSize: 10.5, color: '#94a3b8' }}>
-                                                            <span>{rt.total_items} item{rt.total_items === 1 ? '' : 's'}</span>
-                                                            <span>{formatDateTime(rt.created_at)}</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    ) : (
-                                        <div style={{ fontSize: 12, color: '#9ca3af', fontStyle: 'italic', padding: '12px 0', textAlign: 'center' }}>
-                                            No recent transfer snapshots found
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Search, Store Selector & Status Filter Toolbar */}
+            }
+        >
+            {/* Create Success Banner */}
+            {createSuccessMsg && (
                 <div style={{
-                    background: '#fff',
-                    borderRadius: 12,
-                    border: '1px solid #e5e7eb',
-                    padding: '14px 18px',
-                    marginBottom: 20,
+                    background: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    color: '#15803d',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    fontSize: 13.5,
+                    fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}>
+                    <span>✓ {createSuccessMsg}</span>
+                    <button
+                        type="button"
+                        onClick={() => setCreateSuccessMsg("")}
+                        style={{ background: 'transparent', border: 'none', color: '#15803d', cursor: 'pointer', fontSize: 14 }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Approval Error Alert */}
+            {approveError && (
+                <div style={{
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    borderRadius: 8,
+                    padding: '12px 18px',
+                    marginBottom: 16,
+                    display: 'flex',
+                    alignItems: 'flex-start',
                     justifyContent: 'space-between',
-                    flexWrap: 'wrap',
                     gap: 12
                 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', flex: 1 }}>
-                        {/* Search Input */}
-                        <div style={{ position: 'relative', minWidth: 260, flex: 1 }}>
-                            <BsSearch size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-                            <input
-                                type="text"
-                                placeholder="Search by transfer #, store, product, SKU, or approver..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                style={{
-                                    width: '100%',
-                                    padding: '8px 12px 8px 34px',
-                                    borderRadius: 8,
-                                    border: '1px solid #d1d5db',
-                                    fontSize: 13,
-                                    outline: 'none'
-                                }}
-                            />
-                        </div>
-
-                        {/* Store Selector (Dynamic from stores list, no hardcoded store_id=1) */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <label style={{ fontSize: 12.5, fontWeight: 600, color: '#4b5563', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <BsShop size={14} /> Store:
-                            </label>
-                            <select
-                                value={selectedStoreId}
-                                onChange={(e) => setSelectedStoreId(e.target.value)}
-                                style={{
-                                    padding: '8px 12px',
-                                    borderRadius: 8,
-                                    border: '1px solid #d1d5db',
-                                    fontSize: 13,
-                                    color: '#111827',
-                                    background: '#fff',
-                                    outline: 'none',
-                                    cursor: 'pointer',
-                                    minWidth: 160
-                                }}
-                            >
-                                <option value="all">All Stores (Company-wide)</option>
-                                {Array.isArray(stores) && stores.map((st) => (
-                                    <option key={st.id} value={String(st.id)}>
-                                        {st.name || st.store_name || `Store #${st.id}`}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Status Filter */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <label style={{ fontSize: 12.5, fontWeight: 600, color: '#4b5563', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <BsFilter size={15} /> Status:
-                            </label>
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                style={{
-                                    padding: '8px 12px',
-                                    borderRadius: 8,
-                                    border: '1px solid #d1d5db',
-                                    fontSize: 13,
-                                    color: '#111827',
-                                    background: '#fff',
-                                    outline: 'none',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                <option value="all">All Status ({safeTransfers.length})</option>
-                                <option value="Pending">Pending ({pendingTransfersVal})</option>
-                                <option value="Approved">Approved ({approvedTransfersVal})</option>
-                                <option value="Dispatched">Dispatched ({dispatchedTransfersVal})</option>
-                                <option value="Received">Received ({receivedTransfersVal})</option>
-                                <option value="Rejected">Rejected ({rejectedTransfersVal})</option>
-                            </select>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <span style={{ fontSize: 16, color: '#dc2626', marginTop: 1 }}>⚠</span>
+                        <div>
+                            <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 13.5 }}>
+                                {approveError.message}
+                            </div>
+                            {approveError.backendDetail && approveError.backendDetail !== approveError.message && (
+                                <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
+                                    Backend validation message: <em>{approveError.backendDetail}</em> (HTTP {approveError.status})
+                                </div>
+                            )}
+                            <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                Store Transfer {approveError.transferNumber} remains in its current status. No changes were applied.
+                            </div>
                         </div>
                     </div>
-
-                    <span style={{ fontSize: 12, color: '#6b7280' }}>
-                        Store Transfer Directory
-                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setApproveError(null)}
+                        style={{ background: 'transparent', border: 'none', color: '#991b1b', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
+                    >
+                        ✕
+                    </button>
                 </div>
+            )}
 
-                {/* Store Transfers Table Container */}
+            {/* Approval Success Banner */}
+            {approveSuccessMsg && (
                 <div style={{
-                    background: '#fff',
-                    borderRadius: 12,
-                    border: '1px solid #e5e7eb',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
-                    overflow: 'hidden'
+                    background: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    color: '#15803d',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
                 }}>
-                    <div
-                        className="store-transfers-table-container custom-scrollbar"
+                    <span>✓ {approveSuccessMsg}</span>
+                    <button
+                        type="button"
+                        onClick={() => setApproveSuccessMsg("")}
+                        style={{ background: 'transparent', border: 'none', color: '#15803d', cursor: 'pointer', fontSize: 14 }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Rejection Error Alert Banner */}
+            {rejectError && (
+                <div style={{
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: 12
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <span style={{ fontSize: 16, color: '#dc2626', marginTop: 1 }}>⚠</span>
+                        <div>
+                            <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 13.5 }}>
+                                {rejectError.message}
+                            </div>
+                            {rejectError.backendDetail && rejectError.backendDetail !== rejectError.message && (
+                                <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
+                                    Backend validation message: <em>{rejectError.backendDetail}</em> (HTTP {rejectError.status})
+                                </div>
+                            )}
+                            <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                Store Transfer {rejectError.transferNumber} remains in its current status. No changes were applied.
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setRejectError(null)}
+                        style={{ background: 'transparent', border: 'none', color: '#991b1b', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Rejection Success Banner */}
+            {rejectSuccessMsg && (
+                <div style={{
+                    background: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    color: '#15803d',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}>
+                    <span>✓ {rejectSuccessMsg}</span>
+                    <button
+                        type="button"
+                        onClick={() => setRejectSuccessMsg("")}
+                        style={{ background: 'transparent', border: 'none', color: '#15803d', cursor: 'pointer', fontSize: 14 }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Dispatch Error Alert Banner */}
+            {dispatchError && (
+                <div style={{
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: 12
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <span style={{ fontSize: 16, color: '#dc2626', marginTop: 1 }}>⚠</span>
+                        <div>
+                            <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 13.5 }}>
+                                {dispatchError.message}
+                            </div>
+                            {dispatchError.backendDetail && dispatchError.backendDetail !== dispatchError.message && (
+                                <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
+                                    Backend validation message: <em>{dispatchError.backendDetail}</em> (HTTP {dispatchError.status})
+                                </div>
+                            )}
+                            <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                Store Transfer {dispatchError.transferNumber} remains in its current status. No changes were applied.
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setDispatchError(null)}
+                        style={{ background: 'transparent', border: 'none', color: '#991b1b', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Dispatch Success Banner */}
+            {dispatchSuccessMsg && (
+                <div style={{
+                    background: '#eff6ff',
+                    border: '1px solid #bfdbfe',
+                    color: '#1d4ed8',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}>
+                    <span>✓ {dispatchSuccessMsg}</span>
+                    <button
+                        type="button"
+                        onClick={() => setDispatchSuccessMsg("")}
+                        style={{ background: 'transparent', border: 'none', color: '#1d4ed8', cursor: 'pointer', fontSize: 14 }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Receive Error Alert Banner */}
+            {receiveError && (
+                <div style={{
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: 12
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <span style={{ fontSize: 16, color: '#dc2626', marginTop: 1 }}>⚠</span>
+                        <div>
+                            <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 13.5 }}>
+                                {receiveError.message}
+                            </div>
+                            {receiveError.backendDetail && receiveError.backendDetail !== receiveError.message && (
+                                <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
+                                    Backend validation message: <em>{receiveError.backendDetail}</em> (HTTP {receiveError.status})
+                                </div>
+                            )}
+                            <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                Store Transfer {receiveError.transferNumber} remains in its current status. No changes were applied.
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setReceiveError(null)}
+                        style={{ background: 'transparent', border: 'none', color: '#991b1b', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Receive Success Banner */}
+            {receiveSuccessMsg && (
+                <div style={{
+                    background: '#ecfdf5',
+                    border: '1px solid #a7f3d0',
+                    color: '#065f46',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}>
+                    <span>✓ {receiveSuccessMsg}</span>
+                    <button
+                        type="button"
+                        onClick={() => setReceiveSuccessMsg("")}
+                        style={{ background: 'transparent', border: 'none', color: '#065f46', cursor: 'pointer', fontSize: 14 }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Discrepancy Error Alert Banner (e.g. 400 Bad Request / 422 Validation) */}
+            {discrepancyError && (
+                <div style={{
+                    background: '#fef2f2',
+                    border: '1px solid #fecaca',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: 12
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <span style={{ fontSize: 16, color: '#dc2626', marginTop: 1 }}>⚠</span>
+                        <div>
+                            <div style={{ fontWeight: 700, color: '#991b1b', fontSize: 13.5 }}>
+                                {discrepancyError.message}
+                            </div>
+                            {discrepancyError.backendDetail && discrepancyError.backendDetail !== discrepancyError.message && (
+                                <div style={{ fontSize: 12, color: '#b91c1c', marginTop: 3 }}>
+                                    Backend validation message: <em>{discrepancyError.backendDetail}</em> (HTTP {discrepancyError.status})
+                                </div>
+                            )}
+                            {Array.isArray(discrepancyError.allErrors) && discrepancyError.allErrors.length > 1 && (
+                                <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 12, color: '#991b1b' }}>
+                                    {discrepancyError.allErrors.map((err, i) => (
+                                        <li key={i}>{err}</li>
+                                    ))}
+                                </ul>
+                            )}
+                            {discrepancyError.transferNumber && (
+                                <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 3 }}>
+                                    Store Transfer {discrepancyError.transferNumber} status was verified before submission.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setDiscrepancyError(null)}
+                        style={{ background: 'transparent', border: 'none', color: '#991b1b', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Discrepancy Status Warning Alert Banner */}
+            {discrepancyStatusWarning && (
+                <div style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: 12
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <span style={{ fontSize: 16, color: '#d97706', marginTop: 1 }}>ℹ️</span>
+                        <div>
+                            <div style={{ fontWeight: 700, color: '#92400e', fontSize: 13.5 }}>
+                                Discrepancy Action Restriction Notice
+                            </div>
+                            <div style={{ fontSize: 12.5, color: '#b45309', marginTop: 2 }}>
+                                {discrepancyStatusWarning}
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setDiscrepancyStatusWarning("")}
+                        style={{ background: 'transparent', border: 'none', color: '#92400e', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Discrepancy Success Banner */}
+            {discrepancySuccessMsg && (
+                <div style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fde68a',
+                    color: '#92400e',
+                    padding: '12px 18px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <BsCheckCircleFill color="#d97706" /> {discrepancySuccessMsg}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setDiscrepancySuccessMsg("")}
+                        style={{ background: 'transparent', border: 'none', color: '#92400e', cursor: 'pointer', fontSize: 14 }}
+                    >
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            {/* Summary Error Alert (Non-blocking) */}
+            {summaryError && (
+                <div style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fef3c7',
+                    color: '#92400e',
+                    padding: '10px 16px',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                    fontSize: 13,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}>
+                    <span>ℹ️ Summary analytics notice: {summaryError}. Showing direct store transfers list.</span>
+                    <button
+                        type="button"
+                        onClick={() => fetchSummary(selectedStoreId)}
                         style={{
-                            overflowX: 'auto',
-                            overflowY: 'auto',
-                            maxHeight: '680px',
-                            position: 'relative'
+                            background: '#f59e0b',
+                            color: '#fff',
+                            border: 'none',
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer'
                         }}
                     >
-                        <table style={{
-                            width: '100%',
-                            minWidth: '1440px',
-                            borderCollapse: 'separate',
-                            borderSpacing: 0,
-                            textAlign: 'left',
-                            fontSize: 13
-                        }}>
-                            <thead style={{
-                                background: '#f9fafb',
-                                color: '#4b5563',
-                                fontWeight: 600
-                            }}>
-                                <tr>
-                                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 150, whiteSpace: 'nowrap' }}>Transfer Number</th>
-                                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 140 }}>Source Store</th>
-                                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 140 }}>Destination Store</th>
-                                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 200 }}>Product Details</th>
-                                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', textAlign: 'center', minWidth: 100, whiteSpace: 'nowrap' }}>Total Items</th>
-                                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', textAlign: 'right', minWidth: 110, whiteSpace: 'nowrap' }}>Quantity</th>
-                                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 130 }}>Status</th>
-                                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 150, whiteSpace: 'nowrap' }}>Created Date</th>
-                                    <th style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', minWidth: 140 }}>Approved By</th>
-                                    <th style={{ position: 'sticky', top: 0, right: 0, zIndex: 20, background: '#f9fafb', borderBottom: '1px solid #e5e7eb', padding: '12px 16px', textAlign: 'center', minWidth: 160, whiteSpace: 'nowrap', boxShadow: '-3px 0 6px rgba(0,0,0,0.04)' }}>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {loading ? (
-                                    <tr>
-                                        <td colSpan="10" style={{ textAlign: 'center', padding: '36px 16px', color: '#6b7280' }}>
-                                            <div style={{
-                                                display: 'inline-block',
-                                                width: 24,
-                                                height: 24,
-                                                border: '3px solid #e5e7eb',
-                                                borderTopColor: '#6366f1',
-                                                borderRadius: '50%',
-                                                animation: 'spin 1s linear infinite',
-                                                marginBottom: 8
-                                            }} />
-                                            <div>Loading store transfers from backend...</div>
-                                        </td>
-                                    </tr>
-                                ) : error ? (
-                                    <tr>
-                                        <td colSpan="10" style={{ textAlign: 'center', padding: '32px 16px', color: '#dc2626' }}>
-                                            <div style={{ fontWeight: 600, marginBottom: 8 }}>{error}</div>
-                                            <button
-                                                type="button"
-                                                onClick={handleRefresh}
-                                                style={{
-                                                    background: '#dc2626',
-                                                    color: '#fff',
-                                                    border: 'none',
-                                                    padding: '6px 14px',
-                                                    borderRadius: 6,
-                                                    fontSize: 12.5,
-                                                    fontWeight: 600,
-                                                    cursor: 'pointer'
-                                                }}
-                                            >
-                                                Try Again
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ) : paginatedTransfers.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="10" style={{ textAlign: 'center', padding: '36px 16px', color: '#6b7280', fontSize: 14 }}>
-                                            {searchTerm || statusFilter !== "all"
-                                                ? "No store transfers found matching your filters."
-                                                : "No store transfers found."}
-                                        </td>
-                                    </tr>
+                        Retry Summary
+                    </button>
+                </div>
+            )}
+
+
+
+            {/* Store Transfer Analytics & Insights (from GET /api/v1/store-transfers/summary) */}
+            {summary && (
+                <div className="st-analytics-panel">
+                    <div
+                        className="st-analytics-panel-header"
+                        onClick={() => setShowAnalytics(!showAnalytics)}
+                    >
+                        <div className="st-analytics-title-group">
+                            <span style={{ fontSize: 18, color: '#6366f1' }}>📊</span>
+                            <div>
+                                <h3 className="st-analytics-main-title">
+                                    Transfer Analytics & Insights
+                                </h3>
+                                <p className="st-analytics-sub-title">
+                                    Route volume, top transferred products, and recent transfer activity
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            className="st-analytics-toggle-btn"
+                        >
+                            {showAnalytics ? <>Collapse Insights <BsChevronUp size={12} /></> : <>Expand Insights <BsChevronDown size={12} /></>}
+                        </button>
+                    </div>
+
+                    {showAnalytics && (
+                        <div className="st-analytics-grid-4">
+                            {/* 1. Top Source Stores */}
+                            <div className="st-analytics-card">
+                                <div className="st-analytics-card-header">
+                                    <BsShop style={{ color: '#6366f1' }} size={14} />
+                                    <span className="st-analytics-card-title">
+                                        Top Source Stores
+                                    </span>
+                                </div>
+                                {Array.isArray(summary.top_source_stores) && summary.top_source_stores.length > 0 ? (
+                                    <div className="st-analytics-list">
+                                        {summary.top_source_stores.slice(0, 5).map((st, i) => (
+                                            <div key={st.store_id || i} className="st-analytics-row">
+                                                <span className="st-analytics-store-name" title={st.store_name}>
+                                                    {st.store_name}
+                                                </span>
+                                                <span className="st-analytics-badge-source">
+                                                    {st.transfer_count} transfers
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 ) : (
-                                    paginatedTransfers.map((tr) => {
-                                        const trId = tr.id;
-                                        const trNum = tr.transfer_number || (trId ? `#${trId}` : '—');
-                                        const isSrcInactive = tr.source_store_id != null && inactiveStoreIds.has(Number(tr.source_store_id));
-                                        const srcStore = tr.source_store_name || (tr.source_store_id != null ? `Store #${tr.source_store_id}` : '—');
-                                        const dstStore = tr.destination_store_name || (tr.destination_store_id != null ? `Store #${tr.destination_store_id}` : '—');
-                                        const statusRaw = tr.status || 'Pending';
-                                        const statusNorm = normalizeStatus(statusRaw);
+                                    <div className="st-analytics-empty">No source store data</div>
+                                )}
+                            </div>
 
-                                        // Total items & quantity
-                                        const itemsArray = Array.isArray(tr.items) ? tr.items : [];
-                                        const totalItems = tr.total_items ?? (itemsArray.length > 0 ? itemsArray.length : 1);
-                                        const totalQuantity = tr.total_quantity ?? (
-                                            itemsArray.length > 0
-                                                ? itemsArray.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0)
-                                                : 0
-                                        );
+                            {/* 2. Top Destination Stores */}
+                            <div className="st-analytics-card">
+                                <div className="st-analytics-card-header">
+                                    <BsShop style={{ color: '#10b981' }} size={14} />
+                                    <span className="st-analytics-card-title">
+                                        Top Destination Stores
+                                    </span>
+                                </div>
+                                {Array.isArray(summary.top_destination_stores) && summary.top_destination_stores.length > 0 ? (
+                                    <div className="st-analytics-list">
+                                        {summary.top_destination_stores.slice(0, 5).map((st, i) => (
+                                            <div key={st.store_id || i} className="st-analytics-row">
+                                                <span className="st-analytics-store-name" title={st.store_name}>
+                                                    {st.store_name}
+                                                </span>
+                                                <span className="st-analytics-badge-dest">
+                                                    {st.transfer_count} transfers
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="st-analytics-empty">No destination store data</div>
+                                )}
+                            </div>
 
-                                        const createdDate = formatDateTime(tr.created_at);
-                                        const approvedBy = tr.approved_by_name || '—';
-                                        const isExpanded = expandedTransferIds.has(trId);
+                            {/* 3. Top Transferred Products */}
+                            <div className="st-analytics-card">
+                                <div className="st-analytics-card-header">
+                                    <BsBoxSeam style={{ color: '#0ea5e9' }} size={14} />
+                                    <span className="st-analytics-card-title">
+                                        Top Transferred Products
+                                    </span>
+                                </div>
+                                {Array.isArray(summary.top_transferred_products) && summary.top_transferred_products.length > 0 ? (
+                                    <div className="st-analytics-list">
+                                        {summary.top_transferred_products.slice(0, 5).map((p, i) => (
+                                            <div key={p.product_id || i} className="st-analytics-row">
+                                                <div className="st-analytics-prod-info">
+                                                    <div className="st-analytics-prod-name" title={p.product_name}>
+                                                        {p.product_name}
+                                                    </div>
+                                                    <div className="st-analytics-prod-sku">
+                                                        {p.sku ? `SKU: ${p.sku}` : `ID: #${p.product_id}`}
+                                                    </div>
+                                                </div>
+                                                <div className="st-analytics-prod-qty">
+                                                    <span className="st-analytics-qty-num">
+                                                        {Number(p.total_quantity || 0).toLocaleString('en-IN')}
+                                                    </span>
+                                                    <span className="st-analytics-qty-unit">units</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="st-analytics-empty">
+                                        No product transfer metrics available
+                                    </div>
+                                )}
+                            </div>
 
-                                        // Determine exact badge styling without altering status values
-                                        let badgeStyle = {
-                                            padding: '3px 10px',
-                                            borderRadius: 12,
-                                            fontSize: 11.5,
-                                            fontWeight: 700,
-                                            display: 'inline-block',
-                                            background: '#fef3c7',
-                                            color: '#b45309',
-                                            border: '1px solid #fde68a'
-                                        };
+                            {/* 4. Recent Activity Snapshot */}
+                            <div className="st-analytics-card">
+                                <div className="st-analytics-card-header">
+                                    <BsClockHistory style={{ color: '#f59e0b' }} size={14} />
+                                    <span className="st-analytics-card-title">
+                                        Recent Activity Snapshot
+                                    </span>
+                                </div>
+                                {Array.isArray(summary.recent_transfers) && summary.recent_transfers.length > 0 ? (
+                                    <div className="st-analytics-list">
+                                        {summary.recent_transfers.slice(0, 5).map((rt, i) => {
+                                            const stNorm = normalizeStatus(rt.status);
+                                            let badgeBg = '#fef3c7';
+                                            let badgeColor = '#b45309';
+                                            if (stNorm === 'received') {
+                                                badgeBg = '#dcfce7';
+                                                badgeColor = '#15803d';
+                                            } else if (stNorm === 'rejected') {
+                                                badgeBg = '#fee2e2';
+                                                badgeColor = '#b91c1c';
+                                            } else if (stNorm === 'approved' || stNorm === 'dispatched') {
+                                                badgeBg = '#e0e7ff';
+                                                badgeColor = '#4338ca';
+                                            }
+                                            return (
+                                                <div key={rt.id || i} className="st-analytics-activity-row">
+                                                    <div className="st-analytics-activity-head">
+                                                        <span className="st-analytics-activity-tr">
+                                                            {rt.transfer_number || `#${rt.id}`}
+                                                        </span>
+                                                        <span
+                                                            className="st-analytics-activity-status"
+                                                            style={{ background: badgeBg, color: badgeColor }}
+                                                        >
+                                                            {rt.status || 'Pending'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="st-analytics-activity-route">
+                                                        <span className="st-truncate-text">{rt.source_store_name || 'Source'}</span>
+                                                        <span style={{ color: '#94a3b8', flexShrink: 0 }}>→</span>
+                                                        <span className="st-truncate-text" style={{ fontWeight: 600, color: '#047857' }}>
+                                                            {rt.destination_store_name || 'Destination'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="st-analytics-activity-meta">
+                                                        <span>{rt.total_items} item{rt.total_items === 1 ? '' : 's'}</span>
+                                                        <span>{formatDateTime(rt.created_at)}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="st-analytics-empty">
+                                        No recent transfer snapshots found
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
 
-                                        if (statusNorm === 'received') {
-                                            badgeStyle = {
-                                                padding: '3px 10px',
-                                                borderRadius: 12,
-                                                fontSize: 11.5,
-                                                fontWeight: 700,
-                                                display: 'inline-block',
-                                                background: '#d1fae5',
-                                                color: '#047857',
-                                                border: '1px solid #a7f3d0'
-                                            };
-                                        } else if (statusNorm === 'rejected') {
-                                            badgeStyle = {
-                                                padding: '3px 10px',
-                                                borderRadius: 12,
-                                                fontSize: 11.5,
-                                                fontWeight: 700,
-                                                display: 'inline-block',
-                                                background: '#fee2e2',
-                                                color: '#b91c1c',
-                                                border: '1px solid #fecaca'
-                                            };
-                                        } else if (statusNorm === 'approved') {
-                                            badgeStyle = {
-                                                padding: '3px 10px',
-                                                borderRadius: 12,
-                                                fontSize: 11.5,
-                                                fontWeight: 700,
-                                                display: 'inline-block',
-                                                background: '#eff6ff',
-                                                color: '#1d4ed8',
-                                                border: '1px solid #bfdbfe'
-                                            };
-                                        } else if (statusNorm === 'dispatched' || statusNorm === 'in-transit') {
-                                            badgeStyle = {
-                                                padding: '3px 10px',
-                                                borderRadius: 12,
-                                                fontSize: 11.5,
-                                                fontWeight: 700,
-                                                display: 'inline-block',
-                                                background: '#f3e8ff',
-                                                color: '#7e22ce',
-                                                border: '1px solid #e9d5ff'
-                                            };
-                                        }
+            {/* Search, Store Selector & Status Filter Toolbar */}
+            <div className="st-toolbar-card">
+                <div className="st-toolbar-controls">
+                    {/* Search Input */}
+                    <div className="st-search-box">
+                        <BsSearch size={14} className="st-search-icon" />
+                        <input
+                            type="text"
+                            placeholder="Search by transfer #, store, product, SKU, or approver..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="st-search-input"
+                        />
+                    </div>
 
-                                        return (
-                                            <React.Fragment key={trId || trNum}>
-                                                <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid #f3f4f6', background: isExpanded ? '#fafafa' : '#fff' }}>
-                                                    {/* Transfer Number */}
-                                                    <td style={{ padding: '12px 16px' }}>
-                                                        <div style={{ fontWeight: 700, color: '#6366f1' }}>{trNum}</div>
-                                                        {trId && <div style={{ fontSize: 11, color: '#9ca3af' }}>ID: #{trId}</div>}
-                                                    </td>
+                    {/* Store Selector (Dynamic from stores list, no hardcoded store_id=1) */}
+                    <div className="st-filter-group">
+                        <label className="st-filter-label" htmlFor="st-store-filter">
+                            <BsShop size={14} /> Store:
+                        </label>
+                        <select
+                            id="st-store-filter"
+                            value={selectedStoreId}
+                            onChange={(e) => setSelectedStoreId(e.target.value)}
+                            className="st-filter-select"
+                        >
+                            <option value="all">All Stores (Company-wide)</option>
+                            {Array.isArray(stores) && stores.map((st) => (
+                                <option key={st.id} value={String(st.id)}>
+                                    {st.name || st.store_name || `Store #${st.id}`}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
 
-                                                    {/* Source Store */}
-                                                    <td style={{ padding: '12px 16px', fontWeight: 500, color: '#1f2937' }}>
-                                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                                            <span>{srcStore}</span>
-                                                            {isSrcInactive && (
-                                                                <span
-                                                                    title="Source store is inactive or has been deleted"
-                                                                    style={{
-                                                                        padding: '1px 6px',
-                                                                        borderRadius: 4,
-                                                                        fontSize: 10.5,
-                                                                        fontWeight: 700,
-                                                                        background: '#fee2e2',
-                                                                        color: '#dc2626',
-                                                                        border: '1px solid #fecaca'
-                                                                    }}
-                                                                >
-                                                                    Inactive
+                    {/* Status Filter */}
+                    <div className="st-filter-group">
+                        <label className="st-filter-label" htmlFor="st-status-filter">
+                            <BsFilter size={15} /> Status:
+                        </label>
+                        <select
+                            id="st-status-filter"
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                            className="st-filter-select"
+                        >
+                            <option value="all">All Status ({safeTransfers.length})</option>
+                            <option value="Pending">Pending ({pendingTransfersVal})</option>
+                            <option value="Approved">Approved ({approvedTransfersVal})</option>
+                            <option value="Dispatched">Dispatched ({dispatchedTransfersVal})</option>
+                            <option value="Received">Received ({receivedTransfersVal})</option>
+                            <option value="Rejected">Rejected ({rejectedTransfersVal})</option>
+                        </select>
+                    </div>
+                </div>
+
+                <span className="st-toolbar-badge">
+                    Store Transfer Directory
+                </span>
+            </div>
+
+            {/* Store Transfers Table Container */}
+            <div className="store-transfers-table-card">
+                <div className="store-transfers-table-container custom-scrollbar">
+                    <table className="store-transfers-table">
+                        <colgroup>
+                            <col className="st-col-tr-num" style={{ width: '10%' }} />
+                            <col className="st-col-src-store" style={{ width: '11%' }} />
+                            <col className="st-col-dst-store" style={{ width: '11%' }} />
+                            <col className="st-col-product" style={{ width: '17%' }} />
+                            <col className="st-col-items" style={{ width: '6%' }} />
+                            <col className="st-col-qty" style={{ width: '7%' }} />
+                            <col className="st-col-status" style={{ width: '9%' }} />
+                            <col className="st-col-date" style={{ width: '11%' }} />
+                            <col className="st-col-approver" style={{ width: '9%' }} />
+                            <col className="st-col-actions" style={{ width: '9%' }} />
+                        </colgroup>
+                        <thead className="st-thead">
+                            <tr className="st-thead-row">
+                                <th className="st-th st-col-tr-num">Transfer Number</th>
+                                <th className="st-th st-col-src-store">Source Store</th>
+                                <th className="st-th st-col-dst-store">Destination Store</th>
+                                <th className="st-th st-col-product">Product Details</th>
+                                <th className="st-th st-col-items st-th-center">Total Items</th>
+                                <th className="st-th st-col-qty st-th-center">Quantity</th>
+                                <th className="st-th st-col-status st-th-center">Status</th>
+                                <th className="st-th st-col-date st-th-center">Created Date</th>
+                                <th className="st-th st-col-approver">Approved By</th>
+                                <th className="st-th st-col-actions st-th-center">Actions</th>
+                            </tr>
+                        </thead>
+                    <tbody>
+                        {loading ? (
+                            <tr>
+                                <td colSpan="10" style={{ textAlign: 'center', padding: '36px 16px', color: '#6b7280' }}>
+                                    <div style={{
+                                        display: 'inline-block',
+                                        width: 24,
+                                        height: 24,
+                                        border: '3px solid #e5e7eb',
+                                        borderTopColor: '#6366f1',
+                                        borderRadius: '50%',
+                                        animation: 'spin 1s linear infinite',
+                                        marginBottom: 8
+                                    }} />
+                                    <div>Loading store transfers from backend...</div>
+                                </td>
+                            </tr>
+                        ) : error ? (
+                            <tr>
+                                <td colSpan="10" style={{ textAlign: 'center', padding: '32px 16px', color: '#dc2626' }}>
+                                    <div style={{ fontWeight: 600, marginBottom: 8 }}>{error}</div>
+                                    <button
+                                        type="button"
+                                        onClick={handleRefresh}
+                                        style={{
+                                            background: '#dc2626',
+                                            color: '#fff',
+                                            border: 'none',
+                                            padding: '6px 14px',
+                                            borderRadius: 6,
+                                            fontSize: 12.5,
+                                            fontWeight: 600,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Try Again
+                                    </button>
+                                </td>
+                            </tr>
+                        ) : paginatedTransfers.length === 0 ? (
+                            <tr>
+                                <td colSpan="10" style={{ textAlign: 'center', padding: '36px 16px', color: '#6b7280', fontSize: 13.5 }}>
+                                    {searchTerm || statusFilter !== "all"
+                                        ? "No store transfers found matching your filters."
+                                        : "No store transfers found."}
+                                </td>
+                            </tr>
+                        ) : (
+                            paginatedTransfers.map((tr) => {
+                                const trId = tr.id;
+                                const trNum = tr.transfer_number || (trId ? `#${trId}` : '—');
+                                const isSrcInactive = tr.source_store_id != null && inactiveStoreIds.has(Number(tr.source_store_id));
+                                const srcStore = tr.source_store_name || (tr.source_store_id != null ? `Store #${tr.source_store_id}` : '—');
+                                const dstStore = tr.destination_store_name || (tr.destination_store_id != null ? `Store #${tr.destination_store_id}` : '—');
+                                const statusRaw = tr.status || 'Pending';
+                                const statusNorm = normalizeStatus(statusRaw);
+
+                                // Total items & quantity
+                                const itemsArray = Array.isArray(tr.items) ? tr.items : [];
+                                const totalItems = tr.total_items ?? (itemsArray.length > 0 ? itemsArray.length : 1);
+                                const totalQuantity = tr.total_quantity ?? (
+                                    itemsArray.length > 0
+                                        ? itemsArray.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0)
+                                        : 0
+                                );
+
+                                const createdDate = formatDateTime(tr.created_at);
+                                const approvedBy = tr.approved_by_name || '—';
+                                const isExpanded = expandedTransferIds.has(trId);
+
+                                return (
+                                    <React.Fragment key={trId || trNum}>
+                                        <tr className="st-tbody-row" style={{ borderBottom: isExpanded ? 'none' : '1px solid #f1f5f9', background: isExpanded ? '#fafafa' : '#fff' }}>
+                                            {/* Transfer Number */}
+                                            <td className="st-col-tr-num">
+                                                <div className="st-tr-num-wrap">
+                                                    <span className="st-code-badge">{trNum}</span>
+                                                    {trId && <span className="st-id-sub">ID: #{trId}</span>}
+                                                </div>
+                                            </td>
+
+                                            {/* Source Store */}
+                                            <td className="st-col-src-store">
+                                                <div className="st-store-cell">
+                                                    <BsShop className="st-store-icon st-icon-src" size={13} />
+                                                    <span className="st-store-name" title={srcStore}>{srcStore}</span>
+                                                    {isSrcInactive && (
+                                                        <span
+                                                            className="st-inactive-badge"
+                                                            title="Source store is inactive or has been deleted"
+                                                        >
+                                                            Inactive
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            {/* Destination Store */}
+                                            <td className="st-col-dst-store">
+                                                <div className="st-store-cell">
+                                                    <BsShop className="st-store-icon st-icon-dst" size={13} />
+                                                    <span className="st-store-name" title={dstStore}>{dstStore}</span>
+                                                </div>
+                                            </td>
+
+                                            {/* Product Details */}
+                                            <td className="st-col-product">
+                                                {itemsArray.length > 0 ? (
+                                                    <div className="st-product-wrap">
+                                                        <span className="st-product-name" title={itemsArray[0].product_name || `Product #${itemsArray[0].product_id}`}>
+                                                            {itemsArray[0].product_name || `Product #${itemsArray[0].product_id}`}
+                                                        </span>
+                                                        <div className="st-product-sub">
+                                                            {itemsArray[0].sku && <span>SKU: {itemsArray[0].sku}</span>}
+                                                            {itemsArray.length > 1 && (
+                                                                <span className="st-more-items-badge">
+                                                                    +{itemsArray.length - 1} more item{itemsArray.length > 2 ? 's' : ''}
                                                                 </span>
                                                             )}
                                                         </div>
-                                                    </td>
+                                                    </div>
+                                                ) : (
+                                                    <span className="st-empty-dash">—</span>
+                                                )}
+                                            </td>
 
-                                                    {/* Destination Store */}
-                                                    <td style={{ padding: '12px 16px', fontWeight: 600, color: '#047857' }}>
-                                                        {dstStore}
-                                                    </td>
+                                            {/* Total Items */}
+                                            <td className="st-col-items st-td-center">
+                                                <span className="st-items-count">{totalItems}</span>
+                                            </td>
 
-                                                    {/* Product Details */}
-                                                    <td style={{ padding: '12px 16px' }}>
+                                            {/* Quantity */}
+                                            <td className="st-col-qty st-td-center">
+                                                <span className="st-quantity-val">{Number(totalQuantity).toLocaleString()}</span>
+                                            </td>
+
+                                            {/* Status Badge */}
+                                            <td className="st-col-status st-td-center">
+                                                <span className={`st-status-badge st-status-${statusNorm}`}>
+                                                    <span className="st-status-dot" />
+                                                    <span>{statusRaw}</span>
+                                                </span>
+                                            </td>
+
+                                            {/* Created Date */}
+                                            <td className="st-col-date st-td-center">
+                                                <span className="st-date-text">{createdDate}</span>
+                                            </td>
+
+                                            {/* Approved By */}
+                                            <td className="st-col-approver">
+                                                {approvedBy !== '—' ? (
+                                                    <div className="st-approver-wrap">
+                                                        <BsShieldCheck className="st-approver-icon" size={13} />
+                                                        <span className="st-approver-name" title={approvedBy}>{approvedBy}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="st-empty-dash">—</span>
+                                                )}
+                                            </td>
+
+                                            {/* Transfer Actions */}
+                                            <td className="st-col-actions st-td-center">
+                                                <div className="st-actions-wrapper">
+                                                    {/* 1. View button */}
+                                                    <button
+                                                        type="button"
+                                                        className="store-transfer-action-btn store-transfer-btn-view"
+                                                        data-tooltip="View Transfer Details"
+                                                        title="View Transfer Details"
+                                                        aria-label="View Transfer Details"
+                                                        onClick={() => handleOpenDetailsModal(trId)}
+                                                    >
+                                                        <BsEye size={14} />
+                                                    </button>
+
+                                                    {/* Subtle visual divider before status progression buttons */}
+                                                    {['pending', 'approved', 'dispatched'].includes(statusNorm) && (
+                                                        <span className="st-action-divider" />
+                                                    )}
+
+                                                    {/* 2. Status-based Workflow Progression Actions */}
+                                                    {/* Pending transfers: Approve */}
+                                                    {statusNorm === 'pending' && (
+                                                        <button
+                                                            type="button"
+                                                            className="store-transfer-action-btn store-transfer-btn-approve"
+                                                            onClick={() => handleRequestApprove(tr)}
+                                                            disabled={isSrcInactive || approvingTransferId === trId || rejectingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId}
+                                                            data-tooltip={isSrcInactive ? "Cannot approve: Source store is inactive" : "Approve Transfer"}
+                                                            title={isSrcInactive ? "Cannot approve this transfer because its source store is inactive or has been deleted." : "Approve this stock transfer"}
+                                                            aria-label="Approve this stock transfer"
+                                                            style={isSrcInactive ? { background: '#f3f4f6', color: '#9ca3af', borderColor: '#e5e7eb', cursor: 'not-allowed' } : {}}
+                                                        >
+                                                            {approvingTransferId === trId ? (
+                                                                <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                            ) : (
+                                                                <BsCheckCircle size={14} />
+                                                            )}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Pending transfers: Reject */}
+                                                    {statusNorm === 'pending' && (
+                                                        <button
+                                                            type="button"
+                                                            className="store-transfer-action-btn store-transfer-btn-reject"
+                                                            onClick={() => handleRequestReject(tr)}
+                                                            disabled={rejectingTransferId === trId || approvingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId}
+                                                            data-tooltip="Reject Transfer"
+                                                            title="Reject this stock transfer"
+                                                            aria-label="Reject this stock transfer"
+                                                        >
+                                                            {rejectingTransferId === trId ? (
+                                                                <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                            ) : (
+                                                                <BsXCircle size={14} />
+                                                            )}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Approved transfers: Dispatch */}
+                                                    {statusNorm === 'approved' && (
+                                                        <button
+                                                            type="button"
+                                                            className="store-transfer-action-btn store-transfer-btn-dispatch"
+                                                            onClick={() => handleRequestDispatch(tr)}
+                                                            disabled={dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingTransferId === trId}
+                                                            data-tooltip="Dispatch Transfer"
+                                                            title="Dispatch this approved stock transfer"
+                                                            aria-label="Dispatch this approved stock transfer"
+                                                        >
+                                                            {dispatchingTransferId === trId ? (
+                                                                <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                            ) : (
+                                                                <BsTruck size={14} />
+                                                            )}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Dispatched transfers: Receive */}
+                                                    {statusNorm === 'dispatched' && (
+                                                        <button
+                                                            type="button"
+                                                            className="store-transfer-action-btn store-transfer-btn-receive"
+                                                            onClick={() => handleRequestReceive(tr)}
+                                                            disabled={receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId}
+                                                            data-tooltip="Receive Transfer"
+                                                            title="Receive this dispatched stock transfer"
+                                                            aria-label="Receive this dispatched stock transfer"
+                                                        >
+                                                            {receivingTransferId === trId ? (
+                                                                <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                            ) : (
+                                                                <BsBoxSeam size={14} />
+                                                            )}
+                                                        </button>
+                                                    )}
+
+                                                    {/* Dispatched transfers: Receive With Discrepancy */}
+                                                    {statusNorm === 'dispatched' && (
+                                                        <button
+                                                            type="button"
+                                                            className="store-transfer-action-btn store-transfer-btn-discrepancy"
+                                                            onClick={() => handleRequestReceiveWithDiscrepancy(tr)}
+                                                            disabled={receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId || receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId}
+                                                            data-tooltip="Receive with Discrepancy"
+                                                            title="Receive this dispatched transfer with discrepancy breakdown (good, damaged, missing)"
+                                                            aria-label="Receive this dispatched transfer with discrepancy breakdown"
+                                                        >
+                                                            {verifyingDiscrepancyStatusId === trId || receivingDiscrepancyTransferId === trId ? (
+                                                                <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                                                            ) : (
+                                                                <BsExclamationTriangle size={14} />
+                                                            )}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+
+                                        {/* Expandable Items Breakdown Row */}
+                                        {isExpanded && (
+                                            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
+                                                <td colSpan="10" style={{ padding: '14px 20px' }}>
+                                                    <div className="st-expandable-card">
+                                                        <div className="st-expandable-header">
+                                                            <span>
+                                                                📦 Products in Transfer {trNum}
+                                                            </span>
+                                                            <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>
+                                                                {itemsArray.length} {itemsArray.length === 1 ? 'item' : 'items'} | Total: {Number(totalQuantity).toLocaleString()} units
+                                                            </span>
+                                                        </div>
+
                                                         {itemsArray.length > 0 ? (
-                                                            <div>
-                                                                <div style={{ fontWeight: 600, color: '#0f172a' }}>
-                                                                    {itemsArray[0].product_name || `Product #${itemsArray[0].product_id}`}
-                                                                </div>
-                                                                <div style={{ fontSize: 11, color: '#64748b' }}>
-                                                                    {itemsArray[0].sku ? `SKU: ${itemsArray[0].sku}` : ''}
-                                                                    {itemsArray.length > 1 && (
-                                                                        <span style={{ color: '#6366f1', marginLeft: 4, fontWeight: 500 }}>
-                                                                            (+{itemsArray.length - 1} more item{itemsArray.length > 2 ? 's' : ''})
-                                                                        </span>
-                                                                    )}
-                                                                </div>
+                                                            <div className="custom-scrollbar" style={{ overflowX: 'auto' }}>
+                                                                <table className="st-sub-table">
+                                                                    <thead>
+                                                                        <tr>
+                                                                            <th>Product ID</th>
+                                                                            <th>Product Details</th>
+                                                                            <th>SKU</th>
+                                                                            <th style={{ textAlign: 'right' }}>Quantity</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        {itemsArray.map((item, idx) => (
+                                                                            <tr key={item.product_id || idx}>
+                                                                                <td style={{ color: '#4f46e5', fontWeight: 600 }}>
+                                                                                    #{item.product_id}
+                                                                                </td>
+                                                                                <td style={{ fontWeight: 500, color: '#0f172a' }}>
+                                                                                    {item.product_name || '—'}
+                                                                                </td>
+                                                                                <td style={{ color: '#64748b' }}>
+                                                                                    {item.sku || '—'}
+                                                                                </td>
+                                                                                <td style={{ textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                                                                                    {Number(item.quantity).toLocaleString()}
+                                                                                </td>
+                                                                            </tr>
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
                                                             </div>
                                                         ) : (
-                                                            <span style={{ color: '#9ca3af' }}>—</span>
-                                                        )}
-                                                    </td>
-
-                                                    {/* Total Items */}
-                                                    <td style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, color: '#374151' }}>
-                                                        {totalItems}
-                                                    </td>
-
-                                                    {/* Quantity */}
-                                                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
-                                                        {Number(totalQuantity).toLocaleString()}
-                                                    </td>
-
-                                                    {/* Status Badge */}
-                                                    <td style={{ padding: '12px 16px' }}>
-                                                        <span style={badgeStyle}>
-                                                            {statusRaw}
-                                                        </span>
-                                                    </td>
-
-                                                    {/* Created Date */}
-                                                    <td style={{ padding: '12px 16px', color: '#4b5563', fontSize: 12.5, whiteSpace: 'nowrap' }}>
-                                                        {createdDate}
-                                                    </td>
-
-                                                    {/* Approved By */}
-                                                    <td style={{ padding: '12px 16px', color: approvedBy !== '—' ? '#047857' : '#9ca3af', fontWeight: approvedBy !== '—' ? 600 : 400 }}>
-                                                        {approvedBy}
-                                                    </td>
-
-                                                    {/* Transfer Actions */}
-                                                    <td
-                                                        className="store-transfers-actions-cell"
-                                                        style={{
-                                                            position: 'sticky',
-                                                            right: 0,
-                                                            zIndex: 10,
-                                                            background: isExpanded ? '#fafafa' : '#ffffff',
-                                                            padding: '10px 16px',
-                                                            textAlign: 'center',
-                                                            whiteSpace: 'nowrap',
-                                                            boxShadow: '-3px 0 6px rgba(0,0,0,0.04)'
-                                                        }}
-                                                    >
-                                                        <div
-                                                            className="store-transfers-actions-wrapper"
-                                                            style={{
-                                                                display: 'inline-flex',
-                                                                alignItems: 'center',
-                                                                justifyContent: 'center',
-                                                                gap: 6,
-                                                                flexWrap: 'nowrap'
-                                                            }}
-                                                        >
-                                                            {/* 1. View button - Logical primary inspection action across ALL statuses */}
-                                                            <button
-                                                                type="button"
-                                                                className="store-transfer-action-btn store-transfer-btn-view"
-                                                                data-tooltip="View Transfer Details"
-                                                                title="View Transfer Details"
-                                                                aria-label="View Transfer Details"
-                                                                onClick={() => handleOpenDetailsModal(trId)}
-                                                            >
-                                                                <BsEye size={14} />
-                                                            </button>
-
-                                                            {/* Subtle visual divider before status progression buttons */}
-                                                            {['pending', 'approved', 'dispatched'].includes(statusNorm) && (
-                                                                <span className="store-transfers-action-divider" style={{ width: 1, height: 16, background: '#e2e8f0', margin: '0 3px', flexShrink: 0 }} />
-                                                            )}
-
-                                                            {/* 2. Status-based Workflow Progression Actions */}
-
-                                                            {/* Pending transfers: Approve */}
-                                                            {statusNorm === 'pending' && (
-                                                                <button
-                                                                    type="button"
-                                                                    className="store-transfer-action-btn store-transfer-btn-approve"
-                                                                    onClick={() => handleRequestApprove(tr)}
-                                                                    disabled={isSrcInactive || approvingTransferId === trId || rejectingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId}
-                                                                    data-tooltip={isSrcInactive ? "Cannot approve: Source store is inactive" : "Approve Transfer"}
-                                                                    title={isSrcInactive ? "Cannot approve this transfer because its source store is inactive or has been deleted." : "Approve this stock transfer"}
-                                                                    aria-label="Approve this stock transfer"
-                                                                    style={isSrcInactive ? { background: '#f3f4f6', color: '#9ca3af', borderColor: '#e5e7eb', cursor: 'not-allowed' } : {}}
-                                                                >
-                                                                    {approvingTransferId === trId ? (
-                                                                        <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                                                                    ) : (
-                                                                        <BsCheckCircle size={14} />
-                                                                    )}
-                                                                </button>
-                                                            )}
-
-                                                            {/* Pending transfers: Reject */}
-                                                            {statusNorm === 'pending' && (
-                                                                <button
-                                                                    type="button"
-                                                                    className="store-transfer-action-btn store-transfer-btn-reject"
-                                                                    onClick={() => handleRequestReject(tr)}
-                                                                    disabled={rejectingTransferId === trId || approvingTransferId === trId || dispatchingTransferId === trId || receivingTransferId === trId}
-                                                                    data-tooltip="Reject Transfer"
-                                                                    title="Reject this stock transfer"
-                                                                    aria-label="Reject this stock transfer"
-                                                                >
-                                                                    {rejectingTransferId === trId ? (
-                                                                        <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                                                                    ) : (
-                                                                        <BsXCircle size={14} />
-                                                                    )}
-                                                                </button>
-                                                            )}
-
-                                                            {/* Approved transfers: Dispatch */}
-                                                            {statusNorm === 'approved' && (
-                                                                <button
-                                                                    type="button"
-                                                                    className="store-transfer-action-btn store-transfer-btn-dispatch"
-                                                                    onClick={() => handleRequestDispatch(tr)}
-                                                                    disabled={dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingTransferId === trId}
-                                                                    data-tooltip="Dispatch Transfer"
-                                                                    title="Dispatch this approved stock transfer"
-                                                                    aria-label="Dispatch this approved stock transfer"
-                                                                >
-                                                                    {dispatchingTransferId === trId ? (
-                                                                        <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                                                                    ) : (
-                                                                        <BsTruck size={14} />
-                                                                    )}
-                                                                </button>
-                                                            )}
-
-                                                            {/* Dispatched transfers: Receive */}
-                                                            {statusNorm === 'dispatched' && (
-                                                                <button
-                                                                    type="button"
-                                                                    className="store-transfer-action-btn store-transfer-btn-receive"
-                                                                    onClick={() => handleRequestReceive(tr)}
-                                                                    disabled={receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId || receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId}
-                                                                    data-tooltip="Receive Transfer"
-                                                                    title="Receive this dispatched stock transfer"
-                                                                    aria-label="Receive this dispatched stock transfer"
-                                                                >
-                                                                    {receivingTransferId === trId ? (
-                                                                        <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                                                                    ) : (
-                                                                        <BsBoxSeam size={14} />
-                                                                    )}
-                                                                </button>
-                                                            )}
-
-                                                            {/* Dispatched transfers: Receive With Discrepancy */}
-                                                            {statusNorm === 'dispatched' && (
-                                                                <button
-                                                                    type="button"
-                                                                    className="store-transfer-action-btn store-transfer-btn-discrepancy"
-                                                                    onClick={() => handleRequestReceiveWithDiscrepancy(tr)}
-                                                                    disabled={receivingDiscrepancyTransferId === trId || verifyingDiscrepancyStatusId === trId || receivingTransferId === trId || dispatchingTransferId === trId || approvingTransferId === trId || rejectingTransferId === trId}
-                                                                    data-tooltip="Receive with Discrepancy"
-                                                                    title="Receive this dispatched transfer with discrepancy breakdown (good, damaged, missing)"
-                                                                    aria-label="Receive this dispatched transfer with discrepancy breakdown"
-                                                                >
-                                                                    {verifyingDiscrepancyStatusId === trId || receivingDiscrepancyTransferId === trId ? (
-                                                                        <span style={{ display: 'inline-block', width: 13, height: 13, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                                                                    ) : (
-                                                                        <BsExclamationTriangle size={14} />
-                                                                    )}
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                </tr>
-
-                                                {/* Expandable Items Breakdown Row */}
-                                                {isExpanded && (
-                                                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-                                                        <td colSpan="10" style={{ padding: '14px 20px' }}>
-                                                            <div style={{
-                                                                background: '#fff',
-                                                                borderRadius: 10,
-                                                                border: '1px solid #e2e8f0',
-                                                                padding: 14,
-                                                                boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)'
-                                                            }}>
-                                                                <div style={{
-                                                                    fontSize: 13,
-                                                                    fontWeight: 700,
-                                                                    color: '#1e293b',
-                                                                    marginBottom: 10,
-                                                                    display: 'flex',
-                                                                    alignItems: 'center',
-                                                                    justifyContent: 'space-between'
-                                                                }}>
-                                                                    <span>
-                                                                        📦 Products in Transfer {trNum}
-                                                                    </span>
-                                                                    <span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>
-                                                                        {itemsArray.length} {itemsArray.length === 1 ? 'item' : 'items'} | Total: {Number(totalQuantity).toLocaleString()} units
-                                                                    </span>
-                                                                </div>
-
-                                                                {itemsArray.length > 0 ? (
-                                                                    <div className="custom-scrollbar" style={{ overflowX: 'auto' }}>
-                                                                        <table style={{ width: '100%', minWidth: '550px', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                                                                            <thead>
-                                                                                <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b', textAlign: 'left', background: '#f8fafc' }}>
-                                                                                    <th style={{ padding: '8px 12px' }}>Product ID</th>
-                                                                                    <th style={{ padding: '8px 12px' }}>Product Details</th>
-                                                                                    <th style={{ padding: '8px 12px' }}>SKU</th>
-                                                                                    <th style={{ padding: '8px 12px', textAlign: 'right' }}>Quantity</th>
-                                                                                </tr>
-                                                                            </thead>
-                                                                            <tbody>
-                                                                                {itemsArray.map((item, idx) => (
-                                                                                    <tr key={item.product_id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                                                        <td style={{ padding: '8px 12px', color: '#6366f1', fontWeight: 600 }}>
-                                                                                            #{item.product_id}
-                                                                                        </td>
-                                                                                        <td style={{ padding: '8px 12px', fontWeight: 500, color: '#0f172a' }}>
-                                                                                            {item.product_name || '—'}
-                                                                                        </td>
-                                                                                        <td style={{ padding: '8px 12px', color: '#64748b' }}>
-                                                                                            {item.sku || '—'}
-                                                                                        </td>
-                                                                                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
-                                                                                            {Number(item.quantity).toLocaleString()}
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                ))}
-                                                                            </tbody>
-                                                                        </table>
-                                                                    </div>
-                                                                ) : (
-                                                                    <div style={{ color: '#64748b', fontSize: 12 }}>
-                                                                        No individual item details returned for this transfer.
-                                                                    </div>
-                                                                )}
+                                                            <div style={{ color: '#64748b', fontSize: 12 }}>
+                                                                No individual item details returned for this transfer.
                                                             </div>
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                            </React.Fragment>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
+                                );
+                            })
+                        )}
+                    </tbody>
+                </table>
                 </div>
+            </div>
 
-                {/* Pagination Toolbar */}
-                {totalPages > 1 && (
-                    <div className="store-transfers-pagination-footer">
-                        {/* Left column placeholder */}
-                        <div className="store-transfers-pagination-left" />
+            {/* Pagination Toolbar */}
+            {!loading && filteredTransfers.length > 0 && (
+                <div className="store-transfers-pagination-footer">
+                    {/* Left side: Rows Per Page dropdown (no label) */}
+                    <div className="store-transfers-pagination-left">
+                        <select
+                            className="st-page-size-select"
+                            value={pageSize}
+                            onChange={(e) => {
+                                setPageSize(Number(e.target.value));
+                                setPage(1);
+                            }}
+                            aria-label="Select rows per page"
+                        >
+                            <option value={8}>8</option>
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                        </select>
+                    </div>
 
-                        {/* Centered Record Count */}
-                        <div className="store-transfers-pagination-center">
-                            <span style={{ fontSize: 13, color: '#6b7280', whiteSpace: 'nowrap' }}>
-                                Showing {Math.min(filteredTransfers.length, (page - 1) * pageSize + 1)} to {Math.min(filteredTransfers.length, page * pageSize)} of {filteredTransfers.length} records
-                            </span>
-                        </div>
+                    {/* Middle: Centered Record Count */}
+                    <div className="store-transfers-pagination-center">
+                        Showing <strong>{filteredTransfers.length === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to <strong>{Math.min(filteredTransfers.length, page * pageSize)}</strong> of <strong>{filteredTransfers.length}</strong> {filteredTransfers.length === 1 ? 'record' : 'records'}
+                    </div>
 
-                        {/* Right column pagination controls */}
-                        <div className="store-transfers-pagination-right">
+                    {/* Right side: Page Navigation Controls (Page numbers with active page highlighted, no Previous/Next) */}
+                    <div className="store-transfers-pagination-right">
+                        <div className="st-page-numbers-group">
                             {(() => {
                                 let pages = [];
                                 if (totalPages <= 7) {
@@ -13110,45 +11925,20 @@ export const StoreTransfersPage = () => {
                                 return pages.map((p, idx) => {
                                     if (p === '...') {
                                         return (
-                                            <span
-                                                key={`ellipsis-${idx}`}
-                                                style={{
-                                                    minWidth: 28,
-                                                    height: 32,
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    color: '#9ca3af',
-                                                    fontSize: 13,
-                                                    fontWeight: 600
-                                                }}
-                                            >
+                                            <span key={`ellipsis-${idx}`} className="st-page-ellipsis">
                                                 …
                                             </span>
                                         );
                                     }
+                                    const isActive = p === page;
                                     return (
                                         <button
                                             key={p}
                                             type="button"
                                             onClick={() => setPage(p)}
-                                            style={{
-                                                minWidth: 32,
-                                                height: 32,
-                                                padding: '0 6px',
-                                                borderRadius: 6,
-                                                border: p === page ? '1.5px solid #6366f1' : '1px solid #d1d5db',
-                                                background: p === page ? '#eef2ff' : '#ffffff',
-                                                color: p === page ? '#6366f1' : '#374151',
-                                                fontSize: 12.5,
-                                                fontWeight: 600,
-                                                cursor: 'pointer',
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                transition: 'all 0.15s ease'
-                                            }}
-                                            aria-current={p === page ? 'page' : undefined}
+                                            className={`st-page-btn st-page-num-btn ${isActive ? 'is-active' : ''}`}
+                                            aria-label={`Page ${p}`}
+                                            aria-current={isActive ? 'page' : undefined}
                                         >
                                             {p}
                                         </button>
@@ -13157,1155 +11947,357 @@ export const StoreTransfersPage = () => {
                             })()}
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* CREATE STOCK TRANSFER MODAL */}
-                <TransferStockModal
-                    isOpen={isCreateModalOpen}
-                    onClose={() => setIsCreateModalOpen(false)}
-                    onSuccess={handleCreateSuccess}
-                    initialSourceStoreId={selectedStoreId !== "all" ? selectedStoreId : null}
-                />
+            {/* CREATE STOCK TRANSFER MODAL */}
+            <TransferStockModal
+                isOpen={isCreateModalOpen}
+                onClose={() => setIsCreateModalOpen(false)}
+                onSuccess={handleCreateSuccess}
+                initialSourceStoreId={selectedStoreId !== "all" ? selectedStoreId : null}
+            />
 
-                {/* VIEW STORE TRANSFER DETAILS MODAL (GET /api/v1/store-transfers/{transfer_id}) */}
-                {detailsModalOpen && (
+            {/* VIEW STORE TRANSFER DETAILS MODAL (GET /api/v1/store-transfers/{transfer_id}) */}
+            {detailsModalOpen && (
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                        backdropFilter: 'blur(4px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 9999,
+                        padding: 16
+                    }}
+                    onClick={handleCloseDetailsModal}
+                >
                     <div
                         style={{
-                            position: 'fixed',
-                            inset: 0,
-                            backgroundColor: 'rgba(15, 23, 42, 0.65)',
-                            backdropFilter: 'blur(4px)',
+                            background: '#fff',
+                            borderRadius: 14,
+                            width: '100%',
+                            maxWidth: 720,
+                            maxHeight: '90vh',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
+                            overflow: 'hidden'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div style={{
+                            padding: '16px 22px',
+                            borderBottom: '1px solid #e5e7eb',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                            zIndex: 9999,
-                            padding: 16
-                        }}
-                        onClick={handleCloseDetailsModal}
-                    >
-                        <div
-                            style={{
-                                background: '#fff',
-                                borderRadius: 14,
-                                width: '100%',
-                                maxWidth: 720,
-                                maxHeight: '90vh',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-                                overflow: 'hidden'
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            {/* Modal Header */}
-                            <div style={{
-                                padding: '16px 22px',
-                                borderBottom: '1px solid #e5e7eb',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: '#f9fafb'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            justifyContent: 'space-between',
+                            background: '#f9fafb'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 8,
+                                    background: '#e0e7ff',
+                                    color: '#4f46e5',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BsArrowLeftRight size={18} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                        Transfer Details {detailsData?.transfer_number ? `— ${detailsData.transfer_number}` : (selectedDetailsTransferId ? `— #${selectedDetailsTransferId}` : '')}
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280' }}>
+                                        Complete transfer details and itemized product breakdown
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={handleCloseDetailsModal}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#6b7280',
+                                    cursor: 'pointer',
+                                    fontSize: 18,
+                                    padding: '4px 8px',
+                                    borderRadius: 6
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '20px 22px', overflowY: 'auto', flex: 1 }}>
+                            {detailsLoading ? (
+                                <div style={{ textAlign: 'center', padding: '48px 16px', color: '#6b7280' }}>
                                     <div style={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: 8,
-                                        background: '#e0e7ff',
-                                        color: '#4f46e5',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <BsArrowLeftRight size={18} />
-                                    </div>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
-                                            Transfer Details {detailsData?.transfer_number ? `— ${detailsData.transfer_number}` : (selectedDetailsTransferId ? `— #${selectedDetailsTransferId}` : '')}
-                                        </h3>
-                                        <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280' }}>
-                                            Complete transfer details and itemized product breakdown
-                                        </p>
+                                        display: 'inline-block',
+                                        width: 28,
+                                        height: 28,
+                                        border: '3px solid #e5e7eb',
+                                        borderTopColor: '#6366f1',
+                                        borderRadius: '50%',
+                                        animation: 'spin 1s linear infinite',
+                                        marginBottom: 12
+                                    }} />
+                                    <div style={{ fontSize: 13.5, fontWeight: 500 }}>
+                                        Loading store transfer #{selectedDetailsTransferId} details from backend...
                                     </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={handleCloseDetailsModal}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        color: '#6b7280',
-                                        cursor: 'pointer',
-                                        fontSize: 18,
-                                        padding: '4px 8px',
-                                        borderRadius: 6
-                                    }}
-                                >
-                                    ✕
-                                </button>
-                            </div>
-
-                            {/* Modal Body */}
-                            <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '20px 22px', overflowY: 'auto', flex: 1 }}>
-                                {detailsLoading ? (
-                                    <div style={{ textAlign: 'center', padding: '48px 16px', color: '#6b7280' }}>
+                            ) : detailsError ? (
+                                <div style={{
+                                    background: '#fef2f2',
+                                    border: '1px solid #fecaca',
+                                    borderRadius: 10,
+                                    padding: '16px 20px',
+                                    color: '#991b1b',
+                                    textAlign: 'center'
+                                }}>
+                                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
+                                        ⚠ {detailsError}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleOpenDetailsModal(selectedDetailsTransferId)}
+                                        style={{
+                                            background: '#dc2626',
+                                            color: '#fff',
+                                            border: 'none',
+                                            padding: '6px 16px',
+                                            borderRadius: 6,
+                                            fontSize: 12.5,
+                                            fontWeight: 600,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Try Again
+                                    </button>
+                                </div>
+                            ) : detailsData ? (
+                                <div>
+                                    {/* Source Store Inactive Notice */}
+                                    {detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id)) && (
                                         <div style={{
-                                            display: 'inline-block',
-                                            width: 28,
-                                            height: 28,
-                                            border: '3px solid #e5e7eb',
-                                            borderTopColor: '#6366f1',
-                                            borderRadius: '50%',
-                                            animation: 'spin 1s linear infinite',
-                                            marginBottom: 12
-                                        }} />
-                                        <div style={{ fontSize: 13.5, fontWeight: 500 }}>
-                                            Loading store transfer #{selectedDetailsTransferId} details from backend...
+                                            background: '#fef2f2',
+                                            border: '1px solid #fecaca',
+                                            borderRadius: 8,
+                                            padding: '10px 14px',
+                                            marginBottom: 16,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 8,
+                                            color: '#991b1b',
+                                            fontSize: 13,
+                                            fontWeight: 600
+                                        }}>
+                                            <BsExclamationTriangle size={16} style={{ flexShrink: 0 }} />
+                                            <span>Cannot approve this transfer because its source store is inactive or has been deleted.</span>
                                         </div>
-                                    </div>
-                                ) : detailsError ? (
+                                    )}
+
+                                    {/* Key Details Grid */}
                                     <div style={{
-                                        background: '#fef2f2',
-                                        border: '1px solid #fecaca',
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                        gap: 14,
+                                        background: '#f8fafc',
                                         borderRadius: 10,
-                                        padding: '16px 20px',
-                                        color: '#991b1b',
-                                        textAlign: 'center'
+                                        border: '1px solid #e2e8f0',
+                                        padding: '14px 16px',
+                                        marginBottom: 20
                                     }}>
-                                        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
-                                            ⚠ {detailsError}
+                                        <div>
+                                            <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Transfer Number</span>
+                                            <span style={{ fontSize: 14, fontWeight: 700, color: '#4f46e5' }}>{detailsData.transfer_number || `#${detailsData.id}`}</span>
                                         </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleOpenDetailsModal(selectedDetailsTransferId)}
-                                            style={{
-                                                background: '#dc2626',
-                                                color: '#fff',
-                                                border: 'none',
-                                                padding: '6px 16px',
-                                                borderRadius: 6,
-                                                fontSize: 12.5,
-                                                fontWeight: 600,
-                                                cursor: 'pointer'
-                                            }}
-                                        >
-                                            Try Again
-                                        </button>
-                                    </div>
-                                ) : detailsData ? (
-                                    <div>
-                                        {/* Source Store Inactive Notice */}
-                                        {detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id)) && (
-                                            <div style={{
-                                                background: '#fef2f2',
-                                                border: '1px solid #fecaca',
-                                                borderRadius: 8,
-                                                padding: '10px 14px',
-                                                marginBottom: 16,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 8,
-                                                color: '#991b1b',
-                                                fontSize: 13,
-                                                fontWeight: 600
+                                        <div>
+                                            <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Status</span>
+                                            <span style={{
+                                                display: 'inline-block',
+                                                padding: '2px 8px',
+                                                borderRadius: 10,
+                                                fontSize: 11.5,
+                                                fontWeight: 700,
+                                                marginTop: 2,
+                                                background: normalizeStatus(detailsData.status) === 'received' ? '#dcfce7' : normalizeStatus(detailsData.status) === 'rejected' ? '#fee2e2' : '#fef3c7',
+                                                color: normalizeStatus(detailsData.status) === 'received' ? '#15803d' : normalizeStatus(detailsData.status) === 'rejected' ? '#b91c1c' : '#b45309'
                                             }}>
-                                                <BsExclamationTriangle size={16} style={{ flexShrink: 0 }} />
-                                                <span>Cannot approve this transfer because its source store is inactive or has been deleted.</span>
+                                                {detailsData.status || 'Pending'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Source Store</span>
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                                <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>
+                                                    {detailsData.source_store_name || (detailsData.source_store_id != null ? `Store #${detailsData.source_store_id}` : '—')}
+                                                </span>
+                                                {detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id)) && (
+                                                    <span style={{
+                                                        padding: '1px 6px',
+                                                        borderRadius: 4,
+                                                        fontSize: 10.5,
+                                                        fontWeight: 700,
+                                                        background: '#fee2e2',
+                                                        color: '#dc2626',
+                                                        border: '1px solid #fecaca'
+                                                    }}>
+                                                        Inactive
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Destination Store</span>
+                                            <span style={{ fontSize: 13, fontWeight: 600, color: '#047857' }}>
+                                                {detailsData.destination_store_name || (detailsData.destination_store_id != null ? `Store #${detailsData.destination_store_id}` : '—')}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Created Date</span>
+                                            <span style={{ fontSize: 12.5, color: '#334155' }}>{formatDateTime(detailsData.created_at)}</span>
+                                        </div>
+                                        <div>
+                                            <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Approved By</span>
+                                            <span style={{ fontSize: 12.5, fontWeight: detailsData.approved_by_name ? 600 : 400, color: detailsData.approved_by_name ? '#047857' : '#94a3b8' }}>
+                                                {detailsData.approved_by_name || 'Not Approved Yet'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Total Items</span>
+                                            <span style={{ fontSize: 13.5, fontWeight: 700, color: '#1e293b' }}>
+                                                {detailsData.total_items ?? (Array.isArray(detailsData.items) ? detailsData.items.length : 0)} items
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Total Quantity</span>
+                                            <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0284c7' }}>
+                                                {Number(detailsData.total_quantity ?? (Array.isArray(detailsData.items) ? detailsData.items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0)).toLocaleString()} units
+                                            </span>
+                                        </div>
+
+                                        {/* Discrepancy Overview Banner inside Key Details Grid */}
+                                        {(detailsData.has_discrepancy || detailsData.total_damaged_quantity > 0 || detailsData.total_missing_quantity > 0 || detailsData.discrepancy_notes) && (
+                                            <div style={{
+                                                gridColumn: '1 / -1',
+                                                background: '#fffbeb',
+                                                border: '1px solid #fde68a',
+                                                borderRadius: 8,
+                                                padding: '12px 16px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                gap: 8
+                                            }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#92400e', fontWeight: 700, fontSize: 13.5 }}>
+                                                        <BsExclamationTriangle size={16} color="#d97706" />
+                                                        <span>Discrepancy Details (Recorded on Receipt)</span>
+                                                    </div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 12.5 }}>
+                                                        <span>Dispatched: <strong>{Number(detailsData.total_dispatched_quantity ?? detailsData.total_quantity ?? 0).toLocaleString()}</strong></span>
+                                                        <span>Good Received: <strong style={{ color: '#047857' }}>{Number(detailsData.total_received_quantity ?? 0).toLocaleString()}</strong></span>
+                                                        <span>Damaged: <strong style={{ color: '#dc2626' }}>{Number(detailsData.total_damaged_quantity ?? 0).toLocaleString()}</strong></span>
+                                                        <span>Missing: <strong style={{ color: '#d97706' }}>{Number(detailsData.total_missing_quantity ?? 0).toLocaleString()}</strong></span>
+                                                    </div>
+                                                </div>
+                                                {detailsData.discrepancy_notes && (
+                                                    <div style={{ fontSize: 12.5, color: '#b45309', borderTop: '1px dashed #fde68a', paddingTop: 6 }}>
+                                                        <strong>Discrepancy Notes:</strong> {detailsData.discrepancy_notes}
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
+                                    </div>
 
-                                        {/* Key Details Grid */}
+                                    {/* Products Table */}
+                                    <div className="custom-scrollbar" style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflowX: 'auto' }}>
                                         <div style={{
-                                            display: 'grid',
-                                            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                                            gap: 14,
                                             background: '#f8fafc',
-                                            borderRadius: 10,
-                                            border: '1px solid #e2e8f0',
-                                            padding: '14px 16px',
-                                            marginBottom: 20
-                                        }}>
-                                            <div>
-                                                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Transfer Number</span>
-                                                <span style={{ fontSize: 14, fontWeight: 700, color: '#4f46e5' }}>{detailsData.transfer_number || `#${detailsData.id}`}</span>
-                                            </div>
-                                            <div>
-                                                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Status</span>
-                                                <span style={{
-                                                    display: 'inline-block',
-                                                    padding: '2px 8px',
-                                                    borderRadius: 10,
-                                                    fontSize: 11.5,
-                                                    fontWeight: 700,
-                                                    marginTop: 2,
-                                                    background: normalizeStatus(detailsData.status) === 'received' ? '#dcfce7' : normalizeStatus(detailsData.status) === 'rejected' ? '#fee2e2' : '#fef3c7',
-                                                    color: normalizeStatus(detailsData.status) === 'received' ? '#15803d' : normalizeStatus(detailsData.status) === 'rejected' ? '#b91c1c' : '#b45309'
-                                                }}>
-                                                    {detailsData.status || 'Pending'}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Source Store</span>
-                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                                    <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>
-                                                        {detailsData.source_store_name || (detailsData.source_store_id != null ? `Store #${detailsData.source_store_id}` : '—')}
-                                                    </span>
-                                                    {detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id)) && (
-                                                        <span style={{
-                                                            padding: '1px 6px',
-                                                            borderRadius: 4,
-                                                            fontSize: 10.5,
-                                                            fontWeight: 700,
-                                                            background: '#fee2e2',
-                                                            color: '#dc2626',
-                                                            border: '1px solid #fecaca'
-                                                        }}>
-                                                            Inactive
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Destination Store</span>
-                                                <span style={{ fontSize: 13, fontWeight: 600, color: '#047857' }}>
-                                                    {detailsData.destination_store_name || (detailsData.destination_store_id != null ? `Store #${detailsData.destination_store_id}` : '—')}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Created Date</span>
-                                                <span style={{ fontSize: 12.5, color: '#334155' }}>{formatDateTime(detailsData.created_at)}</span>
-                                            </div>
-                                            <div>
-                                                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Approved By</span>
-                                                <span style={{ fontSize: 12.5, fontWeight: detailsData.approved_by_name ? 600 : 400, color: detailsData.approved_by_name ? '#047857' : '#94a3b8' }}>
-                                                    {detailsData.approved_by_name || 'Not Approved Yet'}
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Total Items</span>
-                                                <span style={{ fontSize: 13.5, fontWeight: 700, color: '#1e293b' }}>
-                                                    {detailsData.total_items ?? (Array.isArray(detailsData.items) ? detailsData.items.length : 0)} items
-                                                </span>
-                                            </div>
-                                            <div>
-                                                <span style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Total Quantity</span>
-                                                <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0284c7' }}>
-                                                    {Number(detailsData.total_quantity ?? (Array.isArray(detailsData.items) ? detailsData.items.reduce((acc, it) => acc + (Number(it.quantity) || 0), 0) : 0)).toLocaleString()} units
-                                                </span>
-                                            </div>
-
-                                            {/* Discrepancy Overview Banner inside Key Details Grid */}
-                                            {(detailsData.has_discrepancy || detailsData.total_damaged_quantity > 0 || detailsData.total_missing_quantity > 0 || detailsData.discrepancy_notes) && (
-                                                <div style={{
-                                                    gridColumn: '1 / -1',
-                                                    background: '#fffbeb',
-                                                    border: '1px solid #fde68a',
-                                                    borderRadius: 8,
-                                                    padding: '12px 16px',
-                                                    display: 'flex',
-                                                    flexDirection: 'column',
-                                                    gap: 8
-                                                }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#92400e', fontWeight: 700, fontSize: 13.5 }}>
-                                                            <BsExclamationTriangle size={16} color="#d97706" />
-                                                            <span>Discrepancy Details (Recorded on Receipt)</span>
-                                                        </div>
-                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 12.5 }}>
-                                                            <span>Dispatched: <strong>{Number(detailsData.total_dispatched_quantity ?? detailsData.total_quantity ?? 0).toLocaleString()}</strong></span>
-                                                            <span>Good Received: <strong style={{ color: '#047857' }}>{Number(detailsData.total_received_quantity ?? 0).toLocaleString()}</strong></span>
-                                                            <span>Damaged: <strong style={{ color: '#dc2626' }}>{Number(detailsData.total_damaged_quantity ?? 0).toLocaleString()}</strong></span>
-                                                            <span>Missing: <strong style={{ color: '#d97706' }}>{Number(detailsData.total_missing_quantity ?? 0).toLocaleString()}</strong></span>
-                                                        </div>
-                                                    </div>
-                                                    {detailsData.discrepancy_notes && (
-                                                        <div style={{ fontSize: 12.5, color: '#b45309', borderTop: '1px dashed #fde68a', paddingTop: 6 }}>
-                                                            <strong>Discrepancy Notes:</strong> {detailsData.discrepancy_notes}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Products Table */}
-                                        <div className="custom-scrollbar" style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflowX: 'auto' }}>
-                                            <div style={{
-                                                background: '#f8fafc',
-                                                padding: '10px 14px',
-                                                borderBottom: '1px solid #e2e8f0',
-                                                fontSize: 13,
-                                                fontWeight: 700,
-                                                color: '#1e293b',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                minWidth: '650px'
-                                            }}>
-                                                <span>📦 Transferred Products</span>
-                                                <span style={{ fontSize: 11.5, fontWeight: 600, color: '#64748b' }}>
-                                                    {Array.isArray(detailsData.items) ? detailsData.items.length : 0} item line{(Array.isArray(detailsData.items) && detailsData.items.length === 1) ? '' : 's'}
-                                                </span>
-                                            </div>
-                                            <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
-                                                <thead>
-                                                    <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>
-                                                        <th style={{ padding: '8px 12px' }}>Product ID</th>
-                                                        <th style={{ padding: '8px 12px' }}>Product Details</th>
-                                                        <th style={{ padding: '8px 12px' }}>SKU</th>
-                                                        {(detailsData.has_discrepancy || detailsData.items?.some(it => it.damaged_quantity > 0 || it.missing_quantity > 0)) ? (
-                                                            <>
-                                                                <th style={{ padding: '8px 12px', textAlign: 'right' }}>Dispatched</th>
-                                                                <th style={{ padding: '8px 12px', textAlign: 'right', color: '#047857' }}>Received</th>
-                                                                <th style={{ padding: '8px 12px', textAlign: 'right', color: '#dc2626' }}>Damaged</th>
-                                                                <th style={{ padding: '8px 12px', textAlign: 'right', color: '#d97706' }}>Missing</th>
-                                                                <th style={{ padding: '8px 12px' }}>Remarks</th>
-                                                            </>
-                                                        ) : (
-                                                            <th style={{ padding: '8px 12px', textAlign: 'right' }}>Quantity</th>
-                                                        )}
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {Array.isArray(detailsData.items) && detailsData.items.length > 0 ? (
-                                                        detailsData.items.map((item, idx) => (
-                                                            <tr key={item.product_id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                                                                <td style={{ padding: '8px 12px', fontWeight: 600, color: '#6366f1' }}>
-                                                                    #{item.product_id}
-                                                                </td>
-                                                                <td style={{ padding: '8px 12px', fontWeight: 500, color: '#0f172a' }}>
-                                                                    {item.product_name || '—'}
-                                                                </td>
-                                                                <td style={{ padding: '8px 12px', color: '#64748b' }}>
-                                                                    {item.sku || '—'}
-                                                                </td>
-                                                                {(detailsData.has_discrepancy || detailsData.items?.some(it => it.damaged_quantity > 0 || it.missing_quantity > 0)) ? (
-                                                                    <>
-                                                                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600 }}>
-                                                                            {Number(item.dispatched_quantity ?? item.quantity ?? 0).toLocaleString()}
-                                                                        </td>
-                                                                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
-                                                                            {Number(item.received_quantity ?? item.quantity ?? 0).toLocaleString()}
-                                                                        </td>
-                                                                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: item.damaged_quantity > 0 ? '#dc2626' : '#9ca3af' }}>
-                                                                            {Number(item.damaged_quantity ?? 0).toLocaleString()}
-                                                                        </td>
-                                                                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: item.missing_quantity > 0 ? '#d97706' : '#9ca3af' }}>
-                                                                            {Number(item.missing_quantity ?? 0).toLocaleString()}
-                                                                        </td>
-                                                                        <td style={{ padding: '8px 12px', color: item.remarks ? '#1f2937' : '#9ca3af', fontStyle: item.remarks ? 'normal' : 'italic' }}>
-                                                                            {item.remarks || '—'}
-                                                                        </td>
-                                                                    </>
-                                                                ) : (
-                                                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
-                                                                        {Number(item.quantity).toLocaleString()}
-                                                                    </td>
-                                                                )}
-                                                            </tr>
-                                                        ))
-                                                    ) : (
-                                                        <tr>
-                                                            <td colSpan="8" style={{ textAlign: 'center', padding: '18px 12px', color: '#94a3b8', fontStyle: 'italic' }}>
-                                                                No product items found in this transfer record.
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                ) : null}
-                            </div>
-
-                            {/* Modal Footer */}
-                            <div className="store-transfers-modal-footer">
-                                <div className="store-transfers-modal-actions-left">
-                                    {detailsData && normalizeStatus(detailsData.status) === 'pending' && (
-                                        <>
-                                            <button
-                                                type="button"
-                                                className="store-transfer-modal-btn store-transfer-modal-btn-approve"
-                                                disabled={
-                                                    (detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id))) ||
-                                                    approvingTransferId === detailsData.id ||
-                                                    rejectingTransferId === detailsData.id
-                                                }
-                                                onClick={() => handleRequestApprove(detailsData)}
-                                                title={
-                                                    detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id))
-                                                        ? "Cannot approve this transfer because its source store is inactive or has been deleted."
-                                                        : "Approve this stock transfer"
-                                                }
-                                                style={
-                                                    detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id))
-                                                        ? { background: '#9ca3af', borderColor: '#9ca3af', cursor: 'not-allowed' }
-                                                        : {}
-                                                }
-                                            >
-                                                <BsCheckCircleFill size={14} />
-                                                {approvingTransferId === detailsData.id ? 'Approving...' : 'Approve Transfer'}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="store-transfer-modal-btn store-transfer-modal-btn-reject"
-                                                disabled={rejectingTransferId === detailsData.id || approvingTransferId === detailsData.id}
-                                                onClick={() => handleRequestReject(detailsData)}
-                                                title="Reject this stock transfer"
-                                            >
-                                                <BsXCircleFill size={14} />
-                                                {rejectingTransferId === detailsData.id ? 'Rejecting...' : 'Reject Transfer'}
-                                            </button>
-                                        </>
-                                    )}
-                                    {detailsData && normalizeStatus(detailsData.status) === 'approved' && (
-                                        <button
-                                            type="button"
-                                            className="store-transfer-modal-btn store-transfer-modal-btn-dispatch"
-                                            disabled={dispatchingTransferId === detailsData.id}
-                                            onClick={() => handleRequestDispatch(detailsData)}
-                                            title="Dispatch this approved stock transfer"
-                                        >
-                                            <BsTruck size={14} />
-                                            {dispatchingTransferId === detailsData.id ? 'Dispatching...' : 'Dispatch Transfer'}
-                                        </button>
-                                    )}
-                                    {detailsData && normalizeStatus(detailsData.status) === 'dispatched' && (
-                                        <>
-                                            <button
-                                                type="button"
-                                                className="store-transfer-modal-btn store-transfer-modal-btn-receive"
-                                                disabled={receivingTransferId === detailsData.id || receivingDiscrepancyTransferId === detailsData.id || verifyingDiscrepancyStatusId === detailsData.id}
-                                                onClick={() => handleRequestReceive(detailsData)}
-                                                title="Receive this dispatched stock transfer"
-                                            >
-                                                <BsBoxSeam size={14} />
-                                                {receivingTransferId === detailsData.id ? 'Receiving...' : 'Receive Transfer'}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                className="store-transfer-modal-btn store-transfer-modal-btn-discrepancy"
-                                                disabled={receivingDiscrepancyTransferId === detailsData.id || verifyingDiscrepancyStatusId === detailsData.id || receivingTransferId === detailsData.id}
-                                                onClick={() => handleRequestReceiveWithDiscrepancy(detailsData)}
-                                                title="Receive transfer with discrepancy recorded (good, damaged, missing)"
-                                            >
-                                                <BsExclamationTriangle size={14} />
-                                                {verifyingDiscrepancyStatusId === detailsData.id ? 'Verifying...' : receivingDiscrepancyTransferId === detailsData.id ? 'Receiving...' : 'Receive with Discrepancy'}
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                                <button
-                                    type="button"
-                                    className="store-transfer-modal-btn store-transfer-modal-btn-close"
-                                    onClick={handleCloseDetailsModal}
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Approval Confirmation Modal */}
-                {confirmApproveTransfer && (
-                    <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(15, 23, 42, 0.55)',
-                        backdropFilter: 'blur(3px)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 999999,
-                        padding: 16
-                    }}>
-                        <div style={{
-                            background: '#ffffff',
-                            borderRadius: 12,
-                            width: '100%',
-                            maxWidth: 480,
-                            maxHeight: '90vh',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                            overflow: 'hidden',
-                            animation: 'fadeIn 0.15s ease-out'
-                        }}>
-                            {/* Header */}
-                            <div style={{
-                                padding: '16px 20px',
-                                borderBottom: '1px solid #e5e7eb',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: '#f9fafb',
-                                flexShrink: 0
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 34,
-                                        height: 34,
-                                        borderRadius: '50%',
-                                        background: '#d1fae5',
-                                        color: '#059669',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <BsCheckCircleFill size={18} />
-                                    </div>
-                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
-                                        Confirm Transfer Approval
-                                    </h3>
-                                </div>
-                                <button
-                                    type="button"
-                                    disabled={approvingTransferId === confirmApproveTransfer.id}
-                                    onClick={() => setConfirmApproveTransfer(null)}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        color: '#9ca3af',
-                                        cursor: 'pointer',
-                                        padding: 4
-                                    }}
-                                >
-                                    <BsX size={20} />
-                                </button>
-                            </div>
-
-                            {/* Body */}
-                            <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-                                <p style={{ margin: '0 0 14px', fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
-                                    Are you sure you want to approve this stock transfer?
-                                </p>
-                                <div style={{
-                                    background: '#f8fafc',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: 8,
-                                    padding: 12,
-                                    fontSize: 13,
-                                    color: '#475569',
-                                    display: 'grid',
-                                    gridTemplateColumns: 'auto 1fr',
-                                    rowGap: 8,
-                                    columnGap: 12
-                                }}>
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
-                                    <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                                        {confirmApproveTransfer.transfer_number || `#${confirmApproveTransfer.id}`}
-                                    </span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
-                                    <span>{confirmApproveTransfer.source_store_name || confirmApproveTransfer.source_store || `Store #${confirmApproveTransfer.source_store_id || 'N/A'}`}</span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
-                                    <span>{confirmApproveTransfer.destination_store_name || confirmApproveTransfer.destination_store || `Store #${confirmApproveTransfer.destination_store_id || 'N/A'}`}</span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items:</span>
-                                    <span>{confirmApproveTransfer.total_items ?? (confirmApproveTransfer.items?.length ?? 1)} item(s) (Quantity: {confirmApproveTransfer.total_quantity ?? '—'})</span>
-                                </div>
-                                <p style={{ margin: '14px 0 0', fontSize: 12, color: '#6b7280' }}>
-                                    This action will validate source stock availability and transition this transfer to Approved.
-                                </p>
-                            </div>
-
-                            {/* Footer */}
-                            <div style={{
-                                padding: '12px 20px',
-                                background: '#f9fafb',
-                                borderTop: '1px solid #e5e7eb',
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: 10,
-                                flexShrink: 0
-                            }}>
-                                <button
-                                    type="button"
-                                    disabled={approvingTransferId === confirmApproveTransfer.id}
-                                    onClick={() => setConfirmApproveTransfer(null)}
-                                    style={{
-                                        background: '#fff',
-                                        border: '1px solid #d1d5db',
-                                        color: '#374151',
-                                        padding: '7px 16px',
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={approvingTransferId === confirmApproveTransfer.id}
-                                    onClick={() => handleConfirmApprove(confirmApproveTransfer.id)}
-                                    style={{
-                                        background: '#059669',
-                                        border: 'none',
-                                        color: '#fff',
-                                        padding: '7px 18px',
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: approvingTransferId === confirmApproveTransfer.id ? 'not-allowed' : 'pointer',
-                                        opacity: approvingTransferId === confirmApproveTransfer.id ? 0.7 : 1,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 6
-                                    }}
-                                >
-                                    <BsCheckCircleFill size={13} />
-                                    {approvingTransferId === confirmApproveTransfer.id ? 'Approving...' : 'Confirm & Approve'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Rejection Confirmation Modal */}
-                {confirmRejectTransfer && (
-                    <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(15, 23, 42, 0.55)',
-                        backdropFilter: 'blur(3px)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 999999,
-                        padding: 16
-                    }}>
-                        <div style={{
-                            background: '#ffffff',
-                            borderRadius: 12,
-                            width: '100%',
-                            maxWidth: 480,
-                            maxHeight: '90vh',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                            overflow: 'hidden',
-                            animation: 'fadeIn 0.15s ease-out'
-                        }}>
-                            {/* Header */}
-                            <div style={{
-                                padding: '16px 20px',
-                                borderBottom: '1px solid #e5e7eb',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: '#fef2f2',
-                                flexShrink: 0
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 34,
-                                        height: 34,
-                                        borderRadius: '50%',
-                                        background: '#fee2e2',
-                                        color: '#dc2626',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <BsXCircleFill size={18} />
-                                    </div>
-                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#991b1b' }}>
-                                        Confirm Transfer Rejection
-                                    </h3>
-                                </div>
-                                <button
-                                    type="button"
-                                    disabled={rejectingTransferId === confirmRejectTransfer.id}
-                                    onClick={() => {
-                                        setConfirmRejectTransfer(null);
-                                        setRejectionReason("");
-                                        setRejectReasonError("");
-                                    }}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        color: '#9ca3af',
-                                        cursor: 'pointer',
-                                        padding: 4
-                                    }}
-                                >
-                                    <BsX size={20} />
-                                </button>
-                            </div>
-
-                            {/* Body */}
-                            <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-                                <p style={{ margin: '0 0 14px', fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
-                                    Are you sure you want to reject this stock transfer? This action will transition the transfer to Rejected.
-                                </p>
-                                <div style={{
-                                    background: '#f8fafc',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: 8,
-                                    padding: 12,
-                                    fontSize: 13,
-                                    color: '#475569',
-                                    display: 'grid',
-                                    gridTemplateColumns: 'auto 1fr',
-                                    rowGap: 8,
-                                    columnGap: 12,
-                                    marginBottom: 16
-                                }}>
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
-                                    <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                                        {confirmRejectTransfer.transfer_number || `#${confirmRejectTransfer.id}`}
-                                    </span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
-                                    <span>{confirmRejectTransfer.source_store_name || confirmRejectTransfer.source_store || `Store #${confirmRejectTransfer.source_store_id || 'N/A'}`}</span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
-                                    <span>{confirmRejectTransfer.destination_store_name || confirmRejectTransfer.destination_store || `Store #${confirmRejectTransfer.destination_store_id || 'N/A'}`}</span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items:</span>
-                                    <span>{confirmRejectTransfer.total_items ?? (confirmRejectTransfer.items?.length ?? 1)} item(s) (Quantity: {confirmRejectTransfer.total_quantity ?? '—'})</span>
-                                </div>
-
-                                {/* Rejection Reason Input */}
-                                <div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                        <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
-                                            Rejection Reason <span style={{ fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
-                                        </label>
-                                        <span style={{ fontSize: 11.5, color: rejectionReason.length > 500 ? '#dc2626' : '#6b7280' }}>
-                                            {rejectionReason.length} / 500
-                                        </span>
-                                    </div>
-                                    <textarea
-                                        value={rejectionReason}
-                                        maxLength={500}
-                                        disabled={rejectingTransferId === confirmRejectTransfer.id}
-                                        onChange={(e) => {
-                                            setRejectionReason(e.target.value);
-                                            if (e.target.value.length <= 500) {
-                                                setRejectReasonError("");
-                                            }
-                                        }}
-                                        placeholder="e.g. The source store does not have sufficient available stock to fulfill the requested transfer quantity."
-                                        rows={3}
-                                        style={{
-                                            width: '100%',
-                                            boxSizing: 'border-box',
-                                            padding: '9px 12px',
-                                            borderRadius: 8,
-                                            border: rejectReasonError ? '1px solid #ef4444' : '1px solid #d1d5db',
+                                            padding: '10px 14px',
+                                            borderBottom: '1px solid #e2e8f0',
                                             fontSize: 13,
-                                            color: '#1f2937',
-                                            resize: 'vertical',
-                                            outline: 'none',
-                                            fontFamily: 'inherit'
-                                        }}
-                                    />
-                                    {rejectReasonError && (
-                                        <p style={{ margin: '4px 0 0', fontSize: 12, color: '#dc2626' }}>
-                                            {rejectReasonError}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Footer */}
-                            <div style={{
-                                padding: '12px 20px',
-                                background: '#f9fafb',
-                                borderTop: '1px solid #e5e7eb',
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: 10,
-                                flexShrink: 0
-                            }}>
-                                <button
-                                    type="button"
-                                    disabled={rejectingTransferId === confirmRejectTransfer.id}
-                                    onClick={() => {
-                                        setConfirmRejectTransfer(null);
-                                        setRejectionReason("");
-                                        setRejectReasonError("");
-                                    }}
-                                    style={{
-                                        background: '#fff',
-                                        border: '1px solid #d1d5db',
-                                        color: '#374151',
-                                        padding: '7px 16px',
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={rejectingTransferId === confirmRejectTransfer.id}
-                                    onClick={handleConfirmReject}
-                                    style={{
-                                        background: '#dc2626',
-                                        border: 'none',
-                                        color: '#fff',
-                                        padding: '7px 18px',
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: rejectingTransferId === confirmRejectTransfer.id ? 'not-allowed' : 'pointer',
-                                        opacity: rejectingTransferId === confirmRejectTransfer.id ? 0.7 : 1,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 6
-                                    }}
-                                >
-                                    <BsXCircleFill size={13} />
-                                    {rejectingTransferId === confirmRejectTransfer.id ? 'Rejecting...' : 'Confirm & Reject'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Dispatch Confirmation Modal */}
-                {confirmDispatchTransfer && (
-                    <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(15, 23, 42, 0.55)',
-                        backdropFilter: 'blur(3px)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 999999,
-                        padding: 16
-                    }}>
-                        <div style={{
-                            background: '#ffffff',
-                            borderRadius: 12,
-                            width: '100%',
-                            maxWidth: 480,
-                            maxHeight: '90vh',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                            overflow: 'hidden',
-                            animation: 'fadeIn 0.15s ease-out'
-                        }}>
-                            {/* Header */}
-                            <div style={{
-                                padding: '16px 20px',
-                                borderBottom: '1px solid #e5e7eb',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: '#eff6ff',
-                                flexShrink: 0
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 34,
-                                        height: 34,
-                                        borderRadius: '50%',
-                                        background: '#dbeafe',
-                                        color: '#2563eb',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <BsTruck size={18} />
-                                    </div>
-                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e40af' }}>
-                                        Confirm Transfer Dispatch
-                                    </h3>
-                                </div>
-                                <button
-                                    type="button"
-                                    disabled={dispatchingTransferId === confirmDispatchTransfer.id}
-                                    onClick={() => setConfirmDispatchTransfer(null)}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        color: '#9ca3af',
-                                        cursor: 'pointer',
-                                        padding: 4
-                                    }}
-                                >
-                                    <BsX size={20} />
-                                </button>
-                            </div>
-
-                            {/* Body */}
-                            <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-                                <p style={{ margin: '0 0 14px', fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
-                                    Are you sure you want to dispatch this approved stock transfer? This will transition the transfer to Dispatched and mark inventory in transit.
-                                </p>
-                                <div style={{
-                                    background: '#f8fafc',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: 8,
-                                    padding: 12,
-                                    fontSize: 13,
-                                    color: '#475569',
-                                    display: 'grid',
-                                    gridTemplateColumns: 'auto 1fr',
-                                    rowGap: 8,
-                                    columnGap: 12
-                                }}>
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
-                                    <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                                        {confirmDispatchTransfer.transfer_number || `#${confirmDispatchTransfer.id}`}
-                                    </span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Status:</span>
-                                    <span>
-                                        <span style={{
-                                            display: 'inline-block',
-                                            padding: '2px 8px',
-                                            borderRadius: 10,
-                                            fontSize: 11,
                                             fontWeight: 700,
-                                            background: '#d1fae5',
-                                            color: '#065f46'
+                                            color: '#1e293b',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            minWidth: '650px'
                                         }}>
-                                            {confirmDispatchTransfer.status || 'Approved'}
-                                        </span>
-                                    </span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
-                                    <span>{confirmDispatchTransfer.source_store_name || confirmDispatchTransfer.source_store || `Store #${confirmDispatchTransfer.source_store_id || 'N/A'}`}</span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
-                                    <span>{confirmDispatchTransfer.destination_store_name || confirmDispatchTransfer.destination_store || `Store #${confirmDispatchTransfer.destination_store_id || 'N/A'}`}</span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items:</span>
-                                    <span>{confirmDispatchTransfer.total_items ?? (confirmDispatchTransfer.items?.length ?? 1)} item(s) (Quantity: {confirmDispatchTransfer.total_quantity ?? '—'})</span>
-                                </div>
-                            </div>
-
-                            {/* Footer */}
-                            <div style={{
-                                padding: '12px 20px',
-                                background: '#f9fafb',
-                                borderTop: '1px solid #e5e7eb',
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: 10,
-                                flexShrink: 0
-                            }}>
-                                <button
-                                    type="button"
-                                    disabled={dispatchingTransferId === confirmDispatchTransfer.id}
-                                    onClick={() => setConfirmDispatchTransfer(null)}
-                                    style={{
-                                        background: '#fff',
-                                        border: '1px solid #d1d5db',
-                                        color: '#374151',
-                                        padding: '7px 16px',
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={dispatchingTransferId === confirmDispatchTransfer.id}
-                                    onClick={handleConfirmDispatch}
-                                    style={{
-                                        background: '#2563eb',
-                                        border: 'none',
-                                        color: '#fff',
-                                        padding: '7px 18px',
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: dispatchingTransferId === confirmDispatchTransfer.id ? 'not-allowed' : 'pointer',
-                                        opacity: dispatchingTransferId === confirmDispatchTransfer.id ? 0.7 : 1,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 6
-                                    }}
-                                >
-                                    <BsTruck size={14} />
-                                    {dispatchingTransferId === confirmDispatchTransfer.id ? 'Dispatching...' : 'Confirm & Dispatch'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Receive Confirmation Modal */}
-                {confirmReceiveTransfer && (
-                    <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(15, 23, 42, 0.55)',
-                        backdropFilter: 'blur(3px)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 999999,
-                        padding: 16
-                    }}>
-                        <div style={{
-                            background: '#ffffff',
-                            borderRadius: 12,
-                            width: '100%',
-                            maxWidth: 520,
-                            maxHeight: '90vh',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                            overflow: 'hidden',
-                            animation: 'fadeIn 0.15s ease-out'
-                        }}>
-                            {/* Header */}
-                            <div style={{
-                                padding: '16px 20px',
-                                borderBottom: '1px solid #e5e7eb',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: '#ecfdf5',
-                                flexShrink: 0
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 34,
-                                        height: 34,
-                                        borderRadius: '50%',
-                                        background: '#d1fae5',
-                                        color: '#059669',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <BsBoxSeam size={17} />
-                                    </div>
-                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#065f46' }}>
-                                        Confirm Transfer Receipt
-                                    </h3>
-                                </div>
-                                <button
-                                    type="button"
-                                    disabled={receivingTransferId === confirmReceiveTransfer.id}
-                                    onClick={() => setConfirmReceiveTransfer(null)}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        color: '#9ca3af',
-                                        cursor: 'pointer',
-                                        padding: 4
-                                    }}
-                                >
-                                    <BsX size={20} />
-                                </button>
-                            </div>
-
-                            {/* Body */}
-                            <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-                                <p style={{ margin: '0 0 14px', fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
-                                    Are you sure you want to receive this dispatched stock transfer? This will transition the transfer to Received and update inventory at the destination store.
-                                </p>
-                                <div style={{
-                                    background: '#f8fafc',
-                                    border: '1px solid #e2e8f0',
-                                    borderRadius: 8,
-                                    padding: 12,
-                                    fontSize: 13,
-                                    color: '#475569',
-                                    display: 'grid',
-                                    gridTemplateColumns: 'auto 1fr',
-                                    rowGap: 8,
-                                    columnGap: 12
-                                }}>
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
-                                    <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
-                                        {confirmReceiveTransfer.transfer_number || `#${confirmReceiveTransfer.id}`}
-                                    </span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Status:</span>
-                                    <span>
-                                        <span style={{
-                                            display: 'inline-block',
-                                            padding: '2px 8px',
-                                            borderRadius: 10,
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            background: '#dbeafe',
-                                            color: '#1e40af'
-                                        }}>
-                                            {confirmReceiveTransfer.status || 'Dispatched'}
-                                        </span>
-                                    </span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
-                                    <span>{confirmReceiveTransfer.source_store_name || confirmReceiveTransfer.source_store || `Store #${confirmReceiveTransfer.source_store_id || 'N/A'}`}</span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
-                                    <span>{confirmReceiveTransfer.destination_store_name || confirmReceiveTransfer.destination_store || `Store #${confirmReceiveTransfer.destination_store_id || 'N/A'}`}</span>
-
-                                    <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items & Quantity:</span>
-                                    <span>{confirmReceiveTransfer.total_items ?? (confirmReceiveTransfer.items?.length ?? 1)} item(s) | Total: {Number(confirmReceiveTransfer.total_quantity ?? 0).toLocaleString()} units</span>
-                                </div>
-
-                                {/* Transferred Products Breakdown */}
-                                <div style={{ marginTop: 14 }}>
-                                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#374151', marginBottom: 6 }}>
-                                        Products in this transfer:
-                                    </div>
-                                    <div style={{
-                                        maxHeight: 160,
-                                        overflowY: 'auto',
-                                        border: '1px solid #e5e7eb',
-                                        borderRadius: 8,
-                                        background: '#fafafa'
-                                    }}>
-                                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                                            <span>📦 Transferred Products</span>
+                                            <span style={{ fontSize: 11.5, fontWeight: 600, color: '#64748b' }}>
+                                                {Array.isArray(detailsData.items) ? detailsData.items.length : 0} item line{(Array.isArray(detailsData.items) && detailsData.items.length === 1) ? '' : 's'}
+                                            </span>
+                                        </div>
+                                        <table style={{ width: '100%', minWidth: '650px', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
                                             <thead>
-                                                <tr style={{ background: '#f3f4f6', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>
-                                                    <th style={{ padding: '6px 10px', color: '#4b5563', fontWeight: 600 }}>Product Details</th>
-                                                    <th style={{ padding: '6px 10px', color: '#4b5563', fontWeight: 600 }}>SKU</th>
-                                                    <th style={{ padding: '6px 10px', color: '#4b5563', fontWeight: 600, textAlign: 'right' }}>Quantity</th>
+                                                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>
+                                                    <th style={{ padding: '8px 12px' }}>Product ID</th>
+                                                    <th style={{ padding: '8px 12px' }}>Product Details</th>
+                                                    <th style={{ padding: '8px 12px' }}>SKU</th>
+                                                    {(detailsData.has_discrepancy || detailsData.items?.some(it => it.damaged_quantity > 0 || it.missing_quantity > 0)) ? (
+                                                        <>
+                                                            <th style={{ padding: '8px 12px', textAlign: 'right' }}>Dispatched</th>
+                                                            <th style={{ padding: '8px 12px', textAlign: 'right', color: '#047857' }}>Received</th>
+                                                            <th style={{ padding: '8px 12px', textAlign: 'right', color: '#dc2626' }}>Damaged</th>
+                                                            <th style={{ padding: '8px 12px', textAlign: 'right', color: '#d97706' }}>Missing</th>
+                                                            <th style={{ padding: '8px 12px' }}>Remarks</th>
+                                                        </>
+                                                    ) : (
+                                                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>Quantity</th>
+                                                    )}
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                {Array.isArray(confirmReceiveTransfer.items) && confirmReceiveTransfer.items.length > 0 ? (
-                                                    confirmReceiveTransfer.items.map((it, idx) => (
-                                                        <tr key={idx} style={{ borderBottom: idx < confirmReceiveTransfer.items.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
-                                                            <td style={{ padding: '6px 10px', color: '#111827', fontWeight: 500 }}>
-                                                                {it.product_name || `Product #${it.product_id}`}
+                                                {Array.isArray(detailsData.items) && detailsData.items.length > 0 ? (
+                                                    detailsData.items.map((item, idx) => (
+                                                        <tr key={item.product_id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                                            <td style={{ padding: '8px 12px', fontWeight: 600, color: '#6366f1' }}>
+                                                                #{item.product_id}
                                                             </td>
-                                                            <td style={{ padding: '6px 10px', color: '#6b7280', fontFamily: 'monospace' }}>
-                                                                {it.sku || '—'}
+                                                            <td style={{ padding: '8px 12px', fontWeight: 500, color: '#0f172a' }}>
+                                                                {item.product_name || '—'}
                                                             </td>
-                                                            <td style={{ padding: '6px 10px', color: '#047857', fontWeight: 700, textAlign: 'right' }}>
-                                                                {Number(it.quantity || 0).toLocaleString()}
+                                                            <td style={{ padding: '8px 12px', color: '#64748b' }}>
+                                                                {item.sku || '—'}
                                                             </td>
+                                                            {(detailsData.has_discrepancy || detailsData.items?.some(it => it.damaged_quantity > 0 || it.missing_quantity > 0)) ? (
+                                                                <>
+                                                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 600 }}>
+                                                                        {Number(item.dispatched_quantity ?? item.quantity ?? 0).toLocaleString()}
+                                                                    </td>
+                                                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#047857' }}>
+                                                                        {Number(item.received_quantity ?? item.quantity ?? 0).toLocaleString()}
+                                                                    </td>
+                                                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: item.damaged_quantity > 0 ? '#dc2626' : '#9ca3af' }}>
+                                                                        {Number(item.damaged_quantity ?? 0).toLocaleString()}
+                                                                    </td>
+                                                                    <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: item.missing_quantity > 0 ? '#d97706' : '#9ca3af' }}>
+                                                                        {Number(item.missing_quantity ?? 0).toLocaleString()}
+                                                                    </td>
+                                                                    <td style={{ padding: '8px 12px', color: item.remarks ? '#1f2937' : '#9ca3af', fontStyle: item.remarks ? 'normal' : 'italic' }}>
+                                                                        {item.remarks || '—'}
+                                                                    </td>
+                                                                </>
+                                                            ) : (
+                                                                <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                                                                    {Number(item.quantity).toLocaleString()}
+                                                                </td>
+                                                            )}
                                                         </tr>
                                                     ))
                                                 ) : (
                                                     <tr>
-                                                        <td colSpan="3" style={{ padding: '8px 10px', color: '#6b7280', textAlign: 'center' }}>
-                                                            {confirmReceiveTransfer.total_quantity != null ? `${Number(confirmReceiveTransfer.total_quantity).toLocaleString()} units` : '1 unit'}
+                                                        <td colSpan="8" style={{ textAlign: 'center', padding: '18px 12px', color: '#94a3b8', fontStyle: 'italic' }}>
+                                                            No product items found in this transfer record.
                                                         </td>
                                                     </tr>
                                                 )}
@@ -14313,537 +12305,1332 @@ export const StoreTransfersPage = () => {
                                         </table>
                                     </div>
                                 </div>
-                            </div>
+                            ) : null}
+                        </div>
 
-                            {/* Footer */}
-                            <div style={{
-                                padding: '12px 20px',
-                                background: '#f9fafb',
-                                borderTop: '1px solid #e5e7eb',
-                                display: 'flex',
-                                justifyContent: 'flex-end',
-                                gap: 10,
-                                flexShrink: 0
-                            }}>
-                                <button
-                                    type="button"
-                                    disabled={receivingTransferId === confirmReceiveTransfer.id}
-                                    onClick={() => setConfirmReceiveTransfer(null)}
-                                    style={{
-                                        background: '#fff',
-                                        border: '1px solid #d1d5db',
-                                        color: '#374151',
-                                        padding: '7px 16px',
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={receivingTransferId === confirmReceiveTransfer.id}
-                                    onClick={handleConfirmReceive}
-                                    style={{
-                                        background: '#059669',
-                                        border: 'none',
-                                        color: '#fff',
-                                        padding: '7px 18px',
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: receivingTransferId === confirmReceiveTransfer.id ? 'not-allowed' : 'pointer',
-                                        opacity: receivingTransferId === confirmReceiveTransfer.id ? 0.7 : 1,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 6
-                                    }}
-                                >
-                                    <BsBoxSeam size={14} />
-                                    {receivingTransferId === confirmReceiveTransfer.id ? 'Receiving...' : 'Confirm & Receive'}
-                                </button>
+                        {/* Modal Footer */}
+                        <div className="store-transfers-modal-footer">
+                            <div className="store-transfers-modal-actions-left">
+                                {detailsData && normalizeStatus(detailsData.status) === 'pending' && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="store-transfer-modal-btn store-transfer-modal-btn-approve"
+                                            disabled={
+                                                (detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id))) ||
+                                                approvingTransferId === detailsData.id ||
+                                                rejectingTransferId === detailsData.id
+                                            }
+                                            onClick={() => handleRequestApprove(detailsData)}
+                                            title={
+                                                detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id))
+                                                    ? "Cannot approve this transfer because its source store is inactive or has been deleted."
+                                                    : "Approve this stock transfer"
+                                            }
+                                            style={
+                                                detailsData.source_store_id != null && inactiveStoreIds.has(Number(detailsData.source_store_id))
+                                                    ? { background: '#9ca3af', borderColor: '#9ca3af', cursor: 'not-allowed' }
+                                                    : {}
+                                            }
+                                        >
+                                            <BsCheckCircleFill size={14} />
+                                            {approvingTransferId === detailsData.id ? 'Approving...' : 'Approve Transfer'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="store-transfer-modal-btn store-transfer-modal-btn-reject"
+                                            disabled={rejectingTransferId === detailsData.id || approvingTransferId === detailsData.id}
+                                            onClick={() => handleRequestReject(detailsData)}
+                                            title="Reject this stock transfer"
+                                        >
+                                            <BsXCircleFill size={14} />
+                                            {rejectingTransferId === detailsData.id ? 'Rejecting...' : 'Reject Transfer'}
+                                        </button>
+                                    </>
+                                )}
+                                {detailsData && normalizeStatus(detailsData.status) === 'approved' && (
+                                    <button
+                                        type="button"
+                                        className="store-transfer-modal-btn store-transfer-modal-btn-dispatch"
+                                        disabled={dispatchingTransferId === detailsData.id}
+                                        onClick={() => handleRequestDispatch(detailsData)}
+                                        title="Dispatch this approved stock transfer"
+                                    >
+                                        <BsTruck size={14} />
+                                        {dispatchingTransferId === detailsData.id ? 'Dispatching...' : 'Dispatch Transfer'}
+                                    </button>
+                                )}
+                                {detailsData && normalizeStatus(detailsData.status) === 'dispatched' && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            className="store-transfer-modal-btn store-transfer-modal-btn-receive"
+                                            disabled={receivingTransferId === detailsData.id || receivingDiscrepancyTransferId === detailsData.id || verifyingDiscrepancyStatusId === detailsData.id}
+                                            onClick={() => handleRequestReceive(detailsData)}
+                                            title="Receive this dispatched stock transfer"
+                                        >
+                                            <BsBoxSeam size={14} />
+                                            {receivingTransferId === detailsData.id ? 'Receiving...' : 'Receive Transfer'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="store-transfer-modal-btn store-transfer-modal-btn-discrepancy"
+                                            disabled={receivingDiscrepancyTransferId === detailsData.id || verifyingDiscrepancyStatusId === detailsData.id || receivingTransferId === detailsData.id}
+                                            onClick={() => handleRequestReceiveWithDiscrepancy(detailsData)}
+                                            title="Receive transfer with discrepancy recorded (good, damaged, missing)"
+                                        >
+                                            <BsExclamationTriangle size={14} />
+                                            {verifyingDiscrepancyStatusId === detailsData.id ? 'Verifying...' : receivingDiscrepancyTransferId === detailsData.id ? 'Receiving...' : 'Receive with Discrepancy'}
+                                        </button>
+                                    </>
+                                )}
                             </div>
+                            <button
+                                type="button"
+                                className="store-transfer-modal-btn store-transfer-modal-btn-close"
+                                onClick={handleCloseDetailsModal}
+                            >
+                                Close
+                            </button>
                         </div>
                     </div>
-                )}
+                </div>
+            )}
 
-                {/* Receive With Discrepancy Modal */}
-                {discrepancyModalOpen && discrepancyTransfer && (
+            {/* Approval Confirmation Modal */}
+            {confirmApproveTransfer && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.55)',
+                    backdropFilter: 'blur(3px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 999999,
+                    padding: 16
+                }}>
                     <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: 'rgba(15, 23, 42, 0.6)',
-                        backdropFilter: 'blur(3px)',
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        width: '100%',
+                        maxWidth: 480,
+                        maxHeight: '90vh',
                         display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 999999,
-                        padding: 16
+                        flexDirection: 'column',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        overflow: 'hidden',
+                        animation: 'fadeIn 0.15s ease-out'
                     }}>
+                        {/* Header */}
                         <div style={{
-                            background: '#ffffff',
-                            borderRadius: 12,
-                            width: '100%',
-                            maxWidth: 820,
-                            maxHeight: '90vh',
+                            padding: '16px 20px',
+                            borderBottom: '1px solid #e5e7eb',
                             display: 'flex',
-                            flexDirection: 'column',
-                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                            overflow: 'hidden',
-                            animation: 'fadeIn 0.15s ease-out'
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: '#f9fafb',
+                            flexShrink: 0
                         }}>
-                            {/* Header */}
-                            <div style={{
-                                padding: '16px 22px',
-                                borderBottom: '1px solid #fde68a',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                background: '#fffbeb'
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <div style={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: '50%',
-                                        background: '#fef3c7',
-                                        color: '#d97706',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center'
-                                    }}>
-                                        <BsExclamationTriangle size={18} />
-                                    </div>
-                                    <div>
-                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#92400e' }}>
-                                            Receive Transfer With Discrepancy
-                                        </h3>
-                                        <p style={{ margin: '2px 0 0', fontSize: 12, color: '#b45309' }}>
-                                            POST /api/v1/store-transfers/{discrepancyTransfer.id}/receive-with-discrepancy
-                                        </p>
-                                    </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: '50%',
+                                    background: '#d1fae5',
+                                    color: '#059669',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BsCheckCircleFill size={18} />
                                 </div>
-                                <button
-                                    type="button"
-                                    disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
-                                    onClick={() => {
-                                        setDiscrepancyModalOpen(false);
-                                        setDiscrepancyTransfer(null);
-                                        setDiscrepancyError(null);
-                                    }}
-                                    style={{
-                                        background: 'transparent',
-                                        border: 'none',
-                                        color: '#9ca3af',
-                                        cursor: 'pointer',
-                                        padding: 4
-                                    }}
-                                >
-                                    <BsX size={22} />
-                                </button>
+                                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#111827' }}>
+                                    Confirm Transfer Approval
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={approvingTransferId === confirmApproveTransfer.id}
+                                onClick={() => setConfirmApproveTransfer(null)}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#9ca3af',
+                                    cursor: 'pointer',
+                                    padding: 4
+                                }}
+                            >
+                                <BsX size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+                            <p style={{ margin: '0 0 14px', fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
+                                Are you sure you want to approve this stock transfer?
+                            </p>
+                            <div style={{
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 8,
+                                padding: 12,
+                                fontSize: 13,
+                                color: '#475569',
+                                display: 'grid',
+                                gridTemplateColumns: 'auto 1fr',
+                                rowGap: 8,
+                                columnGap: 12
+                            }}>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                                    {confirmApproveTransfer.transfer_number || `#${confirmApproveTransfer.id}`}
+                                </span>
+
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
+                                <span>{confirmApproveTransfer.source_store_name || confirmApproveTransfer.source_store || `Store #${confirmApproveTransfer.source_store_id || 'N/A'}`}</span>
+
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
+                                <span>{confirmApproveTransfer.destination_store_name || confirmApproveTransfer.destination_store || `Store #${confirmApproveTransfer.destination_store_id || 'N/A'}`}</span>
+
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items:</span>
+                                <span>{confirmApproveTransfer.total_items ?? (confirmApproveTransfer.items?.length ?? 1)} item(s) (Quantity: {confirmApproveTransfer.total_quantity ?? '—'})</span>
+                            </div>
+                            <p style={{ margin: '14px 0 0', fontSize: 12, color: '#6b7280' }}>
+                                This action will validate source stock availability and transition this transfer to Approved.
+                            </p>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            padding: '12px 20px',
+                            background: '#f9fafb',
+                            borderTop: '1px solid #e5e7eb',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: 10,
+                            flexShrink: 0
+                        }}>
+                            <button
+                                type="button"
+                                disabled={approvingTransferId === confirmApproveTransfer.id}
+                                onClick={() => setConfirmApproveTransfer(null)}
+                                style={{
+                                    background: '#fff',
+                                    border: '1px solid #d1d5db',
+                                    color: '#374151',
+                                    padding: '7px 16px',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={approvingTransferId === confirmApproveTransfer.id}
+                                onClick={() => handleConfirmApprove(confirmApproveTransfer.id)}
+                                style={{
+                                    background: '#059669',
+                                    border: 'none',
+                                    color: '#fff',
+                                    padding: '7px 18px',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: approvingTransferId === confirmApproveTransfer.id ? 'not-allowed' : 'pointer',
+                                    opacity: approvingTransferId === confirmApproveTransfer.id ? 0.7 : 1,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6
+                                }}
+                            >
+                                <BsCheckCircleFill size={13} />
+                                {approvingTransferId === confirmApproveTransfer.id ? 'Approving...' : 'Confirm & Approve'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Rejection Confirmation Modal */}
+            {confirmRejectTransfer && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.55)',
+                    backdropFilter: 'blur(3px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 999999,
+                    padding: 16
+                }}>
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        width: '100%',
+                        maxWidth: 480,
+                        maxHeight: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        overflow: 'hidden',
+                        animation: 'fadeIn 0.15s ease-out'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            padding: '16px 20px',
+                            borderBottom: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: '#fef2f2',
+                            flexShrink: 0
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: '50%',
+                                    background: '#fee2e2',
+                                    color: '#dc2626',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BsXCircleFill size={18} />
+                                </div>
+                                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#991b1b' }}>
+                                    Confirm Transfer Rejection
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={rejectingTransferId === confirmRejectTransfer.id}
+                                onClick={() => {
+                                    setConfirmRejectTransfer(null);
+                                    setRejectionReason("");
+                                    setRejectReasonError("");
+                                }}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#9ca3af',
+                                    cursor: 'pointer',
+                                    padding: 4
+                                }}
+                            >
+                                <BsX size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+                            <p style={{ margin: '0 0 14px', fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
+                                Are you sure you want to reject this stock transfer? This action will transition the transfer to Rejected.
+                            </p>
+                            <div style={{
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 8,
+                                padding: 12,
+                                fontSize: 13,
+                                color: '#475569',
+                                display: 'grid',
+                                gridTemplateColumns: 'auto 1fr',
+                                rowGap: 8,
+                                columnGap: 12,
+                                marginBottom: 16
+                            }}>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                                    {confirmRejectTransfer.transfer_number || `#${confirmRejectTransfer.id}`}
+                                </span>
+
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
+                                <span>{confirmRejectTransfer.source_store_name || confirmRejectTransfer.source_store || `Store #${confirmRejectTransfer.source_store_id || 'N/A'}`}</span>
+
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
+                                <span>{confirmRejectTransfer.destination_store_name || confirmRejectTransfer.destination_store || `Store #${confirmRejectTransfer.destination_store_id || 'N/A'}`}</span>
+
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items:</span>
+                                <span>{confirmRejectTransfer.total_items ?? (confirmRejectTransfer.items?.length ?? 1)} item(s) (Quantity: {confirmRejectTransfer.total_quantity ?? '—'})</span>
                             </div>
 
-                            {/* Subheader / Status Bar */}
-                            <div style={{
-                                padding: '10px 22px',
-                                background: '#f8fafc',
-                                borderBottom: '1px solid #e2e8f0',
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                fontSize: 12.5,
-                                gap: 12
-                            }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                                    <span><strong>Transfer Number:</strong> <span style={{ fontFamily: 'monospace', color: '#4f46e5' }}>{discrepancyTransfer.transfer_number || `#${discrepancyTransfer.id}`}</span></span>
-                                    <span><strong>Source Store:</strong> {discrepancyTransfer.source_store_name || `Store #${discrepancyTransfer.source_store_id || 'N/A'}`}</span>
-                                    <span><strong>Destination Store:</strong> {discrepancyTransfer.destination_store_name || `Store #${discrepancyTransfer.destination_store_id || 'N/A'}`}</span>
+                            {/* Rejection Reason Input */}
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                    <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                                        Rejection Reason <span style={{ fontWeight: 400, color: '#6b7280' }}>(Optional)</span>
+                                    </label>
+                                    <span style={{ fontSize: 11.5, color: rejectionReason.length > 500 ? '#dc2626' : '#6b7280' }}>
+                                        {rejectionReason.length} / 500
+                                    </span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <textarea
+                                    value={rejectionReason}
+                                    maxLength={500}
+                                    disabled={rejectingTransferId === confirmRejectTransfer.id}
+                                    onChange={(e) => {
+                                        setRejectionReason(e.target.value);
+                                        if (e.target.value.length <= 500) {
+                                            setRejectReasonError("");
+                                        }
+                                    }}
+                                    placeholder="e.g. The source store does not have sufficient available stock to fulfill the requested transfer quantity."
+                                    rows={3}
+                                    style={{
+                                        width: '100%',
+                                        boxSizing: 'border-box',
+                                        padding: '9px 12px',
+                                        borderRadius: 8,
+                                        border: rejectReasonError ? '1px solid #ef4444' : '1px solid #d1d5db',
+                                        fontSize: 13,
+                                        color: '#1f2937',
+                                        resize: 'vertical',
+                                        outline: 'none',
+                                        fontFamily: 'inherit'
+                                    }}
+                                />
+                                {rejectReasonError && (
+                                    <p style={{ margin: '4px 0 0', fontSize: 12, color: '#dc2626' }}>
+                                        {rejectReasonError}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            padding: '12px 20px',
+                            background: '#f9fafb',
+                            borderTop: '1px solid #e5e7eb',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: 10,
+                            flexShrink: 0
+                        }}>
+                            <button
+                                type="button"
+                                disabled={rejectingTransferId === confirmRejectTransfer.id}
+                                onClick={() => {
+                                    setConfirmRejectTransfer(null);
+                                    setRejectionReason("");
+                                    setRejectReasonError("");
+                                }}
+                                style={{
+                                    background: '#fff',
+                                    border: '1px solid #d1d5db',
+                                    color: '#374151',
+                                    padding: '7px 16px',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={rejectingTransferId === confirmRejectTransfer.id}
+                                onClick={handleConfirmReject}
+                                style={{
+                                    background: '#dc2626',
+                                    border: 'none',
+                                    color: '#fff',
+                                    padding: '7px 18px',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: rejectingTransferId === confirmRejectTransfer.id ? 'not-allowed' : 'pointer',
+                                    opacity: rejectingTransferId === confirmRejectTransfer.id ? 0.7 : 1,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6
+                                }}
+                            >
+                                <BsXCircleFill size={13} />
+                                {rejectingTransferId === confirmRejectTransfer.id ? 'Rejecting...' : 'Confirm & Reject'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Dispatch Confirmation Modal */}
+            {confirmDispatchTransfer && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.55)',
+                    backdropFilter: 'blur(3px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 999999,
+                    padding: 16
+                }}>
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        width: '100%',
+                        maxWidth: 480,
+                        maxHeight: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        overflow: 'hidden',
+                        animation: 'fadeIn 0.15s ease-out'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            padding: '16px 20px',
+                            borderBottom: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: '#eff6ff',
+                            flexShrink: 0
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: '50%',
+                                    background: '#dbeafe',
+                                    color: '#2563eb',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BsTruck size={18} />
+                                </div>
+                                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#1e40af' }}>
+                                    Confirm Transfer Dispatch
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={dispatchingTransferId === confirmDispatchTransfer.id}
+                                onClick={() => setConfirmDispatchTransfer(null)}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#9ca3af',
+                                    cursor: 'pointer',
+                                    padding: 4
+                                }}
+                            >
+                                <BsX size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+                            <p style={{ margin: '0 0 14px', fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
+                                Are you sure you want to dispatch this approved stock transfer? This will transition the transfer to Dispatched and mark inventory in transit.
+                            </p>
+                            <div style={{
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 8,
+                                padding: 12,
+                                fontSize: 13,
+                                color: '#475569',
+                                display: 'grid',
+                                gridTemplateColumns: 'auto 1fr',
+                                rowGap: 8,
+                                columnGap: 12
+                            }}>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                                    {confirmDispatchTransfer.transfer_number || `#${confirmDispatchTransfer.id}`}
+                                </span>
+
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Status:</span>
+                                <span>
                                     <span style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 4,
+                                        display: 'inline-block',
                                         padding: '2px 8px',
                                         borderRadius: 10,
                                         fontSize: 11,
                                         fontWeight: 700,
-                                        background: '#dcfce7',
-                                        color: '#15803d',
-                                        border: '1px solid #bbf7d0'
+                                        background: '#d1fae5',
+                                        color: '#065f46'
                                     }}>
-                                        ✓ Status: Dispatched (Verified)
+                                        {confirmDispatchTransfer.status || 'Approved'}
                                     </span>
-                                </div>
-                            </div>
+                                </span>
 
-                            {/* Modal Body */}
-                            <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '18px 22px', overflowY: 'auto', flex: 1 }}>
-                                {/* Guidelines */}
-                                <div style={{
-                                    background: '#eff6ff',
-                                    border: '1px solid #bfdbfe',
-                                    borderRadius: 8,
-                                    padding: '10px 14px',
-                                    fontSize: 12.5,
-                                    color: '#1e40af',
-                                    marginBottom: 16,
-                                    lineHeight: 1.45
-                                }}>
-                                    <strong>Instructions:</strong> Specify the actual quantity received in good sellable condition, damaged items, and missing items for each product line. The total <strong>(Received + Damaged + Missing)</strong> must match the <strong>Dispatched Quantity</strong> for each product.
-                                </div>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
+                                <span>{confirmDispatchTransfer.source_store_name || confirmDispatchTransfer.source_store || `Store #${confirmDispatchTransfer.source_store_id || 'N/A'}`}</span>
 
-                                {/* Items Discrepancy Table */}
-                                <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
-                                    <div style={{
-                                        padding: '8px 12px',
-                                        background: '#f9fafb',
-                                        borderBottom: '1px solid #e5e7eb',
-                                        fontSize: 12.5,
-                                        fontWeight: 700,
-                                        color: '#374151',
-                                        display: 'flex',
-                                        justifyContent: 'space-between'
-                                    }}>
-                                        <span>Transfer Item Breakdown ({discrepancyItems.length} product{discrepancyItems.length === 1 ? '' : 's'})</span>
-                                        <span style={{ fontSize: 11.5, fontWeight: 500, color: '#6b7280' }}>All quantities must be non-negative integers</span>
-                                    </div>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
+                                <span>{confirmDispatchTransfer.destination_store_name || confirmDispatchTransfer.destination_store || `Store #${confirmDispatchTransfer.destination_store_id || 'N/A'}`}</span>
 
-                                    <div className="custom-scrollbar" style={{ overflowX: 'auto' }}>
-                                        <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', fontSize: 12.5 }}>
-                                            <thead>
-                                                <tr style={{ background: '#f3f4f6', borderBottom: '1px solid #e5e7eb', color: '#4b5563', textAlign: 'left' }}>
-                                                    <th style={{ padding: '8px 10px', minWidth: 160 }}>Product Details</th>
-                                                    <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Dispatched Qty</th>
-                                                    <th style={{ padding: '8px 8px', width: 105, textAlign: 'center' }}>Good Qty</th>
-                                                    <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Damaged Qty</th>
-                                                    <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Missing Qty</th>
-                                                    <th style={{ padding: '8px 8px', width: 85, textAlign: 'center' }}>Accounted Qty</th>
-                                                    <th style={{ padding: '8px 10px', minWidth: 180 }}>Item Remarks</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {discrepancyItems.map((it, idx) => {
-                                                    const rec = Number(it.received_quantity || 0);
-                                                    const dmg = Number(it.damaged_quantity || 0);
-                                                    const mis = Number(it.missing_quantity || 0);
-                                                    const disp = Number(it.dispatched_quantity || 0);
-                                                    const accounted = rec + dmg + mis;
-                                                    const isBalanced = accounted === disp;
-
-                                                    return (
-                                                        <tr key={it.product_id || idx} style={{
-                                                            borderBottom: idx < discrepancyItems.length - 1 ? '1px solid #e5e7eb' : 'none',
-                                                            background: !isBalanced ? '#fef2f2' : (dmg > 0 || mis > 0 ? '#fffbeb' : '#fff')
-                                                        }}>
-                                                            {/* Product Info */}
-                                                            <td style={{ padding: '8px 10px' }}>
-                                                                <div style={{ fontWeight: 600, color: '#111827' }}>
-                                                                    {it.product_name || `Product #${it.product_id}`}
-                                                                </div>
-                                                                <div style={{ fontSize: 11, color: '#6b7280' }}>
-                                                                    ID: #{it.product_id} {it.sku && it.sku !== '—' ? `| SKU: ${it.sku}` : ''}
-                                                                </div>
-                                                            </td>
-
-                                                            {/* Dispatched */}
-                                                            <td style={{ padding: '8px 8px', textAlign: 'center', fontWeight: 700, color: '#1e293b' }}>
-                                                                <span style={{
-                                                                    display: 'inline-block',
-                                                                    padding: '2px 8px',
-                                                                    borderRadius: 6,
-                                                                    background: '#f1f5f9',
-                                                                    color: '#334155'
-                                                                }}>
-                                                                    {disp}
-                                                                </span>
-                                                            </td>
-
-                                                            {/* Received */}
-                                                            <td style={{ padding: '8px 8px', textAlign: 'center' }}>
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    max={disp}
-                                                                    value={it.received_quantity}
-                                                                    onChange={(e) => handleUpdateDiscrepancyItem(idx, 'received_quantity', e.target.value)}
-                                                                    disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
-                                                                    style={{
-                                                                        width: '100%',
-                                                                        maxWidth: 80,
-                                                                        padding: '4px 6px',
-                                                                        border: '1px solid #10b981',
-                                                                        borderRadius: 6,
-                                                                        fontSize: 12.5,
-                                                                        fontWeight: 600,
-                                                                        textAlign: 'center',
-                                                                        color: '#065f46',
-                                                                        background: '#f0fdf4'
-                                                                    }}
-                                                                />
-                                                            </td>
-
-                                                            {/* Damaged */}
-                                                            <td style={{ padding: '8px 8px', textAlign: 'center' }}>
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    max={disp}
-                                                                    value={it.damaged_quantity}
-                                                                    onChange={(e) => handleUpdateDiscrepancyItem(idx, 'damaged_quantity', e.target.value)}
-                                                                    disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
-                                                                    style={{
-                                                                        width: '100%',
-                                                                        maxWidth: 80,
-                                                                        padding: '4px 6px',
-                                                                        border: dmg > 0 ? '1px solid #ef4444' : '1px solid #d1d5db',
-                                                                        borderRadius: 6,
-                                                                        fontSize: 12.5,
-                                                                        fontWeight: 600,
-                                                                        textAlign: 'center',
-                                                                        color: dmg > 0 ? '#b91c1c' : '#374151',
-                                                                        background: dmg > 0 ? '#fef2f2' : '#fff'
-                                                                    }}
-                                                                />
-                                                            </td>
-
-                                                            {/* Missing */}
-                                                            <td style={{ padding: '8px 8px', textAlign: 'center' }}>
-                                                                <input
-                                                                    type="number"
-                                                                    min="0"
-                                                                    max={disp}
-                                                                    value={it.missing_quantity}
-                                                                    onChange={(e) => handleUpdateDiscrepancyItem(idx, 'missing_quantity', e.target.value)}
-                                                                    disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
-                                                                    style={{
-                                                                        width: '100%',
-                                                                        maxWidth: 80,
-                                                                        padding: '4px 6px',
-                                                                        border: mis > 0 ? '1px solid #f59e0b' : '1px solid #d1d5db',
-                                                                        borderRadius: 6,
-                                                                        fontSize: 12.5,
-                                                                        fontWeight: 600,
-                                                                        textAlign: 'center',
-                                                                        color: mis > 0 ? '#b45309' : '#374151',
-                                                                        background: mis > 0 ? '#fffbeb' : '#fff'
-                                                                    }}
-                                                                />
-                                                            </td>
-
-                                                            {/* Accounted Match */}
-                                                            <td style={{ padding: '8px 8px', textAlign: 'center' }}>
-                                                                <span style={{
-                                                                    display: 'inline-block',
-                                                                    padding: '2px 6px',
-                                                                    borderRadius: 10,
-                                                                    fontSize: 11,
-                                                                    fontWeight: 700,
-                                                                    background: isBalanced ? '#d1fae5' : '#fee2e2',
-                                                                    color: isBalanced ? '#065f46' : '#991b1b',
-                                                                    border: `1px solid ${isBalanced ? '#a7f3d0' : '#fecaca'}`
-                                                                }}>
-                                                                    {accounted}/{disp}
-                                                                </span>
-                                                            </td>
-
-                                                            {/* Remarks */}
-                                                            <td style={{ padding: '8px 10px' }}>
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="Remarks for this item"
-                                                                    value={it.remarks}
-                                                                    maxLength={255}
-                                                                    onChange={(e) => handleRemarksChange(idx, e.target.value)}
-                                                                    disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
-                                                                    style={{
-                                                                        width: '100%',
-                                                                        padding: '4px 8px',
-                                                                        border: '1px solid #d1d5db',
-                                                                        borderRadius: 6,
-                                                                        fontSize: 12,
-                                                                        color: '#374151'
-                                                                    }}
-                                                                />
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                {/* Overall Notes */}
-                                <div style={{ marginBottom: 14 }}>
-                                    <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
-                                        Overall Discrepancy Notes / Remarks (Optional, max 500 chars)
-                                    </label>
-                                    <textarea
-                                        rows={2}
-                                        maxLength={500}
-                                        value={discrepancyNotes}
-                                        onChange={(e) => setDiscrepancyNotes(e.target.value)}
-                                        placeholder="e.g. Received with discrepancy: goods verified on arrival"
-                                        disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
-                                        style={{
-                                            width: '100%',
-                                            padding: '8px 10px',
-                                            border: '1px solid #d1d5db',
-                                            borderRadius: 6,
-                                            fontSize: 12.5,
-                                            color: '#1f2937',
-                                            resize: 'vertical',
-                                            boxSizing: 'border-box'
-                                        }}
-                                    />
-                                </div>
-
-                                {/* Summary Totals Bar */}
-                                {(() => {
-                                    const totalDisp = discrepancyItems.reduce((acc, it) => acc + (Number(it.dispatched_quantity) || 0), 0);
-                                    const totalRec = discrepancyItems.reduce((acc, it) => acc + (Number(it.received_quantity) || 0), 0);
-                                    const totalDmg = discrepancyItems.reduce((acc, it) => acc + (Number(it.damaged_quantity) || 0), 0);
-                                    const totalMis = discrepancyItems.reduce((acc, it) => acc + (Number(it.missing_quantity) || 0), 0);
-                                    const totalAccounted = totalRec + totalDmg + totalMis;
-                                    const isAllBalanced = totalAccounted === totalDisp && discrepancyItems.every(it => ((Number(it.received_quantity) || 0) + (Number(it.damaged_quantity) || 0) + (Number(it.missing_quantity) || 0)) === (Number(it.dispatched_quantity) || 0));
-
-                                    return (
-                                        <div style={{
-                                            display: 'flex',
-                                            flexWrap: 'wrap',
-                                            gap: 12,
-                                            padding: '10px 14px',
-                                            background: isAllBalanced ? '#f8fafc' : '#fef2f2',
-                                            border: `1px solid ${isAllBalanced ? '#e2e8f0' : '#fecaca'}`,
-                                            borderRadius: 8,
-                                            fontSize: 12.5,
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between'
-                                        }}>
-                                            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                                                <span>Dispatched Quantity: <strong>{totalDisp}</strong></span>
-                                                <span>Good Quantity: <strong style={{ color: '#047857' }}>{totalRec}</strong></span>
-                                                <span>Damaged Quantity: <strong style={{ color: '#dc2626' }}>{totalDmg}</strong></span>
-                                                <span>Missing Quantity: <strong style={{ color: '#d97706' }}>{totalMis}</strong></span>
-                                            </div>
-                                            <div>
-                                                {isAllBalanced ? (
-                                                    <span style={{ color: '#047857', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                                        ✓ All quantities balanced ({totalAccounted}/{totalDisp})
-                                                    </span>
-                                                ) : (
-                                                    <span style={{ color: '#dc2626', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                                        ⚠ Quantity mismatch: Accounted {totalAccounted} of {totalDisp} dispatched
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-
-                                {/* In-Modal Error Display */}
-                                {discrepancyError && (
-                                    <div style={{
-                                        marginTop: 14,
-                                        background: '#fef2f2',
-                                        border: '1px solid #fecaca',
-                                        borderRadius: 8,
-                                        padding: '10px 14px',
-                                        color: '#991b1b',
-                                        fontSize: 12.5
-                                    }}>
-                                        <div style={{ fontWeight: 700, marginBottom: 2 }}>
-                                            ⚠ {discrepancyError.message}
-                                        </div>
-                                        {discrepancyError.backendDetail && discrepancyError.backendDetail !== discrepancyError.message && (
-                                            <div style={{ fontSize: 11.5, color: '#b91c1c', marginTop: 2 }}>
-                                                Backend response (HTTP {discrepancyError.status}): {discrepancyError.backendDetail}
-                                            </div>
-                                        )}
-                                        {Array.isArray(discrepancyError.allErrors) && discrepancyError.allErrors.length > 1 && (
-                                            <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 11.5 }}>
-                                                {discrepancyError.allErrors.map((err, i) => (
-                                                    <li key={i}>{err}</li>
-                                                ))}
-                                            </ul>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Modal Footer */}
-                            <div style={{
-                                padding: '12px 22px',
-                                background: '#f9fafb',
-                                borderTop: '1px solid #e5e7eb',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'flex-end',
-                                gap: 10
-                            }}>
-                                <button
-                                    type="button"
-                                    disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
-                                    onClick={() => {
-                                        setDiscrepancyModalOpen(false);
-                                        setDiscrepancyTransfer(null);
-                                        setDiscrepancyError(null);
-                                    }}
-                                    style={{
-                                        background: '#fff',
-                                        border: '1px solid #d1d5db',
-                                        color: '#374151',
-                                        padding: '7px 16px',
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                    }}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id || getDiscrepancyValidationErrors().length > 0}
-                                    onClick={handleConfirmReceiveWithDiscrepancy}
-                                    style={{
-                                        background: '#d97706',
-                                        border: 'none',
-                                        color: '#fff',
-                                        padding: '7px 20px',
-                                        borderRadius: 6,
-                                        fontSize: 13,
-                                        fontWeight: 600,
-                                        cursor: (receivingDiscrepancyTransferId === discrepancyTransfer.id || getDiscrepancyValidationErrors().length > 0) ? 'not-allowed' : 'pointer',
-                                        opacity: (receivingDiscrepancyTransferId === discrepancyTransfer.id || getDiscrepancyValidationErrors().length > 0) ? 0.6 : 1,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: 6
-                                    }}
-                                >
-                                    <BsExclamationTriangle size={14} />
-                                    {receivingDiscrepancyTransferId === discrepancyTransfer.id ? 'Submitting Discrepancy Receipt...' : 'Confirm & Receive With Discrepancy'}
-                                </button>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items:</span>
+                                <span>{confirmDispatchTransfer.total_items ?? (confirmDispatchTransfer.items?.length ?? 1)} item(s) (Quantity: {confirmDispatchTransfer.total_quantity ?? '—'})</span>
                             </div>
                         </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            padding: '12px 20px',
+                            background: '#f9fafb',
+                            borderTop: '1px solid #e5e7eb',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: 10,
+                            flexShrink: 0
+                        }}>
+                            <button
+                                type="button"
+                                disabled={dispatchingTransferId === confirmDispatchTransfer.id}
+                                onClick={() => setConfirmDispatchTransfer(null)}
+                                style={{
+                                    background: '#fff',
+                                    border: '1px solid #d1d5db',
+                                    color: '#374151',
+                                    padding: '7px 16px',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={dispatchingTransferId === confirmDispatchTransfer.id}
+                                onClick={handleConfirmDispatch}
+                                style={{
+                                    background: '#2563eb',
+                                    border: 'none',
+                                    color: '#fff',
+                                    padding: '7px 18px',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: dispatchingTransferId === confirmDispatchTransfer.id ? 'not-allowed' : 'pointer',
+                                    opacity: dispatchingTransferId === confirmDispatchTransfer.id ? 0.7 : 1,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6
+                                }}
+                            >
+                                <BsTruck size={14} />
+                                {dispatchingTransferId === confirmDispatchTransfer.id ? 'Dispatching...' : 'Confirm & Dispatch'}
+                            </button>
+                        </div>
                     </div>
-                )}
-            </ModuleContainer>
+                </div>
+            )}
+
+            {/* Receive Confirmation Modal */}
+            {confirmReceiveTransfer && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.55)',
+                    backdropFilter: 'blur(3px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 999999,
+                    padding: 16
+                }}>
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        width: '100%',
+                        maxWidth: 520,
+                        maxHeight: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        overflow: 'hidden',
+                        animation: 'fadeIn 0.15s ease-out'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            padding: '16px 20px',
+                            borderBottom: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: '#ecfdf5',
+                            flexShrink: 0
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 34,
+                                    height: 34,
+                                    borderRadius: '50%',
+                                    background: '#d1fae5',
+                                    color: '#059669',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BsBoxSeam size={17} />
+                                </div>
+                                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#065f46' }}>
+                                    Confirm Transfer Receipt
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={receivingTransferId === confirmReceiveTransfer.id}
+                                onClick={() => setConfirmReceiveTransfer(null)}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#9ca3af',
+                                    cursor: 'pointer',
+                                    padding: 4
+                                }}
+                            >
+                                <BsX size={20} />
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+                            <p style={{ margin: '0 0 14px', fontSize: 14, color: '#374151', lineHeight: 1.5 }}>
+                                Are you sure you want to receive this dispatched stock transfer? This will transition the transfer to Received and update inventory at the destination store.
+                            </p>
+                            <div style={{
+                                background: '#f8fafc',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: 8,
+                                padding: 12,
+                                fontSize: 13,
+                                color: '#475569',
+                                display: 'grid',
+                                gridTemplateColumns: 'auto 1fr',
+                                rowGap: 8,
+                                columnGap: 12
+                            }}>
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Transfer Number:</span>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                                    {confirmReceiveTransfer.transfer_number || `#${confirmReceiveTransfer.id}`}
+                                </span>
+
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Status:</span>
+                                <span>
+                                    <span style={{
+                                        display: 'inline-block',
+                                        padding: '2px 8px',
+                                        borderRadius: 10,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        background: '#dbeafe',
+                                        color: '#1e40af'
+                                    }}>
+                                        {confirmReceiveTransfer.status || 'Dispatched'}
+                                    </span>
+                                </span>
+
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Source Store:</span>
+                                <span>{confirmReceiveTransfer.source_store_name || confirmReceiveTransfer.source_store || `Store #${confirmReceiveTransfer.source_store_id || 'N/A'}`}</span>
+
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Destination Store:</span>
+                                <span>{confirmReceiveTransfer.destination_store_name || confirmReceiveTransfer.destination_store || `Store #${confirmReceiveTransfer.destination_store_id || 'N/A'}`}</span>
+
+                                <span style={{ fontWeight: 600, color: '#1e293b' }}>Total Items & Quantity:</span>
+                                <span>{confirmReceiveTransfer.total_items ?? (confirmReceiveTransfer.items?.length ?? 1)} item(s) | Total: {Number(confirmReceiveTransfer.total_quantity ?? 0).toLocaleString()} units</span>
+                            </div>
+
+                            {/* Transferred Products Breakdown */}
+                            <div style={{ marginTop: 14 }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#374151', marginBottom: 6 }}>
+                                    Products in this transfer:
+                                </div>
+                                <div style={{
+                                    maxHeight: 160,
+                                    overflowY: 'auto',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: 8,
+                                    background: '#fafafa'
+                                }}>
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                                        <thead>
+                                            <tr style={{ background: '#f3f4f6', borderBottom: '1px solid #e5e7eb', textAlign: 'left' }}>
+                                                <th style={{ padding: '6px 10px', color: '#4b5563', fontWeight: 600 }}>Product Details</th>
+                                                <th style={{ padding: '6px 10px', color: '#4b5563', fontWeight: 600 }}>SKU</th>
+                                                <th style={{ padding: '6px 10px', color: '#4b5563', fontWeight: 600, textAlign: 'right' }}>Quantity</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {Array.isArray(confirmReceiveTransfer.items) && confirmReceiveTransfer.items.length > 0 ? (
+                                                confirmReceiveTransfer.items.map((it, idx) => (
+                                                    <tr key={idx} style={{ borderBottom: idx < confirmReceiveTransfer.items.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
+                                                        <td style={{ padding: '6px 10px', color: '#111827', fontWeight: 500 }}>
+                                                            {it.product_name || `Product #${it.product_id}`}
+                                                        </td>
+                                                        <td style={{ padding: '6px 10px', color: '#6b7280', fontFamily: 'monospace' }}>
+                                                            {it.sku || '—'}
+                                                        </td>
+                                                        <td style={{ padding: '6px 10px', color: '#047857', fontWeight: 700, textAlign: 'right' }}>
+                                                            {Number(it.quantity || 0).toLocaleString()}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                <tr>
+                                                    <td colSpan="3" style={{ padding: '8px 10px', color: '#6b7280', textAlign: 'center' }}>
+                                                        {confirmReceiveTransfer.total_quantity != null ? `${Number(confirmReceiveTransfer.total_quantity).toLocaleString()} units` : '1 unit'}
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{
+                            padding: '12px 20px',
+                            background: '#f9fafb',
+                            borderTop: '1px solid #e5e7eb',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: 10,
+                            flexShrink: 0
+                        }}>
+                            <button
+                                type="button"
+                                disabled={receivingTransferId === confirmReceiveTransfer.id}
+                                onClick={() => setConfirmReceiveTransfer(null)}
+                                style={{
+                                    background: '#fff',
+                                    border: '1px solid #d1d5db',
+                                    color: '#374151',
+                                    padding: '7px 16px',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={receivingTransferId === confirmReceiveTransfer.id}
+                                onClick={handleConfirmReceive}
+                                style={{
+                                    background: '#059669',
+                                    border: 'none',
+                                    color: '#fff',
+                                    padding: '7px 18px',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: receivingTransferId === confirmReceiveTransfer.id ? 'not-allowed' : 'pointer',
+                                    opacity: receivingTransferId === confirmReceiveTransfer.id ? 0.7 : 1,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6
+                                }}
+                            >
+                                <BsBoxSeam size={14} />
+                                {receivingTransferId === confirmReceiveTransfer.id ? 'Receiving...' : 'Confirm & Receive'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Receive With Discrepancy Modal */}
+            {discrepancyModalOpen && discrepancyTransfer && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    backdropFilter: 'blur(3px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 999999,
+                    padding: 16
+                }}>
+                    <div style={{
+                        background: '#ffffff',
+                        borderRadius: 12,
+                        width: '100%',
+                        maxWidth: 820,
+                        maxHeight: '90vh',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                        overflow: 'hidden',
+                        animation: 'fadeIn 0.15s ease-out'
+                    }}>
+                        {/* Header */}
+                        <div style={{
+                            padding: '16px 22px',
+                            borderBottom: '1px solid #fde68a',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: '#fffbeb'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: '50%',
+                                    background: '#fef3c7',
+                                    color: '#d97706',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}>
+                                    <BsExclamationTriangle size={18} />
+                                </div>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#92400e' }}>
+                                        Receive Transfer With Discrepancy
+                                    </h3>
+                                    <p style={{ margin: '2px 0 0', fontSize: 12, color: '#b45309' }}>
+                                        POST /api/v1/store-transfers/{discrepancyTransfer.id}/receive-with-discrepancy
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
+                                onClick={() => {
+                                    setDiscrepancyModalOpen(false);
+                                    setDiscrepancyTransfer(null);
+                                    setDiscrepancyError(null);
+                                }}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: '#9ca3af',
+                                    cursor: 'pointer',
+                                    padding: 4
+                                }}
+                            >
+                                <BsX size={22} />
+                            </button>
+                        </div>
+
+                        {/* Subheader / Status Bar */}
+                        <div style={{
+                            padding: '10px 22px',
+                            background: '#f8fafc',
+                            borderBottom: '1px solid #e2e8f0',
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            fontSize: 12.5,
+                            gap: 12
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                                <span><strong>Transfer Number:</strong> <span style={{ fontFamily: 'monospace', color: '#4f46e5' }}>{discrepancyTransfer.transfer_number || `#${discrepancyTransfer.id}`}</span></span>
+                                <span><strong>Source Store:</strong> {discrepancyTransfer.source_store_name || `Store #${discrepancyTransfer.source_store_id || 'N/A'}`}</span>
+                                <span><strong>Destination Store:</strong> {discrepancyTransfer.destination_store_name || `Store #${discrepancyTransfer.destination_store_id || 'N/A'}`}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    padding: '2px 8px',
+                                    borderRadius: 10,
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    background: '#dcfce7',
+                                    color: '#15803d',
+                                    border: '1px solid #bbf7d0'
+                                }}>
+                                    ✓ Status: Dispatched (Verified)
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="modal-scrollable-body custom-scrollbar" style={{ padding: '18px 22px', overflowY: 'auto', flex: 1 }}>
+                            {/* Guidelines */}
+                            <div style={{
+                                background: '#eff6ff',
+                                border: '1px solid #bfdbfe',
+                                borderRadius: 8,
+                                padding: '10px 14px',
+                                fontSize: 12.5,
+                                color: '#1e40af',
+                                marginBottom: 16,
+                                lineHeight: 1.45
+                            }}>
+                                <strong>Instructions:</strong> Specify the actual quantity received in good sellable condition, damaged items, and missing items for each product line. The total <strong>(Received + Damaged + Missing)</strong> must match the <strong>Dispatched Quantity</strong> for each product.
+                            </div>
+
+                            {/* Items Discrepancy Table */}
+                            <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', marginBottom: 16 }}>
+                                <div style={{
+                                    padding: '8px 12px',
+                                    background: '#f9fafb',
+                                    borderBottom: '1px solid #e5e7eb',
+                                    fontSize: 12.5,
+                                    fontWeight: 700,
+                                    color: '#374151',
+                                    display: 'flex',
+                                    justifyContent: 'space-between'
+                                }}>
+                                    <span>Transfer Item Breakdown ({discrepancyItems.length} product{discrepancyItems.length === 1 ? '' : 's'})</span>
+                                    <span style={{ fontSize: 11.5, fontWeight: 500, color: '#6b7280' }}>All quantities must be non-negative integers</span>
+                                </div>
+
+                                <div className="custom-scrollbar" style={{ overflowX: 'auto' }}>
+                                    <table style={{ width: '100%', minWidth: '780px', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                                        <thead>
+                                            <tr style={{ background: '#f3f4f6', borderBottom: '1px solid #e5e7eb', color: '#4b5563', textAlign: 'left' }}>
+                                                <th style={{ padding: '8px 10px', minWidth: 160 }}>Product Details</th>
+                                                <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Dispatched Qty</th>
+                                                <th style={{ padding: '8px 8px', width: 105, textAlign: 'center' }}>Good Qty</th>
+                                                <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Damaged Qty</th>
+                                                <th style={{ padding: '8px 8px', width: 95, textAlign: 'center' }}>Missing Qty</th>
+                                                <th style={{ padding: '8px 8px', width: 85, textAlign: 'center' }}>Accounted Qty</th>
+                                                <th style={{ padding: '8px 10px', minWidth: 180 }}>Item Remarks</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {discrepancyItems.map((it, idx) => {
+                                                const rec = Number(it.received_quantity || 0);
+                                                const dmg = Number(it.damaged_quantity || 0);
+                                                const mis = Number(it.missing_quantity || 0);
+                                                const disp = Number(it.dispatched_quantity || 0);
+                                                const accounted = rec + dmg + mis;
+                                                const isBalanced = accounted === disp;
+
+                                                return (
+                                                    <tr key={it.product_id || idx} style={{
+                                                        borderBottom: idx < discrepancyItems.length - 1 ? '1px solid #e5e7eb' : 'none',
+                                                        background: !isBalanced ? '#fef2f2' : (dmg > 0 || mis > 0 ? '#fffbeb' : '#fff')
+                                                    }}>
+                                                        {/* Product Info */}
+                                                        <td style={{ padding: '8px 10px' }}>
+                                                            <div style={{ fontWeight: 600, color: '#111827' }}>
+                                                                {it.product_name || `Product #${it.product_id}`}
+                                                            </div>
+                                                            <div style={{ fontSize: 11, color: '#6b7280' }}>
+                                                                ID: #{it.product_id} {it.sku && it.sku !== '—' ? `| SKU: ${it.sku}` : ''}
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Dispatched */}
+                                                        <td style={{ padding: '8px 8px', textAlign: 'center', fontWeight: 700, color: '#1e293b' }}>
+                                                            <span style={{
+                                                                display: 'inline-block',
+                                                                padding: '2px 8px',
+                                                                borderRadius: 6,
+                                                                background: '#f1f5f9',
+                                                                color: '#334155'
+                                                            }}>
+                                                                {disp}
+                                                            </span>
+                                                        </td>
+
+                                                        {/* Received */}
+                                                        <td style={{ padding: '8px 8px', textAlign: 'center' }}>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max={disp}
+                                                                value={it.received_quantity}
+                                                                onChange={(e) => handleUpdateDiscrepancyItem(idx, 'received_quantity', e.target.value)}
+                                                                disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    maxWidth: 80,
+                                                                    padding: '4px 6px',
+                                                                    border: '1px solid #10b981',
+                                                                    borderRadius: 6,
+                                                                    fontSize: 12.5,
+                                                                    fontWeight: 600,
+                                                                    textAlign: 'center',
+                                                                    color: '#065f46',
+                                                                    background: '#f0fdf4'
+                                                                }}
+                                                            />
+                                                        </td>
+
+                                                        {/* Damaged */}
+                                                        <td style={{ padding: '8px 8px', textAlign: 'center' }}>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max={disp}
+                                                                value={it.damaged_quantity}
+                                                                onChange={(e) => handleUpdateDiscrepancyItem(idx, 'damaged_quantity', e.target.value)}
+                                                                disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    maxWidth: 80,
+                                                                    padding: '4px 6px',
+                                                                    border: dmg > 0 ? '1px solid #ef4444' : '1px solid #d1d5db',
+                                                                    borderRadius: 6,
+                                                                    fontSize: 12.5,
+                                                                    fontWeight: 600,
+                                                                    textAlign: 'center',
+                                                                    color: dmg > 0 ? '#b91c1c' : '#374151',
+                                                                    background: dmg > 0 ? '#fef2f2' : '#fff'
+                                                                }}
+                                                            />
+                                                        </td>
+
+                                                        {/* Missing */}
+                                                        <td style={{ padding: '8px 8px', textAlign: 'center' }}>
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max={disp}
+                                                                value={it.missing_quantity}
+                                                                onChange={(e) => handleUpdateDiscrepancyItem(idx, 'missing_quantity', e.target.value)}
+                                                                disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    maxWidth: 80,
+                                                                    padding: '4px 6px',
+                                                                    border: mis > 0 ? '1px solid #f59e0b' : '1px solid #d1d5db',
+                                                                    borderRadius: 6,
+                                                                    fontSize: 12.5,
+                                                                    fontWeight: 600,
+                                                                    textAlign: 'center',
+                                                                    color: mis > 0 ? '#b45309' : '#374151',
+                                                                    background: mis > 0 ? '#fffbeb' : '#fff'
+                                                                }}
+                                                            />
+                                                        </td>
+
+                                                        {/* Accounted Match */}
+                                                        <td style={{ padding: '8px 8px', textAlign: 'center' }}>
+                                                            <span style={{
+                                                                display: 'inline-block',
+                                                                padding: '2px 6px',
+                                                                borderRadius: 10,
+                                                                fontSize: 11,
+                                                                fontWeight: 700,
+                                                                background: isBalanced ? '#d1fae5' : '#fee2e2',
+                                                                color: isBalanced ? '#065f46' : '#991b1b',
+                                                                border: `1px solid ${isBalanced ? '#a7f3d0' : '#fecaca'}`
+                                                            }}>
+                                                                {accounted}/{disp}
+                                                            </span>
+                                                        </td>
+
+                                                        {/* Remarks */}
+                                                        <td style={{ padding: '8px 10px' }}>
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Remarks for this item"
+                                                                value={it.remarks}
+                                                                maxLength={255}
+                                                                onChange={(e) => handleRemarksChange(idx, e.target.value)}
+                                                                disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
+                                                                style={{
+                                                                    width: '100%',
+                                                                    padding: '4px 8px',
+                                                                    border: '1px solid #d1d5db',
+                                                                    borderRadius: 6,
+                                                                    fontSize: 12,
+                                                                    color: '#374151'
+                                                                }}
+                                                            />
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Overall Notes */}
+                            <div style={{ marginBottom: 14 }}>
+                                <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+                                    Overall Discrepancy Notes / Remarks (Optional, max 500 chars)
+                                </label>
+                                <textarea
+                                    rows={2}
+                                    maxLength={500}
+                                    value={discrepancyNotes}
+                                    onChange={(e) => setDiscrepancyNotes(e.target.value)}
+                                    placeholder="e.g. Received with discrepancy: goods verified on arrival"
+                                    disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
+                                    style={{
+                                        width: '100%',
+                                        padding: '8px 10px',
+                                        border: '1px solid #d1d5db',
+                                        borderRadius: 6,
+                                        fontSize: 12.5,
+                                        color: '#1f2937',
+                                        resize: 'vertical',
+                                        boxSizing: 'border-box'
+                                    }}
+                                />
+                            </div>
+
+                            {/* Summary Totals Bar */}
+                            {(() => {
+                                const totalDisp = discrepancyItems.reduce((acc, it) => acc + (Number(it.dispatched_quantity) || 0), 0);
+                                const totalRec = discrepancyItems.reduce((acc, it) => acc + (Number(it.received_quantity) || 0), 0);
+                                const totalDmg = discrepancyItems.reduce((acc, it) => acc + (Number(it.damaged_quantity) || 0), 0);
+                                const totalMis = discrepancyItems.reduce((acc, it) => acc + (Number(it.missing_quantity) || 0), 0);
+                                const totalAccounted = totalRec + totalDmg + totalMis;
+                                const isAllBalanced = totalAccounted === totalDisp && discrepancyItems.every(it => ((Number(it.received_quantity) || 0) + (Number(it.damaged_quantity) || 0) + (Number(it.missing_quantity) || 0)) === (Number(it.dispatched_quantity) || 0));
+
+                                return (
+                                    <div style={{
+                                        display: 'flex',
+                                        flexWrap: 'wrap',
+                                        gap: 12,
+                                        padding: '10px 14px',
+                                        background: isAllBalanced ? '#f8fafc' : '#fef2f2',
+                                        border: `1px solid ${isAllBalanced ? '#e2e8f0' : '#fecaca'}`,
+                                        borderRadius: 8,
+                                        fontSize: 12.5,
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between'
+                                    }}>
+                                        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                                            <span>Dispatched Quantity: <strong>{totalDisp}</strong></span>
+                                            <span>Good Quantity: <strong style={{ color: '#047857' }}>{totalRec}</strong></span>
+                                            <span>Damaged Quantity: <strong style={{ color: '#dc2626' }}>{totalDmg}</strong></span>
+                                            <span>Missing Quantity: <strong style={{ color: '#d97706' }}>{totalMis}</strong></span>
+                                        </div>
+                                        <div>
+                                            {isAllBalanced ? (
+                                                <span style={{ color: '#047857', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                    ✓ All quantities balanced ({totalAccounted}/{totalDisp})
+                                                </span>
+                                            ) : (
+                                                <span style={{ color: '#dc2626', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                    ⚠ Quantity mismatch: Accounted {totalAccounted} of {totalDisp} dispatched
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* In-Modal Error Display */}
+                            {discrepancyError && (
+                                <div style={{
+                                    marginTop: 14,
+                                    background: '#fef2f2',
+                                    border: '1px solid #fecaca',
+                                    borderRadius: 8,
+                                    padding: '10px 14px',
+                                    color: '#991b1b',
+                                    fontSize: 12.5
+                                }}>
+                                    <div style={{ fontWeight: 700, marginBottom: 2 }}>
+                                        ⚠ {discrepancyError.message}
+                                    </div>
+                                    {discrepancyError.backendDetail && discrepancyError.backendDetail !== discrepancyError.message && (
+                                        <div style={{ fontSize: 11.5, color: '#b91c1c', marginTop: 2 }}>
+                                            Backend response (HTTP {discrepancyError.status}): {discrepancyError.backendDetail}
+                                        </div>
+                                    )}
+                                    {Array.isArray(discrepancyError.allErrors) && discrepancyError.allErrors.length > 1 && (
+                                        <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 11.5 }}>
+                                            {discrepancyError.allErrors.map((err, i) => (
+                                                <li key={i}>{err}</li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div style={{
+                            padding: '12px 22px',
+                            background: '#f9fafb',
+                            borderTop: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
+                            gap: 10
+                        }}>
+                            <button
+                                type="button"
+                                disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id}
+                                onClick={() => {
+                                    setDiscrepancyModalOpen(false);
+                                    setDiscrepancyTransfer(null);
+                                    setDiscrepancyError(null);
+                                }}
+                                style={{
+                                    background: '#fff',
+                                    border: '1px solid #d1d5db',
+                                    color: '#374151',
+                                    padding: '7px 16px',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={receivingDiscrepancyTransferId === discrepancyTransfer.id || getDiscrepancyValidationErrors().length > 0}
+                                onClick={handleConfirmReceiveWithDiscrepancy}
+                                style={{
+                                    background: '#d97706',
+                                    border: 'none',
+                                    color: '#fff',
+                                    padding: '7px 20px',
+                                    borderRadius: 6,
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: (receivingDiscrepancyTransferId === discrepancyTransfer.id || getDiscrepancyValidationErrors().length > 0) ? 'not-allowed' : 'pointer',
+                                    opacity: (receivingDiscrepancyTransferId === discrepancyTransfer.id || getDiscrepancyValidationErrors().length > 0) ? 0.6 : 1,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6
+                                }}
+                            >
+                                <BsExclamationTriangle size={14} />
+                                {receivingDiscrepancyTransferId === discrepancyTransfer.id ? 'Submitting Discrepancy Receipt...' : 'Confirm & Receive With Discrepancy'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </ModuleContainer>
         </div>
     );
 };
 
-
-/* ─────────────────────────────────────────────────────────────
-   9. CUSTOMERS: Loyalty
-───────────────────────────────────────────────────────────── */
 export { CustomerLoyaltyPage } from '../CustomerLoyalty';
 
 /* ─────────────────────────────────────────────────────────────

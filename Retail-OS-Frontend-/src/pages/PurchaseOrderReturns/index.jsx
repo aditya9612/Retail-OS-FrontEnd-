@@ -37,6 +37,7 @@ import {
   BsReceipt,
   BsShop,
   BsFilter,
+  BsArrowReturnLeft,
 } from "react-icons/bs";
 
 import "./PurchaseOrderReturns.css";
@@ -1542,7 +1543,12 @@ const PurchaseOrderReturns = () => {
             <span className="por-eyebrow-dot"></span>
             Inventory Management &bull; Purchase History
           </div>
-          <h2>Purchase Order Returns</h2>
+          <h2>
+            <span className="por-header-icon-wrap" aria-hidden="true">
+              <BsArrowReturnLeft size={18} />
+            </span>
+            Purchase Order Returns
+          </h2>
           <p>Create, track, and manage purchase order returns and debit notes.</p>
         </div>
 
@@ -2589,9 +2595,6 @@ const PurchaseOrderReturns = () => {
         <div className="purchase-order-returns-pagination">
           <div className="por-pagination-left">
             <div className="por-page-size-wrap">
-              <label htmlFor="por-page-size" className="por-page-size-label">
-                Rows per page:
-              </label>
               <select
                 id="por-page-size"
                 className="por-page-size-select"

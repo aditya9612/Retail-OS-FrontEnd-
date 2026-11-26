@@ -1699,7 +1699,7 @@ const Supplier = () => {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(8);
   const [modal, setModal] = useState(null);
   const [historySupplier, setHistorySupplier] = useState(null);
   const [productsSupplier, setProductsSupplier] = useState(null);
@@ -2575,34 +2575,70 @@ const Supplier = () => {
         {/* ================= PAGINATION ================= */}
         {!loading && filteredSuppliers.length > 0 && (
           <div className="sup-pagination">
-            <div className="sup-pagination-controls">
-              {getPageNumbers().map((p, idx) => {
-                if (p === "...") {
+            {/* Left: Rows Per Page Dropdown */}
+            <div className="sup-pagination-left">
+              <select
+                className="sup-page-size-select"
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                aria-label="Select rows per page"
+              >
+                <option value={8}>8</option>
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+
+            {/* Center: Record Count Info */}
+            <div className="sup-pagination-center">
+              Showing{" "}
+              <strong>
+                {filteredSuppliers.length === 0 ? 0 : (page - 1) * pageSize + 1}
+              </strong>{" "}
+              to{" "}
+              <strong>
+                {Math.min(filteredSuppliers.length, page * pageSize)}
+              </strong>{" "}
+              of <strong>{filteredSuppliers.length}</strong>{" "}
+              {filteredSuppliers.length === 1 ? "supplier" : "suppliers"}
+            </div>
+
+            {/* Right: Page Numbers (Previous & Next removed) */}
+            <div className="sup-pagination-right">
+              <div className="sup-page-numbers-group">
+                {getPageNumbers().map((p, idx) => {
+                  if (p === "...") {
+                    return (
+                      <span
+                        key={`ellipsis-${idx}`}
+                        className="sup-page-ellipsis"
+                      >
+                        …
+                      </span>
+                    );
+                  }
+                  const isActive = p === page;
                   return (
-                    <span
-                      key={`ellipsis-${idx}`}
-                      className="sup-page-ellipsis"
+                    <button
+                      key={p}
+                      type="button"
+                      className={`sup-page-btn sup-page-num-btn ${
+                        isActive ? "sup-page-btn--active" : ""
+                      }`}
+                      onClick={() => setPage(p)}
+                      aria-label={`Page ${p}`}
+                      aria-current={isActive ? "page" : undefined}
                     >
-                      …
-                    </span>
+                      {p}
+                    </button>
                   );
-                }
-                const isActive = p === page;
-                return (
-                  <button
-                    key={p}
-                    type="button"
-                    className={`sup-page-btn sup-page-num-btn ${
-                      isActive ? "sup-page-btn--active" : ""
-                    }`}
-                    onClick={() => setPage(p)}
-                    aria-label={`Page ${p}`}
-                    aria-current={isActive ? "page" : undefined}
-                  >
-                    {p}
-                  </button>
-                );
-              })}
+                })}
+              </div>
             </div>
           </div>
         )}

@@ -3749,21 +3749,17 @@ const Purchases = () => {
           {!loading && filtered.length > 0 && (
             <div
               style={{
-                display: "flex",
+                display: "grid",
+                gridTemplateColumns: "1fr auto 1fr",
                 alignItems: "center",
-                justifyContent: "space-between",
                 padding: "14px 20px",
                 borderTop: "1px solid #e2e8f0",
                 background: "#ffffff",
-                flexWrap: "wrap",
                 gap: 12,
               }}
             >
               {/* Left: Page-Size Dropdown */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 12.5, color: "#64748b", fontWeight: 600 }}>
-                  Rows per page:
-                </span>
+              <div style={{ display: "flex", alignItems: "center", justifySelf: "start" }}>
                 <select
                   value={pageSize}
                   onChange={(e) => {
@@ -3792,11 +3788,42 @@ const Purchases = () => {
                 </select>
               </div>
 
+              {/* Center: Showing record count */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  justifySelf: "center",
+                  fontSize: 13,
+                  color: "#64748b",
+                  fontWeight: 500,
+                  whiteSpace: "nowrap",
+                  textAlign: "center",
+                }}
+              >
+                Showing{" "}
+                <strong style={{ color: "#0f172a", fontWeight: 700, margin: "0 4px" }}>
+                  {filtered.length === 0 ? 0 : (page - 1) * pageSize + 1}
+                </strong>{" "}
+                to{" "}
+                <strong style={{ color: "#0f172a", fontWeight: 700, margin: "0 4px" }}>
+                  {Math.min(filtered.length, page * pageSize)}
+                </strong>{" "}
+                of{" "}
+                <strong style={{ color: "#0f172a", fontWeight: 700, margin: "0 4px" }}>
+                  {filtered.length}
+                </strong>{" "}
+                {filtered.length === 1 ? "purchase" : "purchases"}
+              </div>
+
               {/* Right: Page Numbers */}
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
+                  justifyContent: "flex-end",
+                  justifySelf: "end",
                   gap: 6,
                 }}
               >
